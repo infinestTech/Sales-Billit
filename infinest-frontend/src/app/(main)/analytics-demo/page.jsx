@@ -1,6 +1,6 @@
 "use client";
-import AnalyticsDashboardDemo from "@/components/dashboard/AnalyticsDashboardDemo";
+import EnhancedAnalyticsDashboard from "@/components/dashboard/EnhancedAnalyticsDashboard";
 
 export default function AnalyticsDemoPage() {
-  return <AnalyticsDashboardDemo />;
+  return <EnhancedAnalyticsDashboard />;
 }
