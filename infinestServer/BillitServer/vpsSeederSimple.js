@@ -48,7 +48,8 @@ const plans = [
     "isPopular": false,
     "name": "Basic",
     "price": "0",
-    "term": "Free Plan"
+    "term": "Free Plan",
+    "branchLimit": 1
   },
   {
     "_id": "sales-gold",
@@ -58,7 +59,8 @@ const plans = [
     "isPopular": false,
     "name": "Gold",
     "price": "299",
-    "term": "Monthly Plan"
+    "term": "Monthly Plan",
+    "branchLimit": 1
   },
   {
     "_id": "sales-premium",
@@ -68,7 +70,8 @@ const plans = [
     "isPopular": false,
     "name": "Premium",
     "price": "399",
-    "term": "Monthly Plan"
+    "term": "Monthly Plan",
+    "branchLimit": 1
   },
   {
     "_id": "enterprise-basic",
@@ -78,7 +81,8 @@ const plans = [
     "isPopular": false,
     "name": "Basic",
     "price": "0",
-    "term": "Free Plan"
+    "term": "Free Plan",
+    "branchLimit": 5
   },
   {
     "_id": "enterprise-gold",
@@ -88,7 +92,8 @@ const plans = [
     "isPopular": false,
     "name": "Gold",
     "price": "999",
-    "term": "Monthly Plan"
+    "term": "Monthly Plan",
+    "branchLimit": 10
   },
   {
     "_id": "enterprise-premium",
@@ -98,7 +103,8 @@ const plans = [
     "isPopular": false,
     "name": "Premium",
     "price": "1499",
-    "term": "Monthly Plan"
+    "term": "Monthly Plan",
+    "branchLimit": 50
   },
   {
     "_id": "service-basic",

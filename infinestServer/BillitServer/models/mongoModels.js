@@ -141,7 +141,7 @@ const planCategorySchema = new mongoose.Schema({
   },
   name: {
     type: String,
-    enum: ["Sales", "Service", "Sales + Service", "Manager"],
+    enum: ["Sales", "Service", "Sales + Service", "Manager", "Enterprise"],
     required: true,
     unique: true
   },
@@ -164,7 +164,7 @@ const planSchema = new mongoose.Schema({
   },
   name: { type: String, enum: ["Basic", "Gold", "Premium"], required: true },
   description: String,
-  branchLimit: { type: Number, required: true },
+  branchLimit: { type: Number, required: false }, // Made optional since not all plans have it
   originalPrice: String,
   price: String,
   savePercentage: Number,

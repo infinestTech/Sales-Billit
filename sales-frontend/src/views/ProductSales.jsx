@@ -191,12 +191,12 @@ function ProductSales({ salesUrl, token }) {
 			const sgstPercent = sale.sgst || sgst;
 			const igstPercent = sale.igst || igst;
 			const cgstAmt = sale.cgstAmount || cgstAmount;
-			const sgstAmt = sale.sgstAmount || sgtAmount;
+			const sgstAmt = sale.sgstAmount || sgstAmount;
 			const igstAmt = sale.igstAmount || igstAmount;
-			const subTotal = sale.subTotal || subTotal;
+			const subTotalValue = (typeof sale.subTotal === 'number' ? sale.subTotal : subTotal);
 			let gstLines = '';
 			if (cgstPercent > 0) gstLines += `<div>CGST ${cgstPercent}%: <span style="float:right;">${cgstAmt.toFixed(2)}</span></div>`;
-			if (sgstPercent > 0) gstLines += `<div>SGST ${sgtPercent}%: <span style="float:right;">${sgtAmt.toFixed(2)}</span></div>`;
+			if (sgstPercent > 0) gstLines += `<div>SGST ${sgstPercent}%: <span style="float:right;">${sgstAmt.toFixed(2)}</span></div>`;
 			if (igstPercent > 0) gstLines += `<div>IGST ${igstPercent}%: <span style="float:right;">${igstAmt.toFixed(2)}</span></div>`;
 			if (gstLines) gstLines += `<div style="margin:6px 0;"></div>`;
 			const html = `<!doctype html><html><head><meta charset="utf-8"><title>Receipt</title><style> @page { size: 72mm auto; margin: 2mm; } body{font-family:monospace,Arial,Helvetica,sans-serif;padding:6px;color:#111; width:72mm; box-sizing:border-box;} h2{margin:0 0 6px;font-size:14px} .shop{ text-align:center; margin-bottom:6px; } .shop strong{ display:block; font-size:12px } .shop .contact{ font-size:11px; margin-top:2px } .gst{ font-size:11px; margin-top:2px } .address{ font-size:11px; margin-top:2px } .date{ font-size:11px; margin-bottom:6px } table{width:100%;border-collapse:collapse;margin-top:6px;font-size:11px} th,td{padding:4px 2px} thead th{border-bottom:1px dashed #bbb; text-align:left; font-size:11px} tbody td{border-bottom:1px dashed #eee} .right{ text-align:right } footer{margin-top:8px;text-align:right;font-weight:700;font-size:12px} .center{ text-align:center }</style></head><body>` +
@@ -204,7 +204,7 @@ function ProductSales({ salesUrl, token }) {
 				`<div class="date"><strong>Date:</strong> ${date}</div>` +
 				`<table><thead><tr><th>Item</th><th class="right">Qty</th><th class="right">Unit</th><th class="right">Line</th></tr></thead><tbody>${items}</tbody></table>` +
 				`<footer style="margin-top:10px;text-align:left;font-size:12px;line-height:1.7;">` +
-				`<div>SUB TOTAL: <span style="float:right;">${subTotal.toFixed(2)}</span></div>` +
+				`<div>SUB TOTAL: <span style="float:right;">${subTotalValue.toFixed(2)}</span></div>` +
 				gstLines +
 				`<div style="font-weight:700;font-size:14px;">TOTAL: <span style="float:right;">${total}</span></div>` +
 				`</footer></body></html>`;
@@ -361,8 +361,8 @@ function ProductSales({ salesUrl, token }) {
 										<tr>
 											<td colSpan={4} style={{textAlign:'right'}}>SGST (%)</td>
 											<td colSpan={2}></td>
-											<td><input style={{width:64}} type="number" min="0" value={sgt} onChange={e => setSgst(e.target.value)} /></td>
-											<td>₹ {sgtAmount.toFixed(1)}</td>
+											<td><input style={{width:64}} type="number" min="0" value={sgst} onChange={e => setSgst(e.target.value)} /></td>
+											<td>₹ {sgstAmount.toFixed(1)}</td>
 											<td colSpan={1}></td>
 										</tr>
 										<tr>

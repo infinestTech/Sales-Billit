@@ -179,6 +179,14 @@ function BankHistory({ salesUrl, token }) {
                 style: { padding: '12px', textAlign: 'left', borderBottom: '2px solid #e5e7eb' }
               }, 'Bank'),
               React.createElement('th', { 
+                key: 'reference',
+                style: { padding: '12px', textAlign: 'left', borderBottom: '2px solid #e5e7eb' }
+              }, 'Reference'),
+              React.createElement('th', { 
+                key: 'supplier',
+                style: { padding: '12px', textAlign: 'left', borderBottom: '2px solid #e5e7eb' }
+              }, 'Supplier'),
+              React.createElement('th', { 
                 key: 'type',
                 style: { padding: '12px', textAlign: 'left', borderBottom: '2px solid #e5e7eb' }
               }, 'Type'),
@@ -199,6 +207,14 @@ function BankHistory({ salesUrl, token }) {
                   key: 'bank',
                   style: { padding: '12px', borderBottom: '1px solid #f3f4f6' }
                 }, txn.bank_id?.bankName || 'Unknown'),
+                React.createElement('td', { 
+                  key: 'reference',
+                  style: { padding: '12px', borderBottom: '1px solid #f3f4f6', maxWidth: '260px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }
+                }, txn.reference || '-'),
+                React.createElement('td', { 
+                  key: 'supplier',
+                  style: { padding: '12px', borderBottom: '1px solid #f3f4f6' }
+                }, (txn.supplier_id && (txn.supplier_id.supplierName || txn.supplier_id.name)) || '-'),
                 React.createElement('td', { 
                   key: 'type',
                   style: { padding: '12px', borderBottom: '1px solid #f3f4f6' }
