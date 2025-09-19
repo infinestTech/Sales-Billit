@@ -88,6 +88,7 @@ export default function Home() {
               } else {
                 router.replace("/billit-login");
               }
+              
             }
           } else {
             // Handle unexpected response format
