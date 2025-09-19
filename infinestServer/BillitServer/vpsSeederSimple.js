@@ -2,7 +2,7 @@ const mongoose = require('mongoose');
 const { Plan, Feature, PlanCategory } = require('./models/mongoModels');
 
 // MongoDB connection URI for production VPS
-const MONGO_URI = process.env.MONGO_URI || 'mongodb://localhost:27017/billit_production';
+const MONGO_URI = process.env.MONGO_URI || 'mongodb://127.0.0.1:27017/billit_production';
 
 // PLAN CATEGORIES (exact from local data)
 const planCategories = [
@@ -48,7 +48,8 @@ const plans = [
     "isPopular": false,
     "name": "Basic",
     "price": "0",
-    "term": "Free Plan"
+    "term": "Free Plan",
+    "branchLimit": 1
   },
   {
     "_id": "sales-gold",
@@ -58,7 +59,8 @@ const plans = [
     "isPopular": false,
     "name": "Gold",
     "price": "299",
-    "term": "Monthly Plan"
+    "term": "Monthly Plan",
+    "branchLimit": 1
   },
   {
     "_id": "sales-premium",
@@ -68,7 +70,8 @@ const plans = [
     "isPopular": false,
     "name": "Premium",
     "price": "399",
-    "term": "Monthly Plan"
+    "term": "Monthly Plan",
+    "branchLimit": 5
   },
   {
     "_id": "enterprise-basic",
@@ -78,7 +81,8 @@ const plans = [
     "isPopular": false,
     "name": "Basic",
     "price": "0",
-    "term": "Free Plan"
+    "term": "Free Plan",
+    "branchLimit": 1
   },
   {
     "_id": "enterprise-gold",
@@ -88,7 +92,8 @@ const plans = [
     "isPopular": false,
     "name": "Gold",
     "price": "999",
-    "term": "Monthly Plan"
+    "term": "Monthly Plan",
+    "branchLimit": 1
   },
   {
     "_id": "enterprise-premium",
@@ -98,7 +103,8 @@ const plans = [
     "isPopular": false,
     "name": "Premium",
     "price": "1499",
-    "term": "Monthly Plan"
+    "term": "Monthly Plan",
+    "branchLimit": 1
   },
   {
     "_id": "service-basic",
@@ -176,6 +182,31 @@ const features = [
       "maxPerCreation": 5
     },
     "description": "Dealer mobile creation limit: 5",
+    "__v": 0
+  },
+  // --- Bank account limits for Sales plans ---
+  {
+    "plan_id": "sales-basic",
+  "feature_key": "bank_accounts_limit",
+    "type": "limit",
+    "config": { "maxBankAccounts": 3 },
+    "description": "Max 3 bank accounts",
+    "__v": 0
+  },
+  {
+    "plan_id": "sales-gold",
+  "feature_key": "bank_accounts_limit",
+    "type": "limit",
+    "config": { "maxBankAccounts": 7 },
+    "description": "Max 7 bank accounts",
+    "__v": 0
+  },
+  {
+    "plan_id": "sales-premium",
+  "feature_key": "bank_accounts_limit",
+    "type": "limit",
+    "config": { "maxBankAccounts": 30 },
+    "description": "Max 30 bank accounts",
     "__v": 0
   },
   {

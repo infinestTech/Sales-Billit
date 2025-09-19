@@ -35,14 +35,25 @@ function BranchSupply({ salesUrl, token }) {
 
   React.useEffect(() => { if (selectedBranch) loadStock(selectedBranch); }, [selectedBranch]);
 
+  const getAvailableQty = (row) => Number(row?.centralQty != null ? row.centralQty : (row?.qty ?? 0)) || 0;
+
   const onQtyChange = (productId, qty) => {
-    const row = stock.find(s => (s.productId || s._id) === productId);
-    const q = Number(qty) || 0;
-  const pct = Number(selectedRows[productId]?.pct || 0);
-  const cost = Number(row?.costPrice || 0);
-  const sellingPrice = pct ? (cost * (1 + pct / 100)) : Number(row?.sellingPrice || 0);
-  const value = sellingPrice * q;
-  const next = { ...selectedRows, [productId]: { qty: q, value, productId, pct, sellingPrice } };
+    const row = stock.find(s => (s.productId || s._id) === productId) || {};
+    const entered = Number(qty) || 0;
+    const available = getAvailableQty(row);
+    let q = entered;
+    if (entered > available) {
+      // cap to available and inform user
+      setError(`Requested qty (${entered}) exceeds available stock (${available}). Using ${available} instead.`);
+      q = available;
+      // clear the message after a short while
+      setTimeout(() => { setError(''); }, 5000);
+    }
+    const pct = Number(selectedRows[productId]?.pct || 0);
+    const cost = Number(row?.costPrice || 0);
+    const sellingPrice = pct ? (cost * (1 + pct / 100)) : Number(row?.sellingPrice || 0);
+    const value = sellingPrice * q;
+    const next = { ...selectedRows, [productId]: { qty: q, value, productId, pct, sellingPrice } };
     setSelectedRows(next);
     const total = Object.values(next).reduce((s, it) => s + (Number(it.value) || 0), 0);
     setTotalValue(total);
@@ -66,22 +77,47 @@ function BranchSupply({ salesUrl, token }) {
   setError('');
   if (!selectedBranch) return setError('Select a branch');
   setLoading(true);
-      const items = Object.values(selectedRows).map(r => {
+      // Build items, but ensure we never send more than available stock.
+      const selected = Object.values(selectedRows);
+      if (selected.length === 0) return setError('Select at least one product and enter qty');
+      let adjusted = false;
+      const items = selected.map(r => {
         const row = stock.find(s => (s.productId || s._id) === r.productId) || {};
         const sellingPrice = r.sellingPrice ?? row.sellingPrice ?? 0;
+        const available = getAvailableQty(row);
+        const qtyToSend = Math.min(Number(r.qty) || 0, available);
+        if (qtyToSend !== (Number(r.qty) || 0)) adjusted = true;
         return {
           productId: r.productId,
           productName: row.productName || row.name || '',
           brand: row.brand || '',
           model: row.model || '',
           validity: row.validity || null,
-          qty: r.qty,
+          qty: qtyToSend,
           sellingPrice: sellingPrice,
           costPrice: row.costPrice,
           pct: r.pct || 0
         };
       }).filter(i => i.qty > 0);
+
       if (items.length === 0) return setError('Select at least one product and enter qty');
+
+      // If adjustments were made (user requested more than available), update UI and inform
+      if (adjusted) {
+        // reflect adjusted qtys back into selectedRows and totalValue
+        const next = { ...selectedRows };
+        items.forEach(it => {
+          const row = stock.find(s => (s.productId || s._id) === it.productId) || {};
+          const sellingPrice = it.sellingPrice ?? row.sellingPrice ?? 0;
+          const value = sellingPrice * it.qty;
+          next[it.productId] = { qty: it.qty, value, productId: it.productId, pct: it.pct, sellingPrice };
+        });
+        setSelectedRows(next);
+        const total = Object.values(next).reduce((s, it) => s + (Number(it.value) || 0), 0);
+        setTotalValue(total);
+        setError('Some requested quantities exceeded available stock and were adjusted to available amounts.');
+        setTimeout(() => { setError(''); }, 5000);
+      }
       const res = await fetch(salesUrl + '/api/branch-supply', {
         method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token },
         body: JSON.stringify({ branch_id: selectedBranch, items })
@@ -105,11 +141,13 @@ function BranchSupply({ salesUrl, token }) {
   const currency = (n) => new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 2 }).format(n || 0);
 
   const filteredStock = React.useMemo(() => {
+    // Use available quantity (centralQty or qty) and exclude items with available <= 0
+    const availableFilter = (item) => getAvailableQty(item) > 0;
     if (!productFilter) {
-      return stock.filter(item => item.qty > 0); // Exclude products with qty 0
+      return stock.filter(availableFilter);
     }
     return stock
-      .filter(item => item.qty > 0) // Exclude products with qty 0
+      .filter(availableFilter)
       .filter(item => item.productNo?.toLowerCase().includes(productFilter.toLowerCase()));
   }, [stock, productFilter]);
 

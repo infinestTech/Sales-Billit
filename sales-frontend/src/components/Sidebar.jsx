@@ -37,18 +37,18 @@ function Sidebar({ active = 'bank', onSelect, planId, branchLimit, branchUser })
   return (
     <aside className="sidebar">
       <div className="brand">
-        <h1>SalesPro</h1>
+        <h1>Fixel</h1>
         <p>Mobile Sales Management</p>
       </div>
       <nav className="nav">
         {isBranch ? (
           // Branch users see a minimal branch nav
           <>
-            <Item id="bank" label="Payment Methods" icon={"💳"} activeId={active} onClick={onSelect} />
-            <Item id="bank-history" label="Payment History" icon={"📊"} activeId={active} onClick={onSelect} />
-            <Item id="instock" label="Inventory" icon={"📦"} activeId={active} onClick={onSelect} />
-            <Item id="product-sales" label="Point of Sale" icon={"🛒"} activeId={active} onClick={onSelect} />
-            <Item id="seconds-sales" label="Quick Sales" icon={"⚡"} activeId={active} onClick={onSelect} />
+            <Item id="bank" label="Bank" icon={"💳"} activeId={active} onClick={onSelect} />
+            <Item id="bank-history" label="Bank History" icon={"📊"} activeId={active} onClick={onSelect} />
+            <Item id="instock" label="Product Inventory" icon={"📦"} activeId={active} onClick={onSelect} />
+            <Item id="product-sales" label="Product Sales" icon={"🛒"} activeId={active} onClick={onSelect} />
+            <Item id="seconds-sales" label="Seconds Mobile Sales" icon={"⚡"} activeId={active} onClick={onSelect} />
             <Item id="sales-track" label="Sales Analytics" icon={"📈"} activeId={active} onClick={onSelect} />
             <Item id="branch-expense" label="Expenses" icon={"💸"} activeId={active} onClick={onSelect} />
 
@@ -58,7 +58,7 @@ function Sidebar({ active = 'bank', onSelect, planId, branchLimit, branchUser })
           <>
             <Item 
               id="bank" 
-              label="Payment Methods" 
+              label="Bank" 
               icon={"💳"} 
               activeId={active} 
               onClick={onSelect}
@@ -67,7 +67,7 @@ function Sidebar({ active = 'bank', onSelect, planId, branchLimit, branchUser })
             />
             <Item 
               id="bank-history" 
-              label="Payment History" 
+              label="Bank History" 
               icon={"📊"} 
               activeId={active} 
               onClick={onSelect}
@@ -76,14 +76,14 @@ function Sidebar({ active = 'bank', onSelect, planId, branchLimit, branchUser })
             />
             <Item 
               id="supplier" 
-              label="Suppliers" 
+              label="Dealers" 
               icon={"🏢"} 
               activeId={active} 
               onClick={onSelect}
               locked={!isSupplierEnabled}
               onLockedClick={() => window.checkSalesFeatureAccess('suppliers_enabled', 'Supplier Management', features, 'Basic/Gold/Premium')}
             />
-            <Item id="instock" label="Master Inventory" icon={"📦"} activeId={active} onClick={onSelect} />
+            <Item id="instock" label="Product Inventory" icon={"📦"} activeId={active} onClick={onSelect} />
             <Item 
               id="gst-calculator" 
               label="GST Calculator" 

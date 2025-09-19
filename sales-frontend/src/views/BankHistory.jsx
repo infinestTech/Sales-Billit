@@ -7,6 +7,17 @@ function BankHistory({ salesUrl, token }) {
     loading: true,
     error: null
   });
+  // Filters
+  const [bankFilter, setBankFilter] = React.useState('');
+  const [typeFilter, setTypeFilter] = React.useState('');
+  const [referenceFilter, setReferenceFilter] = React.useState('');
+
+  const normalizeReference = (ref) => {
+    if (!ref) return ref;
+    // Remove trailing Mongo/ObjectId-like token at the end (space + 24 hex chars)
+    // e.g. "InStock payment for supplier 68cd09fcf5d4f275fc0e9bdc" -> "InStock payment for supplier"
+    return ref.replace(/\s[0-9a-fA-F]{24}$/, '').trim();
+  };
   
   // Use basic refs for filters to avoid state update loops
   const bankIdRef = React.useRef('');
@@ -77,6 +88,50 @@ function BankHistory({ salesUrl, token }) {
       key: 'title',
       style: { marginBottom: '20px', color: '#1f2937' }
     }, '🏦 Payment History'),
+    // Filters row
+    React.createElement('div', {
+      key: 'filters',
+      style: { display: 'flex', gap: '12px', marginBottom: '16px', alignItems: 'center' }
+    }, [
+      React.createElement('div', { key: 'bankFilterWrap', style: { minWidth: 200 } }, [
+        React.createElement('label', { key: 'bankLabel', style: { display: 'block', fontSize: 12, color: '#6b7280' } }, 'Bank'),
+        React.createElement('select', {
+          key: 'bankSelect',
+          value: bankFilter,
+          onChange: e => setBankFilter(e.target.value),
+          style: { width: '100%', padding: '8px', borderRadius: 4 }
+        }, [
+          React.createElement('option', { key: '__all', value: '' }, '-- All Banks --'),
+          ...data.banks.map(b => React.createElement('option', { key: b._id, value: b._id }, b.bankName || b.name || b._id))
+        ])
+      ]),
+
+      React.createElement('div', { key: 'typeFilterWrap', style: { minWidth: 160 } }, [
+        React.createElement('label', { key: 'typeLabel', style: { display: 'block', fontSize: 12, color: '#6b7280' } }, 'Type'),
+        React.createElement('select', {
+          key: 'typeSelect',
+          value: typeFilter,
+          onChange: e => setTypeFilter(e.target.value),
+          style: { width: '100%', padding: '8px', borderRadius: 4 }
+        }, [
+          React.createElement('option', { key: '__all_t', value: '' }, '-- All Types --'),
+          ...Array.from(new Set(data.transactions.map(t => t.type).filter(Boolean))).map(t => React.createElement('option', { key: t, value: t }, t))
+        ])
+      ]),
+
+      React.createElement('div', { key: 'refFilterWrap', style: { minWidth: 220 } }, [
+        React.createElement('label', { key: 'refLabel', style: { display: 'block', fontSize: 12, color: '#6b7280' } }, 'Reference'),
+        React.createElement('select', {
+          key: 'refSelect',
+          value: referenceFilter,
+          onChange: e => setReferenceFilter(e.target.value),
+          style: { width: '100%', padding: '8px', borderRadius: 4 }
+        }, [
+          React.createElement('option', { key: '__all_r', value: '' }, '-- All References --'),
+          ...Array.from(new Set(data.transactions.map(t => normalizeReference(t.reference)).filter(Boolean))).map(r => React.createElement('option', { key: r, value: r }, r))
+        ])
+      ])
+    ]),
     
     React.createElement('div', {
       key: 'stats',
@@ -140,7 +195,13 @@ function BankHistory({ salesUrl, token }) {
         style: { marginTop: '0', marginBottom: '16px', color: '#1f2937' }
       }, 'Recent Transactions'),
       
-      data.transactions.length === 0 ? 
+      // Apply client-side filters
+      (() => {
+        const byBank = bankFilter ? data.transactions.filter(t => t.bank_id?._id === bankFilter) : data.transactions;
+        const byType = typeFilter ? byBank.filter(t => t.type === typeFilter) : byBank;
+        const byRef = referenceFilter ? byType.filter(t => t.reference === referenceFilter) : byType;
+        const filtered = byRef;
+        return filtered.length === 0 ?
         React.createElement('div', {
           key: 'empty',
           style: { 
@@ -183,13 +244,21 @@ function BankHistory({ salesUrl, token }) {
                 style: { padding: '12px', textAlign: 'left', borderBottom: '2px solid #e5e7eb' }
               }, 'Type'),
               React.createElement('th', { 
+                key: 'reference',
+                style: { padding: '12px', textAlign: 'left', borderBottom: '2px solid #e5e7eb' }
+              }, 'Reference'),
+              React.createElement('th', { 
+                key: 'supplier',
+                style: { padding: '12px', textAlign: 'left', borderBottom: '2px solid #e5e7eb' }
+              }, 'Supplier'),
+              React.createElement('th', { 
                 key: 'amount',
                 style: { padding: '12px', textAlign: 'right', borderBottom: '2px solid #e5e7eb' }
               }, 'Amount')
             ])
           ),
           React.createElement('tbody', { key: 'tbody' }, 
-            data.transactions.slice(0, 10).map((txn, index) => 
+            filtered.slice(0, 10).map((txn, index) => 
               React.createElement('tr', { key: txn._id || index }, [
                 React.createElement('td', { 
                   key: 'date',
@@ -204,6 +273,14 @@ function BankHistory({ salesUrl, token }) {
                   style: { padding: '12px', borderBottom: '1px solid #f3f4f6' }
                 }, txn.type || 'Unknown'),
                 React.createElement('td', { 
+                  key: 'reference',
+                  style: { padding: '12px', borderBottom: '1px solid #f3f4f6' }
+                }, normalizeReference(txn.reference) || '-'),
+                React.createElement('td', { 
+                  key: 'supplier',
+                  style: { padding: '12px', borderBottom: '1px solid #f3f4f6' }
+                }, txn.supplier_id?.supplierName || '-'),
+                React.createElement('td', { 
                   key: 'amount',
                   style: { 
                     padding: '12px', 
@@ -217,6 +294,7 @@ function BankHistory({ salesUrl, token }) {
             )
           )
         ]))
+      })()
     ])
   ]);
 }

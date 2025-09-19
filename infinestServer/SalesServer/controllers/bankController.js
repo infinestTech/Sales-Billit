@@ -1,23 +1,46 @@
+
 const Bank = require('../models/bank');
+const { Feature } = require('../models/feature');
 
 // POST /api/banks
 const createBank = async (req, res) => {
   try {
     const { bankName, accountNumber, holderName, address, phoneNumber, accountBalance } = req.body || {};
+    const userId = req.user.userId || req.user.branch_id || '';
+    const planId = req.user.mongoPlanId;
+    // 1. Get bank account limit for this user's plan
+    let maxBankAccounts = 0;
+    if (planId) {
+  const feature = await Feature.findOne({ plan_id: planId, feature_key: 'bank_accounts_limit' });
+      if (feature && feature.config && typeof feature.config.maxBankAccounts === 'number') {
+        maxBankAccounts = feature.config.maxBankAccounts;
+      }
+    }
+    // 2. Count existing banks for this user/shop/branch
+    let filter = {};
+    if (req.user.isBranch) {
+      filter = { branch_id: req.user.branch_id };
+    } else {
+      filter = { $or: [ { mysql_user_id: userId }, { shop_id: req.user.shop_id } ] };
+    }
+    const currentCount = await Bank.countDocuments(filter);
+    if (maxBankAccounts > 0 && currentCount >= maxBankAccounts) {
+      return res.status(400).json({ success: false, message: `Bank account limit reached (${currentCount}/${maxBankAccounts}). Upgrade for more accounts.` });
+    }
+    // 3. Proceed to create bank
     const payload = {
-      mysql_user_id: req.user.userId || req.user.branch_id || '',
+      mysql_user_id: userId,
       shop_id: req.user.shop_id || null,
       branch_id: req.user.isBranch ? req.user.branch_id : undefined,
       branchName: req.user.isBranch ? req.user.branchName || '' : undefined,
-
       bankName: bankName || '',
       accountNumber: accountNumber || '',
       holderName: holderName || '',
       address: address || '',
       phoneNumber: phoneNumber || '',
       accountBalance: accountBalance === '' || accountBalance === undefined || accountBalance === null ? undefined : Number(accountBalance),
-      createdBy: req.user.userId || req.user.branch_id || '',
-      updatedBy: req.user.userId || req.user.branch_id || '',
+      createdBy: userId,
+      updatedBy: userId,
     };
     const doc = await Bank.create(payload);
     res.status(201).json({ success: true, bank: doc });

@@ -17,8 +17,11 @@ function CreateBank({ salesUrl, token }) {
   };
 
   const bankLimit = getFeatureLimit('bank_accounts_limit', 'maxBankAccounts');
+  const [remoteBankLimit, setRemoteBankLimit] = React.useState(null);
   const currentBankCount = rows.length;
-  const isAtLimit = isLimitReached('bank_accounts_limit', 'maxBankAccounts', currentBankCount);
+  // effective limit: prefer the remote fetched limit (direct API), else context-provided limit
+  const effectiveBankLimit = (typeof remoteBankLimit === 'number' && remoteBankLimit >= 0) ? remoteBankLimit : bankLimit;
+  const isAtLimit = effectiveBankLimit > 0 ? (currentBankCount >= effectiveBankLimit) : false;
 
   const onChange = (e) => {
     const { name, value } = e.target;
@@ -40,6 +43,27 @@ function CreateBank({ salesUrl, token }) {
   };
 
   React.useEffect(() => { fetchBanks(); }, [token]);
+
+  // Fetch the specific bank_accounts_limit directly if context returns 0 or missing
+  React.useEffect(() => {
+    let mounted = true;
+    const fetchLimit = async () => {
+      try {
+        if (!token) return;
+        // Only fetch if context limit is falsy (0) or remote not fetched yet
+        if (bankLimit && bankLimit > 0) return;
+        const res = await fetch(salesUrl + '/api/user/features/bank_accounts_limit/limits', { headers: { Authorization: 'Bearer ' + token } });
+        if (!res.ok) return;
+        const data = await res.json();
+        const val = data?.limits?.maxBankAccounts;
+        if (mounted && typeof val === 'number') setRemoteBankLimit(Number(val));
+      } catch (err) {
+        // ignore - remote fallback is optional
+      }
+    };
+    fetchLimit();
+    return () => { mounted = false; };
+  }, [token, salesUrl, bankLimit]);
 
   const submit = async (e) => {
     e.preventDefault();
