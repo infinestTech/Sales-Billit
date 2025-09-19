@@ -65,29 +65,36 @@ function ProductSales({ salesUrl, token }) {
 	const totalCount = sellerProducts.reduce((s, it) => s + Number(it.sellingQty ?? it.qty ?? 0), 0);
 	const subTotal = sellerProducts.reduce((s, it) => s + lineTotal(it), 0);
 
+	// Discount state (percentage)
+	const [discount, setDiscount] = React.useState(0);
+	const discountAmount = ((Number(discount) || 0) / 100) * subTotal;
+	const taxableAmount = Math.max(0, subTotal - discountAmount);
+
 	// GST state
 	const [cgst, setCgst] = React.useState(0);
 	const [sgst, setSgst] = React.useState(0);
 	const [igst, setIgst] = React.useState(0);
 
-	// GST calculation
-	// GST calculation (calculator logic: percentage / 100 * subTotal)
-	const cgstAmount = ((Number(cgst) || 0) / 100) * subTotal;
-	const sgstAmount = ((Number(sgst) || 0) / 100) * subTotal;
-	const igstAmount = ((Number(igst) || 0) / 100) * subTotal;
+	// GST calculation (apply on taxableAmount i.e. after discount)
+	const cgstAmount = ((Number(cgst) || 0) / 100) * taxableAmount;
+	const sgstAmount = ((Number(sgst) || 0) / 100) * taxableAmount;
+	const igstAmount = ((Number(igst) || 0) / 100) * taxableAmount;
 
 	// Total calculation logic
-	let totalAmount = subTotal;
+	let totalAmount = taxableAmount;
 	if (igst > 0) {
-		totalAmount += igstAmount;
+			totalAmount += igstAmount;
 	} else {
-		totalAmount += cgstAmount + sgstAmount;
+			totalAmount += cgstAmount + sgstAmount;
 	}
 	totalAmount = Number(totalAmount.toFixed(1));
 
 	async function doSell() {
 		try {
 			if (sellerProducts.length === 0) { setError('No products to sell'); return; }
+			// validate quantities before sending
+			const over = sellerProducts.find(it => Number(it.sellingQty ?? it.qty ?? 0) > Number(it.qty ?? 0));
+			if (over) { setError('Your qty is low'); return; }
 			if (!(customerNo || '').toString().replace(/[^0-9]/g, '')) { setError('Customer mobile number is required'); return; }
 			if (!selectedBank || selectedBank === 'select') { setError('Select a payment method'); return; }
 			setSellingBusy(true);
@@ -101,7 +108,9 @@ function ProductSales({ salesUrl, token }) {
 				subTotal,
 				cgst: Number(cgst),
 				sgst: Number(sgst),
-				igst: Number(igst),
+					igst: Number(igst),
+					discount: Number(discount) || 0,
+					discountAmount: Number(discountAmount.toFixed(2)),
 				cgstAmount: Number(cgstAmount.toFixed(2)),
 				sgstAmount: Number(sgstAmount.toFixed(2)),
 				igstAmount: Number(igstAmount.toFixed(2)),
@@ -190,33 +199,65 @@ function ProductSales({ salesUrl, token }) {
 			const cgstPercent = sale.cgst || cgst;
 			const sgstPercent = sale.sgst || sgst;
 			const igstPercent = sale.igst || igst;
-			const cgstAmt = sale.cgstAmount || cgstAmount;
-			const sgstAmt = sale.sgstAmount || sgtAmount;
-			const igstAmt = sale.igstAmount || igstAmount;
-			const subTotal = sale.subTotal || subTotal;
+			const cgstAmt = sale.cgstAmount ?? cgstAmount;
+			const sgstAmt = sale.sgstAmount ?? sgstAmount;
+			const igstAmt = sale.igstAmount ?? igstAmount;
+			const printedSubTotal = sale.subTotal ?? subTotal;
 			let gstLines = '';
 			if (cgstPercent > 0) gstLines += `<div>CGST ${cgstPercent}%: <span style="float:right;">${cgstAmt.toFixed(2)}</span></div>`;
-			if (sgstPercent > 0) gstLines += `<div>SGST ${sgtPercent}%: <span style="float:right;">${sgtAmt.toFixed(2)}</span></div>`;
+			if (sgstPercent > 0) gstLines += `<div>SGST ${sgstPercent}%: <span style="float:right;">${sgstAmt.toFixed(2)}</span></div>`;
 			if (igstPercent > 0) gstLines += `<div>IGST ${igstPercent}%: <span style="float:right;">${igstAmt.toFixed(2)}</span></div>`;
 			if (gstLines) gstLines += `<div style="margin:6px 0;"></div>`;
-			const html = `<!doctype html><html><head><meta charset="utf-8"><title>Receipt</title><style> @page { size: 72mm auto; margin: 2mm; } body{font-family:monospace,Arial,Helvetica,sans-serif;padding:6px;color:#111; width:72mm; box-sizing:border-box;} h2{margin:0 0 6px;font-size:14px} .shop{ text-align:center; margin-bottom:6px; } .shop strong{ display:block; font-size:12px } .shop .contact{ font-size:11px; margin-top:2px } .gst{ font-size:11px; margin-top:2px } .address{ font-size:11px; margin-top:2px } .date{ font-size:11px; margin-bottom:6px } table{width:100%;border-collapse:collapse;margin-top:6px;font-size:11px} th,td{padding:4px 2px} thead th{border-bottom:1px dashed #bbb; text-align:left; font-size:11px} tbody td{border-bottom:1px dashed #eee} .right{ text-align:right } footer{margin-top:8px;text-align:right;font-weight:700;font-size:12px} .center{ text-align:center }</style></head><body>` +
-				`<div class="center"><h2 style="margin:0">CASH RECEIPT</h2></div><div class="shop"><strong>${shopName || 'Shop'}</strong><div class="contact">${shopContact || ''}</div><div class="gst">GST No: ${shopGst || '-'}</div><div class="address">${shopAddress || '-'}</div></div>` +
-				`<div class="date"><strong>Date:</strong> ${date}</div>` +
-				`<table><thead><tr><th>Item</th><th class="right">Qty</th><th class="right">Unit</th><th class="right">Line</th></tr></thead><tbody>${items}</tbody></table>` +
-				`<footer style="margin-top:10px;text-align:left;font-size:12px;line-height:1.7;">` +
-				`<div>SUB TOTAL: <span style="float:right;">${subTotal.toFixed(2)}</span></div>` +
-				gstLines +
-				`<div style="font-weight:700;font-size:14px;">TOTAL: <span style="float:right;">${total}</span></div>` +
-				`</footer></body></html>`;
+
+			// Build the bordered invoice HTML per requested layout
+			const outSubTotal = Number((sale.subTotal ?? subTotal) || 0);
+			const outDiscount = Number((sale.discountAmount ?? discountAmount) || 0);
+			const outTaxable = Number((sale.taxableAmount ?? Math.max(0, outSubTotal - outDiscount)) || 0);
+			const outTotal = Number(sale.totalAmount ?? total).toFixed(2);
+
+			const invoiceHtml = `<!doctype html><html><head><meta charset="utf-8"><title>Invoice</title><style>
+				@page { size: 80mm auto; margin: 6mm; }
+				body{font-family: Arial, Helvetica, sans-serif;padding:8px;color:#111; width:80mm; box-sizing:border-box}
+				.top-box{border:1px solid #000;padding:6px;margin-bottom:6px}
+				.top-left{float:left;font-size:11px}
+				.top-right{float:right;font-size:11px}
+				.center-title{clear:both;text-align:center;font-weight:700;margin:6px 0}
+				.branch-name{font-size:16px;font-weight:900;text-align:center;padding:4px 0;border-bottom:1px solid #000}
+				.address{font-size:11px;text-align:center;margin-top:4px}
+				.cust-line{margin-top:8px;font-size:11px}
+				.cust-dotted{border-bottom:1px dotted #000;padding-bottom:6px;margin-bottom:6px}
+				table.items{width:100%;border-collapse:collapse;margin-top:8px;font-size:11px}
+				table.items th, table.items td{border:1px solid #000;padding:6px}
+				thead th{background:#fff}
+				table.totals{width:44%;float:right;border-collapse:collapse;margin-top:8px;font-size:11px}
+				table.totals td{padding:6px;border:0}
+				.right{text-align:right}
+			</style></head><body>` +
+				`<div class="top-box"><div class="top-left">GSTIN: ${shopGst || '-'}</div><div class="top-right">Mob: ${shopContact || '-'}</div><div style="clear:both"></div></div>` +
+				`<div class="center-title">CASH RECEIPT</div>` +
+				`<div class="branch-name">${shopName || 'Branch Name'}</div>` +
+				`<div class="address">${shopAddress || 'Branch Address'}</div>` +
+				`<div class="cust-line cust-dotted"><strong>Customer:</strong> ${sale.customerName || 'John Doe'}</div>` +
+				`<div class="cust-line"><strong>Phone:</strong> ${sale.customerNo || customerNo || '9999999999'} &nbsp;&nbsp; <strong>Date:</strong> ${date}</div>` +
+				`<table class="items"><thead><tr><th style="width:6%">S.no</th><th style="width:56%">Description of Goods</th><th style="width:10%">HSN</th><th style="width:8%">Qty</th><th style="width:10%">Rate</th><th style="width:10%">Amount</th></tr></thead><tbody>${itemsRows}</tbody></table>` +
+				`<table class="totals">` +
+					`<tr><td>SUB TOTAL:</td><td class="right">${outSubTotal.toFixed(2)}</td></tr>` +
+					(sale.discount ? `<tr><td>DISCOUNT (${sale.discount}%):</td><td class="right">${outDiscount.toFixed(2)}</td></tr>` : '') +
+					`<tr><td>TAXABLE:</td><td class="right">${outTaxable.toFixed(2)}</td></tr>` +
+					(cgstPercent > 0 ? `<tr><td>CGST ${cgstPercent}%:</td><td class="right">${Number(cgstAmt).toFixed(2)}</td></tr>` : '') +
+					(sgstPercent > 0 ? `<tr><td>SGST ${sgstPercent}%:</td><td class="right">${Number(sgstAmt).toFixed(2)}</td></tr>` : '') +
+					(igstPercent > 0 ? `<tr><td>IGST ${igstPercent}%:</td><td class="right">${Number(igstAmt).toFixed(2)}</td></tr>` : '') +
+					`<tr><td style="font-weight:700">GRAND TOTAL:</td><td class="right" style="font-weight:700">${outTotal}</td></tr>` +
+				`</table>`;
+
 			const w = window.open('', '_blank');
 			if (!w) {
-				// fallback to in-page preview when popups are blocked
-				setPreviewHtml(html);
+				setPreviewHtml(invoiceHtml);
 				setShowPreview(true);
 				setError('Popup blocked: showing preview. Allow popups to print directly.');
 				return;
 			}
-			w.document.open(); w.document.write(html); w.document.close(); w.focus();
+			w.document.open(); w.document.write(invoiceHtml); w.document.close(); w.focus();
 			setTimeout(() => { try { w.print(); } catch (e) { /* ignore */ } }, 300);
 		} catch (e) { setError('Failed to open printer: ' + (e.message || e)); }
 	}
@@ -292,7 +333,7 @@ function ProductSales({ salesUrl, token }) {
 			
 			
 			<div className="card mt-3 table-card">
-				<div className="table-title">My Products</div>
+				<div className="table-title">My sold</div>
 				{sellerProducts.length === 0 ? (
 					<div className="empty-state" style={{padding:24}}>
 						<div className="empty-icon">🧾</div>
@@ -309,7 +350,7 @@ function ProductSales({ salesUrl, token }) {
 									<th>Brand</th>
 									<th>Model</th>
 									<th>Qty</th>
-                                    	<th>Cost Price</th>
+                                    	
 									<th>Selling Price</th>
 									<th>Selling Qty</th>
 								
@@ -327,11 +368,18 @@ function ProductSales({ salesUrl, token }) {
 										<td>{p.brand || '-'}</td>
 										<td>{p.model || '-'}</td>
 										<td>{p.qty ?? '-'}</td>
-                                        	<td>{p.costPrice ?? '-'}</td>
+                                        	
 										<td>{p.sellingPrice ?? '-'}</td>
 										<td>
 											<input style={{width:64}} value={p.sellingQty ?? p.qty ?? 1} onChange={e => {
-												const v = Number(e.target.value) || 0;
+												const inputVal = Number(e.target.value) || 0;
+												const available = Number(p.qty ?? 0);
+												let v = inputVal;
+												if (inputVal > available) {
+													// Prevent setting selling quantity more than available
+													setError('Your qty is low');
+													v = available;
+												}
 												setSellerProducts(sp => sp.map((s, idx) => idx === i ? { ...s, sellingQty: v } : s));
 											}} />
 										</td>
@@ -347,10 +395,16 @@ function ProductSales({ salesUrl, token }) {
 											<td colSpan={4} style={{textAlign:'right', fontWeight:600}}>Sub Total:</td>
 											<td style={{fontWeight:600}}>{totalCount}</td>
 											<td></td>
-											<td style={{fontWeight:600}}>{subTotal.toFixed(1)}</td>
+											<td style={{fontWeight:600}}>{subTotal.toFixed(2)}</td>
+											</tr>
+											<tr>
+											<td colSpan={4} style={{textAlign:'right'}}>Discount (%)</td>
 											<td colSpan={2}></td>
-										</tr>
-										{/* GST Inputs */}
+											<td><input style={{width:64}} type="number" min="0" value={discount} onChange={e => setDiscount(e.target.value)} /></td>
+											<td>₹ {discountAmount.toFixed(2)}</td>
+											<td colSpan={1}></td>
+											</tr>
+											{/* GST Inputs */}
 										<tr>
 											<td colSpan={4} style={{textAlign:'right'}}>CGST (%)</td>
 											<td colSpan={2}></td>
@@ -361,8 +415,8 @@ function ProductSales({ salesUrl, token }) {
 										<tr>
 											<td colSpan={4} style={{textAlign:'right'}}>SGST (%)</td>
 											<td colSpan={2}></td>
-											<td><input style={{width:64}} type="number" min="0" value={sgt} onChange={e => setSgst(e.target.value)} /></td>
-											<td>₹ {sgtAmount.toFixed(1)}</td>
+											<td><input style={{width:64}} type="number" min="0" value={sgst} onChange={e => setSgst(e.target.value)} /></td>
+											<td>₹ {sgstAmount.toFixed(1)}</td>
 											<td colSpan={1}></td>
 										</tr>
 										<tr>

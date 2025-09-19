@@ -80,7 +80,14 @@ export default function Home() {
             } else if (response.data.newSubscriptionCreated || !response.data.alreadySubscribed) {
               // Subscription was successful
               logSuccess("You've successfully subscribed to the Basic plan!");
-              router.replace("/billit-login");
+              // Redirect to different login pages depending on selected category
+              // If user was on SALES plans, send them to the sales login (external URL/hash)
+              if (mongoCategoryId === "Sales" || activeCategory === "SALES") {
+                // Use full URL to force navigation to the sales frontend
+                window.location.href = "http://localhost:3020/#login";
+              } else {
+                router.replace("/billit-login");
+              }
             }
           } else {
             // Handle unexpected response format
@@ -165,7 +172,14 @@ export default function Home() {
               { headers: { Authorization: `Bearer ${token}` } }
             );
             logSuccess(`Subscribed to ${name} successfully!`);
-            router.replace("/billit-login");
+            // Redirect depending on the category the user selected
+            // Prefer server-provided category if available, otherwise fallback to local activeCategory
+            const targetCategory = mongoCategoryId || (activeCategory === "SALES" ? "Sales" : activeCategory);
+            if (targetCategory === "Sales" || activeCategory === "SALES") {
+              window.location.href = "http://localhost:3020/#login";
+            } else {
+              router.replace("/billit-login");
+            }
           } catch (error) {
             logError(`Failed to complete ${name} subscription`, error);
           }

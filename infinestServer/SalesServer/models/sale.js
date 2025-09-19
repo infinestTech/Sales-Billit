@@ -16,6 +16,9 @@ const SaleSchema = new mongoose.Schema({
   customerNo: { type: String, default: '' },
   items: { type: [SaleItem], default: [] },
   subTotal: { type: Number, default: 0 },
+  discount: { type: Number, default: 0 }, // discount percentage
+  discountAmount: { type: Number, default: 0 }, // discount amount
+  taxableAmount: { type: Number, default: 0 }, // amount after discount, before tax
   cgst: { type: Number, default: 0 }, // CGST percentage
   sgst: { type: Number, default: 0 }, // SGST percentage
   igst: { type: Number, default: 0 }, // IGST percentage

@@ -75,48 +75,76 @@ function SalesTrack({ salesUrl, token }) {
       const line = (qty * Number(unit)).toFixed(2);
       return { name, qty, unit, line };
     });
-    const itemsRows = items.map(it => `<tr><td style="padding:6px">${it.name}</td><td style="text-align:right;padding:6px">${it.qty}</td><td style="text-align:right;padding:6px">${it.unit}</td><td style="text-align:right;padding:6px">${it.line}</td></tr>`).join('');
+    // build table rows with S.no, Description (wide), HSN (empty), Qty, Rate, Amount
+    const itemsRows = items.map((it, idx) => `
+      <tr>
+        <td style="padding:6px;text-align:center">${idx+1}</td>
+        <td style="padding:6px">${it.name}</td>
+        <td style="padding:6px;text-align:center">&nbsp;</td>
+        <td style="padding:6px;text-align:right">${it.qty}</td>
+        <td style="padding:6px;text-align:right">${it.unit}</td>
+        <td style="padding:6px;text-align:right">${it.line}</td>
+      </tr>
+    `).join('');
     // GST details
-    const cgstPercent = sale.cgst || sale.cgstPercent || 0;
-    const sgstPercent = sale.sgst || sale.sgstPercent || 0;
-    const igstPercent = sale.igst || sale.igstPercent || 0;
-    const cgstAmt = sale.cgstAmount || 0;
-    const sgstAmt = sale.sgstAmount || 0;
-    const igstAmt = sale.igstAmount || 0;
-    const subTotal = sale.subTotal || items.reduce((s, it) => s + Number(it.line), 0);
-    const total = Number(sale.totalAmount || (subTotal + cgstAmt + sgstAmt + igstAmt)).toFixed(2);
+  const cgstPercent = sale.cgst || sale.cgstPercent || 0;
+  const sgstPercent = sale.sgst || sale.sgstPercent || 0;
+  const igstPercent = sale.igst || sale.igstPercent || 0;
+  const cgstAmt = sale.cgstAmount ?? 0;
+  const sgstAmt = sale.sgstAmount ?? 0;
+  const igstAmt = sale.igstAmount ?? 0;
+  const subTotal = sale.subTotal ?? items.reduce((s, it) => s + Number(it.line), 0);
+  const discount = sale.discount ?? 0;
+  const discountAmount = sale.discountAmount ?? 0;
+  const taxable = sale.taxableAmount ?? Math.max(0, subTotal - discountAmount);
+  const total = Number(sale.totalAmount ?? (taxable + cgstAmt + sgstAmt + igstAmt)).toFixed(2);
     const date = new Date(sale.createdAt || Date.now()).toLocaleString();
     let gstLines = '';
     if (cgstPercent > 0) gstLines += `<div>CGST ${cgstPercent}%: <span style=\"float:right;\">${Number(cgstAmt).toFixed(2)}</span></div>`;
     if (sgstPercent > 0) gstLines += `<div>SGST ${sgstPercent}%: <span style=\"float:right;\">${Number(sgstAmt).toFixed(2)}</span></div>`;
     if (igstPercent > 0) gstLines += `<div>IGST ${igstPercent}%: <span style=\"float:right;\">${Number(igstAmt).toFixed(2)}</span></div>`;
     if (gstLines) gstLines += `<div style=\"margin:6px 0;\"></div>`;
-    const html = `<!doctype html><html><head><meta charset="utf-8"><title>Receipt</title><style>
-      @page { size: 72mm auto; margin: 2mm; }
-      body{font-family:monospace,Arial,Helvetica,sans-serif;padding:6px;color:#111; width:72mm; box-sizing:border-box;}
-      h2{margin:0 0 6px;font-size:14px}
-      .shop{ text-align:center; margin-bottom:6px; }
-      .shop strong{ display:block; font-size:12px }
-      .shop .contact{ font-size:11px; margin-top:2px }
-      .gst{ font-size:11px; margin-top:2px }
-      .address{ font-size:11px; margin-top:2px }
-      .date{ font-size:11px; margin-bottom:6px }
-      table{width:100%;border-collapse:collapse;margin-top:6px;font-size:11px}
-      th,td{padding:4px 2px}
-      thead th{border-bottom:1px dashed #bbb; text-align:left; font-size:11px}
-      tbody td{border-bottom:1px dashed #eee}
-      .right{ text-align:right }
-      footer{margin-top:8px;text-align:right;font-weight:700;font-size:12px}
-      .center{ text-align:center }
-      </style></head><body>` +
-      `<div class="center"><h2 style="margin:0">CASH RECEIPT</h2></div><div class="shop"><strong>${branchName || 'Shop'}</strong><div class="contact">${branchContact || ''}</div><div class="gst">GST No: ${branchGst || '-'}</div><div class="address">${branchAddress || '-'}</div></div>` +
-      `<div class="date"><strong>Date:</strong> ${date}</div>` +
-      `<table><thead><tr><th>Item</th><th class="right">Qty</th><th class="right">Unit</th><th class="right">Line</th></tr></thead><tbody>${itemsRows}</tbody></table>` +
-      `<footer style="margin-top:10px;text-align:left;font-size:12px;line-height:1.7;">` +
-      `<div>SUB TOTAL: <span style="float:right;">${Number(subTotal).toFixed(2)}</span></div>` +
-      gstLines +
-      `<div style="font-weight:700;font-size:14px;">TOTAL: <span style="float:right;">${total}</span></div>` +
-      `</footer></body></html>`;
+    // Build a bordered invoice that matches provided layout
+    const outSubTotal = Number(subTotal || 0);
+    const outDiscount = Number(discountAmount || 0);
+    const outTaxable = Number(taxable || Math.max(0, outSubTotal - outDiscount));
+    const outTotal = Number(total || 0).toFixed(2);
+
+    const html = `<!doctype html><html><head><meta charset="utf-8"><title>Invoice</title><style>
+      @page { size: 80mm auto; margin: 6mm; }
+      body{font-family: Arial, Helvetica, sans-serif; padding:8px; color:#111; width:80mm; box-sizing:border-box}
+      .top-box{border:1px solid #000;padding:6px;margin-bottom:6px}
+      .top-left{float:left;font-size:11px}
+      .top-right{float:right;font-size:11px}
+      .center-title{clear:both;text-align:center;font-weight:700;margin:6px 0}
+      .branch-name{font-size:16px;font-weight:900;text-align:center;padding:4px 0;border-bottom:1px solid #000}
+      .address{font-size:11px;text-align:center;margin-top:4px}
+      .cust-line{margin-top:8px;font-size:11px}
+      .cust-dotted{border-bottom:1px dotted #000;padding-bottom:6px;margin-bottom:6px}
+      table.items{width:100%;border-collapse:collapse;margin-top:8px;font-size:11px}
+      table.items th, table.items td{border:1px solid #000;padding:6px}
+      thead th{background:#fff}
+      table.totals{width:44%;float:right;border-collapse:collapse;margin-top:8px;font-size:11px}
+      table.totals td{padding:6px;border:0}
+      .right{text-align:right}
+    </style></head><body>` +
+      `<div class="top-box"><div class="top-left">GSTIN: ${branchGst || '-'}</div><div class="top-right">Mob: ${branchContact || '-'}</div><div style="clear:both"></div></div>` +
+      `<div class="center-title">CASH RECEIPT</div>` +
+      `<div class="branch-name">${branchName || 'Branch Name'}</div>` +
+      `<div class="address">${branchAddress || 'Branch Address'}</div>` +
+      `<div class="cust-line cust-dotted"><strong>Customer:</strong> ${sale.customerName || 'John Doe'}</div>` +
+      `<div class="cust-line"><strong>Phone:</strong> ${sale.customerNo || '9999999999'} &nbsp;&nbsp; <strong>Date:</strong> ${date}</div>` +
+      `<table class="items"><thead><tr><th style="width:6%">S.no</th><th style="width:56%">Description of Goods</th><th style="width:10%">HSN</th><th style="width:8%">Qty</th><th style="width:10%">Rate</th><th style="width:10%">Amount</th></tr></thead><tbody>${itemsRows}</tbody></table>` +
+      `<table class="totals">` +
+        `<tr><td>SUB TOTAL:</td><td class="right">${outSubTotal.toFixed(2)}</td></tr>` +
+        (discount ? `<tr><td>DISCOUNT (${discount}%):</td><td class="right">${outDiscount.toFixed(2)}</td></tr>` : '') +
+        `<tr><td>TAXABLE:</td><td class="right">${outTaxable.toFixed(2)}</td></tr>` +
+        (cgstPercent > 0 ? `<tr><td>CGST ${cgstPercent}%:</td><td class="right">${Number(cgstAmt).toFixed(2)}</td></tr>` : '') +
+        (sgstPercent > 0 ? `<tr><td>SGST ${sgstPercent}%:</td><td class="right">${Number(sgstAmt).toFixed(2)}</td></tr>` : '') +
+        (igstPercent > 0 ? `<tr><td>IGST ${igstPercent}%:</td><td class="right">${Number(igstAmt).toFixed(2)}</td></tr>` : '') +
+        `<tr><td style="font-weight:700">GRAND TOTAL:</td><td class="right" style="font-weight:700">${outTotal}</td></tr>` +
+      `</table>` +
+    `</body></html>`;
     return html;
   }
 
@@ -170,6 +198,7 @@ function SalesTrack({ salesUrl, token }) {
                   <th>Date</th>
                   <th>Customer</th>
                   <th>Items</th>
+                  <th>Discount</th>
                   <th>Total</th>
                   <th>Payment</th>
                   <th>Actions</th>
@@ -181,6 +210,7 @@ function SalesTrack({ salesUrl, token }) {
                     <td>{new Date(s.createdAt).toLocaleString()}</td>
                     <td>{s.customerNo || '-'}</td>
                     <td>{(s.items || []).map(i => `${i.productName || i.productNo || 'item'} x${i.qty || i.sellingQty || 0}`).join(', ')}</td>
+                    <td>{s.discount ? `${s.discount}% (${Number(s.discountAmount||0).toFixed(2)})` : '-'}</td>
                     <td>{Number(s.totalAmount || 0).toFixed(2)}</td>
                     <td>{s.paymentMethod || '-'}</td>
                     <td>

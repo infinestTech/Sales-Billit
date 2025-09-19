@@ -36,21 +36,26 @@ exports.createSale = async (req, res) => {
     const amountPaid = Number(req.body.amountPaid || 0);
     const bank_id = req.body.bank_id || '';
 
-    // GST calculation (calculator logic: percentage / 100 * subTotal)
-    const subTotal = Number(req.body.subTotal || items.reduce((s, it) => s + (Number(it.qty || it.sellingQty || 0) * Number(it.sellingPrice || 0)), 0));
+    // Subtotal and discount/taxable calculation
+    const computedSubTotal = Number(req.body.subTotal || items.reduce((s, it) => s + (Number(it.qty || it.sellingQty || 0) * Number(it.sellingPrice || 0)), 0));
+    const discount = Number(req.body.discount || 0);
+    const discountAmount = Number(((discount / 100) * computedSubTotal).toFixed(2));
+    const taxableAmount = Math.max(0, Number((computedSubTotal - discountAmount).toFixed(2)));
+
+    // GST calculation applied on taxableAmount
     const cgst = Number(req.body.cgst || 0);
     const sgst = Number(req.body.sgst || 0);
     const igst = Number(req.body.igst || 0);
-    const cgstAmount = Number((cgst / 100 * subTotal).toFixed(1));
-    const sgstAmount = Number((sgst / 100 * subTotal).toFixed(1));
-    const igstAmount = Number((igst / 100 * subTotal).toFixed(1));
-    let totalAmount = subTotal;
+    const cgstAmount = Number((cgst / 100 * taxableAmount).toFixed(2));
+    const sgstAmount = Number((sgst / 100 * taxableAmount).toFixed(2));
+    const igstAmount = Number((igst / 100 * taxableAmount).toFixed(2));
+    let totalAmount = taxableAmount;
     if (igst > 0) {
       totalAmount += igstAmount;
     } else {
       totalAmount += cgstAmount + sgstAmount;
     }
-    totalAmount = Number(totalAmount.toFixed(1));
+    totalAmount = Number(totalAmount.toFixed(2));
 
     // Check branch stock availability before creating the sale
     try {
@@ -87,7 +92,10 @@ exports.createSale = async (req, res) => {
       seller_id,
       customerNo,
       items,
-      subTotal: Number(subTotal.toFixed(1)),
+      subTotal: Number(computedSubTotal.toFixed(2)),
+      discount,
+      discountAmount,
+      taxableAmount,
       cgst,
       sgst,
       igst,
