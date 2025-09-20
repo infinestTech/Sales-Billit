@@ -10,6 +10,9 @@ const PWAInstallPrompt = () => {
   const [isStandalone, setIsStandalone] = useState(false);
 
   useEffect(() => {
+    // Only run on client side
+    if (typeof window === 'undefined' || typeof navigator === 'undefined') return;
+
     // Check if running on iOS
     const iOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
     setIsIOS(iOS);
@@ -81,6 +84,7 @@ const PWAInstallPrompt = () => {
   };
 
   const isMobile = () => {
+    if (typeof navigator === 'undefined') return false;
     return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) ||
            (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1); // iPad Pro
   };

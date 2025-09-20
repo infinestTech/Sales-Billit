@@ -5,6 +5,9 @@ import { useRouter } from "next/navigation"
 import Link from "next/link"
 import { User, Mail, Phone, Lock, Chrome, UserPlus } from "lucide-react"
 
+// Force dynamic rendering to avoid SSR issues with browser APIs
+export const dynamic = 'force-dynamic'
+
 export default function SignUpPage() {
   const router = useRouter()
   const [email, setEmail] = useState("")
@@ -21,7 +24,9 @@ export default function SignUpPage() {
     setSocialLoading(provider)
     setErrorMsg("")
     if (provider === "google") {
-      window.location.href = `${process.env.NEXT_PUBLIC_API_URL_AUTH}/auth/google`
+      if (typeof window !== "undefined") {
+        window.location.href = `${process.env.NEXT_PUBLIC_API_URL_AUTH}/auth/google`
+      }
     }
   }
 

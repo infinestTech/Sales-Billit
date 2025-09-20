@@ -4,6 +4,9 @@ import { useEffect } from 'react';
 
 const PWAInstaller = () => {
   useEffect(() => {
+    // Only run on client side
+    if (typeof window === 'undefined' || typeof navigator === 'undefined') return;
+
     // Only register service worker in production
     if ('serviceWorker' in navigator && process.env.NODE_ENV === 'production') {
       navigator.serviceWorker

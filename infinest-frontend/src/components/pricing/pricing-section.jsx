@@ -3,7 +3,7 @@
 import { Zap } from "lucide-react"
 import PlanCard from "./plan-card"
 
-export default function PricingSection({ title = "Choose Your Plan", subtitle, plans = [] }) {
+export default function PricingSection({ title = "Choose Your Plan", subtitle, plans = [], isLoading = false, error = null }) {
   return (
     <section className="relative min-h-screen bg-black overflow-hidden py-20 px-4">
       {/* Animated Background Grid */}
@@ -33,27 +33,65 @@ export default function PricingSection({ title = "Choose Your Plan", subtitle, p
           </div>
         )}
 
+        {/* Loading State */}
+        {isLoading && (
+          <div className="flex items-center justify-center py-20">
+            <div className="flex items-center space-x-4">
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-white"></div>
+              <p className="text-white/60 text-lg">Loading pricing plans...</p>
+            </div>
+          </div>
+        )}
+
+        {/* Error State */}
+        {error && !isLoading && (
+          <div className="flex items-center justify-center py-20">
+            <div className="text-center">
+              <p className="text-red-400 text-lg mb-4">Failed to load pricing plans</p>
+              <p className="text-white/40 text-sm">{error}</p>
+              <button 
+                onClick={() => window.location.reload()} 
+                className="mt-4 px-6 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors"
+              >
+                Retry
+              </button>
+            </div>
+          </div>
+        )}
+
         {/* Pricing Cards Grid */}
-        <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-8 max-w-6xl mx-auto">
-          {plans.map((plan, index) => (
-            <PlanCard
-              key={index}
-              name={plan.name}
-              description={plan.description}
-              originalPrice={plan.originalPrice}
-              price={plan.price}
-              savePercentage={plan.savePercentage}
-              term={plan.term}
-              bonusOffer={plan.bonusOffer}
-              renewalPrice={plan.renewalPrice}
-              renewalTerm={plan.renewalTerm}
-              features={plan.features}
-              isPopular={plan.isPopular}
-              buttonText={plan.buttonText}
-              onSelect={plan.onSelect}
-            />
-          ))}
-        </div>
+        {!isLoading && !error && plans.length > 0 && (
+          <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-8 max-w-6xl mx-auto">
+            {plans.map((plan, index) => (
+              <PlanCard
+                key={plan.mongoPlanId || index}
+                name={plan.name}
+                description={plan.description}
+                originalPrice={plan.originalPrice}
+                price={plan.price}
+                savePercentage={plan.savePercentage}
+                term={plan.term}
+                bonusOffer={plan.bonusOffer}
+                renewalPrice={plan.renewalPrice}
+                renewalTerm={plan.renewalTerm}
+                features={plan.features}
+                isPopular={plan.isPopular}
+                buttonText={plan.buttonText}
+                onSelect={plan.onSelect}
+              />
+            ))}
+          </div>
+        )}
+
+        {/* No Plans State */}
+        {!isLoading && !error && plans.length === 0 && (
+          <div className="flex items-center justify-center py-20">
+            <div className="text-center">
+              <p className="text-white/60 text-lg">No pricing plans available</p>
+              <p className="text-white/40 text-sm">Please try again later</p>
+            </div>
+          </div>
+        )}
 
         {/* Bottom CTA */}
         <div className="text-center mt-20">

@@ -43,35 +43,53 @@ const plans = [
   {
     "_id": "sales-basic",
     "__v": 0,
+    "bonusOffer": null,
+    "branchLimit": 1,
     "category_id": "Sales",
     "created_at": "2025-08-30T18:16:46.235Z",
+    "description": "Perfect for small shops starting their sales journey with essential tools and basic features.",
     "isPopular": false,
     "name": "Basic",
+    "originalPrice": "199",
     "price": "0",
-    "term": "Free Plan",
-    "branchLimit": 1
+    "renewalPrice": "Always Free",
+    "renewalTerm": "No Expiration",
+    "savePercentage": 100,
+    "term": "Free Forever"
   },
   {
     "_id": "sales-gold",
     "__v": 0,
+    "bonusOffer": null,
+    "branchLimit": 1,
     "category_id": "Sales",
     "created_at": "2025-08-30T18:16:46.243Z",
-    "isPopular": false,
+    "description": "Advanced sales inventory and billing system for growing retail businesses with smart analytics.",
+    "isPopular": true,
     "name": "Gold",
+    "originalPrice": "899",
     "price": "299",
-    "term": "Monthly Plan",
-    "branchLimit": 1
+    "renewalPrice": "299",
+    "renewalTerm": "per month",
+    "savePercentage": 67,
+    "term": "Monthly Plan"
   },
   {
     "_id": "sales-premium",
     "__v": 0,
+    "bonusOffer": null,
+    "branchLimit": 5,
     "category_id": "Sales",
     "created_at": "2025-08-30T18:16:46.251Z",
+    "description": "Complete sales suite for high-volume retailers with advanced analytics, unlimited products and priority support.",
     "isPopular": false,
     "name": "Premium",
+    "originalPrice": "1499",
     "price": "399",
-    "term": "Monthly Plan",
-    "branchLimit": 5
+    "renewalPrice": "399",
+    "renewalTerm": "per month",
+    "savePercentage": 73,
+    "term": "Monthly Plan"
   },
   {
     "_id": "enterprise-basic",
@@ -184,29 +202,83 @@ const features = [
     "description": "Dealer mobile creation limit: 5",
     "__v": 0
   },
-  // --- Bank account limits for Sales plans ---
+  // --- Simple Sales Features (Original) ---
   {
+    "_id": "68bfc0aca1815bd5628643e3",
     "plan_id": "sales-basic",
-  "feature_key": "bank_accounts_limit",
+    "feature_key": "sales_products_limit",
     "type": "limit",
-    "config": { "maxBankAccounts": 3 },
-    "description": "Max 3 bank accounts",
+    "config": {
+      "totalPages": 5
+    },
+    "description": "5 products",
     "__v": 0
   },
   {
+    "_id": "68bfc0aca1815bd5628643e4",
+    "plan_id": "sales-basic",
+    "feature_key": "show_ads",
+    "type": "boolean",
+    "enabled": true,
+    "description": "Ads shown",
+    "__v": 0
+  },
+  {
+    "_id": "68bfc0aca1815bd5628643e8",
     "plan_id": "sales-gold",
-  "feature_key": "bank_accounts_limit",
+    "feature_key": "sales_products_limit",
     "type": "limit",
-    "config": { "maxBankAccounts": 7 },
-    "description": "Max 7 bank accounts",
+    "config": {
+      "totalPages": 100
+    },
+    "description": "100 products",
     "__v": 0
   },
   {
+    "_id": "68bfc0aca1815bd5628643e9",
+    "plan_id": "sales-gold",
+    "feature_key": "sales_analytics",
+    "type": "boolean",
+    "enabled": true,
+    "description": "Basic analytics",
+    "__v": 0
+  },
+  {
+    "_id": "68bfc0aca1815bd5628643ea",
+    "plan_id": "sales-gold",
+    "feature_key": "show_ads",
+    "type": "boolean",
+    "enabled": false,
+    "description": "No ads",
+    "__v": 0
+  },
+  {
+    "_id": "68bfc0aca1815bd5628643ee",
     "plan_id": "sales-premium",
-  "feature_key": "bank_accounts_limit",
+    "feature_key": "sales_products_limit",
     "type": "limit",
-    "config": { "maxBankAccounts": 30 },
-    "description": "Max 30 bank accounts",
+    "config": {
+      "totalPages": 999999
+    },
+    "description": "Unlimited products",
+    "__v": 0
+  },
+  {
+    "_id": "68bfc0aca1815bd5628643ef",
+    "plan_id": "sales-premium",
+    "feature_key": "sales_analytics",
+    "type": "boolean",
+    "enabled": true,
+    "description": "Advanced analytics",
+    "__v": 0
+  },
+  {
+    "_id": "68bfc0aca1815bd5628643f0",
+    "plan_id": "sales-premium",
+    "feature_key": "priority_support",
+    "type": "boolean",
+    "enabled": true,
+    "description": "Priority support",
     "__v": 0
   },
   {
@@ -469,84 +541,6 @@ const features = [
     "type": "boolean",
     "enabled": false,
     "description": "Ads removed",
-    "__v": 0
-  },
-  {
-    "_id": "68bfc0aca1815bd5628643e3",
-    "plan_id": "sales-basic",
-    "feature_key": "sales_products_limit",
-    "type": "limit",
-    "config": {
-      "totalPages": 5
-    },
-    "description": "5 products",
-    "__v": 0
-  },
-  {
-    "_id": "68bfc0aca1815bd5628643e4",
-    "plan_id": "sales-basic",
-    "feature_key": "show_ads",
-    "type": "boolean",
-    "enabled": true,
-    "description": "Ads shown",
-    "__v": 0
-  },
-  {
-    "_id": "68bfc0aca1815bd5628643e8",
-    "plan_id": "sales-gold",
-    "feature_key": "sales_products_limit",
-    "type": "limit",
-    "config": {
-      "totalPages": 100
-    },
-    "description": "100 products",
-    "__v": 0
-  },
-  {
-    "_id": "68bfc0aca1815bd5628643e9",
-    "plan_id": "sales-gold",
-    "feature_key": "sales_analytics",
-    "type": "boolean",
-    "enabled": true,
-    "description": "Basic analytics",
-    "__v": 0
-  },
-  {
-    "_id": "68bfc0aca1815bd5628643ea",
-    "plan_id": "sales-gold",
-    "feature_key": "show_ads",
-    "type": "boolean",
-    "enabled": false,
-    "description": "No ads",
-    "__v": 0
-  },
-  {
-    "_id": "68bfc0aca1815bd5628643ee",
-    "plan_id": "sales-premium",
-    "feature_key": "sales_products_limit",
-    "type": "limit",
-    "config": {
-      "totalPages": 999999
-    },
-    "description": "Unlimited products",
-    "__v": 0
-  },
-  {
-    "_id": "68bfc0aca1815bd5628643ef",
-    "plan_id": "sales-premium",
-    "feature_key": "sales_analytics",
-    "type": "boolean",
-    "enabled": true,
-    "description": "Advanced analytics",
-    "__v": 0
-  },
-  {
-    "_id": "68bfc0aca1815bd5628643f0",
-    "plan_id": "sales-premium",
-    "feature_key": "priority_support",
-    "type": "boolean",
-    "enabled": true,
-    "description": "Priority support",
     "__v": 0
   },
   {

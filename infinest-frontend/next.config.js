@@ -5,10 +5,46 @@ const nextConfig = {
   // Enable compression
   compress: true,
   
-  // Generate sitemap automatically
+  // Force dynamic rendering to avoid SSR issues with browser APIs
   experimental: {
     optimizeCss: true,
     webVitalsAttribution: ['CLS', 'LCP', 'FCP', 'FID', 'TTFB'],
+  },
+
+  // Configure output and rendering
+  output: 'standalone',
+
+  // Webpack configuration to handle Node.js compatibility
+  webpack: (config, { buildId, dev, isServer, defaultLoaders, webpack }) => {
+    // Add fallbacks for Node.js modules
+    if (!isServer) {
+      config.resolve.fallback = {
+        ...config.resolve.fallback,
+        fs: false,
+        net: false,
+        tls: false,
+        crypto: false,
+        stream: false,
+        util: false,
+        buffer: false,
+      };
+    }
+
+    // Add global polyfills for SSR compatibility
+    if (isServer) {
+      config.plugins.push(
+        new webpack.DefinePlugin({
+          'typeof navigator': JSON.stringify('undefined'),
+          'typeof window': JSON.stringify('undefined'),
+          'typeof document': JSON.stringify('undefined'),
+        })
+      );
+    }
+
+    // Increase max listeners to avoid memory issues
+    require('events').EventEmitter.defaultMaxListeners = 25;
+
+    return config;
   },
   
   // Image optimization
