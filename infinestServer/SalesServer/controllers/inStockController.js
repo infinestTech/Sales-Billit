@@ -2,21 +2,26 @@ const InStock = require('../models/inStock');
 const Bank = require('../models/bank');
 const BankTransaction = require('../models/bankTransaction');
 
+
 exports.createInStock = async (req, res) => {
   try {
   console.debug('createInStock payload items:', JSON.stringify(req.body.items || []));
   const { shop_id, userId } = req.user || {};
     if (!shop_id) return res.status(400).json({ success: false, message: 'Shop missing' });
 
+
   // Branch users are not allowed to create in-stock entries via this endpoint
   if (req.user.isBranch) return res.status(403).json({ success: false, message: 'Branches cannot create in-stock entries' });
+
 
   const { supplier_id, bank_id, supplierAmount = 0, gstAmount = 0, items = [], reference = '' } = req.body || {};
     if (!supplier_id) return res.status(400).json({ success: false, message: 'supplier_id is required' });
   if (!bank_id) return res.status(400).json({ success: false, message: 'bank_id is required' });
 
+
   // Calculate totalCost for bank balance and transaction logic
   const totalCost = (items || []).reduce((s, it) => s + ((Number(it.costPrice) || 0) * (Number(it.quantity) || 1)), 0);
+
 
     // Fetch and validate bank balance
     const bank = await Bank.findOne({ _id: bank_id, $or: [{ shop_id }, { mysql_user_id: req.user.userId }] });
@@ -25,6 +30,7 @@ exports.createInStock = async (req, res) => {
     if (currentBalance < totalCost) {
       return res.status(400).json({ success: false, message: 'Insufficient bank balance' });
     }
+
 
   const doc = await InStock.create({
       shop_id,
@@ -44,13 +50,17 @@ exports.createInStock = async (req, res) => {
           return str;
         }
         // Use manual input as-is, only auto-generate if blank
+        // Determine totalQuantity: prefer explicit imes length (for mobiles) if provided, else use quantity
+        const imesArray = Array.isArray(i.imes) ? i.imes.map(x => (x || '').toString()) : [];
+        const computedTotalQ = imesArray.length > 0 ? imesArray.length : (Number(i.quantity) || 1);
         return {
           productNo: i.productNo && i.productNo.trim() ? i.productNo : randomProductNo(),
           productName: i.productName || '',
           brand: i.brand || '',
           model: i.model || '',
           quantity: Number(i.quantity) || 1,
-          totalQuantity: Number(i.quantity) || 1,
+          totalQuantity: computedTotalQ,
+          imes: imesArray,
           costPrice: Number(i.costPrice) || 0,
           sellingPrice: Number(i.sellingPrice) || 0,
           validity: i.validity ? new Date(i.validity) : undefined,
@@ -60,6 +70,7 @@ exports.createInStock = async (req, res) => {
       updatedBy: String(userId || ''),
     });
   console.debug('createInStock saved doc items:', JSON.stringify(doc.items || []));
+
 
     // Debit bank and record transaction
     const newBalance = currentBalance - totalCost;
@@ -77,12 +88,14 @@ exports.createInStock = async (req, res) => {
       createdBy: String(userId || '')
     });
 
+
     return res.json({ success: true, entry: doc, bank: { _id: bank._id, accountBalance: newBalance }, transaction: txn });
   } catch (err) {
     console.error('createInStock error:', err.message);
     return res.status(500).json({ success: false, message: err.message });
   }
 };
+
 
 exports.listInStock = async (req, res) => {
   try {
@@ -101,6 +114,7 @@ exports.listInStock = async (req, res) => {
         .lean();
       return res.json({ success: true, entries });
     }
+
 
     let entries = await InStock.find({ shop_id })
       .sort({ createdAt: -1 })
@@ -132,3 +146,7 @@ exports.listInStock = async (req, res) => {
     return res.status(500).json({ success: false, message: err.message });
   }
 };
+
+
+
+

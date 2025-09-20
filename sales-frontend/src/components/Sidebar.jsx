@@ -2,18 +2,19 @@ function Sidebar({ active = 'bank', onSelect, planId, branchLimit, branchUser })
   // Use sales features context
   const { features, isFeatureEnabled, getFeatureLimit } = window.useSalesFeatures ? window.useSalesFeatures() : { features: {}, isFeatureEnabled: () => true, getFeatureLimit: () => 999 };
 
+
   const Item = ({ id, label, icon = '📋', locked = false, activeId, onClick, onLockedClick }) => (
     <a
       className={'nav-item ' + (activeId === id ? 'active' : '')}
       href={"#" + id}
-      onClick={(e) => { 
-        e.preventDefault(); 
+      onClick={(e) => {
+        e.preventDefault();
         if (locked) {
           if (onLockedClick) onLockedClick();
           return;
         }
-        onClick?.(id); 
-        try { location.hash = '#' + id; } catch {} 
+        onClick?.(id);
+        try { location.hash = '#' + id; } catch {}
       }}
     >
       <span className="icon">{icon}</span>
@@ -21,6 +22,7 @@ function Sidebar({ active = 'bank', onSelect, planId, branchLimit, branchUser })
       {locked ? <span className="lock">🔒</span> : null}
     </a>
   );
+
 
   // Feature access checks with better fallback logic for Gold plan
   const isBankEnabled = isFeatureEnabled('bank_accounts_enabled') || (planId === 'sales-gold' || planId === 'sales-premium' || planId === 'sales-basic');
@@ -30,9 +32,11 @@ function Sidebar({ active = 'bank', onSelect, planId, branchLimit, branchUser })
   const isSupplyHistoryEnabled = isFeatureEnabled('supply_history_enabled') || (planId === 'sales-premium');
   const isBranchEnabled = isFeatureEnabled('branch_management_enabled') || (planId === 'sales-basic' || planId === 'sales-gold' || planId === 'sales-premium');
 
+
   // Legacy fallback for existing planId checks
   const canUseBranch = isBranchEnabled || planId === 'sales-gold' || planId === 'sales-premium';
   const isBranch = !!branchUser;
+
 
   return (
     <aside className="sidebar">
@@ -52,43 +56,48 @@ function Sidebar({ active = 'bank', onSelect, planId, branchLimit, branchUser })
             <Item id="sales-track" label="Sales Analytics" icon={"📈"} activeId={active} onClick={onSelect} />
             <Item id="branch-expense" label="Expenses" icon={"💸"} activeId={active} onClick={onSelect} />
 
+
           </>
         ) : (
           // Admin / seller view
           <>
-            <Item 
-              id="bank" 
-              label="Bank" 
-              icon={"💳"} 
-              activeId={active} 
+            {/* New Dashboard nav item for admin */}
+            {/* <Item id="dashboard" label="Dashboard" icon={"🏠"} activeId={active} onClick={onSelect} /> */}
+
+
+            <Item
+              id="bank"
+              label="Bank"
+              icon={"💳"}
+              activeId={active}
               onClick={onSelect}
               locked={!isBankEnabled}
               onLockedClick={() => window.checkSalesFeatureAccess('bank_accounts_enabled', 'Bank Account Management', features, 'Basic/Gold/Premium')}
             />
-            <Item 
-              id="bank-history" 
-              label="Bank History" 
-              icon={"📊"} 
-              activeId={active} 
+            <Item
+              id="bank-history"
+              label="Bank History"
+              icon={"📊"}
+              activeId={active}
               onClick={onSelect}
               locked={!isPaymentHistoryEnabled}
               onLockedClick={() => window.checkSalesFeatureAccess('payment_history_enabled', 'Payment History', features, 'Gold/Premium')}
             />
-            <Item 
-              id="supplier" 
-              label="Dealers" 
-              icon={"🏢"} 
-              activeId={active} 
+            <Item
+              id="supplier"
+              label="Dealers"
+              icon={"🏢"}
+              activeId={active}
               onClick={onSelect}
               locked={!isSupplierEnabled}
               onLockedClick={() => window.checkSalesFeatureAccess('suppliers_enabled', 'Supplier Management', features, 'Basic/Gold/Premium')}
             />
             <Item id="instock" label="Product Inventory" icon={"📦"} activeId={active} onClick={onSelect} />
-            <Item 
-              id="gst-calculator" 
-              label="GST Calculator" 
-              icon={"🧮"} 
-              activeId={active} 
+            <Item
+              id="gst-calculator"
+              label="GST Calculator"
+              icon={"🧮"}
+              activeId={active}
               onClick={onSelect}
               locked={!isGstEnabled}
               onLockedClick={() => window.checkSalesFeatureAccess('gst_calculator_enabled', 'GST Calculator', features, 'Gold/Premium')}
@@ -102,21 +111,21 @@ function Sidebar({ active = 'bank', onSelect, planId, branchLimit, branchUser })
               onClick={onSelect}
               onLockedClick={() => window.checkSalesFeatureAccess('branch_management_enabled', 'Branch Management', features, 'Basic/Gold/Premium')}
             />
-            <Item 
-              id="branch-supply" 
-              label="Branch Supply" 
-              icon={"🚚"} 
-              activeId={active} 
-              onClick={onSelect} 
+            <Item
+              id="branch-supply"
+              label="Branch Supply"
+              icon={"🚚"}
+              activeId={active}
+              onClick={onSelect}
               locked={!canUseBranch}
               onLockedClick={() => window.checkSalesFeatureAccess('branch_management_enabled', 'Branch Supply', features, 'Basic/Gold/Premium')}
             />
-            <Item 
-              id="branch-supply-history" 
-              label="Supply History" 
-              icon={"📋"} 
-              activeId={active} 
-              onClick={onSelect} 
+            <Item
+              id="branch-supply-history"
+              label="Supply History"
+              icon={"📋"}
+              activeId={active}
+              onClick={onSelect}
               locked={!isSupplyHistoryEnabled}
               onLockedClick={() => window.checkSalesFeatureAccess('supply_history_enabled', 'Supply History', features, 'Premium')}
             />
@@ -136,5 +145,8 @@ function Sidebar({ active = 'bank', onSelect, planId, branchLimit, branchUser })
   );
 }
 
+
 // Register globally for the in-browser JSX loader
 window.Sidebar = Sidebar;
+
+

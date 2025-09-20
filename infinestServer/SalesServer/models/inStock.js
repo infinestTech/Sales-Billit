@@ -1,5 +1,6 @@
 const mongoose = require('mongoose');
 
+
 const InStockItemSchema = new mongoose.Schema({
   productNo: { type: String, default: '' },
   productName: { type: String, default: '' },
@@ -10,11 +11,14 @@ const InStockItemSchema = new mongoose.Schema({
   // This allows tracking how much was originally added vs how much has
   // been transferred to branches (quantity may be decremented later).
   totalQuantity: { type: Number, default: 1 },
+  // For mobile items, store IMEI/IMES numbers associated with each unit
+  imes: { type: [String], default: [] },
   costPrice: { type: Number, default: 0 },
   sellingPrice: { type: Number, default: 0 },
   // Store as Date for calendar input; old string values remain readable in Mongo
   validity: { type: Date },
 }, { _id: false });
+
 
 const InStockSchema = new mongoose.Schema({
   shop_id: { type: mongoose.Schema.Types.ObjectId, ref: 'Shop', index: true, required: true },
@@ -27,4 +31,9 @@ const InStockSchema = new mongoose.Schema({
   updatedBy: { type: String, default: '' },
 }, { timestamps: true });
 
+
 module.exports = mongoose.model('InStock', InStockSchema);
+
+
+
+

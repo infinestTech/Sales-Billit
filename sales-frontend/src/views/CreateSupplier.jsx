@@ -7,16 +7,19 @@ function CreateSupplier({ salesUrl, token }) {
   const [page, setPage] = React.useState(1);
   const [pageSize] = React.useState(10);
 
+
   // Feature context
-  const { features, getFeatureLimit, isLimitReached } = window.useSalesFeatures ? window.useSalesFeatures() : { 
-    features: {}, 
-    getFeatureLimit: () => 999, 
-    isLimitReached: () => false 
+  const { features, getFeatureLimit, isLimitReached } = window.useSalesFeatures ? window.useSalesFeatures() : {
+    features: {},
+    getFeatureLimit: () => 999,
+    isLimitReached: () => false
   };
+
 
   const supplierLimit = getFeatureLimit('suppliers_limit', 'maxSuppliers');
   const currentSupplierCount = rows.length;
   const isAtLimit = isLimitReached('suppliers_limit', 'maxSuppliers', currentSupplierCount);
+
 
   // Filters
   const [agencyFilter, setAgencyFilter] = React.useState('');
@@ -24,15 +27,18 @@ function CreateSupplier({ salesUrl, token }) {
   const [panFilter, setPanFilter] = React.useState('');
   const [amountSort, setAmountSort] = React.useState(''); // 'high' | 'low' | ''
 
+
   // Form
   const [form, setForm] = React.useState({
     supplierName: '', agencyName: '', phoneNumber: '', address: '', gstNumber: '', panNumber: ''
   });
 
+
   const onChange = (e) => {
     const { name, value } = e.target;
     setForm((f) => ({ ...f, [name]: value }));
   };
+
 
   // --- fetchers ---
   const fetchSuppliers = async () => {
@@ -49,6 +55,7 @@ function CreateSupplier({ salesUrl, token }) {
     }
   };
 
+
   const fetchInStock = async () => {
     try {
       const res = await fetch(salesUrl + '/api/in-stock', { headers: { Authorization: 'Bearer ' + token } });
@@ -60,11 +67,13 @@ function CreateSupplier({ salesUrl, token }) {
     }
   };
 
+
   React.useEffect(() => {
     fetchSuppliers();
     fetchInStock();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
 
   // --- derived maps (must come BEFORE anything that uses them) ---
   const supplierAmountMap = React.useMemo(() => {
@@ -77,6 +86,7 @@ function CreateSupplier({ salesUrl, token }) {
     return m;
   }, [inStockEntries]);
 
+
   const supplierItemsCountMap = React.useMemo(() => {
     const m = {};
     for (const e of inStockEntries) {
@@ -88,6 +98,7 @@ function CreateSupplier({ salesUrl, token }) {
     return m;
   }, [inStockEntries]);
 
+
   // --- options (after rows exists) ---
   const agencyOptions = React.useMemo(() => {
     const set = new Set();
@@ -95,17 +106,20 @@ function CreateSupplier({ salesUrl, token }) {
     return Array.from(set);
   }, [rows]);
 
+
   const phoneOptions = React.useMemo(() => {
     const set = new Set();
     rows.forEach(r => r.phoneNumber && set.add(r.phoneNumber));
     return Array.from(set);
   }, [rows]);
 
+
   const panOptions = React.useMemo(() => {
     const set = new Set();
     rows.forEach(r => r.panNumber && set.add(r.panNumber));
     return Array.from(set);
   }, [rows]);
+
 
   // --- filtered/sorted data (after supplierAmountMap & rows exist) ---
   const filteredRows = React.useMemo(() => {
@@ -116,6 +130,7 @@ function CreateSupplier({ salesUrl, token }) {
       return agencyMatch && phoneMatch && panMatch;
     });
 
+
     if (amountSort) {
       result = result.slice().sort((a, b) => {
         const aAmt = supplierAmountMap[a._id] || 0;
@@ -124,8 +139,10 @@ function CreateSupplier({ salesUrl, token }) {
       });
     }
 
+
     return result;
   }, [rows, agencyFilter, phoneFilter, panFilter, amountSort, supplierAmountMap]);
+
 
   // --- pagination (after filteredRows, page, pageSize exist) ---
   const total = filteredRows.length;
@@ -135,16 +152,17 @@ function CreateSupplier({ salesUrl, token }) {
   const endIndex = Math.min(clampedPage * pageSize, total);
   const visible = filteredRows.slice((clampedPage - 1) * pageSize, (clampedPage - 1) * pageSize + pageSize);
 
+
   // --- submit ---
   const submit = async (e) => {
     e.preventDefault();
-    
+   
     // Check limit before creating
     if (isAtLimit) {
       window.checkSalesFeatureLimit('suppliers_limit', 'maxSuppliers', currentSupplierCount, features, 'Supplier');
       return;
     }
-    
+   
     setSaving(true);
     setError('');
     try {
@@ -164,6 +182,7 @@ function CreateSupplier({ salesUrl, token }) {
     }
   };
 
+
   return (
     <div>
       {/* Limit Warning */}
@@ -174,7 +193,7 @@ function CreateSupplier({ salesUrl, token }) {
         featureName: 'Supplier',
         showWarningAt: 0.8
       }, null)}
-      
+     
       {/* Filter Box */}
      
       <div className="card">
@@ -182,11 +201,12 @@ function CreateSupplier({ salesUrl, token }) {
           <div>
             <h3 className="card-title">Create Supplier</h3>
             <p className="card-description">
-              Add new supplier for your inventory 
+              Add new supplier for your inventory
               {supplierLimit < 999 && ` (${currentSupplierCount}/${supplierLimit} used)`}
             </p>
           </div>
         </div>
+
 
         {/* Show limit reached message */}
         {isAtLimit && (
@@ -198,8 +218,8 @@ function CreateSupplier({ salesUrl, token }) {
             margin: '1rem',
             color: '#991b1b'
           }}>
-            🚫 Supplier limit reached ({currentSupplierCount}/{supplierLimit}). 
-            <button 
+            🚫 Supplier limit reached ({currentSupplierCount}/{supplierLimit}).
+            <button
               onClick={() => window.open('/pricing', '_blank')}
               style={{
                 marginLeft: '0.5rem',
@@ -214,7 +234,7 @@ function CreateSupplier({ salesUrl, token }) {
             </button>
           </div>
         )}
-        
+       
         <form onSubmit={submit}>
           <div className="row mt-2">
             <div className="col">
@@ -245,11 +265,14 @@ function CreateSupplier({ salesUrl, token }) {
             </div>
           </div>
           <div className="row mt-3">
-            <button className="btn" type="submit" disabled={saving}>{saving ? 'Saving…' : 'Save'}</button>
+            <button className="btn" type="submit" disabled={saving || isAtLimit}>
+              {isAtLimit ? `Limit reached (${currentSupplierCount}/${supplierLimit || '—'})` : (saving ? 'Saving…' : 'Save')}
+            </button>
           </div>
           {error ? <div className="mt-2 text-danger">{error}</div> : null}
         </form>
       </div>
+
 
  <div className="card">
         <h3>Supplier Filters</h3><br />
@@ -294,7 +317,9 @@ function CreateSupplier({ salesUrl, token }) {
                 </div>
             </div>
 
+
             </div>
+
 
       {/* Suppliers Table */}
       <div className="table-card">
@@ -383,3 +408,7 @@ function CreateSupplier({ salesUrl, token }) {
     </div>
   );
 }
+
+
+
+
