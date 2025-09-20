@@ -7,8 +7,9 @@ function InStockView({ salesUrl, token }) {
   const [bankId, setBankId] = React.useState('');
   const [supplierAmount, setSupplierAmount] = React.useState('');
   const [gstAmount, setGstAmount] = React.useState('');
+  const [category, setCategory] = React.useState('');
   const [items, setItems] = React.useState([
-    { productNo: '', productName: '', brand: '', model: '', quantity: 1, costPrice: '', validity: '' }
+    { productNo: '', productName: '', brand: '', model: '', quantity: 1, costPrice: '', validity: '', imes: [] }
   ]);
   const [saving, setSaving] = React.useState(false);
   const [error, setError] = React.useState('');
@@ -23,6 +24,7 @@ function InStockView({ salesUrl, token }) {
   const [validityPopup, setValidityPopup] = React.useState(false);
   const [validityData, setValidityData] = React.useState([]);
   const [showRedDot, setShowRedDot] = React.useState(false);
+
 
   const loadSuppliers = async () => {
     try {
@@ -50,6 +52,7 @@ function InStockView({ salesUrl, token }) {
   };
   React.useEffect(() => { loadSuppliers(); loadBanks(); loadEntries(); }, []);
 
+
   React.useEffect(() => {
     const hasExpiringProducts = entries.some(entry => {
       return entry.items.some(item => {
@@ -63,9 +66,11 @@ function InStockView({ salesUrl, token }) {
     setShowRedDot(hasExpiringProducts);
   }, [entries]);
 
+
   const handleFilterChange = (field, value) => {
     setFilter(prev => ({ ...prev, [field]: value }));
   };
+
 
   const filteredEntries = React.useMemo(() => {
     return entries.filter(entry => {
@@ -73,6 +78,7 @@ function InStockView({ salesUrl, token }) {
         const productDays = filter.productDays ? parseInt(filter.productDays, 10) : null;
         const createdDate = new Date(entry.createdAt);
         const daysInStock = Math.floor((Date.now() - createdDate.getTime()) / (1000 * 60 * 60 * 24)) + 1;
+
 
         return (
           (!filter.productNo || item.productNo?.includes(filter.productNo)) &&
@@ -86,6 +92,7 @@ function InStockView({ salesUrl, token }) {
     });
   }, [entries, filter]);
 
+
   // Removed sumCost calculation and Supplier Amount check
   const canSubmit = supplierId && bankId && items.every(it => it.productName);
   // Calculate product amount (qty x cost price) for each item
@@ -94,15 +101,48 @@ function InStockView({ salesUrl, token }) {
   // Calculate total bill amount
   const totalBillAmount = (Number(supplierAmount) || 0) + (Number(gstAmount) || 0);
 
+
   const addRow = () => setItems(it => [...it, { productNo: '', productName: '', brand: '', model: '', quantity: 1, costPrice: '', validity: '' }]);
-  const updateItem = (idx, field, value) => setItems(list => list.map((it, i) => i === idx ? { ...it, [field]: value } : it));
+  const addRowWithImes = () => setItems(it => [...it, { productNo: '', productName: '', brand: '', model: '', quantity: 1, costPrice: '', validity: '', imes: [] }]);
+
+
+  const updateItem = (idx, field, value) => setItems(list => list.map((it, i) => {
+    if (i !== idx) return it;
+    // if quantity changed and category is Mobile, ensure imes array length matches quantity
+    if (field === 'quantity') {
+      const qty = Number(value) || 0;
+      const prevImes = Array.isArray(it.imes) ? it.imes.slice(0, qty) : [];
+      while (prevImes.length < qty) prevImes.push('');
+      return { ...it, [field]: value, imes: prevImes };
+    }
+    return { ...it, [field]: value };
+  }));
   const removeRow = (idx) => setItems(list => list.filter((_, i) => i !== idx));
+
 
   const resetModal = () => {
     setSupplierId(''); setBankId(''); setSupplierAmount('');
-  setItems([{ productNo: '', productName: '', brand: '', model: '', quantity: 1, costPrice: '', validity: '' }]);
+  setItems([{ productNo: '', productName: '', brand: '', model: '', quantity: 1, costPrice: '', validity: '', imes: [] }]);
     setError('');
+    setGstAmount('');
+    setCategory('');
   };
+
+
+  // Ensure IMES inputs are present when category is Mobile: keep imes array length == quantity
+  React.useEffect(() => {
+    setItems(prev => prev.map(item => {
+      const qty = Number(item.quantity) || 0;
+      if (category === 'Mobile') {
+        const imes = Array.isArray(item.imes) ? item.imes.slice(0, qty) : [];
+        while (imes.length < qty) imes.push('');
+        return { ...item, imes };
+      }
+      // clear imes for non-mobile categories to avoid showing inputs
+      return { ...item, imes: [] };
+    }));
+  }, [category]);
+
 
   // Helper to generate random alphanumeric string (2-9 chars)
   function randomProductNo() {
@@ -114,6 +154,7 @@ function InStockView({ salesUrl, token }) {
     }
     return str;
   }
+
 
   const submit = async () => {
     setSaving(true);
@@ -127,6 +168,7 @@ function InStockView({ salesUrl, token }) {
               bank_id: bankId,
               supplierAmount: Number(supplierAmount) || 0,
               gstAmount: Number(gstAmount) || 0,
+              category: category || null,
               items: items.map(it => ({
                 productNo: it.productNo && it.productNo.trim() ? it.productNo : randomProductNo(),
                 productName: it.productName,
@@ -135,6 +177,7 @@ function InStockView({ salesUrl, token }) {
                 quantity: Number(it.quantity) || 1,
                 costPrice: Number(it.costPrice) || 0,
                 validity: it.validity,
+                imes: Array.isArray(it.imes) ? it.imes.filter(x => x && x.trim()) : []
               }))
             })
       });
@@ -146,6 +189,7 @@ function InStockView({ salesUrl, token }) {
     } catch (e) { setError(e.message); } finally { setSaving(false); }
   };
 
+
   const selectedSupplierTotal = React.useMemo(() => {
     if (!supplierId) return 0;
     const fromEntries = entries.reduce((sum, e) => {
@@ -155,6 +199,7 @@ function InStockView({ salesUrl, token }) {
     }, 0);
     return fromEntries;
   }, [entries, supplierId, open]);
+
 
   const handleProductValidity = () => {
     const today = new Date();
@@ -176,6 +221,7 @@ function InStockView({ salesUrl, token }) {
     setShowRedDot(false); // Hide red dot when popup is opened
   };
 
+
   return (
     <div>
       {/* Statistics Cards */}
@@ -190,7 +236,7 @@ function InStockView({ salesUrl, token }) {
           </div>
           <div className="stat-change">Unique items in stock</div>
         </div>
-        
+       
         <div className="stat-card secondary">
           <div className="stat-header">
             <div className="stat-icon" style={{background: 'var(--gradient-secondary)'}}>📊</div>
@@ -201,7 +247,7 @@ function InStockView({ salesUrl, token }) {
           </div>
           <div className="stat-change">Items available</div>
         </div>
-        
+       
         <div className="stat-card accent">
           <div className="stat-header">
             <div className="stat-icon" style={{background: 'var(--gradient-accent)'}}>💰</div>
@@ -214,6 +260,7 @@ function InStockView({ salesUrl, token }) {
         </div>
       </div>
 
+
       {/* Action Section */}
       <div className="card">
         <div className="card-header">
@@ -225,6 +272,7 @@ function InStockView({ salesUrl, token }) {
             📦 Add New Stock
           </button>
 
+
           <button className="btn btn-secondary" type="button" onClick={handleProductValidity}>
             📅 Product Validity
             {showRedDot && <span className="red-dot"></span>}
@@ -232,8 +280,9 @@ function InStockView({ salesUrl, token }) {
         </div>
          <h4>Filter Inventory</h4><br />
          <div className="row mt-2">
-          
+         
               <div className="col">
+
 
                 <input
             type="text"
@@ -283,11 +332,12 @@ function InStockView({ salesUrl, token }) {
             />
           </div>
 
-          
+
+         
                
               </div>
       </div>
-{/* 
+{/*
       {/* Inventory Table */}
       <div className="table-card">
         <div className="table-header">
@@ -299,6 +349,7 @@ function InStockView({ salesUrl, token }) {
             <p className="table-subtitle">Complete list of all products in your inventory</p>
           </div>
         </div>
+
 
         {filteredEntries.length === 0 ? (
           <div className="empty-state">
@@ -385,6 +436,7 @@ function InStockView({ salesUrl, token }) {
         )}
       </div>
 
+
       {open && (
         <div className="modal-backdrop">
           <div className="modal">
@@ -417,7 +469,16 @@ function InStockView({ salesUrl, token }) {
                   <label>GST Amount</label>
                   <input type="number" value={gstAmount} onChange={e=>setGstAmount(e.target.value)} placeholder="GST Amount" />
                 </div>
+                <div className="col">
+                  <label>Category</label>
+                  <select value={category} onChange={e=>setCategory(e.target.value)}>
+                    <option value="">Select category</option>
+                    <option value="Accessories">Accessories</option>
+                    <option value="Mobile">Mobile</option>
+                  </select>
+                </div>
               </div>
+
 
               <div className="table-scroll mt-3">
                 <table className="pretty-table">
@@ -430,6 +491,7 @@ function InStockView({ salesUrl, token }) {
                       <th>Qty</th>
                       <th>Cost Price</th>
                       <th>Product Validity</th>
+                      {category === 'Mobile' && <th style={{width: '220px'}}>IMES No</th>}
                       <th></th>
                     </tr>
                   </thead>
@@ -443,6 +505,36 @@ function InStockView({ salesUrl, token }) {
                         <td style={{maxWidth:140}}><input type="number" style={{width:'120px'}} value={it.quantity === undefined ? '' : it.quantity} onChange={e=>updateItem(idx,'quantity',e.target.value)} placeholder="1" /></td>
                         <td><input type="number" value={it.costPrice} onChange={e=>updateItem(idx,'costPrice',e.target.value)} placeholder="0" /></td>
                         <td><input type="date" value={it.validity} onChange={e=>updateItem(idx,'validity',e.target.value)} /></td>
+                        {category === 'Mobile' && (
+                          <td style={{width: '220px'}}>
+                            <div style={{display:'flex', gap:8, flexWrap:'wrap'}}>
+                              {(() => {
+                                const qty = Number(it.quantity) || 1;
+                                const imesArr = Array.isArray(it.imes) && it.imes.length ? it.imes.slice(0, qty) : Array.from({ length: qty }, () => '');
+                                return imesArr.map((im, iim) => (
+                                  <input
+                                    key={iim}
+                                    value={im}
+                                    onChange={e => {
+                                      const val = e.target.value;
+                                      setItems(list => list.map((row, rIdx) => {
+                                        if (rIdx !== idx) return row;
+                                        const qtyLocal = Number(row.quantity) || 1;
+                                        const newImes = Array.isArray(row.imes) ? row.imes.slice(0, qtyLocal) : Array.from({ length: qtyLocal }, () => '');
+                                        while (newImes.length < qtyLocal) newImes.push('');
+                                        newImes[iim] = val;
+                                        return { ...row, imes: newImes };
+                                      }));
+                                    }}
+                                    placeholder={`IMEI ${iim+1}`}
+                                    style={{ width: 160 }}
+                                  />
+                                ));
+                              })()}
+                            </div>
+                          </td>
+                        )}
+                       
                         <td><button className="btn secondary" type="button" onClick={()=>removeRow(idx)}>Remove</button></td>
                       </tr>
                     ))}
@@ -450,7 +542,7 @@ function InStockView({ salesUrl, token }) {
                 </table>
               </div>
               <div className="row mt-2" style={{justifyContent:'space-between'}}>
-                <button className="btn secondary" type="button" onClick={addRow}>Add Row</button>
+                <button className="btn secondary" type="button" onClick={addRowWithImes}>Add Row</button>
               </div>
               <div className="row mt-2" style={{justifyContent:'flex-end'}}>
                 <div style={{color:'#9ca3af', marginRight: '32px'}}>
@@ -465,6 +557,7 @@ function InStockView({ salesUrl, token }) {
           </div>
         </div>
       )}
+
 
       {validityPopup && (
         <div className="modal-backdrop">
@@ -495,3 +588,7 @@ function InStockView({ salesUrl, token }) {
     </div>
   );
 }
+
+
+
+

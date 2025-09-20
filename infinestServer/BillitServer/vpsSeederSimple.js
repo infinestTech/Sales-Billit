@@ -1,8 +1,10 @@
 const mongoose = require('mongoose');
 const { Plan, Feature, PlanCategory } = require('./models/mongoModels');
 
+
 // MongoDB connection URI for production VPS
-const MONGO_URI = process.env.MONGO_URI || 'mongodb://127.0.0.1:27017/billit_production';
+const MONGO_URI = process.env.MONGO_URI || 'mongodb://127.0.0.1:27017/billit_db';
+
 
 // PLAN CATEGORIES (exact from local data)
 const planCategories = [
@@ -37,6 +39,7 @@ const planCategories = [
     "name": "Enterprise"
   }
 ];
+
 
 // PLANS DATA (exact from local data)
 const plans = [
@@ -177,6 +180,7 @@ const plans = [
   }
 ];
 
+
 // FEATURES DATA (exact from local data)
 const features = [
   {
@@ -202,83 +206,29 @@ const features = [
     "description": "Dealer mobile creation limit: 5",
     "__v": 0
   },
-  // --- Simple Sales Features (Original) ---
+  // --- Bank account limits for Sales plans ---
   {
-    "_id": "68bfc0aca1815bd5628643e3",
     "plan_id": "sales-basic",
-    "feature_key": "sales_products_limit",
+  "feature_key": "bank_accounts_limit",
     "type": "limit",
-    "config": {
-      "totalPages": 5
-    },
-    "description": "5 products",
+    "config": { "maxBankAccounts": 3 },
+    "description": "Max 3 bank accounts",
     "__v": 0
   },
   {
-    "_id": "68bfc0aca1815bd5628643e4",
-    "plan_id": "sales-basic",
-    "feature_key": "show_ads",
-    "type": "boolean",
-    "enabled": true,
-    "description": "Ads shown",
-    "__v": 0
-  },
-  {
-    "_id": "68bfc0aca1815bd5628643e8",
     "plan_id": "sales-gold",
-    "feature_key": "sales_products_limit",
+  "feature_key": "bank_accounts_limit",
     "type": "limit",
-    "config": {
-      "totalPages": 100
-    },
-    "description": "100 products",
+    "config": { "maxBankAccounts": 7 },
+    "description": "Max 7 bank accounts",
     "__v": 0
   },
   {
-    "_id": "68bfc0aca1815bd5628643e9",
-    "plan_id": "sales-gold",
-    "feature_key": "sales_analytics",
-    "type": "boolean",
-    "enabled": true,
-    "description": "Basic analytics",
-    "__v": 0
-  },
-  {
-    "_id": "68bfc0aca1815bd5628643ea",
-    "plan_id": "sales-gold",
-    "feature_key": "show_ads",
-    "type": "boolean",
-    "enabled": false,
-    "description": "No ads",
-    "__v": 0
-  },
-  {
-    "_id": "68bfc0aca1815bd5628643ee",
     "plan_id": "sales-premium",
-    "feature_key": "sales_products_limit",
+  "feature_key": "bank_accounts_limit",
     "type": "limit",
-    "config": {
-      "totalPages": 999999
-    },
-    "description": "Unlimited products",
-    "__v": 0
-  },
-  {
-    "_id": "68bfc0aca1815bd5628643ef",
-    "plan_id": "sales-premium",
-    "feature_key": "sales_analytics",
-    "type": "boolean",
-    "enabled": true,
-    "description": "Advanced analytics",
-    "__v": 0
-  },
-  {
-    "_id": "68bfc0aca1815bd5628643f0",
-    "plan_id": "sales-premium",
-    "feature_key": "priority_support",
-    "type": "boolean",
-    "enabled": true,
-    "description": "Priority support",
+    "config": { "maxBankAccounts": 30 },
+    "description": "Max 30 bank accounts",
     "__v": 0
   },
   {
@@ -544,6 +494,125 @@ const features = [
     "__v": 0
   },
   {
+    "_id": "68bfc0aca1815bd5628643e3",
+    "plan_id": "sales-basic",
+    "feature_key": "sales_products_limit",
+    "type": "limit",
+    "config": {
+      "totalPages": 5
+    },
+    "description": "5 products",
+    "__v": 0
+  },
+  // --- Supplier limits for Sales plans ---
+  {
+    "plan_id": "sales-basic",
+    "feature_key": "suppliers_limit",
+    "type": "limit",
+    "config": { "maxSuppliers": 5 },
+    "description": "Max 5 suppliers",
+    "__v": 0
+  },
+  {
+    "plan_id": "sales-gold",
+    "feature_key": "suppliers_limit",
+    "type": "limit",
+    "config": { "maxSuppliers": 10 },
+    "description": "Max 10 suppliers",
+    "__v": 0
+  },
+  {
+    "plan_id": "sales-premium",
+    "feature_key": "suppliers_limit",
+    "type": "limit",
+    "config": { "maxSuppliers": 100 },
+    "description": "Max 100 suppliers",
+    "__v": 0
+  },
+  {
+    "_id": "68bfc0aca1815bd5628643e4",
+    "plan_id": "sales-basic",
+    "feature_key": "show_ads",
+    "type": "boolean",
+    "enabled": true,
+    "description": "Ads shown",
+    "__v": 0
+  },
+  {
+    "_id": "68bfc0aca1815bd5628643e8",
+    "plan_id": "sales-gold",
+    "feature_key": "sales_products_limit",
+    "type": "limit",
+    "config": {
+      "totalPages": 100
+    },
+    "description": "100 products",
+    "__v": 0
+  },
+  {
+    "plan_id": "sales-gold",
+    "feature_key": "gst_calculator_enabled",
+    "type": "boolean",
+    "enabled": true,
+    "description": "GST Calculator enabled for Gold",
+    "__v": 0
+  },
+  {
+    "_id": "68bfc0aca1815bd5628643e9",
+    "plan_id": "sales-gold",
+    "feature_key": "sales_analytics",
+    "type": "boolean",
+    "enabled": true,
+    "description": "Basic analytics",
+    "__v": 0
+  },
+  {
+    "_id": "68bfc0aca1815bd5628643ea",
+    "plan_id": "sales-gold",
+    "feature_key": "show_ads",
+    "type": "boolean",
+    "enabled": false,
+    "description": "No ads",
+    "__v": 0
+  },
+  {
+    "_id": "68bfc0aca1815bd5628643ee",
+    "plan_id": "sales-premium",
+    "feature_key": "sales_products_limit",
+    "type": "limit",
+    "config": {
+      "totalPages": 999999
+    },
+    "description": "Unlimited products",
+    "__v": 0
+  },
+  {
+    "plan_id": "sales-premium",
+    "feature_key": "gst_calculator_enabled",
+    "type": "boolean",
+    "enabled": true,
+    "description": "GST Calculator enabled for Premium",
+    "__v": 0
+  },
+  {
+    "_id": "68bfc0aca1815bd5628643ef",
+    "plan_id": "sales-premium",
+    "feature_key": "sales_analytics",
+    "type": "boolean",
+    "enabled": true,
+    "description": "Advanced analytics",
+    "__v": 0
+  },
+  {
+    "_id": "68bfc0aca1815bd5628643f0",
+    "plan_id": "sales-premium",
+    "feature_key": "priority_support",
+    "type": "boolean",
+    "enabled": true,
+    "description": "Priority support",
+    "__v": 0
+  },
+  {
     "_id": "68bfc0aca1815bd5628643f4",
     "plan_id": "enterprise-basic",
     "feature_key": "branch_limit",
@@ -623,14 +692,16 @@ const features = [
   }
 ];
 
+
 // Seeding function for VPS
 async function seedVPSDatabase() {
   try {
     console.log('🚀 Starting VPS Database Seeding...');
-    
+   
     // Connect to MongoDB
     await mongoose.connect(MONGO_URI);
     console.log('✅ Connected to production MongoDB');
+
 
     // Clean existing data
     console.log('\n🗑️  Cleaning existing data...');
@@ -638,6 +709,7 @@ async function seedVPSDatabase() {
     await Plan.deleteMany({});
     await PlanCategory.deleteMany({});
     console.log('✅ Cleaned existing data');
+
 
     // Seed Plan Categories
     console.log('\n📂 Seeding Plan Categories...');
@@ -650,6 +722,7 @@ async function seedVPSDatabase() {
       }
     }
 
+
     // Seed Plans
     console.log('\n📋 Seeding Plans...');
     for (const plan of plans) {
@@ -660,6 +733,7 @@ async function seedVPSDatabase() {
         console.log(`❌ Error creating plan ${plan.name}:`, error.message);
       }
     }
+
 
     // Seed Features
     console.log('\n⚡ Seeding Features...');
@@ -672,16 +746,17 @@ async function seedVPSDatabase() {
       }
     }
 
+
     console.log('\n🎉 VPS Database seeding completed successfully!');
     console.log(`📊 Summary:`);
     console.log(`   - Categories: ${planCategories.length}`);
     console.log(`   - Plans: ${plans.length}`);
     console.log(`   - Features: ${features.length}`);
-    
+   
     console.log('\n✅ Verification:');
     console.log('📂 Plan Categories:');
     planCategories.forEach(cat => console.log(`   - ${cat.name} (${cat._id})`));
-    
+   
     console.log('\n📦 Plans by Category:');
     const plansByCategory = {};
     plans.forEach(plan => {
@@ -692,7 +767,7 @@ async function seedVPSDatabase() {
       console.log(`   ${catId}:`);
       plansByCategory[catId].forEach(plan => console.log(`     - ${plan}`));
     });
-    
+   
     console.log('\n🔧 Features Summary:');
     const featuresByPlan = {};
     features.forEach(feature => {
@@ -702,7 +777,7 @@ async function seedVPSDatabase() {
     Object.keys(featuresByPlan).forEach(planId => {
       console.log(`   ${planId}: ${featuresByPlan[planId]} features`);
     });
-    
+   
   } catch (error) {
     console.error('❌ Seeding failed:', error);
   } finally {
@@ -711,9 +786,15 @@ async function seedVPSDatabase() {
   }
 }
 
+
 // Run the seeding function if called directly
 if (require.main === module) {
   seedVPSDatabase();
 }
 
+
 module.exports = { seedVPSDatabase, planCategories, plans, features };
+
+
+
+

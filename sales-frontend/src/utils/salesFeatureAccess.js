@@ -2,6 +2,7 @@
  * Sales Feature access utility for handling subscription-based feature restrictions
  */
 
+
 /**
  * Show upgrade notification when user tries to access a restricted feature
  * @param {string} featureName - Name of the feature being accessed
@@ -9,11 +10,12 @@
  */
 const showSalesUpgradeNotification = (featureName, requiredPlans = "Gold/Premium") => {
   const message = `🚀 Upgrade Required! The ${featureName} feature is available in ${requiredPlans} plans. Upgrade now to unlock this powerful feature and boost your sales efficiency.`;
-  
+ 
   // Simple alert for now - can be enhanced with toast notifications
   alert(message);
   console.warn("Feature locked:", featureName, "Required plans:", requiredPlans);
 };
+
 
 /**
  * Check if a feature is enabled and show upgrade notification if not
@@ -25,14 +27,15 @@ const showSalesUpgradeNotification = (featureName, requiredPlans = "Gold/Premium
  */
 const checkSalesFeatureAccess = (featureKey, featureName, features, requiredPlans = "Gold/Premium") => {
   const isEnabled = features[featureKey]?.enabled;
-  
+ 
   if (!isEnabled) {
     showSalesUpgradeNotification(featureName, requiredPlans);
     return false;
   }
-  
+ 
   return true;
 };
+
 
 /**
  * Check if user has reached a feature limit
@@ -46,21 +49,22 @@ const checkSalesFeatureAccess = (featureKey, featureName, features, requiredPlan
 const checkSalesFeatureLimit = (featureKey, limitKey, currentCount, features, featureName) => {
   const feature = features[featureKey];
   if (!feature || feature.type !== 'limit') return false;
-  
+ 
   const limit = feature[limitKey];
   if (typeof limit !== 'number') return false;
-  
+ 
   const isLimitReached = currentCount >= limit;
-  
+ 
   if (isLimitReached) {
     showSalesUpgradeNotification(
-      `${featureName} Limit Reached`, 
+      `${featureName} Limit Reached`,
       "Gold/Premium"
     );
   }
-  
+ 
   return isLimitReached;
 };
+
 
 /**
  * Create a feature access component that shows upgrade prompt
@@ -81,7 +85,7 @@ const createSalesFeatureLockedComponent = (featureName, description, requiredPla
       padding: '2rem',
       backgroundColor: '#f8fafc'
     }
-  }, 
+  },
     React.createElement('div', {
       className: 'feature-locked-card',
       style: {
@@ -246,6 +250,7 @@ const createSalesFeatureLockedComponent = (featureName, description, requiredPla
   );
 };
 
+
 /**
  * Feature access mapping for different sales features
  */
@@ -297,9 +302,14 @@ const SALES_FEATURE_CONFIG = {
   }
 };
 
+
 // Register globally for access
 window.showSalesUpgradeNotification = showSalesUpgradeNotification;
 window.checkSalesFeatureAccess = checkSalesFeatureAccess;
 window.checkSalesFeatureLimit = checkSalesFeatureLimit;
 window.createSalesFeatureLockedComponent = createSalesFeatureLockedComponent;
 window.SALES_FEATURE_CONFIG = SALES_FEATURE_CONFIG;
+
+
+
+

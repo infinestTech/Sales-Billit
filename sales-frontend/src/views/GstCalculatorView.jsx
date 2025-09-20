@@ -1,6 +1,6 @@
 function GstCalculatorView() {
   const [transactions, setTransactions] = React.useState([]);
-  
+ 
   React.useEffect(() => {
     const salesUrl = window.ENV_CONFIG?.SALES_API_URL || 'http://127.0.0.1:9000';
     const token = localStorage.getItem('sales_token') || '';
@@ -27,12 +27,23 @@ function GstCalculatorView() {
         }
       });
   }, []);
-  
+ 
+  // Custom fallback so the locked UI explicitly shows the requested text
+  const fallback = window.createSalesFeatureLockedComponent(
+    'GST Calculator',
+    'Calculate GST for your transactions and maintain tax compliance with advanced GST tools.',
+    'Gold/Premium',
+    () => window.open('/pricing', '_blank')
+  );
+
+
   return React.createElement(window.FeatureGuard, {
     featureKey: 'gst_calculator_enabled',
     featureName: 'GST Calculator',
-    requiredPlans: 'Gold/Premium'
+    requiredPlans: 'Gold/Premium',
+    fallbackComponent: fallback
   }, React.createElement(window.GstCalculator, { transactions }));
 }
+
 
 window.GstCalculatorView = GstCalculatorView;
