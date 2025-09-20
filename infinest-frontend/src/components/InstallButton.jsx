@@ -9,6 +9,9 @@ const InstallButton = ({ className = '', variant = 'primary', size = 'md' }) => 
   const [isInstalled, setIsInstalled] = useState(false);
 
   useEffect(() => {
+    // Only run on client side
+    if (typeof window === 'undefined' || typeof navigator === 'undefined') return;
+
     // Check if app is already installed
     const checkInstalled = () => {
       const isStandalone = window.matchMedia('(display-mode: standalone)').matches ||
