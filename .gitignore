@@ -2,12 +2,6 @@
 node_modules/
 **/node_modules/
 
-# Environments
-.env
-**/.env
-.env.local
-**/.env.local
-.env.*.local
 
 # Logs
 npm-debug.log*
