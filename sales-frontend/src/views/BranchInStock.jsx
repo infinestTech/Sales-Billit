@@ -7,6 +7,7 @@ function BranchInStock({ salesUrl, token }) {
   const [brandFilter, setBrandFilter] = React.useState('');
   const [modelFilter, setModelFilter] = React.useState('');
   const [qtyFilter, setQtyFilter] = React.useState('');
+  const [imesFilter, setImesFilter] = React.useState('');
 
   const loadEntries = async () => {
     try {
@@ -36,28 +37,50 @@ function BranchInStock({ salesUrl, token }) {
   const filteredEntries = React.useMemo(() => {
     return entries.filter(it => {
       const qtyVal = it.branchQty ?? it.qty ?? '';
+      // prepare IME string for searching
+  const centralArr = Array.isArray(it.centralOnlyImes) && it.centralOnlyImes.length ? it.centralOnlyImes : (Array.isArray(it.centralImes) ? it.centralImes : []);
+  const imesStr = [ ...(Array.isArray(it.imes) ? it.imes : []), ...centralArr ].join(',');
       return (
         (!productNoFilter || (it.productNo || '').toLowerCase().includes(productNoFilter.toLowerCase())) &&
         (!productNameFilter || (it.productName || '').toLowerCase().includes(productNameFilter.toLowerCase())) &&
         (!brandFilter || (it.brand || '').toLowerCase().includes(brandFilter.toLowerCase())) &&
         (!modelFilter || (it.model || '').toLowerCase().includes(modelFilter.toLowerCase())) &&
-        (!qtyFilter || String(qtyVal).includes(qtyFilter))
+        (!qtyFilter || String(qtyVal).includes(qtyFilter)) &&
+        (!imesFilter || imesStr.toLowerCase().includes(imesFilter.toLowerCase()))
       );
     });
-  }, [entries, productNoFilter, productNameFilter, brandFilter, modelFilter, qtyFilter]);
+  }, [entries, productNoFilter, productNameFilter, brandFilter, modelFilter, qtyFilter, imesFilter]);
+
+  // Compute total branch stock value (Qty * Selling Price) for displayed rows
+  const branchStockTotal = React.useMemo(() => {
+    return filteredEntries.reduce((sum, it) => {
+      const qty = Number(it.branchQty ?? it.qty ?? 0) || 0;
+      const price = Number(it.sellingPrice ?? 0) || 0;
+      return sum + qty * price;
+    }, 0);
+  }, [filteredEntries]);
 
   return (
     <div>
       <div className="card mt-3 table-card">
-        <div className="table-title">In Stock (Branch)</div>
+        <div style={{display:'flex', alignItems:'center', gap:12, justifyContent:'flex-start'}}>
+          {/* Total value red box (left) */}
+          <div style={{background:'#ffe6e6', border:'1px solid #ffcccc', color:'#b30000', padding:'10px 14px', borderRadius:6, fontWeight:600}} title="Branch stock total value">
+            Branch Stock Value: {currency(branchStockTotal)}
+          </div>
+          <div style={{minWidth:12}} />
+          <div className="table-title">In Stock (Branch)</div>
+        </div>
+
         {/* Filter Section */}
-        <div className="filter-section" style={{ display: 'flex', gap: '12px', flexWrap: 'wrap', marginBottom: '12px' }}>
+        <div className="filter-section" style={{ display: 'flex', gap: '12px', flexWrap: 'wrap', marginBottom: '12px', marginTop:12 }}>
           <input type="text" placeholder="Filter by Product No" value={productNoFilter} onChange={e => setProductNoFilter(e.target.value)} style={{ padding: '8px', width: '160px' }} />
           <input type="text" placeholder="Filter by Product Name" value={productNameFilter} onChange={e => setProductNameFilter(e.target.value)} style={{ padding: '8px', width: '160px' }} />
           <input type="text" placeholder="Filter by Brand" value={brandFilter} onChange={e => setBrandFilter(e.target.value)} style={{ padding: '8px', width: '120px' }} />
           <input type="text" placeholder="Filter by Model" value={modelFilter} onChange={e => setModelFilter(e.target.value)} style={{ padding: '8px', width: '120px' }} />
           <input type="text" placeholder="Filter by Qty" value={qtyFilter} onChange={e => setQtyFilter(e.target.value)} style={{ padding: '8px', width: '80px' }} />
-        </div>
+          <input type="text" placeholder="Filter by IME" value={imesFilter} onChange={e => setImesFilter(e.target.value)} style={{ padding: '8px', width: '160px' }} />
+          </div>
         {filteredEntries.length === 0 ? (
           <div className="empty-state" style={{padding:24}}>
             <div className="empty-icon">📦</div>
@@ -86,7 +109,7 @@ function BranchInStock({ salesUrl, token }) {
                     <td>{it.brand || '-'}</td>
                     <td>{it.model || '-'}</td>
                     <td>{it.branchQty ?? (it.qty ?? '-')}</td>
-                    <td>{it.sellingPrice != null ? it.sellingPrice : '-'}</td>
+                    <td>{it.sellingPrice != null ? currency(it.sellingPrice) : '-'}</td>
                     <td>{it.validity ? new Date(it.validity).toLocaleDateString() : '-'}</td>
                   </tr>
                 ))}

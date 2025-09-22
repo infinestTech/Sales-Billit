@@ -37,8 +37,8 @@ exports.createWhatsappSale = async (req, res) => {
 
     // Decrement stock: prefer WhatsappStock supplyQty decrement, fallback to BranchStock by productId/productNo
     try {
-      const WhatsappStock = require('../models/whatsappStock');
-      const BranchStock = require('../models/branchStock');
+  const WhatsappStock = require('../models/whatsappStock');
+  const BranchStock = require('../models/branchStock');
       for (const it of items) {
         try {
           const qty = Math.max(0, Number(it.qty || it.sellingQty || 0));
@@ -55,14 +55,21 @@ exports.createWhatsappSale = async (req, res) => {
           }
 
           // Fallback to BranchStock if productId provided
-          if (it.productId) {
-            await BranchStock.updateOne({ shop_id: shop_id, branch_id: branch_id, productId: it.productId }, { $inc: { qty: -qty } });
-            continue;
-          }
+          const soldImes = Array.isArray(it.imes) ? it.imes : (Array.isArray(it.selectedImes) ? it.selectedImes : []);
+          const q = { shop_id: shop_id, branch_id: branch_id };
+          if (it.productId) q.productId = it.productId;
+          else if (it.productNo) q.productNo = it.productNo;
+          else continue;
 
-          // Last resort: BranchStock by productNo
-          if (it.productNo) {
-            await BranchStock.updateOne({ shop_id: shop_id, branch_id: branch_id, productNo: it.productNo }, { $inc: { qty: -qty } });
+          const update = {};
+          if (qty > 0) update.$inc = { qty: -qty };
+          if (soldImes && soldImes.length) update.$pullAll = { imes: soldImes };
+
+          if (Object.keys(update).length) {
+            const after = await BranchStock.findOneAndUpdate(q, update, { new: true }).lean();
+            if (after && typeof after.qty === 'number' && after.qty < 0) {
+              await BranchStock.updateOne({ _id: after._id }, { $set: { qty: 0 } });
+            }
           }
         } catch (e) { /* ignore single-item errors */ }
       }

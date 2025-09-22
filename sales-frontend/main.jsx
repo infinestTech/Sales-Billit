@@ -398,7 +398,7 @@ function App() {
             </div>
           ))
         ) : view === 'branch-expense' ? (
-          (window.BranchNewExpense ? React.createElement(window.BranchNewExpense, { salesUrl: SALES_URL, token: effectiveToken }) : (
+          (window.BranchNewExpense ? React.createElement(window.BranchNewExpense, { salesUrl: SALES_URL, token: effectiveToken, branchUser }) : (
             <div className="card"><div className="empty-state"><div className="empty-icon">💸</div><div className="empty-title">Loading…</div></div></div>
           ))
         ) : view === 'sales-track' ? (
@@ -731,7 +731,7 @@ function CreateBranch({ salesUrl, token, planId, branchLimit = 0 }) {
                     <th>GST No</th>
                     
                     <th>Status</th>
-                    <th>Stock Value</th>
+                   
                   </tr>
                 </thead>
                 <tbody>

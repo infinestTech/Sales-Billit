@@ -8,6 +8,7 @@ const BranchStockSchema = new mongoose.Schema({
   productName: { type: String },
   brand: { type: String },
   model: { type: String },
+  imes: { type: Array, default: [] },
   costPrice: { type: Number, default: 0 },
   qty: { type: Number, default: 0 },
   sellingPrice: { type: Number, default: 0 },

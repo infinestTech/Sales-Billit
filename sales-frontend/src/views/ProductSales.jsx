@@ -65,6 +65,9 @@ function ProductSales({ salesUrl, token }) {
 	const totalCount = sellerProducts.reduce((s, it) => s + Number(it.sellingQty ?? it.qty ?? 0), 0);
 	const subTotal = sellerProducts.reduce((s, it) => s + lineTotal(it), 0);
 
+	// state to toggle IME list per product index
+	const [showImes, setShowImes] = React.useState({});
+
 	// Discount state (percentage)
 	const [discount, setDiscount] = React.useState(0);
 	const discountAmount = ((Number(discount) || 0) / 100) * subTotal;
@@ -95,6 +98,15 @@ function ProductSales({ salesUrl, token }) {
 			// validate quantities before sending
 			const over = sellerProducts.find(it => Number(it.sellingQty ?? it.qty ?? 0) > Number(it.qty ?? 0));
 			if (over) { setError('Your qty is low'); return; }
+			// validate IME selections: for products that track IMEs, selected IMEs must match selling qty
+			const imeMismatch = sellerProducts.find(it => {
+				const sellingQty = Number(it.sellingQty ?? it.qty ?? 0);
+				const availableImes = (Array.isArray(it.centralOnlyImes) && it.centralOnlyImes.length) ? it.centralOnlyImes : (Array.isArray(it.centralImes) && it.centralImes.length) ? it.centralImes : (Array.isArray(it.imes) ? it.imes : []);
+				if (!availableImes || availableImes.length === 0) return false; // not IME-tracked
+				const selected = Array.isArray(it.selectedImes) ? it.selectedImes.length : 0;
+				return selected !== sellingQty;
+			});
+			if (imeMismatch) { setError('Selected IMEs must match selling quantity for IME-tracked products'); return; }
 			if (!(customerNo || '').toString().replace(/[^0-9]/g, '')) { setError('Customer mobile number is required'); return; }
 			if (!selectedBank || selectedBank === 'select') { setError('Select a payment method'); return; }
 			setSellingBusy(true);
@@ -103,7 +115,7 @@ function ProductSales({ salesUrl, token }) {
 			// cash option removed: payments are online via selected bank
 			const paymentMethod = 'online';
 			const payload = {
-				items: sellerProducts.map(it => ({ productId: it.productId || it._id || '', productNo: it.productNo || '', productName: it.productName || '', qty: Number(it.sellingQty ?? it.qty ?? 0), sellingPrice: Number(it.sellingPrice || 0), lineTotal: Number(lineTotal(it)) })),
+				items: sellerProducts.map(it => ({ productId: it.productId || it._id || '', productNo: it.productNo || '', productName: it.productName || '', qty: Number(it.sellingQty ?? it.qty ?? 0), sellingPrice: Number(it.sellingPrice || 0), lineTotal: Number(lineTotal(it),), imes: Array.isArray(it.selectedImes) && it.selectedImes.length ? it.selectedImes : (Array.isArray(it.imes) ? it.imes : []) })),
 				customerNo,
 				subTotal,
 				cgst: Number(cgst),
@@ -123,7 +135,38 @@ function ProductSales({ salesUrl, token }) {
 			const data = await res.json();
 			if (!res.ok) throw new Error(data.message || 'Sell failed');
 			// on success save returned sale for printing / whatsapp and clear the cart
-			setLastSale(data.sale || data || null);
+			const savedSale = data.sale || data || null;
+			setLastSale(savedSale);
+			// update local products: remove sold IMEs and decrement qty
+			try {
+				if (Array.isArray(savedSale?.items) && savedSale.items.length) {
+					// create a copy for updates
+					setProducts(prev => {
+						const next = (prev || []).map(prod => ({ ...prod }));
+						for (const sold of savedSale.items) {
+							const idCandidates = [sold.productId, sold._id, sold.productNo].filter(Boolean).map(String);
+							const foundIdx = next.findIndex(p => idCandidates.includes(String(p.productId || p._id || p.productNo)));
+							if (foundIdx === -1) continue;
+							const product = next[foundIdx];
+							const soldQty = Number(sold.qty ?? sold.sellingQty ?? 0);
+							// remove selected IMEs from product IME arrays if present
+							const soldImes = Array.isArray(sold.imes) ? sold.imes : (Array.isArray(sold.selectedImes) ? sold.selectedImes : []);
+							if (soldImes && soldImes.length) {
+								['centralOnlyImes','centralImes','imes'].forEach(key => {
+									if (Array.isArray(product[key]) && product[key].length) {
+										product[key] = product[key].filter(v => !soldImes.includes(v));
+									}
+								});
+							}
+							// decrement qty but not below 0
+							product.qty = Math.max(0, Number(product.qty ?? 0) - soldQty);
+							next[foundIdx] = product;
+						}
+						return next;
+					});
+				}
+			} catch (e) { /* non-fatal local update failure */ }
+			// clear sellerProducts (cart)
 			setSellerProducts([]);
 			setCustomerNo('');
 			setSelectedBank('');
@@ -239,7 +282,7 @@ function ProductSales({ salesUrl, token }) {
 				`<div class="address">${shopAddress || 'Branch Address'}</div>` +
 				`<div class="cust-line cust-dotted"><strong>Customer:</strong> ${sale.customerName || 'John Doe'}</div>` +
 				`<div class="cust-line"><strong>Phone:</strong> ${sale.customerNo || customerNo || '9999999999'} &nbsp;&nbsp; <strong>Date:</strong> ${date}</div>` +
-				`<table class="items"><thead><tr><th style="width:6%">S.no</th><th style="width:56%">Description of Goods</th><th style="width:10%">HSN</th><th style="width:8%">Qty</th><th style="width:10%">Rate</th><th style="width:10%">Amount</th></tr></thead><tbody>${itemsRows}</tbody></table>` +
+				`<table class="items"><thead><tr><th style="width:6%">S.no</th><th style="width:56%">Description of Goods</th><th style="width:10%">HSN</th><th style="width:8%">Qty</th><th style="width:10%">Rate</th><th style="width:10%">Amount</th></tr></thead><tbody>${items}</tbody></table>` +
 				`<table class="totals">` +
 					`<tr><td>SUB TOTAL:</td><td class="right">${outSubTotal.toFixed(2)}</td></tr>` +
 					(sale.discount ? `<tr><td>DISCOUNT (${sale.discount}%):</td><td class="right">${outDiscount.toFixed(2)}</td></tr>` : '') +
@@ -333,7 +376,7 @@ function ProductSales({ salesUrl, token }) {
 			
 			
 			<div className="card mt-3 table-card">
-				<div className="table-title">My sold</div>
+				<div className="table-title">Branch Product Sell</div>
 				{sellerProducts.length === 0 ? (
 					<div className="empty-state" style={{padding:24}}>
 						<div className="empty-icon">🧾</div>
@@ -345,7 +388,8 @@ function ProductSales({ salesUrl, token }) {
 						<table className="modern-table">
 							<thead>
 								<tr>
-									<th>Product No</th>
+									 <th>Product No</th>
+									
 									<th>Product Name</th>
 									<th>Brand</th>
 									<th>Model</th>
@@ -356,6 +400,7 @@ function ProductSales({ salesUrl, token }) {
 								
 									<th>Line Total</th>
 									<th>Validity</th>
+									 <th style={{textAlign:'center'}}>IMEs</th>
 		                                    <th>Action</th>
 								</tr>
 							</thead>
@@ -386,8 +431,39 @@ function ProductSales({ salesUrl, token }) {
 									
 										<td>{lineTotal(p).toFixed(2)}</td>
 										<td>{p.validity ? new Date(p.validity).toLocaleDateString() : '-'}</td>
-								
-
+										<td style={{textAlign:'center', position: 'relative'}}>
+											<div style={{display:'inline-block', textAlign:'left'}}>
+												<button className="btn tiny" style={{padding:'6px 10px', borderRadius:6, border:'1px solid #ddd'}} onClick={() => setShowImes(s => ({ ...s, [i]: !s[i] }))}>
+													{(Array.isArray(p.centralOnlyImes) ? p.centralOnlyImes.length : (Array.isArray(p.centralImes) ? p.centralImes.length : (Array.isArray(p.imes) ? p.imes.length : 0))) || 0} IMEs available <span style={{marginLeft:8}}>▾</span>
+												</button>
+											</div>
+											{showImes[i] ? (
+												<div style={{position:'absolute', zIndex:999, top:36, left:0, background:'#fff', border:'1px solid #ddd', padding:8, minWidth:260, maxHeight:260, overflowY:'auto', boxShadow:'0 6px 18px rgba(0,0,0,0.08)'}}>
+													<div style={{fontSize:13, marginBottom:6, color:'#333', fontWeight:600}}>Select IMEs</div>
+													{(((Array.isArray(p.centralOnlyImes) && p.centralOnlyImes.length) ? p.centralOnlyImes : (Array.isArray(p.centralImes) && p.centralImes.length) ? p.centralImes : (Array.isArray(p.imes) ? p.imes : [])) || []).map((val, idx2) => {
+														const checked = Array.isArray(p.selectedImes) && p.selectedImes.includes(val);
+														const isCentral = Array.isArray(p.centralOnlyImes) && p.centralOnlyImes.includes(val);
+														return (
+															<div key={idx2} style={{display:'flex', alignItems:'center', justifyContent:'space-between', padding:'6px 6px', borderBottom:'1px solid #f3f3f3'}}>
+															<div style={{display:'flex', alignItems:'center', gap:8}}>
+																<div style={{width:8}}></div>
+																<div style={{fontSize:13}}>{val}</div>
+																{isCentral ? <div style={{fontSize:11, color:'#666', marginLeft:8}}>(central)</div> : null}
+															</div>
+															<div>
+																<input type="checkbox" checked={checked} onChange={() => {
+																	setSellerProducts(sp => sp.map((s, idxS) => idxS === i ? { ...s, selectedImes: checked ? (s.selectedImes || []).filter(x => x !== val) : ((s.selectedImes || []).concat([val])) } : s));
+																}} />
+															</div>
+															</div>
+														);
+													})}
+													<div style={{paddingTop:8, borderTop:'1px solid #eee', marginTop:8, fontSize:13, color:'#333'}}>
+														{Array.isArray(p.selectedImes) && p.selectedImes.length ? `${p.selectedImes.length} selected` : '0 selected'}
+													</div>
+												</div>
+											) : null}
+										</td>
 										<td><button className="btn secondary" onClick={() => setSellerProducts(sp => sp.filter(x => (x.productId || x._id) !== (p.productId || p._id)))}>Remove</button></td>
 									</tr>
 								))}

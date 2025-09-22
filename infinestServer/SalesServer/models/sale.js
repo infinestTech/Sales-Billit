@@ -6,6 +6,7 @@ const SaleItem = new mongoose.Schema({
   productName: { type: String, default: '' },
   qty: { type: Number, default: 0 },
   sellingPrice: { type: Number, default: 0 },
+  imes: { type: [String], default: [] },
   lineTotal: { type: Number, default: 0 }
 }, { _id: false });
 
