@@ -10,6 +10,7 @@ function BranchSupplyHistory({ salesUrl, token }) {
   
   const [branchId, setBranchId] = React.useState('');
   const [filterDate, setFilterDate] = React.useState('');
+  const [imesFilter, setImesFilter] = React.useState('');
 
   // Simple data loading function
   const loadData = React.useCallback(async (bid = '') => {
@@ -67,8 +68,12 @@ function BranchSupplyHistory({ salesUrl, token }) {
       const when = s.createdAt || s.updatedAt || new Date();
       const supplier = s.supplier_id?.supplierName || s.supplierName || '-';
       (Array.isArray(s.items) ? s.items : []).forEach(it => {
+        // prepare IME string and apply IME filter
+        const imesStr = Array.isArray(it.imes) ? it.imes.join(',') : '';
+        if (imesFilter && imesStr.toLowerCase().indexOf(imesFilter.toLowerCase()) === -1) return;
         flat.push({
           supplier,
+          productNo: it.productNo || it.productId || '-',
           productName: it.productName || it.name || '-',
           brand: it.brand || '-',
           model: it.model || '-',
@@ -84,7 +89,7 @@ function BranchSupplyHistory({ salesUrl, token }) {
     });
 
     return flat;
-  }, [data.supplies, filterDate]);
+  }, [data.supplies, filterDate, imesFilter]);
 
   const currency = (n) => new Intl.NumberFormat('en-IN', { 
     style: 'currency', 
@@ -158,6 +163,14 @@ function BranchSupplyHistory({ salesUrl, token }) {
       ])
     ]),
 
+    // IME filter row
+    React.createElement('div', { key: 'ime-filter', className: 'row', style: { padding: '6px 12px 0 12px' } }, [
+      React.createElement('div', { key: 'ime-col', className: 'col' }, [
+        React.createElement('label', { key: 'imelabel' }, 'Filter by IME'),
+        React.createElement('input', { key: 'imeinput', type: 'text', value: imesFilter, onChange: (e) => setImesFilter(e.target.value), style: { marginBottom: '12px', padding: '8px', width: '100%' } })
+      ])
+    ]),
+
     React.createElement('div', {
       key: 'content',
       className: 'table-scroll'
@@ -184,6 +197,8 @@ function BranchSupplyHistory({ salesUrl, token }) {
         }, [
           React.createElement('thead', { key: 'thead' }, 
             React.createElement('tr', {}, [
+             
+              React.createElement('th', { key: 'productNo' }, 'Product No'),
               React.createElement('th', { key: 'product' }, 'Product Name'),
               React.createElement('th', { key: 'brand' }, 'Brand'),
               React.createElement('th', { key: 'model' }, 'Model'),
@@ -197,8 +212,9 @@ function BranchSupplyHistory({ salesUrl, token }) {
             ])
           ),
           React.createElement('tbody', { key: 'tbody' }, 
-            processedData.map((r, i) => 
+                processedData.map((r, i) => 
               React.createElement('tr', { key: i }, [
+                React.createElement('td', { key: 'productNo' }, r.productNo),
                 React.createElement('td', { key: 'product' }, r.productName),
                 React.createElement('td', { key: 'brand' }, r.brand),
                 React.createElement('td', { key: 'model' }, r.model),

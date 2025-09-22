@@ -7,6 +7,7 @@ function BranchSupply({ salesUrl, token }) {
   const [error, setError] = React.useState('');
   const [loading, setLoading] = React.useState(false);
   const [productFilter, setProductFilter] = React.useState('');
+  const [imesOpen, setImesOpen] = React.useState({});
 
   const loadBranches = async () => {
     try {
@@ -35,6 +36,19 @@ function BranchSupply({ salesUrl, token }) {
 
   React.useEffect(() => { if (selectedBranch) loadStock(selectedBranch); }, [selectedBranch]);
 
+  // close IME dropdowns on outside click
+  React.useEffect(() => {
+    function onDocClick(e) {
+      // if click happened inside a dropdown, ignore; otherwise close all imes dropdowns
+      try {
+        if (e && e.target && e.target.closest && e.target.closest('.imes-dropdown')) return;
+      } catch (__) {}
+      setImesOpen({});
+    }
+    document.addEventListener('click', onDocClick);
+    return () => document.removeEventListener('click', onDocClick);
+  }, []);
+
   const getAvailableQty = (row) => Number(row?.centralQty != null ? row.centralQty : (row?.qty ?? 0)) || 0;
 
   const onQtyChange = (productId, qty) => {
@@ -53,10 +67,50 @@ function BranchSupply({ salesUrl, token }) {
     const cost = Number(row?.costPrice || 0);
     const sellingPrice = pct ? (cost * (1 + pct / 100)) : Number(row?.sellingPrice || 0);
     const value = sellingPrice * q;
-    const next = { ...selectedRows, [productId]: { qty: q, value, productId, pct, sellingPrice } };
-    setSelectedRows(next);
-    const total = Object.values(next).reduce((s, it) => s + (Number(it.value) || 0), 0);
-    setTotalValue(total);
+    // ensure selected imes array length does not exceed qty
+    setSelectedRows(prev => {
+      const prevImes = Array.isArray(prev[productId]?.imes) ? prev[productId].imes.slice(0, q) : [];
+      const next = { ...prev, [productId]: { qty: q, value, productId, pct, sellingPrice, imes: prevImes } };
+      const total = Object.values(next).reduce((s, it) => s + (Number(it.value) || 0), 0);
+      setTotalValue(total);
+      return next;
+    });
+  };
+
+  const onImesChange = (productId, imesArray) => {
+    const row = stock.find(s => (s.productId || s._id) === productId) || {};
+    setSelectedRows(prev => {
+      const qty = Number(prev[productId]?.qty || 0);
+      const pct = Number(prev[productId]?.pct || 0);
+      const cost = Number(row?.costPrice || 0);
+      const sellingPrice = pct ? (cost * (1 + pct / 100)) : Number(row?.sellingPrice || 0);
+      const imes = Array.isArray(imesArray) ? imesArray.slice() : [];
+      const value = sellingPrice * qty;
+      const next = { ...prev, [productId]: { qty, value, productId, pct, sellingPrice, imes } };
+      const total = Object.values(next).reduce((s, it) => s + (Number(it.value) || 0), 0);
+      setTotalValue(total);
+      return next;
+    });
+  };
+
+  // Toggle a single ime for a product using functional update to avoid stale closures
+  const toggleIme = (productId, ime) => {
+    setSelectedRows(prev => {
+      const curr = Array.isArray(prev[productId]?.imes) ? prev[productId].imes.slice() : [];
+      const idx = curr.indexOf(ime);
+      if (idx >= 0) curr.splice(idx, 1); else curr.push(ime);
+      // reuse onImesChange logic: compute derived fields
+      const qty = Number(prev[productId]?.qty || 0);
+      const pct = Number(prev[productId]?.pct || 0);
+      const row = stock.find(s => (s.productId || s._id) === productId) || {};
+      const cost = Number(row?.costPrice || 0);
+      const sellingPrice = pct ? (cost * (1 + pct / 100)) : Number(row?.sellingPrice || 0);
+      const value = sellingPrice * qty;
+      const next = { ...prev, [productId]: { qty, value, productId, pct, sellingPrice, imes: curr } };
+      const total = Object.values(next).reduce((s, it) => s + (Number(it.value) || 0), 0);
+      setTotalValue(total);
+      return next;
+    });
   };
 
   const onPctChange = (productId, pctVal) => {
@@ -87,7 +141,7 @@ function BranchSupply({ salesUrl, token }) {
         const available = getAvailableQty(row);
         const qtyToSend = Math.min(Number(r.qty) || 0, available);
         if (qtyToSend !== (Number(r.qty) || 0)) adjusted = true;
-        return {
+        const itemObj = {
           productId: r.productId,
           productName: row.productName || row.name || '',
           brand: row.brand || '',
@@ -98,7 +152,22 @@ function BranchSupply({ salesUrl, token }) {
           costPrice: row.costPrice,
           pct: r.pct || 0
         };
+        if (Array.isArray(r.imes) && r.imes.length) itemObj.imes = r.imes.slice(0, qtyToSend);
+        return itemObj;
       }).filter(i => i.qty > 0);
+
+      // debug: print exactly what we are about to send
+      try { console.log('BranchSupply: sending items', items); } catch (__) {}
+
+      // Validate selected imes match qty for items that require IME selection
+      for (const it of items) {
+        if (Array.isArray(it.imes) && it.imes.length > 0) {
+          if (Number(it.imes.length) !== Number(it.qty)) {
+            setLoading(false);
+            return setError(`Selected IMEs (${it.imes.length}) do not match the quantity (${it.qty}) for product ${it.productName || it.productId}`);
+          }
+        }
+      }
 
       if (items.length === 0) return setError('Select at least one product and enter qty');
 
@@ -196,6 +265,7 @@ function BranchSupply({ salesUrl, token }) {
                   <th>Model</th>
                   <th>Qty</th>
                  
+                  <th>IME / IME Count</th>
                   <th>Total Cost</th>
                   <th>Selling Price</th>
                   <th>Supply Qty</th>
@@ -207,6 +277,10 @@ function BranchSupply({ salesUrl, token }) {
                 {filteredStock.map(s => {
                   const pid = s.productId || s._id;
                   const sel = selectedRows[pid] || { qty: 0, value: 0 };
+                  // Use only central IMEs for dropdowns (centralOnlyImes preferred)
+                  const centralOnly = Array.isArray(s.centralOnlyImes) && s.centralOnlyImes.length ? s.centralOnlyImes : (Array.isArray(s.centralImes) ? s.centralImes : []);
+                  const imeList = centralOnly.map(i => ({ val: i, origin: 'central' }));
+                  const availableImesCount = (Array.isArray(sel.imes) && sel.imes.length) ? sel.imes.length : imeList.length;
                   return (
                     <tr key={pid}>
                       <td>{s.productNo || '-'}</td>
@@ -214,7 +288,79 @@ function BranchSupply({ salesUrl, token }) {
                       <td>{s.brand || '-'}</td>
                       <td>{s.model || '-'}</td>
                       <td>{(s.centralQty != null ? s.centralQty : (s.qty ?? '-'))}</td>
-                     
+
+                      <td style={{ position: 'relative' }}>
+                        {((Array.isArray(s.imes) && s.imes.length) || (Array.isArray(s.centralImes) && s.centralImes.length)) ? (
+                          <div>
+                            <div
+                              role="button"
+                              onClick={(ev) => { ev.stopPropagation(); setImesOpen(prev => ({ ...(prev || {}), [pid]: !prev[pid] })); }}
+                              style={{
+                                border: '1px solid #d1d5db',
+                                padding: '6px 8px',
+                                minWidth: 160,
+                                borderRadius: 6,
+                                background: '#fff',
+                                cursor: 'pointer',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'space-between'
+                              }}
+                            >
+                              <div style={{ fontSize: 13 }}>{(sel.imes || []).length ? `${(sel.imes || []).length} selected` : (availableImesCount ? `${availableImesCount} IMEs available` : 'Select IMEs')}</div>
+                              <div style={{ transform: (imesOpen && imesOpen[pid]) ? 'rotate(180deg)' : 'rotate(0deg)' }}>▾</div>
+                            </div>
+                            {imesOpen && imesOpen[pid] ? (
+                              <div className="imes-dropdown" onClick={e => e.stopPropagation()} style={{
+                                position: 'absolute',
+                                zIndex: 40,
+                                background: '#fff',
+                                border: '1px solid #e5e7eb',
+                                boxShadow: '0 6px 18px rgba(0,0,0,0.06)',
+                                marginTop: 6,
+                                padding: 8,
+                                borderRadius: 6,
+                                maxHeight: 180,
+                                overflow: 'auto',
+                                minWidth: 220
+                              }}>
+                                {imeList.map(iObj => {
+                                  const i = iObj.val;
+                                  const checked = Array.isArray(sel.imes) ? sel.imes.includes(i) : false;
+                                  return (
+                                    <div key={i} onClick={() => {
+                                      const prev = Array.isArray(sel.imes) ? sel.imes.slice() : [];
+                                      const idx = prev.indexOf(i);
+                                      if (idx >= 0) prev.splice(idx, 1); else prev.push(i);
+                                      onImesChange(pid, prev);
+                                    }}
+                                      style={{
+                                        padding: '6px 8px',
+                                        borderRadius: 4,
+                                        marginBottom: 4,
+                                        display: 'flex',
+                                        justifyContent: 'space-between',
+                                        alignItems: 'center',
+                                        background: checked ? '#eef2ff' : 'transparent',
+                                        cursor: 'pointer'
+                                      }}>
+                                      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                                        <div style={{ fontSize: 13 }}>{i}</div>
+                                        {iObj.origin === 'central' ? <div style={{ fontSize: 11, color: '#6b7280' }}>(central)</div> : null}
+                                      </div>
+                                      <div style={{ width: 18, height: 18, borderRadius: 4, border: '1px solid #cbd5e1', background: checked ? '#6366f1' : 'transparent', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontSize: 12 }}>
+                                        {checked ? '✓' : ''}
+                                      </div>
+                                    </div>
+                                  );
+                                })}
+                                <div style={{ fontSize: 11, color: '#666', marginTop: 6 }}>{(sel.imes || []).length} selected</div>
+                              </div>
+                            ) : null}
+                          </div>
+                        ) : (s.imeNo || s.ime ? (s.imeNo || s.ime) : '-')}
+                      </td>
+
                       <td>{s.totalCostPrice != null ? currency(s.totalCostPrice) : (s.costPrice != null ? currency(s.costPrice) : '-')}</td>
                       <td>
                         <div style={{display:'flex',flexDirection:'column'}}>

@@ -13,7 +13,12 @@ const BranchExpense = mongoose.model('BranchExpense', new mongoose.Schema({
 exports.createBranchExpense = async (req, res) => {
   try {
     const shop_id = req.user.shop_id;
-    const branch_id = req.body.branch_id || req.user.branch_id || null;
+    // Accept branch_id from body or from user's branch; if missing (admin user),
+    // fall back to the admin user's id so admin can create expenses without selecting a branch.
+    let branch_id = req.body.branch_id || req.user.branch_id || null;
+    if (!branch_id) {
+      branch_id = req.user.userId || null;
+    }
     const title = (req.body.title || '').toString();
     const amount = Number(req.body.amount) || 0;
     const date = req.body.date ? new Date(req.body.date) : new Date();
@@ -62,13 +67,17 @@ exports.createBranchExpense = async (req, res) => {
 exports.listExpensesForShop = async (req, res) => {
   try {
     const shop_id = req.user.shop_id;
-    let branch_id = req.query.branch_id || null;
-    
+    let branch_id = null;
+
     // If this is a branch user, force filter to their branch only
     if (req.user.isBranch && req.user.branch_id) {
       branch_id = req.user.branch_id;
+    } else {
+      // admin users: if a branch_id was provided in query use it; otherwise
+      // default to admin's own userId so admin sees only admin-created expenses by default
+      branch_id = req.query.branch_id || req.user.userId || null;
     }
-    
+
     const q = { shop_id };
     if (branch_id) q.branch_id = branch_id;
     const expenses = await BranchExpense.find(q).sort({ createdAt: -1 }).lean();
@@ -83,11 +92,14 @@ exports.listExpensesForShop = async (req, res) => {
 exports.summaryForDateRange = async (req, res) => {
   try {
     const shop_id = req.user.shop_id;
-    let branch_id = req.query.branch_id || req.user.branch_id || null;
-    
+    let branch_id = null;
+
     // If this is a branch user, force filter to their branch only
     if (req.user.isBranch && req.user.branch_id) {
       branch_id = req.user.branch_id;
+    } else {
+      // admin: use requested branch_id if provided, otherwise default to admin's own id
+      branch_id = req.query.branch_id || req.user.userId || null;
     }
 
     // Accept either a single date (YYYY-MM-DD) or start/end ISO strings

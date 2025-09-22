@@ -370,6 +370,7 @@ function InStockView({ salesUrl, token }) {
                     <th style={{width: '120px'}}>Model</th>
                     <th style={{width: '80px'}}>Qty</th>
                     <th style={{width: '90px'}}>Total Qty</th>
+                    <th style={{width: '120px'}}>IME / IME Count</th>
                     <th style={{width: '110px'}}>Cost Price</th>
                     <th style={{width: '120px'}}>Validity</th>
                     <th style={{width: '120px'}}>Product Date</th>
@@ -405,6 +406,18 @@ function InStockView({ salesUrl, token }) {
                         </td>
                         <td>
                           <span className="count-badge">{it.totalQuantity ?? it.quantity ?? 0}</span>
+                        </td>
+                        <td>
+                          {Array.isArray(it.imes) && it.imes.length ? (
+                            <div style={{position:'relative'}}>
+                              <div style={{border:'1px solid #e5e7eb', padding:'6px 8px', borderRadius:6, minWidth:120}}>
+                                {it.imes.length} IMEs
+                              </div>
+                              <div style={{position:'absolute', zIndex:30, background:'#fff', border:'1px solid #e5e7eb', padding:8, marginTop:6, borderRadius:6, display:'none'}}>
+                                {it.imes.map(i=> <div key={i} style={{padding:'4px 6px'}}>{i}</div>)}
+                              </div>
+                            </div>
+                          ) : '-'}
                         </td>
                         <td>
                           <span className="amount-badge">

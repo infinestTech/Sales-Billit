@@ -127,11 +127,13 @@ exports.listInStock = async (req, res) => {
     // For each returned entry, compute for each item how much was shipped
     // to branches by comparing totalQuantity vs current quantity.
     try {
+      try { console.debug('FLOW listInStock: entries fetched', { shop_id, count: Array.isArray(entries) ? entries.length : 0 }); } catch (__) {}
       const enriched = (entries || []).map(e => {
         const items = (Array.isArray(e.items) ? e.items : []).map(it => {
           const totalQ = Number(it.totalQuantity || it.quantity || 0);
           const currentQ = Number(it.quantity || 0);
           const shippedQty = Math.max(0, totalQ - currentQ);
+          try { console.debug('DEBUG inStock item imes', { productNo: it.productNo, imesCount: Array.isArray(it.imes) ? it.imes.length : 0 }); } catch (__) {}
           return { ...it, totalQuantity: totalQ, shippedQty };
         });
         return { ...e, items };

@@ -2,21 +2,8 @@ const mongoose = require('mongoose');
 const Branch = require('../models/branch');
 const InStock = require('../models/inStock');
 
-// New model for branch stock and supply will be implemented using simple collections here
-const BranchStock = mongoose.model('BranchStock', new mongoose.Schema({
-  shop_id: { type: String, index: true },
-  branch_id: { type: String, index: true },
-  productId: { type: String },
-  productNo: { type: String },
-  productName: { type: String },
-  brand: { type: String },
-  model: { type: String },
-  costPrice: { type: Number, default: 0 },
-  qty: { type: Number, default: 0 },
-  sellingPrice: { type: Number, default: 0 },
-  validity: { type: Date },
-  updatedBy: { type: String }
-}, { timestamps: true }));
+// Use canonical BranchStock model (includes `imes` field)
+const BranchStock = require('../models/branchStock');
 
 const BranchSupply = mongoose.model('BranchSupply', new mongoose.Schema({
   shop_id: { type: String, index: true },
@@ -38,6 +25,7 @@ exports.createBranchSupply = async (req, res) => {
     const shop_id = req.user.shop_id;
     const branch_id = req.body.branch_id;
     const items = Array.isArray(req.body.items) ? req.body.items : [];
+    try { console.debug('FLOW createBranchSupply: incoming', { shop_id, branch_id, itemsCount: items.length }); } catch (__) {}
     if (!branch_id) return res.status(400).json({ success: false, message: 'branch_id required' });
     if (items.length === 0) return res.status(400).json({ success: false, message: 'items required' });
 
@@ -55,7 +43,7 @@ exports.createBranchSupply = async (req, res) => {
       const totalCostPrice = Number(Number(costUnit * qty).toFixed(2));
       total += value;
       totalCost += totalCostPrice;
-      return {
+      const out = {
         productId: i.productId || i._id || null,
         productNo: i.productNo || '',
         productName: i.productName || i.name || '',
@@ -69,27 +57,53 @@ exports.createBranchSupply = async (req, res) => {
         pct: pct,
         validity: i.validity ? new Date(i.validity) : null
       };
+      // include imes only when client provided them (non-empty)
+      if (Array.isArray(i.imes) && i.imes.length) out.imes = i.imes.slice(0, qty);
+      return out;
     });
 
-    // Create supply record
-  const supply = await BranchSupply.create({ shop_id, branch_id, items: prepared, totalSupplyValue: total, totalSupplyCost: totalCost, createdBy: req.user.userId || req.user.branch_id || '' });
+    // Validate supplied IMEs against central InStock when productId references central docs
+    for (const it of prepared) {
+      try {
+        const pid = String(it.productId || '');
+        if (pid.includes('_') && Array.isArray(it.imes) && it.imes.length) {
+          const [docId, idxStr] = pid.split('_');
+          const idx = Number(idxStr);
+          if (docId && Number.isInteger(idx)) {
+            const central = await InStock.findById(docId).lean();
+            const centralIt = (central && Array.isArray(central.items) && central.items[idx]) ? central.items[idx] : null;
+            const centralImes = Array.isArray(centralIt && centralIt.imes) ? centralIt.imes : [];
+            const invalid = it.imes.filter(i => !centralImes.includes(i));
+            if (invalid.length) {
+              return res.status(400).json({ success: false, message: `Invalid IMEs for product ${it.productName || it.productId}: ${invalid.join(', ')}` });
+            }
+          }
+        }
+      } catch (e) {
+        // ignore per-item validation errors and continue; other checks will catch problems
+      }
+    }
+
+    // Create supply record (after validation)
+    const supply = await BranchSupply.create({ shop_id, branch_id, items: prepared, totalSupplyValue: total, totalSupplyCost: totalCost, createdBy: req.user.userId || req.user.branch_id || '' });
 
     // Update BranchStock: increment or create per item
     for (const it of prepared) {
       const filter = { shop_id, branch_id, productId: it.productId };
-      const update = {
-        $set: {
-          productNo: it.productNo || '',
-          productName: it.productName,
-          sellingPrice: Number(Number(it.unitSellingPrice || 0).toFixed(2)),
-          brand: it.brand,
-          model: it.model,
-          validity: it.validity,
-          costPrice: it.costPrice,
-          updatedBy: req.user.userId || req.user.branch_id || ''
-        },
-        $inc: { qty: it.qty }
+      // Build $set object but include `imes` only when non-empty in the request to avoid
+      // overwriting existing branch imes with an empty array when the client didn't select any.
+      const setObj = {
+        productNo: it.productNo || '',
+        productName: it.productName,
+        sellingPrice: Number(Number(it.unitSellingPrice || 0).toFixed(2)),
+        brand: it.brand,
+        model: it.model,
+        validity: it.validity,
+        costPrice: it.costPrice,
+        updatedBy: req.user.userId || req.user.branch_id || ''
       };
+      // Do not include imes in $set to avoid overwriting existing branch imes with an incoming empty array.
+      const update = { $set: setObj, $inc: { qty: it.qty } };
 
       // If this item references a central InStock item, try to fetch productNo from central
       try {
@@ -112,6 +126,15 @@ exports.createBranchSupply = async (req, res) => {
       }
 
       await BranchStock.findOneAndUpdate(filter, update, { upsert: true, new: true });
+      // If client provided imes, merge them into BranchStock. Use $addToSet to avoid duplicates and to
+      // avoid wiping existing imes on the branch row.
+      if (Array.isArray(it.imes) && it.imes.length) {
+        try {
+          await BranchStock.findOneAndUpdate(filter, { $addToSet: { imes: { $each: it.imes } } });
+        } catch (e) {
+          // ignore merge errors
+        }
+      }
 
       // If this supply came from a central in-stock product (productId like '<docId>_<idx>'),
       // decrement the central InStock.items[idx].quantity so central and branch stay consistent.
@@ -121,12 +144,34 @@ exports.createBranchSupply = async (req, res) => {
           const [docId, idxStr] = pid.split('_');
           const idx = Number(idxStr);
           if (docId && Number.isInteger(idx)) {
+            // If IMEs were supplied, use $pullAll to remove them from the central item's imes array.
+            if (Array.isArray(it.imes) && it.imes.length) {
+              try {
+                // debug: print current imes before removal
+                try { console.debug('DEBUG before pullAll', { docId, idx, remove: it.imes }); } catch (__) {}
+                await InStock.updateOne({ _id: docId }, { $pullAll: { [`items.${idx}.imes`]: it.imes } });
+                // debug: print a note after pullAll
+                try { console.debug('DEBUG after pullAll executed', { docId, idx }); } catch (__) {}
+              } catch (e) {
+                console.error('DEBUG pullAll error', e && e.message ? e.message : e);
+              }
+            }
+            // Re-fetch central doc to calculate correct quantity and remaining imes
             const central = await InStock.findById(docId).lean();
             if (central && Array.isArray(central.items) && central.items[idx]) {
-              const currentQty = Number(central.items[idx].quantity || 0);
-              const newQty = Math.max(0, currentQty - Number(it.qty || 0));
-              const path = `items.${idx}.quantity`;
-              await InStock.findByIdAndUpdate(docId, { $set: { [path]: newQty } });
+              const currentItem = central.items[idx];
+              const currentQty = Number(currentItem.quantity || currentItem.qty || 0);
+              // debug: print remaining imes after pullAll
+              try { console.debug('DEBUG central item after pullAll', { docId, idx, imes: currentItem.imes, quantity: currentItem.quantity || currentItem.qty }); } catch (__) {}
+              // prefer imes length as the source of truth when present
+              const remainingImes = Array.isArray(currentItem.imes) ? currentItem.imes : [];
+              const newQty = Array.isArray(currentItem.imes) && currentItem.imes.length ? remainingImes.length : Math.max(0, currentQty - Number(it.qty || 0));
+              const qtyPath = `items.${idx}.quantity`;
+              const imesPath = `items.${idx}.imes`;
+              const setObj2 = { [qtyPath]: newQty };
+              if (Array.isArray(currentItem.imes)) setObj2[imesPath] = remainingImes;
+              await InStock.findByIdAndUpdate(docId, { $set: setObj2 });
+              try { console.debug('DEBUG central item updated', { docId, idx, setObj2 }); } catch (__) {}
             }
           }
         }
@@ -167,6 +212,7 @@ exports.createBranchSupply = async (req, res) => {
   const updatedRows = await BranchStock.find({ shop_id, branch_id }).lean();
   // reload supply to include any updates
   const freshSupply = await BranchSupply.findById(supply._id).lean();
+  try { console.debug('FLOW createBranchSupply: returning', { supplyId: freshSupply._id, updatedRowsCount: Array.isArray(updatedRows) ? updatedRows.length : 0 }); } catch (__) {}
   return res.json({ success: true, supply: freshSupply || supply, rows: updatedRows });
   } catch (err) {
     console.error('createBranchSupply error:', err.message || err);
@@ -193,8 +239,10 @@ exports.listBranchStock = async (req, res) => {
     // If client requests only branch-specific stock, return BranchStock rows only
     if (onlyBranch) {
       const bid = branch_id || req.user.branch_id || null;
+      try { console.debug('FLOW listBranchStock: incoming onlyBranch', { shop_id, branch_id: bid }); } catch (__) {}
       if (!bid) return res.json({ success: true, rows: [] });
       let rowsOnly = await BranchStock.find({ shop_id, branch_id: bid }).lean();
+      try { console.debug('FLOW listBranchStock: branch rows fetched', { count: Array.isArray(rowsOnly) ? rowsOnly.length : 0 }); } catch (__) {}
 
       // If some branch rows are missing brand/model/validity, try to backfill from central InStock
   const needFill = rowsOnly.filter(r => (!r.brand || r.brand === '') || (!r.model || r.model === '') || !r.validity || (!r.productNo || r.productNo === ''));
@@ -220,6 +268,9 @@ exports.listBranchStock = async (req, res) => {
                   if (!r.model || r.model === '') r.model = it.model || r.model || '';
                     if (!r.validity) r.validity = it.validity || r.validity || null;
                     if (!r.productNo || r.productNo === '') r.productNo = it.productNo || r.productNo || '';
+                    // DO NOT backfill central imes into branch rows here. Branch IMEs are branch-scoped
+                    // and copying central IMEs into branch rows can cause stale/incorrect IME lists to appear
+                    // in branch views. (Keep other backfills like brand/model/validity/productNo.)
                 }
               }
             } catch (e) {
@@ -229,11 +280,13 @@ exports.listBranchStock = async (req, res) => {
           });
 
           // Persist any productNo backfills into BranchStock so subsequent requests include it
+          // Do not persist imes from central into BranchStock.
           try {
             for (const r of rowsOnly) {
               try {
                 if (r.productNo && String(r.productId || '').includes('_')) {
-                  await BranchStock.findOneAndUpdate({ shop_id, branch_id: bid, productId: r.productId }, { $set: { productNo: r.productNo } });
+                  const setObj = { productNo: r.productNo };
+                  await BranchStock.findOneAndUpdate({ shop_id, branch_id: bid, productId: r.productId }, { $set: setObj });
                 }
               } catch (e) { /* ignore individual update errors */ }
             }
@@ -247,6 +300,7 @@ exports.listBranchStock = async (req, res) => {
         const needle = productNoFilter.toLowerCase();
         rowsFiltered = rowsOnly.filter(r => (String(r.productNo || '').toLowerCase().includes(needle)));
       }
+      try { console.debug('FLOW listBranchStock: returning onlyBranch rows', { count: Array.isArray(rowsFiltered) ? rowsFiltered.length : 0 }); } catch (__) {}
       return res.json({ success: true, rows: rowsFiltered, customerNo: customerNo || null });
     }
 
@@ -275,10 +329,29 @@ exports.listBranchStock = async (req, res) => {
           costPrice: costPrice,
           sellingPrice: (it.sellingPrice ?? it.price ?? it.costPrice ?? 0),
           validity: it.validity || null,
-          totalCostPrice: (Number(qty) * Number(costPrice || 0))
+          totalCostPrice: (Number(qty) * Number(costPrice || 0)),
+          imes: Array.isArray(it.imes) ? it.imes : [],
+          // expose centralImes for frontend dropdowns that need to show central IMEs
+          centralImes: Array.isArray(it.imes) ? it.imes : [],
+          // explicit alias to indicate central-only IMEs
+          centralOnlyImes: Array.isArray(it.imes) ? it.imes : []
         });
       });
     });
+
+    // If client explicitly requests central-only (useful for dropdowns that should show
+    // only available central items), return the centralAgg directly.
+    const onlyCentral = (req.query.only_central === '1' || req.query.only_central === 'true');
+    if (onlyCentral) {
+      let rowsCentral = centralAgg;
+      // apply productNo filter if provided
+      if (productNoFilter) {
+        const needle = productNoFilter.toLowerCase();
+        rowsCentral = (rowsCentral || []).filter(r => (String(r.productNo || '').toLowerCase().includes(needle)));
+      }
+      try { console.debug('FLOW listBranchStock: returning central-only rows', { count: Array.isArray(rowsCentral) ? rowsCentral.length : 0 }); } catch (__) {}
+      return res.json({ success: true, rows: rowsCentral, customerNo: customerNo || null });
+    }
 
     // If a branch is requested, merge central items with branch-specific rows
   if (branch_id) {
@@ -287,7 +360,7 @@ exports.listBranchStock = async (req, res) => {
       (branchRows || []).forEach(br => { branchMap[String(br.productId)] = br; });
 
       // Merge: prefer central list but override qty/sellingPrice from branch when present
-  const merged = centralAgg.map(c => {
+      const merged = centralAgg.map(c => {
         const br = branchMap[c.productId];
         const centralQty = Number(c.qty || 0);
         const branchQty = br ? Number(br.qty || 0) : 0;
@@ -311,9 +384,18 @@ exports.listBranchStock = async (req, res) => {
           // Selling price: branch override if present, else central sellingPrice
           sellingPrice: br ? (br.sellingPrice ?? c.sellingPrice) : c.sellingPrice,
           validity: br ? (br.validity || c.validity) : c.validity,
-          totalCostPrice: Number(totalQty) * Number(costPrice || 0)
+          totalCostPrice: Number(totalQty) * Number(costPrice || 0),
+          // include imes only from branch rows. Do NOT fall back to central imes for branch views.
+          imes: Array.isArray(br && br.imes) && br.imes.length ? br.imes : [],
+          // keep central imes available for display (do not persist them into branch rows)
+          centralImes: Array.isArray(c.imes) ? c.imes : [],
+          // explicit central-only IME list
+          centralOnlyImes: Array.isArray(c.imes) ? c.imes : []
         };
+        try { console.debug('DEBUG merged item imes source', { productId: c.productId, branchHasImes: Array.isArray(br && br.imes) && br.imes.length, centralImesCount: Array.isArray(c.imes) ? c.imes.length : 0 }); } catch (__) {}
+        return obj;
       });
+
 
       // Include any branch-only items that don't exist in centralAgg
       const centralIds = new Set(centralAgg.map(c => String(c.productId)));
@@ -333,7 +415,8 @@ exports.listBranchStock = async (req, res) => {
             costPrice: costPrice,
             sellingPrice: br.sellingPrice ?? 0,
             validity: br.validity || null,
-            totalCostPrice: Number(qty) * Number(costPrice || 0)
+            totalCostPrice: Number(qty) * Number(costPrice || 0),
+            imes: Array.isArray(br.imes) ? br.imes : []
           });
         }
       });
@@ -350,6 +433,7 @@ exports.listBranchStock = async (req, res) => {
       rows = (rows || []).filter(r => (String(r.productNo || '').toLowerCase().includes(needle)));
     }
 
+    try { console.debug('FLOW listBranchStock: returning merged rows', { count: Array.isArray(rows) ? rows.length : 0 }); } catch (__) {}
     return res.json({ success: true, rows, customerNo: customerNo || null });
   } catch (err) {
     console.error('listBranchStock error:', err.message || err);

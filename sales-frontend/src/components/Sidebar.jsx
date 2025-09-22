@@ -120,6 +120,8 @@ function Sidebar({ active = 'bank', onSelect, planId, branchLimit, branchUser })
               locked={!canUseBranch}
               onLockedClick={() => window.checkSalesFeatureAccess('branch_management_enabled', 'Branch Supply', features, 'Basic/Gold/Premium')}
             />
+                        <Item id="branch-expense" label="Expenses" icon={"💸"} activeId={active} onClick={onSelect} />
+
             <Item
               id="branch-supply-history"
               label="Supply History"

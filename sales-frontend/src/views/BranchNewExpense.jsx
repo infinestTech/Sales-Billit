@@ -1,6 +1,7 @@
-function BranchNewExpense({ salesUrl, token }) {
+function BranchNewExpense({ salesUrl, token, adminUrl, branchUser }) {
   const [form, setForm] = React.useState({ title: '', amount: '', date: '', bank_id: '' });
   const [banks, setBanks] = React.useState([]);
+  const [branches, setBranches] = React.useState([]);
   const [selectedBank, setSelectedBank] = React.useState(null);
   const [loading, setLoading] = React.useState(false);
   const [error, setError] = React.useState('');
@@ -28,6 +29,8 @@ function BranchNewExpense({ salesUrl, token }) {
     try {
       setError('');
       const url = new URL(salesUrl + '/api/branch-expenses');
+      // If admin selected a branch, include it; branch users will automatically be scoped server-side
+      if (form.branch_id) url.searchParams.set('branch_id', form.branch_id);
       const res = await fetch(url, { headers: { Authorization: 'Bearer ' + token } });
       const data = await res.json();
       if (!res.ok) throw new Error(data.message || 'Failed to load expenses');
@@ -36,6 +39,22 @@ function BranchNewExpense({ salesUrl, token }) {
   };
 
   React.useEffect(() => { load(); }, [token]);
+
+  // Reload when admin selects branch (or branchUser changes branch selection)
+  React.useEffect(() => {
+    load();
+    // also reload sales used for summary
+    (async () => {
+      try {
+        const url = new URL(salesUrl + '/api/sales');
+        url.searchParams.set('pageSize', '200');
+        if (form.branch_id) url.searchParams.set('branch_id', form.branch_id);
+        const res = await fetch(url, { headers: { Authorization: 'Bearer ' + token } });
+        const data = await res.json();
+        if (res.ok) setSales(Array.isArray(data.sales) ? data.sales : []);
+      } catch (_e) {}
+    })();
+  }, [form.branch_id]);
 
   // Load banks for selection
   React.useEffect(() => {
@@ -51,6 +70,19 @@ function BranchNewExpense({ salesUrl, token }) {
       }
     };
     fetchBanks();
+    // If this is an admin view (no branch token), load branches for admin to select
+    const fetchBranches = async () => {
+      try {
+        const url = new URL(salesUrl + '/api/branches');
+        const res = await fetch(url, { headers: { Authorization: 'Bearer ' + token } });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.message || 'Failed to load branches');
+        setBranches(Array.isArray(data.branches) ? data.branches : []);
+      } catch (e) {
+        setBranches([]);
+      }
+    };
+    fetchBranches();
   }, [token]);
 
   React.useEffect(() => {
@@ -69,9 +101,8 @@ function BranchNewExpense({ salesUrl, token }) {
         const url = new URL(salesUrl + '/api/sales');
         // try to request larger pageSize to include today's sales
         url.searchParams.set('pageSize', '200');
-        if (localStorage.getItem('branch_token')) {
-          // branch users will have branch_id embedded server-side; still pass nothing
-        }
+        // If admin selected a branch, include as query so sales summary matches
+        if (form.branch_id) url.searchParams.set('branch_id', form.branch_id);
         const res = await fetch(url, { headers: { Authorization: 'Bearer ' + token } });
         const data = await res.json();
         if (!res.ok) throw new Error(data.message || 'Failed to load sales');
@@ -144,15 +175,34 @@ function BranchNewExpense({ salesUrl, token }) {
     if (amt > Number(selectedBank.accountBalance)) return setError('Amount exceeds selected bank balance');
     setLoading(true);
     try {
+      // capture values locally before we clear the form
+      const postTitle = form.title;
+      const postDate = form.date || new Date().toISOString();
+      const postBranchId = form.branch_id || undefined;
+
       const res = await fetch(salesUrl + '/api/branch-expenses', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token },
-        body: JSON.stringify({ title: form.title, amount: amt, date: form.date || new Date().toISOString(), bank_id: form.bank_id })
+        body: JSON.stringify({ title: postTitle, amount: amt, date: postDate, bank_id: form.bank_id, branch_id: postBranchId })
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.message || 'Create failed');
-      setForm({ title: '', amount: '', date: '', bank_id: '' });
+      // clear only the fields we want; preserve selected branch and bank if desired
+      setForm(f => ({ ...f, title: '', amount: '', date: '' }));
       await load();
+      // notify admin server (BillitServer) so admin portal sees the expense too
+      if (adminUrl) {
+        try {
+          // admin expects shop_id (user/shop identifier) and createdAt
+          const adminBody = { shop_id: (data.expense && data.expense.shop_id) || (window && window.shopId) || '', title: postTitle, amount: amt, createdAt: postDate };
+          // do not fail the branch creation if admin call fails
+          fetch((adminUrl || '') + '/api/expenses/add', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token },
+            body: JSON.stringify(adminBody)
+          }).catch(() => { /* ignore admin post errors */ });
+        } catch (__) { /* ignore */ }
+      }
       try { window.dispatchEvent(new Event('branch-expense-created')); } catch (__) {}
     } catch (e) { setError(e.message); } finally { setLoading(false); }
   };
@@ -195,6 +245,22 @@ function BranchNewExpense({ salesUrl, token }) {
                   </div>
                 ) : null}
               </div>
+              {/* If admin (no branchUser) allow selecting a branch for the expense */}
+              {!branchUser ? (
+                // <div className="col">
+                //   <label>Branch (optional)</label>
+                //   <select name="branch_id" value={form.branch_id || ''} onChange={onChange}>
+                //     <option value="">Use Admin ID</option>
+                //     {branches.map(br => (
+                //       <option key={br._id} value={br._id}>{br.name} ({br.email || '-'})</option>
+                //     ))}
+                //   </select>
+                //   <div style={{ marginTop: 6 }}>
+                //     <small style={{ color: '#999' }}>If left empty, admin id will be used</small>
+                //   </div>
+                // </div>""
+             ""
+             ) : null}
             </div>
             <div className="row mt-3">
               <button className="btn" type="submit" disabled={loading}>{loading ? 'Saving…' : '+ Add Expense'}</button>
@@ -207,11 +273,6 @@ function BranchNewExpense({ salesUrl, token }) {
       <div className="card mt-3">
         <div className="table-title">Summary</div>
         <div style={{ padding: '12px' }}>
-          <div style={{ display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap' }}>
-            <div className="stat-card">
-              <div className="stat-label">Sales Revenue</div>
-              <div className="stat-value">{currency(summary.salesRevenue)}</div>
-            </div>
             {/* <div className="stat-card">
               <div className="stat-label">Stock Revenue (cost)</div>
               <div className="stat-value">{currency(summary.stockRevenue)}</div>
@@ -220,13 +281,24 @@ function BranchNewExpense({ salesUrl, token }) {
               <div className="stat-label">Total Revenue (Sales - Stock)</div>
               <div className="stat-value">{currency(summary.totalRevenue)}</div>
             </div> */}
+          <div style={{ display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap' }}>
+            {/* Show sales & net revenue only to branch users. Admin view hides these as requested. */}
+            {branchUser ? (
+              <>
+                <div className="stat-card">
+                  <div className="stat-label">Sales Revenue</div>
+                  <div className="stat-value">{currency(summary.salesRevenue)}</div>
+                </div>
+                <div className="stat-card">
+                  <div className="stat-label">Net Revenue</div>
+                  <div className="stat-value">{currency(summary.netRevenue)}</div>
+                </div>
+              </>
+            ) : null}
+
             <div className="stat-card">
               <div className="stat-label">Total Expense (today)</div>
               <div className="stat-value">{currency(summary.totalExpense)}</div>
-            </div>
-            <div className="stat-card">
-              <div className="stat-label">Net Revenue</div>
-              <div className="stat-value">{currency(summary.netRevenue)}</div>
             </div>
           </div>
           <div style={{ marginTop: 10, color: '#666' }}>

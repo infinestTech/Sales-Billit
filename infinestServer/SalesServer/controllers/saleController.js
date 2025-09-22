@@ -80,6 +80,22 @@ exports.createSale = async (req, res) => {
           const idDesc = it.productId || it.productNo || it.productName || 'unknown';
           return res.status(400).json({ success: false, message: `Insufficient stock for ${idDesc}: available ${available}, requested ${required}` });
         }
+
+        // If client provided specific IMEs for this item, ensure branch stock actually contains them
+        const soldImes = Array.isArray(it.imes) ? it.imes : (Array.isArray(it.selectedImes) ? it.selectedImes : []);
+        if (soldImes && soldImes.length) {
+          const branchImes = Array.isArray(bs?.imes) ? bs.imes : [];
+          const missing = soldImes.filter(x => !branchImes.includes(x));
+          if (missing.length) {
+            const idDesc = it.productId || it.productNo || it.productName || 'unknown';
+            return res.status(400).json({ success: false, message: `Branch does not have IMEs for ${idDesc}: missing ${missing.join(', ')}` });
+          }
+          // As an additional sanity check, ensure count of IMEs available >= required
+          if (branchImes.length < required) {
+            const idDesc = it.productId || it.productNo || it.productName || 'unknown';
+            return res.status(400).json({ success: false, message: `Insufficient IME count for ${idDesc}: available ${branchImes.length}, requested ${required}` });
+          }
+        }
       }
     } catch (e) {
       console.error('createSale: availability check failed', e && e.message ? e.message : e);
@@ -125,14 +141,34 @@ exports.createSale = async (req, res) => {
       console.error('createSale: bank update failed', e && e.message ? e.message : e);
     }
 
-    // Decrement BranchStock quantities for sold items
+    // Decrement BranchStock quantities for sold items and remove sold IMEs from BranchStock.imes
     try {
       const BranchStock = require('../models/branchStock');
       for (const it of items) {
         try {
-          if (!it.productId) continue;
-          await BranchStock.findOneAndUpdate({ shop_id, branch_id, productId: it.productId }, { $inc: { qty: -Math.max(0, Number(it.qty || it.sellingQty || 0)) } });
-        } catch (e) {}
+          const soldQty = Math.max(0, Number(it.qty || it.sellingQty || 0));
+          const soldImes = Array.isArray(it.imes) ? it.imes : (Array.isArray(it.selectedImes) ? it.selectedImes : []);
+          // Build query using productId or productNo
+          const q = { shop_id, branch_id };
+          if (it.productId) q.productId = it.productId;
+          else if (it.productNo && String(it.productNo).trim() !== '') q.productNo = String(it.productNo).trim();
+          else continue; // nothing to update
+
+          const update = {};
+          if (soldQty > 0) update.$inc = { qty: -soldQty };
+          if (soldImes && soldImes.length) update.$pullAll = { imes: soldImes };
+
+          // If nothing to do, continue
+          if (!Object.keys(update).length) continue;
+
+          const after = await BranchStock.findOneAndUpdate(q, update, { new: true }).lean();
+          // protect against negative qty
+          if (after && typeof after.qty === 'number' && after.qty < 0) {
+            await BranchStock.updateOne({ _id: after._id }, { $set: { qty: 0 } });
+          }
+        } catch (e) {
+          console.error('createSale: failed to update BranchStock for item', it && (it.productId || it.productNo), e && e.message ? e.message : e);
+        }
       }
     } catch (e) {
       console.error('createSale: decrement branch stock failed', e && e.message ? e.message : e);
