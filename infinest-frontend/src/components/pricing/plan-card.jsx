@@ -55,7 +55,7 @@ export default function PlanCard({
       >
         <div
           className={`
-            absolute inset-0 rounded-3xl transition-opacity duration-500
+            absolute inset-0 rounded-3xl transition-opacity duration-500 pointer-events-none
             ${isHovered ? "opacity-100" : "opacity-0"}
             bg-gradient-to-b from-white/5 to-transparent
           `}
@@ -103,7 +103,7 @@ export default function PlanCard({
           {/* Choose Plan Button */}
           <div className="mb-8">
             <button
-              onClick={onSelect}
+              onClick={() => onSelect && onSelect()}
               disabled={buttonText.includes("Processing")}
               className={`
                 w-full py-4 px-6 rounded-2xl font-semibold transition-all duration-300 text-base

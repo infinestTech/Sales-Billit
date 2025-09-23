@@ -20,6 +20,41 @@ export default function Home() {
   const [plansError, setPlanError] = useState(null);
   const router = useRouter();
 
+  // Resolve sales frontend login URL from env (fall back to localhost for dev)
+  const SALES_LOGIN_URL = (process.env.NEXT_PUBLIC_SALES_FRONTEND_URL
+    ? `${process.env.NEXT_PUBLIC_SALES_FRONTEND_URL.replace(/\/$/, "")}/#login`
+    : "http://localhost:3020/#login");
+
+  // Helper to ensure Razorpay script has loaded and window.Razorpay is available
+  const ensureRazorpay = () => {
+    return new Promise((resolve, reject) => {
+      if (typeof window === "undefined") return reject(new Error("No window object"));
+      if (window.Razorpay) return resolve(window.Razorpay);
+
+      // If script already appended, wait for it
+      const existing = document.querySelector('script[src="https://checkout.razorpay.com/v1/checkout.js"]');
+      if (existing) {
+        if (existing.getAttribute("data-loaded") === "true") {
+          return resolve(window.Razorpay);
+        }
+        existing.addEventListener("load", () => resolve(window.Razorpay));
+        existing.addEventListener("error", () => reject(new Error("Failed to load Razorpay script")));
+        return;
+      }
+
+      // Fallback: create script here (should normally be created in useEffect)
+      const script = document.createElement("script");
+      script.src = "https://checkout.razorpay.com/v1/checkout.js";
+      script.async = true;
+      script.addEventListener("load", () => {
+        script.setAttribute("data-loaded", "true");
+        resolve(window.Razorpay);
+      });
+      script.addEventListener("error", () => reject(new Error("Failed to load Razorpay script")));
+      document.body.appendChild(script);
+    });
+  };
+
   
   useEffect(() => {
     const token = localStorage.getItem("token");
@@ -106,6 +141,7 @@ export default function Home() {
 
   // Client-side function to handle plan selection
   const handlePlanSelect = async (plan) => {
+    console.debug("handlePlanSelect called for plan:", plan);
     if (!userId) {
       logAndNotify("Please log in to continue.", "warning");
       return;
@@ -145,8 +181,8 @@ export default function Home() {
               // Redirect to different login pages depending on selected category
               // If user was on SALES plans, send them to the sales login (external URL/hash)
               if (mongoCategoryId === "Sales" || activeCategory === "SALES") {
-                // Use full URL to force navigation to the sales frontend
-                window.location.href = "http://localhost:3020/#login";
+                // Use env-driven URL to force navigation to the sales frontend
+                window.location.href = SALES_LOGIN_URL;
               } else {
                 router.replace("/billit-login");
               }
@@ -239,7 +275,7 @@ export default function Home() {
             // Prefer server-provided category if available, otherwise fallback to local activeCategory
             const targetCategory = mongoCategoryId || (activeCategory === "SALES" ? "Sales" : activeCategory);
             if (targetCategory === "Sales" || activeCategory === "SALES") {
-              window.location.href = "http://localhost:3020/#login";
+              window.location.href = SALES_LOGIN_URL;
             } else {
               router.replace("/billit-login");
             }
@@ -255,8 +291,15 @@ export default function Home() {
         theme: { color: "#0f172a" },
       };
 
-      const rzp = new window.Razorpay(options);
-      rzp.open();
+      // Ensure razorpay script is loaded
+      try {
+        await ensureRazorpay();
+        const rzp = new window.Razorpay(options);
+        rzp.open();
+      } catch (loadErr) {
+        logError("Razorpay failed to initialize", loadErr);
+        logAndNotify("Payment provider failed to load. Please try again later.", "error");
+      }
     } catch (err) {
       logError("Payment processing failed", err);
       
