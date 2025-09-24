@@ -1,5 +1,6 @@
 "use client";
 
+
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import axios from "axios";
@@ -8,17 +9,17 @@ import PricingSection from "@/components/pricing/pricing-section";
 import { logAndNotify, logError, logSuccess, logSystem } from "@/utils/logger";
 import Head from 'next/head';
 
+
 // SEO will be handled by the main layout
 // Client component for interactive pricing functionality
+
 
 export default function Home() {
   const [userId, setUserId] = useState(null);
   const [activeCategory, setActiveCategory] = useState("SERVICE"); // SERVICE | SALES | ENTERPRISE
   const [loadingPlan, setLoadingPlan] = useState(null);
-  const [dynamicPlans, setDynamicPlans] = useState([]);
-  const [plansLoading, setPlansLoading] = useState(true);
-  const [plansError, setPlanError] = useState(null);
   const router = useRouter();
+
 
   
   useEffect(() => {
@@ -38,6 +39,7 @@ export default function Home() {
     }
   }, [router]);
 
+
   useEffect(() => {
     const script = document.createElement("script");
     script.src = "https://checkout.razorpay.com/v1/checkout.js";
@@ -45,64 +47,6 @@ export default function Home() {
     document.body.appendChild(script);
   }, []);
 
-  // Fetch plans when category changes
-  useEffect(() => {
-    const fetchPlans = async () => {
-      try {
-        setPlansLoading(true);
-        setPlanError(null);
-        
-        const response = await axios.get(
-          `${process.env.NEXT_PUBLIC_API_URL_BILLIT}/api/plans/${activeCategory === "SERVICE" ? "Service" : activeCategory === "SALES" ? "Sales" : activeCategory}`
-        );
-        
-        if (response.data && Array.isArray(response.data)) {
-          // Transform the data to match the expected format
-          const transformedPlans = response.data.map((plan) => ({
-            name: plan.name,
-            price: parseInt(plan.price) || 0,
-            originalPrice: plan.originalPrice ? `₹${plan.originalPrice}` : null,
-            savePercentage: plan.savePercentage || null,
-            term: plan.term || "Plan",
-            bonusOffer: plan.bonusOffer,
-            renewalPrice: plan.renewalPrice ? `₹${plan.renewalPrice}` : null,
-            renewalTerm: plan.renewalTerm || "",
-            mongoPlanId: plan._id,
-            mongoCategoryId: plan.category_id,
-            description: plan.description || "",
-            features: plan.features?.map(feature => ({
-              label: feature.description,
-              key: feature.feature_key,
-              value: feature.enabled !== undefined ? feature.enabled : true
-            })) || [],
-            isPopular: plan.isPopular || false,
-            buttonText: loadingPlan === plan.name ? "Processing..." : `Choose ${plan.name}`,
-            onSelect: () => handlePlanSelect({
-              name: plan.name,
-              price: parseInt(plan.price) || 0,
-              mongoPlanId: plan._id,
-              mongoCategoryId: plan.category_id
-            })
-          }));
-          
-          setDynamicPlans(transformedPlans);
-        } else {
-          throw new Error("Invalid response format");
-        }
-      } catch (error) {
-        console.error("Error fetching plans:", error);
-        setPlanError(error.response?.data?.message || "Failed to load plans");
-        logError("Failed to fetch dynamic plans", error);
-        
-        // Fall back to hardcoded plans if API fails
-        setDynamicPlans(activeCategory === "SERVICE" ? staticServicePlans : staticSalesPlans);
-      } finally {
-        setPlansLoading(false);
-      }
-    };
-
-    fetchPlans();
-  }, [activeCategory, loadingPlan]);
 
   // Client-side function to handle plan selection
   const handlePlanSelect = async (plan) => {
@@ -111,10 +55,13 @@ export default function Home() {
       return;
     }
 
+
     const { name, price, mongoPlanId, mongoCategoryId } = plan;
+
 
     try {
       setLoadingPlan(name);
+
 
       // For Basic plan (free), use the unified subscribe endpoint (isPaidPlan=false)
       if (name === "Basic" && price === 0) {
@@ -125,12 +72,14 @@ export default function Home() {
           return;
         }
 
+
         try {
           const response = await axios.post(
             `${process.env.NEXT_PUBLIC_API_URL_BILLIT}/api/subscribe`,
             { planId: mongoPlanId, categoryId: mongoCategoryId, isPaidPlan: false },
             { headers: { Authorization: `Bearer ${token}` } }
           );
+
 
           // Handle the response based on the flags
           if (response.data.success) {
@@ -150,7 +99,6 @@ export default function Home() {
               } else {
                 router.replace("/billit-login");
               }
-              
             }
           } else {
             // Handle unexpected response format
@@ -189,8 +137,10 @@ export default function Home() {
           logAndNotify(error.response?.data?.message || "Failed to subscribe to Basic plan. Please try again.", "error");
         }
 
+
         return;
       }
+
 
       // For paid plans, get order via unified subscribe (server calculates amount)
       const token = localStorage.getItem("token");
@@ -200,13 +150,16 @@ export default function Home() {
         return;
       }
 
+
       const orderRes = await axios.post(
         `${process.env.NEXT_PUBLIC_API_URL_BILLIT}/api/subscribe`,
         { planId: mongoPlanId, categoryId: mongoCategoryId, isPaidPlan: true },
         { headers: { Authorization: `Bearer ${token}` } }
       );
 
+
       const { order } = orderRes.data;
+
 
       const options = {
         key: process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID,
@@ -222,6 +175,7 @@ export default function Home() {
             router.replace("/login");
             return;
           }
+
 
           try {
             await axios.post(
@@ -254,6 +208,7 @@ export default function Home() {
         },
         theme: { color: "#0f172a" },
       };
+
 
       const rzp = new window.Razorpay(options);
       rzp.open();
@@ -292,8 +247,9 @@ export default function Home() {
     }
   };
 
-  // STATIC SERVICE plans (fallback)
-  const staticServicePlans = [
+
+  // SERVICE plans (live)
+  const servicePlans = [
     {
       name: "Basic",
       price: 0,
@@ -375,8 +331,9 @@ export default function Home() {
     onSelect: () => handlePlanSelect(plan),
   }));
 
-  // STATIC SALES plans (fallback)
-  const staticSalesPlans = [
+
+  // SALES plans (dummy)
+  const salesPlans = [
     {
       name: "Basic",
       price: 0,
@@ -440,32 +397,89 @@ export default function Home() {
     onSelect: () => handlePlanSelect(plan),
   }));
 
-  // Use dynamic plans if available, otherwise fall back to static plans
-  const pricingPlans = plansLoading 
-    ? [] // Show empty while loading 
-    : dynamicPlans.length > 0 
-      ? dynamicPlans
-      : activeCategory === "SERVICE"
-        ? staticServicePlans
-        : activeCategory === "SALES"
-        ? staticSalesPlans
-        : [];
+
+  // ENTERPRISE plans (dummy)
+
+
+  
+  const enterprisePlans = [
+    {
+      name: "Basic",
+      price: 0,
+      originalPrice: "₹499",
+      savePercentage: 100,
+      term: "Free trial",
+      bonusOffer: "Contact sales",
+      renewalPrice: "Custom",
+      renewalTerm: "Annual",
+      mongoPlanId: "enterprise-basic",
+      mongoCategoryId: "Enterprise",
+      description: "Multi-branch foundations (demo)",
+      features: [
+        { label: "2 branches", key: "branch_limit" },
+        { label: "Basic roles", key: "roles", value: true },
+        { label: "Email support", key: "support", value: true }
+      ],
+      isPopular: false,
+    },
+    {
+      name: "Gold",
+      price: 999,
+      originalPrice: "₹2499",
+      savePercentage: 60,
+      term: "Monthly plan",
+      bonusOffer: null,
+      renewalPrice: "₹999",
+      renewalTerm: "Monthly",
+      mongoPlanId: "enterprise-gold",
+      mongoCategoryId: "Enterprise",
+      description: "Multi-branch with SSO and audit (demo)",
+      features: [
+        { label: "10 branches", key: "branch_limit" },
+        { label: "SSO & audit logs", key: "security", value: true },
+        { label: "Priority support", key: "support", value: true }
+      ],
+      isPopular: true,
+    },
+    {
+      name: "Premium",
+      price: 1499,
+      originalPrice: "₹3999",
+      savePercentage: 62,
+      term: "Monthly plan",
+      bonusOffer: null,
+      renewalPrice: "₹1499",
+      renewalTerm: "Monthly",
+      mongoPlanId: "enterprise-premium",
+      mongoCategoryId: "Enterprise",
+      description: "Full enterprise suite (demo)",
+      features: [
+        { label: "Unlimited branches", key: "branch_limit" },
+        { label: "SLA + dedicated manager", key: "sla", value: true },
+        { label: "Custom integrations", key: "integrations", value: true }
+      ],
+      isPopular: false,
+    },
+  ].map((plan) => ({
+    ...plan,
+    buttonText: loadingPlan === plan.name ? "Processing..." : `Choose ${plan.name}`,
+    onSelect: () => handlePlanSelect(plan),
+  }));
+
+
+  const pricingPlans = activeCategory === "SERVICE"
+    ? servicePlans
+    : activeCategory === "SALES"
+      ? salesPlans
+      : enterprisePlans;
+
 
   return (
     <div className="min-h-screen bg-black">
       <Head>
-        <title>{activeCategory === "SERVICE" 
-          ? "Choose the Best Service Plan for Your Mobile Shop | BillIt" 
-          : "Choose the Best Sales Plan for Your Business | BillIt"
-        }</title>
-        <meta name="description" content={activeCategory === "SERVICE"
-          ? "Affordable pricing plans for mobile repair shops. Choose from Basic (Free), Gold (₹399/month), or Premium (₹499/month) with advanced features."
-          : "Complete retail management solutions for growing businesses. Choose from Basic (Free), Gold (₹299/month), or Premium (₹399/month) with advanced sales features."
-        } />
-        <meta name="keywords" content={activeCategory === "SERVICE"
-          ? "mobile repair software pricing, service management plans, repair shop subscription, billing software cost"
-          : "retail management software pricing, sales inventory system, point of sale subscription, business management cost"
-        } />
+        <title>Choose the Best Service Plan for Your Mobile Shop | BillIt</title>
+        <meta name="description" content="Affordable pricing plans for mobile repair shops. Choose from Basic (Free), Gold (₹399/month), or Premium (₹499/month) with advanced features." />
+        <meta name="keywords" content="mobile repair software pricing, service management plans, repair shop subscription, billing software cost" />
         
         {/* Structured Data for Pricing */}
         <script
@@ -511,41 +525,29 @@ export default function Home() {
         />
       </Head>
       {/* Category Toggle */}
-      <div className="w-full flex items-center justify-center pt-8 mb-4">
-        <div className="inline-flex rounded-xl border border-slate-600 bg-slate-900/70 p-1.5 backdrop-blur-sm">
-          {["SERVICE", "SALES"].map((tab) => (
+      <div className="w-full flex items-center justify-center mt-2">
+        <div className="inline-flex rounded-lg border border-slate-700 bg-slate-800/50 p-1">
+          {(["SERVICE", "SALES"]).map((tab) => (
+            //,"ENTERPRISE"
             <button
               key={tab}
               onClick={() => setActiveCategory(tab)}
-              className={`px-6 py-3 text-sm font-medium rounded-lg transition-all duration-300 ${
-                activeCategory === tab 
-                  ? "bg-gradient-to-r from-blue-600 to-purple-600 text-white shadow-lg transform scale-105" 
-                  : "text-slate-300 hover:text-white hover:bg-slate-800/50"
-              }`}
+              className={`px-4 py-1.5 text-sm rounded-md transition-colors ${activeCategory === tab ? "bg-slate-900 text-white" : "text-slate-300 hover:text-white"}`}
             >
-              {tab === "SERVICE" ? "🔧 Service Plans" : "💼 Sales Plans"}
+              {tab}
             </button>
           ))}
         </div>
       </div>
 
+
       <PricingSection
-        title={activeCategory === "SERVICE" 
-          ? "Choose the Best Service Plan for Your Mobile Shop" 
-          : activeCategory === "SALES"
-          ? "Choose the Best Sales Plan for Your Business"
-          : "Enterprise Solutions"
-        }
-        subtitle={activeCategory === "SERVICE"
-          ? "Flexible plans tailored for every stage of your service business"
-          : activeCategory === "SALES"
-          ? "Complete retail management solutions for growing businesses"
-          : "Custom solutions for large organizations"
-        }
+        title="Choose the Best Service Plan for Your Mobile Shop"
+        subtitle="Flexible plans tailored for every stage of your service business"
         plans={pricingPlans}
-        isLoading={plansLoading}
-        error={plansError}
       />
     </div>
   );
 }
+
+
