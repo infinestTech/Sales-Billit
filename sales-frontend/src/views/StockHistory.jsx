@@ -12,6 +12,7 @@ function StockHistory({ salesUrl, token, branchUser }) {
     const storedBranchToken = typeof window !== 'undefined' ? (localStorage.getItem('branch_token') || '') : '';
     return token || storedBranchToken || '';
   };
+  
 
   const loadBranches = async () => {
     if (branchUser) return;
