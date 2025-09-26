@@ -28,7 +28,12 @@ function InStockView({ salesUrl, token }) {
 
   const loadSuppliers = async () => {
     try {
-      const res = await fetch(salesUrl + '/api/suppliers', { headers: { Authorization: 'Bearer ' + token } });
+      const storedBranchToken = typeof window !== 'undefined' ? (localStorage.getItem('branch_token') || '') : '';
+      const effectiveToken = token || storedBranchToken || '';
+      let res = await fetch(salesUrl + '/api/suppliers', { headers: { Authorization: 'Bearer ' + effectiveToken } });
+      if (res.status === 401 && storedBranchToken && storedBranchToken !== effectiveToken) {
+        res = await fetch(salesUrl + '/api/suppliers', { headers: { Authorization: 'Bearer ' + storedBranchToken } });
+      }
       const data = await res.json();
       if (!res.ok) throw new Error(data.message || 'Failed to load suppliers');
       setSuppliers(Array.isArray(data.suppliers) ? data.suppliers : []);
@@ -36,7 +41,9 @@ function InStockView({ salesUrl, token }) {
   };
   const loadBanks = async () => {
     try {
-      const res = await fetch(salesUrl + '/api/banks', { headers: { Authorization: 'Bearer ' + token } });
+      const storedBranchToken = typeof window !== 'undefined' ? (localStorage.getItem('branch_token') || '') : '';
+      const effectiveToken = token || storedBranchToken || '';
+      const res = await fetch(salesUrl + '/api/banks', { headers: { Authorization: 'Bearer ' + effectiveToken } });
       const data = await res.json();
       if (!res.ok) throw new Error(data.message || 'Failed to load banks');
       setBanks(Array.isArray(data.banks) ? data.banks : []);
@@ -44,7 +51,12 @@ function InStockView({ salesUrl, token }) {
   };
   const loadEntries = async () => {
     try {
-      const res = await fetch(salesUrl + '/api/in-stock', { headers: { Authorization: 'Bearer ' + token } });
+      const storedBranchToken = typeof window !== 'undefined' ? (localStorage.getItem('branch_token') || '') : '';
+      const effectiveToken = token || storedBranchToken || '';
+      let res = await fetch(salesUrl + '/api/in-stock', { headers: { Authorization: 'Bearer ' + effectiveToken } });
+      if (res.status === 401 && storedBranchToken && storedBranchToken !== effectiveToken) {
+        res = await fetch(salesUrl + '/api/in-stock', { headers: { Authorization: 'Bearer ' + storedBranchToken } });
+      }
       const data = await res.json();
       if (!res.ok) throw new Error(data.message || 'Failed to load');
       setEntries(Array.isArray(data.entries) ? data.entries : []);
@@ -147,7 +159,7 @@ function InStockView({ salesUrl, token }) {
   // Helper to generate random alphanumeric string (2-9 chars)
   function randomProductNo() {
     const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
-    const len = Math.floor(Math.random() * 8) + 2; // 2 to 9
+    const len = Math.floor(Math.random() * 3) + 2; // 2 to 9
     let str = '';
     for (let i = 0; i < len; i++) {
       str += chars.charAt(Math.floor(Math.random() * chars.length));

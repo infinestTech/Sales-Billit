@@ -20,6 +20,24 @@ function CreateSupplier({ salesUrl, token }) {
   const currentSupplierCount = rows.length;
   const isAtLimit = isLimitReached('suppliers_limit', 'maxSuppliers', currentSupplierCount);
 
+  // Decode JWT helper
+  const decodeJwt = (tk) => {
+    try {
+      const base64 = tk.split('.')[1] || '';
+      const json = atob(base64.replace(/-/g, '+').replace(/_/g, '/'));
+      return JSON.parse(json);
+    } catch (e) { return null; }
+  };
+
+  // Determine effective token: prefer prop token (passed from main), else branch_token from localStorage
+  const storedBranchToken = typeof window !== 'undefined' ? (localStorage.getItem('branch_token') || '') : '';
+  const effectiveToken = token || storedBranchToken || '';
+
+  // Detect if effective token is a branch token
+  const decodedEffective = effectiveToken ? decodeJwt(effectiveToken) : null;
+  const branchUserDecoded = decodedEffective && decodedEffective.branch_id ? decodedEffective : null;
+  const effectiveIsAtLimit = branchUserDecoded ? false : isAtLimit;
+
 
   // Filters
   const [agencyFilter, setAgencyFilter] = React.useState('');
@@ -44,21 +62,29 @@ function CreateSupplier({ salesUrl, token }) {
   const fetchSuppliers = async () => {
     try {
       setError('');
-      const res = await fetch(salesUrl + '/api/suppliers', { headers: { Authorization: 'Bearer ' + token } });
+      let res = await fetch(salesUrl + '/api/suppliers', { headers: { Authorization: 'Bearer ' + effectiveToken } });
+      // If unauthorized and we have a stored branch token, retry with it
+      if (res.status === 401 && storedBranchToken && storedBranchToken !== effectiveToken) {
+        res = await fetch(salesUrl + '/api/suppliers', { headers: { Authorization: 'Bearer ' + storedBranchToken } });
+      }
       const data = await res.json();
       if (!res.ok) throw new Error(data.message || 'Failed to load');
       const list = Array.isArray(data.suppliers) ? data.suppliers : [];
       setRows(list);
       setPage(1);
     } catch (err) {
-      setError(err.message);
+      // For branch users, don't show raw auth errors in the UI; show nothing
+      if (!branchUserDecoded) setError(err.message);
     }
   };
 
 
   const fetchInStock = async () => {
     try {
-      const res = await fetch(salesUrl + '/api/in-stock', { headers: { Authorization: 'Bearer ' + token } });
+      let res = await fetch(salesUrl + '/api/in-stock', { headers: { Authorization: 'Bearer ' + effectiveToken } });
+      if (res.status === 401 && storedBranchToken && storedBranchToken !== effectiveToken) {
+        res = await fetch(salesUrl + '/api/in-stock', { headers: { Authorization: 'Bearer ' + storedBranchToken } });
+      }
       const data = await res.json();
       if (!res.ok) throw new Error(data.message || 'Failed to load in-stock');
       setInStockEntries(Array.isArray(data.entries) ? data.entries : []);
@@ -157,8 +183,8 @@ function CreateSupplier({ salesUrl, token }) {
   const submit = async (e) => {
     e.preventDefault();
    
-    // Check limit before creating
-    if (isAtLimit) {
+    // Check limit before creating (skip for branch users)
+    if (effectiveIsAtLimit) {
       window.checkSalesFeatureLimit('suppliers_limit', 'maxSuppliers', currentSupplierCount, features, 'Supplier');
       return;
     }
@@ -166,17 +192,25 @@ function CreateSupplier({ salesUrl, token }) {
     setSaving(true);
     setError('');
     try {
-      const res = await fetch(salesUrl + '/api/suppliers', {
+      let res = await fetch(salesUrl + '/api/suppliers', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token },
+        headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + effectiveToken },
         body: JSON.stringify(form)
       });
+      // Retry with stored branch token if API returns unauthorized
+      if (res.status === 401 && storedBranchToken && storedBranchToken !== effectiveToken) {
+        res = await fetch(salesUrl + '/api/suppliers', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + storedBranchToken },
+          body: JSON.stringify(form)
+        });
+      }
       const data = await res.json();
       if (!res.ok || !data.success) throw new Error(data.message || 'Save failed');
       setForm({ supplierName: '', agencyName: '', phoneNumber: '', address: '', gstNumber: '', panNumber: '' });
       await fetchSuppliers();
     } catch (err) {
-      setError(err.message);
+      if (!branchUserDecoded) setError(err.message);
     } finally {
       setSaving(false);
     }
@@ -185,8 +219,8 @@ function CreateSupplier({ salesUrl, token }) {
 
   return (
     <div>
-      {/* Limit Warning */}
-      {React.createElement(window.LimitGuard, {
+      {/* Limit Warning (hidden for branch users) */}
+      {!branchUserDecoded && React.createElement(window.LimitGuard, {
         featureKey: 'suppliers_limit',
         limitKey: 'maxSuppliers',
         currentCount: currentSupplierCount,
@@ -202,14 +236,14 @@ function CreateSupplier({ salesUrl, token }) {
             <h3 className="card-title">Create Supplier</h3>
             <p className="card-description">
               Add new supplier for your inventory
-              {supplierLimit < 999 && ` (${currentSupplierCount}/${supplierLimit} used)`}
+              {!branchUserDecoded && supplierLimit < 999 && ` (${currentSupplierCount}/${supplierLimit} used)`}
             </p>
           </div>
         </div>
 
 
-        {/* Show limit reached message */}
-        {isAtLimit && (
+        {/* Show limit reached message (hidden for branch users) */}
+        {effectiveIsAtLimit && (
           <div style={{
             backgroundColor: '#fee2e2',
             border: '1px solid #fecaca',
@@ -265,8 +299,8 @@ function CreateSupplier({ salesUrl, token }) {
             </div>
           </div>
           <div className="row mt-3">
-            <button className="btn" type="submit" disabled={saving || isAtLimit}>
-              {isAtLimit ? `Limit reached (${currentSupplierCount}/${supplierLimit || '—'})` : (saving ? 'Saving…' : 'Save')}
+            <button className="btn" type="submit" disabled={saving || effectiveIsAtLimit}>
+              {effectiveIsAtLimit ? `Limit reached (${currentSupplierCount}/${supplierLimit || '—'})` : (saving ? 'Saving…' : 'Save')}
             </button>
           </div>
           {error ? <div className="mt-2 text-danger">{error}</div> : null}
@@ -358,6 +392,7 @@ function CreateSupplier({ salesUrl, token }) {
                     <th>GST Number</th>
                     <th>PAN Number</th>
                     <th>Supplier Amount</th>
+                    {!branchUserDecoded && <th>Branch</th>}
                     <th>Items Count</th>
                   </tr>
                 </thead>
@@ -372,6 +407,7 @@ function CreateSupplier({ salesUrl, token }) {
                       <td>{r.gstNumber || '-'}</td>
                       <td>{r.panNumber || '-'}</td>
                       <td><span className="amount-badge">{supplierAmountMap[r._id] ? supplierAmountMap[r._id] : 0}</span></td>
+                      {!branchUserDecoded && <td>{r.branch_name || '-'}</td>}
                       <td><span className="count-badge">{supplierItemsCountMap[r._id] ? supplierItemsCountMap[r._id] : 0}</span></td>
                     </tr>
                   ))}

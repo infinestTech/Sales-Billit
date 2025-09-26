@@ -8,11 +8,24 @@ const BranchStock = require('../models/branchStock');
 const BranchSupply = mongoose.model('BranchSupply', new mongoose.Schema({
   shop_id: { type: String, index: true },
   branch_id: { type: String, index: true },
+  branch_name: { type: String, default: '' },
+  supplier_id: { type: String, default: '' },
+  supplierName: { type: String, default: '' },
+  bank_id: { type: String, default: '' },
+  bankName: { type: String, default: '' },
+  supplierAmount: { type: Number, default: 0 },
+  gstAmount: { type: Number, default: 0 },
   items: { type: Array, default: [] }, // { productName, productId, qty, unitSellingPrice, value, costPrice, totalCostPrice }
   totalSupplyValue: { type: Number, default: 0 },
   totalSupplyCost: { type: Number, default: 0 },
   createdBy: { type: String },
+  createdByType: { type: String, default: 'admin' }, // 'admin' or 'branch'
 }, { timestamps: true }));
+
+  // helper: test if a string looks like a valid MongoDB ObjectId (24 hex chars)
+  function isValidObjectId(id) {
+    return typeof id === 'string' && /^[0-9a-fA-F]{24}$/.test(id);
+  }
 
 // Helper to compute value: sellingPrice * qty
 function computeItemValue(unitSellingPrice, qty) {
@@ -23,10 +36,19 @@ function computeItemValue(unitSellingPrice, qty) {
 exports.createBranchSupply = async (req, res) => {
   try {
     const shop_id = req.user.shop_id;
-    const branch_id = req.body.branch_id;
+    // Allow branch users to omit branch_id in the request body — default to their branch
+    let branch_id = req.body.branch_id;
+    if (req.user && req.user.isBranch && req.user.branch_id) {
+      branch_id = req.user.branch_id;
+    }
+    const branch_name = req.user && req.user.branchName ? req.user.branchName : (req.body.branch_name || '');
+    const supplier_id = req.body.supplier_id || '';
+    const bank_id = req.body.bank_id || '';
+    const supplierAmount = Number(req.body.supplierAmount) || 0;
+    const gstAmount = Number(req.body.gstAmount) || 0;
     const items = Array.isArray(req.body.items) ? req.body.items : [];
     try { console.debug('FLOW createBranchSupply: incoming', { shop_id, branch_id, itemsCount: items.length }); } catch (__) {}
-    if (!branch_id) return res.status(400).json({ success: false, message: 'branch_id required' });
+  if (!branch_id) return res.status(400).json({ success: false, message: 'branch_id required' });
     if (items.length === 0) return res.status(400).json({ success: false, message: 'items required' });
 
     // Prepare items with computed selling value and cost totals
@@ -43,8 +65,18 @@ exports.createBranchSupply = async (req, res) => {
       const totalCostPrice = Number(Number(costUnit * qty).toFixed(2));
       total += value;
       totalCost += totalCostPrice;
+      // Determine a stable productId. If client provided one (central ref), use it.
+      // For branch-only items (no productId), generate a unique productId so multiple
+      // branch adds do not collide and overwrite previous branch-only rows.
+      let pid = i.productId || i._id || null;
+      if (!pid) {
+        // include branch_id to help identify origin; make unique by timestamp+rand
+        const rand = Math.random().toString(36).slice(2, 8);
+        const bid = branch_id || 'nb';
+        pid = `branch_${bid}_${Date.now()}_${rand}`;
+      }
       const out = {
-        productId: i.productId || i._id || null,
+        productId: pid,
         productNo: i.productNo || '',
         productName: i.productName || i.name || '',
         brand: i.brand || i.mfg || '',
@@ -84,8 +116,43 @@ exports.createBranchSupply = async (req, res) => {
       }
     }
 
+    // Resolve supplierName and bankName when ids provided
+    let supplierName = '';
+    try {
+      if (supplier_id) {
+        const Supplier = require('../models/supplier');
+        const sdoc = await Supplier.findById(supplier_id).lean();
+        if (sdoc) supplierName = sdoc.supplierName || sdoc.agencyName || '';
+      }
+    } catch (e) {
+      // ignore
+    }
+    let bankName = '';
+    try {
+      if (bank_id) {
+        const Bank = require('../models/bank');
+        const bdoc = await Bank.findById(bank_id).lean();
+        if (bdoc) bankName = bdoc.bankName || bdoc.accountNumber || '';
+      }
+    } catch (e) {}
+
     // Create supply record (after validation)
-    const supply = await BranchSupply.create({ shop_id, branch_id, items: prepared, totalSupplyValue: total, totalSupplyCost: totalCost, createdBy: req.user.userId || req.user.branch_id || '' });
+    const supply = await BranchSupply.create({
+      shop_id,
+      branch_id,
+      branch_name,
+      supplier_id,
+      supplierName,
+      bank_id,
+      bankName,
+      supplierAmount,
+      gstAmount,
+      items: prepared,
+      totalSupplyValue: total,
+      totalSupplyCost: totalCost,
+      createdBy: req.user.userId || req.user.branch_id || '',
+      createdByType: req.user && req.user.isBranch ? 'branch' : 'admin'
+    });
 
     // Update BranchStock: increment or create per item
     for (const it of prepared) {
@@ -213,7 +280,7 @@ exports.createBranchSupply = async (req, res) => {
   // reload supply to include any updates
   const freshSupply = await BranchSupply.findById(supply._id).lean();
   try { console.debug('FLOW createBranchSupply: returning', { supplyId: freshSupply._id, updatedRowsCount: Array.isArray(updatedRows) ? updatedRows.length : 0 }); } catch (__) {}
-  return res.json({ success: true, supply: freshSupply || supply, rows: updatedRows });
+  return res.json({ success: true, supply: freshSupply || supply, rows: updatedRows, gstAmount: gstAmount || 0 });
   } catch (err) {
     console.error('createBranchSupply error:', err.message || err);
     return res.status(500).json({ success: false, message: 'Server error' });
@@ -249,7 +316,13 @@ exports.listBranchStock = async (req, res) => {
       if (needFill.length > 0) {
         // collect central doc ids referenced by productId like '<docId>_<idx>'
         const docIds = Array.from(new Set(needFill.map(r => {
-          try { return String(r.productId).includes('_') ? String(r.productId).split('_')[0] : null; } catch(e) { return null; }
+          try {
+            if (String(r.productId).includes('_')) {
+              const maybe = String(r.productId).split('_')[0];
+              return isValidObjectId(maybe) ? maybe : null;
+            }
+            return null;
+          } catch(e) { return null; }
         }).filter(Boolean)));
         if (docIds.length > 0) {
           const centralDocs = await InStock.find({ _id: { $in: docIds } }).lean();
@@ -441,37 +514,60 @@ exports.listBranchStock = async (req, res) => {
   }
 };
 
-// List supplies for the shop (admin view)
+// List supplies for the shop (admin view) with optional pagination and filters
+// Query params supported:
+//  - branch_id (optional; forced for branch users)
+//  - page (1-based), limit (page size)
+//  - from (ISO date) and to (ISO date) to filter createdAt range
+//  - supplier_id to filter supplies created from a specific supplier
 exports.listSuppliesForShop = async (req, res) => {
   try {
     const shop_id = req.user.shop_id;
     let branch_id = req.query.branch_id || null;
-    
+
     // If this is a branch user, force filter to their branch only
     if (req.user.isBranch && req.user.branch_id) {
       branch_id = req.user.branch_id;
     }
-    
+
+    const page = Math.max(1, parseInt(req.query.page || '1', 10));
+    const limit = Math.max(1, Math.min(200, parseInt(req.query.limit || '50', 10)));
+    const from = req.query.from ? new Date(req.query.from) : null;
+    const to = req.query.to ? new Date(req.query.to) : null;
+    const supplier_id = req.query.supplier_id || null;
+
     const query = { shop_id };
     if (branch_id) query.branch_id = branch_id;
-    
-    let supplies = await BranchSupply.find(query).sort({ createdAt: -1 }).lean();
+    if (supplier_id) query.supplier_id = supplier_id;
+    if (from || to) {
+      query.createdAt = {};
+      if (from && !isNaN(from.getTime())) query.createdAt.$gte = from;
+      if (to && !isNaN(to.getTime())) query.createdAt.$lte = to;
+    }
+
+    const total = await BranchSupply.countDocuments(query);
+    const supplies = await BranchSupply.find(query).sort({ createdAt: -1 }).skip((page - 1) * limit).limit(limit).lean();
 
     // Enrich items by backfilling brand/model/validity and supplier from central InStock docs
-    // Collect all referenced central doc ids
     const docIds = new Set();
     (supplies || []).forEach(s => {
       (Array.isArray(s.items) ? s.items : []).forEach(it => {
-        try { if (String(it.productId || '').includes('_')) docIds.add(String(it.productId).split('_')[0]); } catch (e) {}
+        try {
+          if (String(it.productId || '').includes('_')) {
+            const maybe = String(it.productId).split('_')[0];
+            if (isValidObjectId(maybe)) docIds.add(maybe);
+          }
+        } catch (e) {}
       });
     });
 
+    let populatedSupplies = supplies;
     if (docIds.size > 0) {
       const docs = await InStock.find({ _id: { $in: Array.from(docIds) } }).populate('supplier_id', 'supplierName agencyName').lean();
       const docMap = {};
       (docs || []).forEach(d => { docMap[String(d._id)] = d; });
 
-      supplies = (supplies || []).map(s => {
+      populatedSupplies = (supplies || []).map(s => {
         const items = (Array.isArray(s.items) ? s.items : []).map(it => {
           try {
             if (String(it.productId || '').includes('_')) {
@@ -498,9 +594,68 @@ exports.listSuppliesForShop = async (req, res) => {
       });
     }
 
-    return res.json({ success: true, supplies });
+    return res.json({ success: true, supplies: populatedSupplies, total, page, pages: Math.ceil(total / limit) });
   } catch (err) {
     console.error('listSuppliesForShop error:', err.message || err);
+    return res.status(500).json({ success: false, message: 'Server error' });
+  }
+};
+
+// Get a single supply by id (admin or branch-scoped)
+exports.getSupplyById = async (req, res) => {
+  try {
+    const shop_id = req.user.shop_id;
+    const supplyId = req.params && req.params.id ? req.params.id : null;
+    if (!supplyId) return res.status(400).json({ success: false, message: 'supply id required' });
+
+    const supply = await BranchSupply.findOne({ _id: supplyId, shop_id }).lean();
+    if (!supply) return res.status(404).json({ success: false, message: 'supply not found' });
+
+    // If branch user, ensure they can only access their branch's supply
+    if (req.user.isBranch && req.user.branch_id && String(supply.branch_id) !== String(req.user.branch_id)) {
+      return res.status(403).json({ success: false, message: 'forbidden' });
+    }
+
+    // Backfill item fields from central InStock if needed (same logic as list)
+    const docIds = new Set();
+    (Array.isArray(supply.items) ? supply.items : []).forEach(it => {
+      try {
+        if (String(it.productId || '').includes('_')) {
+          const maybe = String(it.productId).split('_')[0];
+          if (isValidObjectId(maybe)) docIds.add(maybe);
+        }
+      } catch (e) {}
+    });
+
+    let populated = supply;
+    if (docIds.size > 0) {
+      const docs = await InStock.find({ _id: { $in: Array.from(docIds) } }).populate('supplier_id', 'supplierName agencyName').lean();
+      const docMap = {};
+      (docs || []).forEach(d => { docMap[String(d._id)] = d; });
+
+      populated = { ...supply, items: (Array.isArray(supply.items) ? supply.items : []).map(it => {
+        try {
+          if (String(it.productId || '').includes('_')) {
+            const [docId, idxStr] = String(it.productId).split('_');
+            const idx = Number(idxStr);
+            const doc = docMap[docId];
+            if (doc && Array.isArray(doc.items) && Number.isInteger(idx) && doc.items[idx]) {
+              const centralItem = doc.items[idx];
+              if (!it.brand || it.brand === '') it.brand = centralItem.brand || it.brand || '';
+              if (!it.model || it.model === '') it.model = centralItem.model || it.model || '';
+              if (!it.validity) it.validity = centralItem.validity || it.validity || null;
+              if (!it.productNo || it.productNo === '') it.productNo = centralItem.productNo || it.productNo || '';
+              it.supplierName = (doc.supplier_id && (doc.supplier_id.supplierName || doc.supplier_id.agencyName)) || it.supplierName || '';
+            }
+          }
+        } catch (e) {}
+        return it;
+      }) };
+    }
+
+    return res.json({ success: true, supply: populated });
+  } catch (err) {
+    console.error('getSupplyById error:', err.message || err);
     return res.status(500).json({ success: false, message: 'Server error' });
   }
 };
