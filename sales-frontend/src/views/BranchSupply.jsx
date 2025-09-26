@@ -26,7 +26,19 @@ function BranchSupply({ salesUrl, token }) {
       const res = await fetch(url, { headers: { Authorization: 'Bearer ' + token } });
       const data = await res.json();
       if (!res.ok) throw new Error(data.message || 'Failed to load branch stock');
-      setStock(Array.isArray(data.rows) ? data.rows : []);
+      // For admin view, hide branch-only stock rows (those created by branches) so admin
+      // sees only admin/central-created stock. Branch-only productIds are generated
+      // with prefix 'branch_' in the backend.
+      const rows = Array.isArray(data.rows) ? data.rows : [];
+      const filtered = rows.filter(r => {
+        try {
+          const pid = String(r.productId || r._id || '');
+          // Exclude branch-only items
+          if (pid.startsWith('branch_')) return false;
+          return true;
+        } catch (e) { return true; }
+      });
+      setStock(filtered);
       setSelectedRows({});
       setTotalValue(0);
     } catch (e) { setError(e.message); }

@@ -14,6 +14,7 @@ function GstCalculator(props) {
   const [error, setError] = React.useState('');
   const [startDate, setStartDate] = React.useState('');
   const [endDate, setEndDate] = React.useState('');
+  const [showZeroGst, setShowZeroGst] = React.useState(false);
 
   React.useEffect(() => {
     if (view === 'sales') {
@@ -73,7 +74,38 @@ function GstCalculator(props) {
     if (endDate && (!t.createdAt || new Date(t.createdAt) > new Date(endDate))) return false;
     return true;
   });
-  const totalGst = filteredTransactions.reduce((sum, t) => sum + (Number(t.gstAmount) || 0), 0);
+
+  // Show only rows with meaningful data: require at least two of
+  // (supplier, bank, branch, supplierAmount>0, gstAmount>0).
+  // If showZeroGst is true, preserve the previous behavior (show all filtered rows).
+  const displayedTransactions = filteredTransactions.filter(t => {
+    if (showZeroGst) return true;
+    function hasText(v) {
+      if (v == null) return false;
+      const s = String(v).trim();
+      if (!s) return false;
+      if (s === '-') return false;
+      return true;
+    }
+    const checks = [];
+    checks.push(hasText(t.supplierName || t.supplier || t.supplier_id));
+    checks.push(hasText(t.bankName || t.bank));
+    checks.push(hasText(t.branchName || t.branch_name || t.branch));
+    checks.push((Number(t.supplierAmount) || 0) > 0);
+    checks.push((Number(t.gstAmount) || 0) > 0);
+    const truthyCount = checks.reduce((s, v) => s + (v ? 1 : 0), 0);
+    return truthyCount >= 2;
+  });
+
+  const totalGst = displayedTransactions.reduce((sum, t) => sum + (Number(t.gstAmount) || 0), 0);
+
+  // Compute per-branch GST subtotals
+  const branchTotals = displayedTransactions.reduce((map, t) => {
+    const branch = (t.branchName || t.branch_name || '').toString() || 'Main';
+    const v = Number(t.gstAmount) || 0;
+    map[branch] = (map[branch] || 0) + v;
+    return map;
+  }, {});
 
   // Sales GST calculation
   const totalSalesCgst = salesData.reduce((sum, s) => sum + (Number(s.cgstAmount) || 0), 0);
@@ -100,6 +132,10 @@ function GstCalculator(props) {
           <input type="date" value={startDate} onChange={e => setStartDate(e.target.value)} style={{ padding: '6px 10px', borderRadius: 6, border: '1px solid #cbd5e1', fontSize: 15 }} />
           <label style={{ fontWeight: 600, fontSize: 15 }}>End Date:</label>
           <input type="date" value={endDate} onChange={e => setEndDate(e.target.value)} style={{ padding: '6px 10px', borderRadius: 6, border: '1px solid #cbd5e1', fontSize: 15 }} />
+            {/* <label style={{ fontWeight: 600, fontSize: 15, marginLeft: 12 }}>
+              <input type="checkbox" checked={showZeroGst} onChange={e => setShowZeroGst(e.target.checked)} style={{ marginRight: 8 }} />
+              Show zero GST
+            </label> */}
         </div>
       </div>
       {view === 'supplier' ? (
@@ -119,6 +155,14 @@ function GstCalculator(props) {
             }}
           >
             <span style={{ fontSize: 18 }}>Total GST Amount:</span> <span style={{ color: '#2563eb', fontWeight: 700, fontSize: 22 }}>{totalGst}</span>
+          </div>
+          {/* Branch subtotals */}
+          <div style={{ marginTop: 10, marginBottom: 20, display: 'flex', gap: 12, flexWrap: 'wrap' }}>
+            {Object.keys(branchTotals).length === 0 ? null : Object.keys(branchTotals).map((b) => (
+              <div key={b} style={{ background: '#fff', padding: '8px 12px', borderRadius: 8, border: '1px solid #e6eef8', fontWeight: 600 }}>
+                {b || 'Main'}: <span style={{ color: '#2563eb' }}>{branchTotals[b]}</span>
+              </div>
+            ))}
           </div>
           <div
             style={{
@@ -143,13 +187,14 @@ function GstCalculator(props) {
                 <tr style={{ background: '#f3f6fa' }}>
                   <th style={{ fontWeight: 700, padding: '14px 10px', borderBottom: '1px solid #e5e7eb', textAlign: 'left' }}>Supplier</th>
                   <th style={{ fontWeight: 700, padding: '14px 10px', borderBottom: '1px solid #e5e7eb', textAlign: 'left' }}>Bank</th>
+                      <th style={{ fontWeight: 700, padding: '14px 10px', borderBottom: '1px solid #e5e7eb', textAlign: 'left' }}>Branch</th>
                   <th style={{ fontWeight: 700, padding: '14px 10px', borderBottom: '1px solid #e5e7eb', textAlign: 'right' }}>Supplier Amount</th>
                   <th style={{ fontWeight: 700, padding: '14px 10px', borderBottom: '1px solid #e5e7eb', textAlign: 'right' }}>GST Amount</th>
                   <th style={{ fontWeight: 700, padding: '14px 10px', borderBottom: '1px solid #e5e7eb', textAlign: 'left' }}>Date</th>
                 </tr>
               </thead>
               <tbody>
-                {filteredTransactions.map((t, idx) => (
+                {displayedTransactions.map((t, idx) => (
                   <tr
                     key={idx}
                     style={{
@@ -157,8 +202,9 @@ function GstCalculator(props) {
                       borderBottom: '1px solid #e5e7eb',
                     }}
                   >
-                    <td style={{ padding: '12px 10px' }}>{t.supplierName || '-'}</td>
-                    <td style={{ padding: '12px 10px' }}>{t.bankName || '-'}</td>
+                        <td style={{ padding: '12px 10px' }}>{t.supplierName || '-'}</td>
+                        <td style={{ padding: '12px 10px' }}>{t.bankName || '-'}</td>
+                        <td style={{ padding: '12px 10px' }}>{t.branchName || '-'}</td>
                     <td style={{ padding: '12px 10px', textAlign: 'right' }}>{t.supplierAmount}</td>
                     <td style={{ padding: '12px 10px', textAlign: 'right' }}>{t.gstAmount}</td>
                     <td style={{ padding: '12px 10px' }}>{t.createdAt ? new Date(t.createdAt).toLocaleString() : '-'}</td>

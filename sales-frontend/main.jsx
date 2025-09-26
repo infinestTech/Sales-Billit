@@ -345,7 +345,7 @@ function App() {
           (window.GstCalculatorView ? React.createElement(window.GstCalculatorView) : (
             <div className="card"><div className="empty-state"><div className="empty-icon">🧮</div><div className="empty-title">Loading…</div></div></div>
           ))
-        ) : (!branchUser && view === 'supplier') ? (
+        ) : (view === 'supplier') ? (
           <CreateSupplier salesUrl={SALES_URL} token={effectiveToken} />
         ) : (!branchUser && view === 'branch') ? (
           (planId === 'sales-gold' || planId === 'sales-premium') ? (
@@ -394,6 +394,16 @@ function App() {
                 <div className="empty-icon">📦</div>
                 <div className="empty-title">Loading…</div>
                 <div className="empty-sub">Branch Supply History component not loaded yet.</div>
+              </div>
+            </div>
+          ))
+        ) : view === 'stock-history' ? (
+          (window.StockHistory ? React.createElement(window.StockHistory, { salesUrl: SALES_URL, token: effectiveToken, branchUser }) : (
+            <div className="card">
+              <div className="empty-state">
+                <div className="empty-icon">📚</div>
+                <div className="empty-title">Loading…</div>
+                <div className="empty-sub">Stock History component not loaded yet.</div>
               </div>
             </div>
           ))

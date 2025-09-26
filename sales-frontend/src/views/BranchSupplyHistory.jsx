@@ -57,11 +57,15 @@ function BranchSupplyHistory({ salesUrl, token }) {
 
   // Pre-process filtered data to avoid function calls in render
   const processedData = React.useMemo(() => {
-    const filtered = !filterDate ? data.supplies : data.supplies.filter(supply => {
+    // Only include supplies created by admin (exclude branch-created supplies)
+    const onlyAdmin = (arr) => (Array.isArray(arr) ? arr.filter(s => String(s.createdByType || '').toLowerCase() === 'admin') : []);
+
+    const baseArr = !filterDate ? data.supplies : data.supplies.filter(supply => {
       const selectedDate = new Date(filterDate).toDateString();
       const supplyDate = new Date(supply.createdAt || supply.updatedAt || new Date()).toDateString();
       return supplyDate === selectedDate;
     });
+    const filtered = onlyAdmin(baseArr);
 
     const flat = [];
     filtered.forEach(s => {
@@ -174,7 +178,7 @@ function BranchSupplyHistory({ salesUrl, token }) {
     React.createElement('div', {
       key: 'content',
       className: 'table-scroll'
-    }, branchId ? (
+    }, (
       processedData.length === 0 ? 
         React.createElement('div', {
           style: { 
@@ -190,7 +194,7 @@ function BranchSupplyHistory({ salesUrl, token }) {
           React.createElement('p', { 
             key: 'msg',
             style: { margin: '0' }
-          }, 'No supply history found for this branch')
+          }, 'No supply history found')
         ]) :
         React.createElement('table', {
           className: 'modern-table'
@@ -235,13 +239,7 @@ function BranchSupplyHistory({ salesUrl, token }) {
             )
           )
         ])
-    ) : React.createElement('div', {
-      style: { 
-        textAlign: 'center', 
-        padding: '40px',
-        color: '#6b7280'
-      }
-    }, 'Please select a branch to view supply history')),
+    )),
 
     data.error ? React.createElement('div', {
       key: 'error',
