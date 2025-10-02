@@ -71,20 +71,28 @@ function SalesTrack({ salesUrl, token }) {
       // resolve from stock when available
       const found = (stock || []).find(p => (String(p._id) && String(p._id) === String(i.productId || i._id)) || (p.productId && String(p.productId) === String(i.productId)) || (p.productNo && i.productNo && String(p.productNo) === String(i.productNo)));
       const name = found?.productName || found?.name || i.productName || i.productNo || '';
+      
+      // Extract IMEI numbers from the item
+      const imes = Array.isArray(i.imes) ? i.imes : (Array.isArray(i.selectedImes) ? i.selectedImes : []);
+      const imeiText = imes.length > 0 ? imes.map(imei => `IMEI: ${imei}`).join(', ') : '';
+      
+      // Combine product name with IMEI information
+      const productDescription = imeiText ? `${name}\n${imeiText}` : name;
+      
       const qty = Number(i.qty || i.sellingQty || 0);
       const unit = Number(found?.sellingPrice ?? found?.unitSellingPrice ?? i.sellingPrice ?? 0).toFixed(2);
       const line = (qty * Number(unit)).toFixed(2);
-      return { name, qty, unit, line };
+      return { name: productDescription, qty, unit, line, hasImei: imes.length > 0 };
     });
     // build table rows with S.no, Description (wide), HSN (empty), Qty, Rate, Amount
     const itemsRows = items.map((it, idx) => `
       <tr>
-        <td style="padding:6px;text-align:center">${idx+1}</td>
-        <td style="padding:6px">${it.name}</td>
-        <td style="padding:6px;text-align:center">&nbsp;</td>
-        <td style="padding:6px;text-align:right">${it.qty}</td>
-        <td style="padding:6px;text-align:right">${it.unit}</td>
-        <td style="padding:6px;text-align:right">${it.line}</td>
+        <td style="padding:8px;text-align:center;vertical-align:top;font-weight:600;background:#f8f9fa">${idx+1}</td>
+        <td style="padding:8px;vertical-align:top;line-height:1.4;${it.hasImei ? 'font-size:10px;' : ''}">${it.name.replace(/\n/g, '<br>')}</td>
+        <td style="padding:8px;text-align:center;vertical-align:top;color:#6c757d">&nbsp;</td>
+        <td style="padding:8px;text-align:right;vertical-align:top;font-weight:500">${it.qty}</td>
+        <td style="padding:8px;text-align:right;vertical-align:top;font-family:monospace">${it.unit}</td>
+        <td style="padding:8px;text-align:right;vertical-align:top;font-weight:600;font-family:monospace">${it.line}</td>
       </tr>
     `).join('');
     // GST details
@@ -113,38 +121,162 @@ function SalesTrack({ salesUrl, token }) {
 
     const html = `<!doctype html><html><head><meta charset="utf-8"><title>Invoice</title><style>
       @page { size: 80mm auto; margin: 6mm; }
-      body{font-family: Arial, Helvetica, sans-serif; padding:8px; color:#111; width:80mm; box-sizing:border-box}
-      .top-box{border:1px solid #000;padding:6px;margin-bottom:6px}
-      .top-left{float:left;font-size:11px}
-      .top-right{float:right;font-size:11px}
-      .center-title{clear:both;text-align:center;font-weight:700;margin:6px 0}
-      .branch-name{font-size:16px;font-weight:900;text-align:center;padding:4px 0;border-bottom:1px solid #000}
-      .address{font-size:11px;text-align:center;margin-top:4px}
-      .cust-line{margin-top:8px;font-size:11px}
-      .cust-dotted{border-bottom:1px dotted #000;padding-bottom:6px;margin-bottom:6px}
-      table.items{width:100%;border-collapse:collapse;margin-top:8px;font-size:11px}
-      table.items th, table.items td{border:1px solid #000;padding:6px}
-      thead th{background:#fff}
-      table.totals{width:44%;float:right;border-collapse:collapse;margin-top:8px;font-size:11px}
-      table.totals td{padding:6px;border:0}
-      .right{text-align:right}
+      body {
+        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+        padding: 12px;
+        color: #212529;
+        width: 80mm;
+        box-sizing: border-box;
+        line-height: 1.4;
+        background: #fff;
+      }
+      .top-box {
+        border: 2px solid #2c3e50;
+        padding: 10px;
+        margin-bottom: 12px;
+        background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+        border-radius: 4px;
+      }
+      .top-left { float: left; font-size: 11px; font-weight: 600; color: #495057; }
+      .top-right { float: right; font-size: 11px; font-weight: 600; color: #495057; }
+      .center-title {
+        clear: both;
+        text-align: center;
+        font-weight: 800;
+        margin: 10px 0;
+        font-size: 14px;
+        color: #2c3e50;
+        letter-spacing: 1px;
+        text-transform: uppercase;
+      }
+      .branch-name {
+        font-size: 18px;
+        font-weight: 900;
+        text-align: center;
+        padding: 8px 0;
+        border-bottom: 2px solid #2c3e50;
+        color: #2c3e50;
+        letter-spacing: 0.5px;
+      }
+      .address {
+        font-size: 11px;
+        text-align: center;
+        margin-top: 6px;
+        color: #6c757d;
+        font-style: italic;
+      }
+      .cust-line {
+        margin-top: 10px;
+        font-size: 12px;
+        color: #495057;
+      }
+      .cust-dotted {
+        border-bottom: 2px dotted #6c757d;
+        padding-bottom: 8px;
+        margin-bottom: 10px;
+        font-weight: 600;
+      }
+      table.items {
+        width: 100%;
+        border-collapse: collapse;
+        margin-top: 12px;
+        font-size: 11px;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        border-radius: 4px;
+        overflow: hidden;
+      }
+      table.items th {
+        background: linear-gradient(135deg, #2c3e50 0%, #34495e 100%);
+        color: white;
+        padding: 10px 8px;
+        font-weight: 700;
+        text-align: center;
+        font-size: 10px;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        border: none;
+      }
+      table.items td {
+        border: 1px solid #dee2e6;
+        padding: 8px;
+        background: #fff;
+      }
+      table.items tbody tr:nth-child(even) {
+        background: #f8f9fa;
+      }
+      table.items tbody tr:hover {
+        background: #e3f2fd;
+      }
+      table.totals {
+        width: 50%;
+        float: right;
+        border-collapse: collapse;
+        margin-top: 12px;
+        font-size: 11px;
+        background: #f8f9fa;
+        border-radius: 4px;
+        overflow: hidden;
+      }
+      table.totals td {
+        padding: 8px 12px;
+        border: none;
+        border-bottom: 1px solid #dee2e6;
+      }
+      table.totals tr:last-child td {
+        border-bottom: none;
+        background: #2c3e50;
+        color: white;
+        font-weight: 800;
+      }
+      .right { text-align: right; }
+      .imei-text {
+        font-size: 9px;
+        color: #6c757d;
+        font-style: italic;
+        margin-top: 2px;
+      }
     </style></head><body>` +
-      `<div class="top-box"><div class="top-left">GSTIN: ${branchGst || '-'}</div><div class="top-right">Mob: ${branchContact || '-'}</div><div style="clear:both"></div></div>` +
-      `<div class="center-title">CASH RECEIPT</div>` +
+      `<div class="top-box">
+        <div class="top-left">📋 GSTIN: ${branchGst || 'N/A'}</div>
+        <div class="top-right">📞 ${branchContact || 'Contact N/A'}</div>
+        <div style="clear:both"></div>
+      </div>` +
+      `<div class="center-title">💰 CASH RECEIPT 💰</div>` +
       `<div class="branch-name">${branchName || 'Branch Name'}</div>` +
-      `<div class="address">${branchAddress || 'Branch Address'}</div>` +
-      `<div class="cust-line cust-dotted"><strong>Customer:</strong> ${sale.customerName || 'John Doe'}</div>` +
-      `<div class="cust-line"><strong>Phone:</strong> ${sale.customerNo || '9999999999'} &nbsp;&nbsp; <strong>Date:</strong> ${date}</div>` +
-      `<table class="items"><thead><tr><th style="width:6%">S.no</th><th style="width:56%">Description of Goods</th><th style="width:10%">HSN</th><th style="width:8%">Qty</th><th style="width:10%">Rate</th><th style="width:10%">Amount</th></tr></thead><tbody>${itemsRows}</tbody></table>` +
+      `<div class="address">📍 ${branchAddress || 'Branch Address'}</div>` +
+      `<div class="cust-line cust-dotted">
+        <strong>👤 Customer:</strong> ${sale.customerName || 'Walk-in Customer'}
+      </div>` +
+      `<div class="cust-line">
+        <strong>📱 Phone:</strong> ${sale.customerNo || 'N/A'} &nbsp;&nbsp;&nbsp;
+        <strong>📅 Date:</strong> ${date}
+      </div>` +
+      `<table class="items">
+        <thead>
+          <tr>
+            <th style="width:8%">#</th>
+            <th style="width:52%">📦 Product Details</th>
+            <th style="width:10%">HSN</th>
+            <th style="width:10%">Qty</th>
+            <th style="width:10%">Rate</th>
+            <th style="width:10%">Amount</th>
+          </tr>
+        </thead>
+        <tbody>${itemsRows}</tbody>
+      </table>` +
       `<table class="totals">` +
-        `<tr><td>SUB TOTAL:</td><td class="right">${outSubTotal.toFixed(2)}</td></tr>` +
-        (discount ? `<tr><td>DISCOUNT (${discount}%):</td><td class="right">${outDiscount.toFixed(2)}</td></tr>` : '') +
-        `<tr><td>TAXABLE:</td><td class="right">${outTaxable.toFixed(2)}</td></tr>` +
-        (cgstPercent > 0 ? `<tr><td>CGST ${cgstPercent}%:</td><td class="right">${Number(cgstAmt).toFixed(2)}</td></tr>` : '') +
-        (sgstPercent > 0 ? `<tr><td>SGST ${sgstPercent}%:</td><td class="right">${Number(sgstAmt).toFixed(2)}</td></tr>` : '') +
-        (igstPercent > 0 ? `<tr><td>IGST ${igstPercent}%:</td><td class="right">${Number(igstAmt).toFixed(2)}</td></tr>` : '') +
-        `<tr><td style="font-weight:700">GRAND TOTAL:</td><td class="right" style="font-weight:700">${outTotal}</td></tr>` +
+        `<tr><td>📊 Sub Total:</td><td class="right">₹ ${outSubTotal.toFixed(2)}</td></tr>` +
+        (discount ? `<tr><td>🏷️ Discount (${discount}%):</td><td class="right">- ₹ ${outDiscount.toFixed(2)}</td></tr>` : '') +
+        `<tr><td>💵 Taxable Amount:</td><td class="right">₹ ${outTaxable.toFixed(2)}</td></tr>` +
+        (cgstPercent > 0 ? `<tr><td>🏛️ CGST ${cgstPercent}%:</td><td class="right">₹ ${Number(cgstAmt).toFixed(2)}</td></tr>` : '') +
+        (sgstPercent > 0 ? `<tr><td>🏛️ SGST ${sgstPercent}%:</td><td class="right">₹ ${Number(sgstAmt).toFixed(2)}</td></tr>` : '') +
+        (igstPercent > 0 ? `<tr><td>🏛️ IGST ${igstPercent}%:</td><td class="right">₹ ${Number(igstAmt).toFixed(2)}</td></tr>` : '') +
+        `<tr><td>💰 GRAND TOTAL:</td><td class="right">₹ ${outTotal}</td></tr>` +
       `</table>` +
+      `<div style="clear:both;margin-top:20px;text-align:center;font-size:11px;color:#6c757d;border-top:1px solid #dee2e6;padding-top:10px;">
+        🙏 Thank you for your business! 🙏<br>
+        <span style="font-size:10px;font-style:italic;">Visit again soon!</span>
+      </div>` +
     `</body></html>`;
     return html;
   }

@@ -309,234 +309,1381 @@ function BranchInStock({ salesUrl, token }) {
   }, [filteredEntries]);
 
   return (
-    <div>
-      <div className="card mt-3 table-card">
-        <div style={{display:'flex', alignItems:'center', gap:12, justifyContent:'flex-start'}}>
-          {/* Total value red box (left) */}
-          <div style={{background:'#ffe6e6', border:'1px solid #ffcccc', color:'#b30000', padding:'10px 14px', borderRadius:6, fontWeight:600}} title="Branch stock total value">
-            <div style={{display:'flex', alignItems:'center', gap:12}}>
-              <div>Branch Stock Value: {currency(branchStockTotal)}</div>
-              <button className="btn" style={{padding:'4px 8px'}} onClick={() => setShowBreakdown(s => !s)}>{showBreakdown ? 'Hide' : 'Show'} breakdown</button>
+    <div style={{ padding: '24px', backgroundColor: '#f8fafc', minHeight: '100vh' }}>
+      {/* Page Header */}
+      <div style={{ marginBottom: '32px' }}>
+        <h1 style={{ 
+          fontSize: '32px', 
+          fontWeight: '700', 
+          color: '#1e293b', 
+          marginBottom: '8px',
+          display: 'flex',
+          alignItems: 'center',
+          gap: '12px'
+        }}>
+          🏢 Branch Inventory
+        </h1>
+        <p style={{ color: '#64748b', fontSize: '16px', margin: 0 }}>
+          Manage and track your branch-specific inventory stock
+        </p>
+      </div>
+
+      {/* Statistics Cards */}
+      <div style={{ 
+        display: 'grid', 
+        gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', 
+        gap: '24px', 
+        marginBottom: '32px' 
+      }}>
+        <div style={{
+          background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+          borderRadius: '16px',
+          padding: '24px',
+          color: 'white',
+          boxShadow: '0 10px 25px rgba(102, 126, 234, 0.15)',
+          border: '1px solid rgba(255, 255, 255, 0.1)'
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', marginBottom: '16px' }}>
+            <div style={{ 
+              fontSize: '28px', 
+              marginRight: '16px',
+              background: 'rgba(255, 255, 255, 0.2)',
+              padding: '12px',
+              borderRadius: '12px',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center'
+            }}>📦</div>
+            <div>
+              <div style={{ fontSize: '14px', opacity: 0.9, marginBottom: '4px' }}>Total Items</div>
+              <div style={{ fontSize: '28px', fontWeight: '700' }}>
+                {filteredEntries.length}
+              </div>
             </div>
-            {showBreakdown && (
-              <div style={{marginTop:8, background:'#fff', color:'#111', padding:8, borderRadius:6, boxShadow:'inset 0 0 0 1px rgba(0,0,0,0.03)'}}>
-                {branchStockBreakdown.items.length === 0 ? (
-                  <div style={{fontSize:12, color:'#6b7280'}}>No non-zero contributions</div>
-                ) : (
-                  <div style={{fontSize:13}}>
-                    {branchStockBreakdown.items.map((b, i) => (
-                      <div key={i} style={{display:'flex', justifyContent:'space-between', gap:12, padding:'2px 0'}}>
-                        <div style={{minWidth:220}}>{b.productNo} — {b.productName}</div>
-                        <div style={{color:'#6b7280'}}>{b.qty} × {currency(b.selling)}</div>
-                        <div style={{fontWeight:700}}>{currency(b.amount)}</div>
-                      </div>
-                    ))}
-                    <div style={{borderTop:'1px dashed #e5e7eb', marginTop:6, paddingTop:6, display:'flex', justifyContent:'space-between'}}>
-                      <div style={{color:'#6b7280'}}>Subtotal</div>
-                      <div style={{fontWeight:800}}>{currency(branchStockBreakdown.total)}</div>
+          </div>
+          <div style={{ fontSize: '14px', opacity: 0.8 }}>Items in branch inventory</div>
+        </div>
+       
+        <div style={{
+          background: 'linear-gradient(135deg, #f093fb 0%, #f5576c 100%)',
+          borderRadius: '16px',
+          padding: '24px',
+          color: 'white',
+          boxShadow: '0 10px 25px rgba(240, 147, 251, 0.15)',
+          border: '1px solid rgba(255, 255, 255, 0.1)'
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', marginBottom: '16px' }}>
+            <div style={{ 
+              fontSize: '28px', 
+              marginRight: '16px',
+              background: 'rgba(255, 255, 255, 0.2)',
+              padding: '12px',
+              borderRadius: '12px',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center'
+            }}>📊</div>
+            <div>
+              <div style={{ fontSize: '14px', opacity: 0.9, marginBottom: '4px' }}>Total Quantity</div>
+              <div style={{ fontSize: '28px', fontWeight: '700' }}>
+                {filteredEntries.reduce((sum, item) => sum + (Number(item.branchQty || item.qty) || 0), 0)}
+              </div>
+            </div>
+          </div>
+          <div style={{ fontSize: '14px', opacity: 0.8 }}>Units in stock</div>
+        </div>
+       
+        <div style={{
+          background: 'linear-gradient(135deg, #4facfe 0%, #00f2fe 100%)',
+          borderRadius: '16px',
+          padding: '24px',
+          color: 'white',
+          boxShadow: '0 10px 25px rgba(79, 172, 254, 0.15)',
+          border: '1px solid rgba(255, 255, 255, 0.1)'
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', marginBottom: '16px' }}>
+            <div style={{ 
+              fontSize: '28px', 
+              marginRight: '16px',
+              background: 'rgba(255, 255, 255, 0.2)',
+              padding: '12px',
+              borderRadius: '12px',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center'
+            }}>💰</div>
+            <div>
+              <div style={{ fontSize: '14px', opacity: 0.9, marginBottom: '4px' }}>Stock Value</div>
+              <div style={{ fontSize: '28px', fontWeight: '700' }}>
+                {currency(branchStockTotal)}
+              </div>
+            </div>
+          </div>
+          <div style={{ fontSize: '14px', opacity: 0.8 }}>
+            <button 
+              style={{
+                background: 'rgba(255, 255, 255, 0.2)',
+                color: 'white',
+                border: 'none',
+                borderRadius: '6px',
+                padding: '4px 8px',
+                fontSize: '12px',
+                cursor: 'pointer'
+              }}
+              onClick={() => setShowBreakdown(s => !s)}
+            >
+              {showBreakdown ? 'Hide' : 'Show'} breakdown
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {/* Stock Value Breakdown */}
+      {showBreakdown && (
+        <div style={{
+          background: 'white',
+          borderRadius: '16px',
+          padding: '24px',
+          marginBottom: '32px',
+          boxShadow: '0 4px 6px rgba(0, 0, 0, 0.05)',
+          border: '1px solid #e2e8f0'
+        }}>
+          <h3 style={{ 
+            fontSize: '18px', 
+            fontWeight: '600', 
+            color: '#1e293b',
+            marginBottom: '16px',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '8px'
+          }}>
+            💰 Stock Value Breakdown
+          </h3>
+          
+          {branchStockBreakdown.items.length === 0 ? (
+            <div style={{
+              textAlign: 'center',
+              padding: '32px',
+              background: '#f8fafc',
+              borderRadius: '12px',
+              border: '2px dashed #cbd5e1'
+            }}>
+              <div style={{ fontSize: '24px', marginBottom: '8px' }}>📊</div>
+              <div style={{ color: '#6b7280', fontSize: '14px' }}>No items contributing to stock value</div>
+            </div>
+          ) : (
+            <div style={{ 
+              border: '1px solid #e2e8f0',
+              borderRadius: '12px',
+              overflow: 'hidden'
+            }}>
+              <div style={{ background: '#f8fafc', padding: '12px 16px', borderBottom: '1px solid #e2e8f0' }}>
+                <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr', gap: '16px', fontSize: '12px', fontWeight: '600', color: '#6b7280' }}>
+                  <div>PRODUCT</div>
+                  <div style={{ textAlign: 'center' }}>CALCULATION</div>
+                  <div style={{ textAlign: 'right' }}>VALUE</div>
+                </div>
+              </div>
+              <div style={{ maxHeight: '300px', overflowY: 'auto' }}>
+                {branchStockBreakdown.items.map((b, i) => (
+                  <div key={i} style={{
+                    display: 'grid', 
+                    gridTemplateColumns: '2fr 1fr 1fr', 
+                    gap: '16px',
+                    padding: '12px 16px',
+                    borderBottom: i < branchStockBreakdown.items.length - 1 ? '1px solid #f1f5f9' : 'none',
+                    fontSize: '14px'
+                  }}>
+                    <div>
+                      <div style={{ fontWeight: '500', color: '#1e293b' }}>{b.productNo}</div>
+                      <div style={{ fontSize: '12px', color: '#6b7280' }}>{b.productName}</div>
+                    </div>
+                    <div style={{ textAlign: 'center', color: '#6b7280' }}>
+                      {b.qty} × {currency(b.selling)}
+                    </div>
+                    <div style={{ textAlign: 'right', fontWeight: '600', color: '#059669' }}>
+                      {currency(b.amount)}
                     </div>
                   </div>
-                )}
+                ))}
               </div>
-            )}
+              <div style={{ 
+                padding: '12px 16px', 
+                background: '#f8fafc', 
+                borderTop: '2px solid #e2e8f0',
+                display: 'grid',
+                gridTemplateColumns: '2fr 1fr 1fr',
+                gap: '16px'
+              }}>
+                <div></div>
+                <div style={{ textAlign: 'center', fontSize: '14px', fontWeight: '600', color: '#6b7280' }}>
+                  Total Value
+                </div>
+                <div style={{ textAlign: 'right', fontSize: '18px', fontWeight: '700', color: '#059669' }}>
+                  {currency(branchStockBreakdown.total)}
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Actions Section */}
+      <div style={{
+        background: 'white',
+        borderRadius: '16px',
+        padding: '24px',
+        marginBottom: '32px',
+        boxShadow: '0 4px 6px rgba(0, 0, 0, 0.05)',
+        border: '1px solid #e2e8f0'
+      }}>
+        <div style={{ 
+          display: 'flex', 
+          justifyContent: 'space-between', 
+          alignItems: 'center',
+          marginBottom: '24px',
+          flexWrap: 'wrap',
+          gap: '16px'
+        }}>
+          <div>
+            <h3 style={{ 
+              fontSize: '24px', 
+              fontWeight: '600', 
+              color: '#1e293b',
+              marginBottom: '8px'
+            }}>Inventory Management</h3>
+            <p style={{ 
+              color: '#64748b', 
+              fontSize: '16px',
+              margin: 0
+            }}>Add new products and manage your branch inventory</p>
           </div>
-          <div style={{minWidth:12}} />
-          <div className="table-title">In Stock (Branch)</div>
-          <div style={{marginLeft:12}}>
-            <button className="btn btn-primary" type="button" onClick={() => setOpenAdd(true)}>📦 Add New Stock</button>
-          </div>
+          <button 
+            style={{
+              background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+              color: 'white',
+              border: 'none',
+              borderRadius: '12px',
+              padding: '12px 24px',
+              fontSize: '14px',
+              fontWeight: '600',
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '8px',
+              boxShadow: '0 4px 12px rgba(102, 126, 234, 0.3)',
+              transition: 'all 0.2s ease'
+            }}
+            type="button" 
+            onClick={() => setOpenAdd(true)}
+            onMouseOver={(e) => {
+              e.target.style.transform = 'translateY(-2px)';
+              e.target.style.boxShadow = '0 6px 16px rgba(102, 126, 234, 0.4)';
+            }}
+            onMouseOut={(e) => {
+              e.target.style.transform = 'translateY(0px)';
+              e.target.style.boxShadow = '0 4px 12px rgba(102, 126, 234, 0.3)';
+            }}
+          >
+            📦 Add New Stock
+          </button>
         </div>
 
         {/* Filter Section */}
-        <div className="filter-section" style={{ display: 'flex', gap: '12px', flexWrap: 'wrap', marginBottom: '12px', marginTop:12 }}>
-          <input type="text" placeholder="Filter by Product No" value={productNoFilter} onChange={e => setProductNoFilter(e.target.value)} style={{ padding: '8px', width: '160px' }} />
-          <input type="text" placeholder="Filter by Product Name" value={productNameFilter} onChange={e => setProductNameFilter(e.target.value)} style={{ padding: '8px', width: '160px' }} />
-          <input type="text" placeholder="Filter by Brand" value={brandFilter} onChange={e => setBrandFilter(e.target.value)} style={{ padding: '8px', width: '120px' }} />
-          <input type="text" placeholder="Filter by Model" value={modelFilter} onChange={e => setModelFilter(e.target.value)} style={{ padding: '8px', width: '120px' }} />
-          <input type="text" placeholder="Filter by Qty" value={qtyFilter} onChange={e => setQtyFilter(e.target.value)} style={{ padding: '8px', width: '80px' }} />
-          <input type="text" placeholder="Filter by IME" value={imesFilter} onChange={e => setImesFilter(e.target.value)} style={{ padding: '8px', width: '160px' }} />
+        <div>
+          <h4 style={{ 
+            fontSize: '18px', 
+            fontWeight: '600', 
+            color: '#1e293b',
+            marginBottom: '20px',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '8px'
+          }}>
+            🔍 Filter Inventory
+          </h4>
+          
+          <div style={{ 
+            display: 'grid', 
+            gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', 
+            gap: '16px'
+          }}>
+            <div>
+              <label style={{ 
+                display: 'block', 
+                fontSize: '14px', 
+                fontWeight: '500', 
+                color: '#374151',
+                marginBottom: '6px'
+              }}>Product No</label>
+              <input 
+                type="text" 
+                placeholder="Search by product number" 
+                value={productNoFilter} 
+                onChange={e => setProductNoFilter(e.target.value)}
+                style={{
+                  width: '100%',
+                  padding: '10px 12px',
+                  border: '2px solid #e5e7eb',
+                  borderRadius: '8px',
+                  fontSize: '14px',
+                  transition: 'border-color 0.2s ease',
+                  outline: 'none'
+                }}
+                onFocus={(e) => e.target.style.borderColor = '#667eea'}
+                onBlur={(e) => e.target.style.borderColor = '#e5e7eb'}
+              />
+            </div>
+
+            <div>
+              <label style={{ 
+                display: 'block', 
+                fontSize: '14px', 
+                fontWeight: '500', 
+                color: '#374151',
+                marginBottom: '6px'
+              }}>Product Name</label>
+              <input 
+                type="text" 
+                placeholder="Search by product name" 
+                value={productNameFilter} 
+                onChange={e => setProductNameFilter(e.target.value)}
+                style={{
+                  width: '100%',
+                  padding: '10px 12px',
+                  border: '2px solid #e5e7eb',
+                  borderRadius: '8px',
+                  fontSize: '14px',
+                  transition: 'border-color 0.2s ease',
+                  outline: 'none'
+                }}
+                onFocus={(e) => e.target.style.borderColor = '#667eea'}
+                onBlur={(e) => e.target.style.borderColor = '#e5e7eb'}
+              />
+            </div>
+
+            <div>
+              <label style={{ 
+                display: 'block', 
+                fontSize: '14px', 
+                fontWeight: '500', 
+                color: '#374151',
+                marginBottom: '6px'
+              }}>Brand</label>
+              <input 
+                type="text" 
+                placeholder="Search by brand" 
+                value={brandFilter} 
+                onChange={e => setBrandFilter(e.target.value)}
+                style={{
+                  width: '100%',
+                  padding: '10px 12px',
+                  border: '2px solid #e5e7eb',
+                  borderRadius: '8px',
+                  fontSize: '14px',
+                  transition: 'border-color 0.2s ease',
+                  outline: 'none'
+                }}
+                onFocus={(e) => e.target.style.borderColor = '#667eea'}
+                onBlur={(e) => e.target.style.borderColor = '#e5e7eb'}
+              />
+            </div>
+
+            <div>
+              <label style={{ 
+                display: 'block', 
+                fontSize: '14px', 
+                fontWeight: '500', 
+                color: '#374151',
+                marginBottom: '6px'
+              }}>Model</label>
+              <input 
+                type="text" 
+                placeholder="Search by model" 
+                value={modelFilter} 
+                onChange={e => setModelFilter(e.target.value)}
+                style={{
+                  width: '100%',
+                  padding: '10px 12px',
+                  border: '2px solid #e5e7eb',
+                  borderRadius: '8px',
+                  fontSize: '14px',
+                  transition: 'border-color 0.2s ease',
+                  outline: 'none'
+                }}
+                onFocus={(e) => e.target.style.borderColor = '#667eea'}
+                onBlur={(e) => e.target.style.borderColor = '#e5e7eb'}
+              />
+            </div>
+
+            <div>
+              <label style={{ 
+                display: 'block', 
+                fontSize: '14px', 
+                fontWeight: '500', 
+                color: '#374151',
+                marginBottom: '6px'
+              }}>Quantity</label>
+              <input 
+                type="text" 
+                placeholder="Filter by quantity" 
+                value={qtyFilter} 
+                onChange={e => setQtyFilter(e.target.value)}
+                style={{
+                  width: '100%',
+                  padding: '10px 12px',
+                  border: '2px solid #e5e7eb',
+                  borderRadius: '8px',
+                  fontSize: '14px',
+                  transition: 'border-color 0.2s ease',
+                  outline: 'none'
+                }}
+                onFocus={(e) => e.target.style.borderColor = '#667eea'}
+                onBlur={(e) => e.target.style.borderColor = '#e5e7eb'}
+              />
+            </div>
+
+            <div>
+              <label style={{ 
+                display: 'block', 
+                fontSize: '14px', 
+                fontWeight: '500', 
+                color: '#374151',
+                marginBottom: '6px'
+              }}>IMEI</label>
+              <input 
+                type="text" 
+                placeholder="Search by IMEI" 
+                value={imesFilter} 
+                onChange={e => setImesFilter(e.target.value)}
+                style={{
+                  width: '100%',
+                  padding: '10px 12px',
+                  border: '2px solid #e5e7eb',
+                  borderRadius: '8px',
+                  fontSize: '14px',
+                  transition: 'border-color 0.2s ease',
+                  outline: 'none'
+                }}
+                onFocus={(e) => e.target.style.borderColor = '#667eea'}
+                onBlur={(e) => e.target.style.borderColor = '#e5e7eb'}
+              />
+            </div>
           </div>
-        {filteredEntries.length === 0 ? (
-          <div className="empty-state" style={{padding:24}}>
-            <div className="empty-icon">📦</div>
-            <div className="empty-title">No Entries</div>
-            <div className="empty-sub">No in-stock entries found for this branch.</div>
-          </div>
-        ) : (
-          <div className="table-scroll">
-            <table className="modern-table">
-              <thead>
-                <tr>
-                  <th>Product No</th>
-                  <th>Product Name</th>
-                  <th>Brand</th>
-                  <th>Model</th>
-                  <th>Qty </th>
-                  <th>Cost Price</th>
-                  <th>Selling Price</th>
-                  <th>Supplier</th>
-                  <th>Product Date</th>
-                  <th>Days in Stock</th>
-                  <th>Validity</th>
-                </tr>
-              </thead>
-              <tbody>
-                {filteredEntries.map((it, idx) => (
-                  <tr key={it._id || idx}>
-                    <td>{it.productNo || '-'}</td>
-                    <td>{it.productName || '-'}</td>
-                    <td>{it.brand || '-'}</td>
-                    <td>{it.model || '-'}</td>
-                    <td>{it.branchQty ?? (it.qty ?? '-')}</td>
-                    <td>{(() => {
-                      // Determine whether this row references a central InStock item.
-                      // Central refs are stored as '<docId>_<idx>' where docId is a 24-char hex ObjectId.
-                      // Treat anything else (including 'branch_...') as branch-only so costPrice is shown.
-                      const pid = String(it.productId || '');
-                      const isCentralRef = /^[0-9a-fA-F]{24}_[0-9]+$/.test(pid);
-                      const isBranchOnly = !isCentralRef;
-                      if (!isBranchOnly) return '-';
-                      const qtyVal = Number(it.branchQty ?? it.qty ?? 0) || 0;
-                      const rawCost = (it.costPrice ?? it.cost ?? null);
-                      let unitCost = null;
-                      if (rawCost != null) unitCost = Number(rawCost) || 0;
-                      else if (it.totalCostPrice != null && qtyVal > 0) unitCost = Number(it.totalCostPrice) / qtyVal;
-                      return unitCost != null ? currency(unitCost) : '-';
-                    })()}</td>
-                    <td>{it.sellingPrice != null ? currency(it.sellingPrice) : '-'}</td>
-                    <td>{it.supplierName || '-'}</td>
-                    <td>{it.productCreatedAt ? new Date(it.productCreatedAt).toLocaleDateString() : '-'}</td>
-                    <td>{(() => {
-                      if (!it.productCreatedAt) return '-';
-                      try {
-                        const created = new Date(it.productCreatedAt);
-                        const now = new Date();
-                        // Calculate calendar day difference using UTC to avoid timezone/time-of-day issues
-                        const utcToday = Date.UTC(now.getFullYear(), now.getMonth(), now.getDate());
-                        const utcCreated = Date.UTC(created.getFullYear(), created.getMonth(), created.getDate());
-                        const diffDays = Math.floor((utcToday - utcCreated) / (1000 * 60 * 60 * 24));
-                        return diffDays >= 0 ? diffDays : '-';
-                      } catch (e) { return '-'; }
-                    })()}</td>
-                    <td>{it.validity ? new Date(it.validity).toLocaleDateString() : '-'}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-        {error ? <div className="mt-2 text-danger" style={{padding:12}}>{error}</div> : null}
+        </div>
       </div>
 
-      {openAdd && (
-        <div className="modal-backdrop">
-          <div className="modal">
-            <div className="modal-header">
-              <div style={{fontWeight:800}}>Add Branch Stock</div>
-              <button className="btn secondary" onClick={() => { setOpenAdd(false); setAddError(''); setItemsToAdd([{ productNo: '', productName: '', brand: '', model: '', qty: 1, costPrice: '', sellingPrice: '', validity: '', imes: [] }]); }}>Close</button>
+      {/* Main Table Section */}
+      <div style={{
+        background: 'white',
+        borderRadius: '16px',
+        padding: '24px',
+        marginBottom: '32px',
+        boxShadow: '0 4px 6px rgba(0, 0, 0, 0.05)',
+        border: '1px solid #e2e8f0'
+      }}>
+        <div style={{ marginBottom: '24px' }}>
+          <h3 style={{ 
+            fontSize: '24px', 
+            fontWeight: '600', 
+            color: '#1e293b',
+            marginBottom: '8px',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '8px'
+          }}>
+            📦 Branch Inventory Items
+          </h3>
+          <p style={{ 
+            color: '#64748b', 
+            fontSize: '16px',
+            margin: 0
+          }}>
+            Showing {filteredEntries.length} item{filteredEntries.length !== 1 ? 's' : ''} in branch inventory
+          </p>
+        </div>
+        {filteredEntries.length === 0 ? (
+          <div style={{
+            textAlign: 'center',
+            padding: '64px 24px',
+            background: '#f8fafc',
+            borderRadius: '12px',
+            border: '2px dashed #cbd5e1'
+          }}>
+            <div style={{ fontSize: '48px', marginBottom: '16px' }}>📦</div>
+            <div style={{ fontSize: '20px', fontWeight: '600', color: '#475569', marginBottom: '8px' }}>
+              No Inventory Items
             </div>
-            <div className="modal-body">
-              {addError ? <div className="text-danger" style={{marginBottom:8}}>{addError}</div> : null}
-              <div className="row" style={{display:'flex', gap:12, marginBottom:12}}>
-                <div style={{flex:1}}>
-                  <label>Supplier</label>
-                  <select value={supplierId} onChange={e=>setSupplierId(e.target.value)}>
-                    <option value="">Select supplier</option>
-                    {suppliers.map(s => <option key={s._id} value={s._id}>{s.supplierName || s.agencyName || s._id}</option>)}
-                  </select>
-                </div>
-                <div style={{flex:1}}>
-                  <label>Bank</label>
-                  <select value={bankId} onChange={e=>setBankId(e.target.value)}>
-                    <option value="">Select bank</option>
-                    {banks.map(b => <option key={b._id} value={b._id}>{b.bankName || b.accountNumber || b._id}</option>)}
-                  </select>
-                </div>
-                <div style={{width:160}}>
-                  <label>Supplier Amount</label>
-                  <input type="number" value={supplierAmount} onChange={e=>setSupplierAmount(e.target.value)} placeholder="Supplier Amount" />
-                </div>
-                <div style={{width:160}}>
-                  <label>GST Amount</label>
-                  <input type="number" value={gstAmount} onChange={e=>setGstAmount(e.target.value)} placeholder="GST Amount" />
-                </div>
-                <div style={{width:180}}>
-                  <label>Category</label>
-                  <select value={category} onChange={e=>setCategory(e.target.value)}>
-                    <option value="">Select category</option>
-                    <option value="Accessories">Accessories</option>
-                    <option value="Mobile">Mobile</option>
-                  </select>
-                </div>
-              </div>
-              <div className="table-scroll">
-                <table className="pretty-table">
-                  <thead>
-                    <tr>
-                      <th>Product No</th>
-                      <th>Product Name</th>
-                      <th>Brand</th>
-                      <th>Model</th>
-                      <th>Qty</th>
-                      <th>Cost Price</th>
-                      <th>Selling Price</th>
-                      {category === 'Mobile' && <th style={{width: '220px'}}>IMES No</th>}
-                      <th>Validity</th>
-                      <th></th>
+            <div style={{ color: '#64748b', fontSize: '16px' }}>
+              No in-stock entries found for this branch
+            </div>
+          </div>
+        ) : (
+          <div style={{ 
+            border: '1px solid #e2e8f0',
+            borderRadius: '12px',
+            overflow: 'hidden',
+            background: '#fff'
+          }}>
+            <div style={{ overflowX: 'auto' }}>
+              <table style={{ 
+                width: '100%', 
+                borderCollapse: 'collapse',
+                fontSize: '14px'
+              }}>
+                <thead>
+                  <tr style={{ background: '#f8fafc' }}>
+                    <th style={{
+                      padding: '16px 12px',
+                      textAlign: 'left',
+                      fontWeight: '600',
+                      color: '#374151',
+                      borderBottom: '2px solid #e5e7eb',
+                      minWidth: '120px'
+                    }}>Product No</th>
+                    <th style={{
+                      padding: '16px 12px',
+                      textAlign: 'left',
+                      fontWeight: '600',
+                      color: '#374151',
+                      borderBottom: '2px solid #e5e7eb',
+                      minWidth: '180px'
+                    }}>Product Name</th>
+                    <th style={{
+                      padding: '16px 12px',
+                      textAlign: 'left',
+                      fontWeight: '600',
+                      color: '#374151',
+                      borderBottom: '2px solid #e5e7eb',
+                      minWidth: '120px'
+                    }}>Brand</th>
+                    <th style={{
+                      padding: '16px 12px',
+                      textAlign: 'left',
+                      fontWeight: '600',
+                      color: '#374151',
+                      borderBottom: '2px solid #e5e7eb',
+                      minWidth: '120px'
+                    }}>Model</th>
+                    <th style={{
+                      padding: '16px 12px',
+                      textAlign: 'center',
+                      fontWeight: '600',
+                      color: '#374151',
+                      borderBottom: '2px solid #e5e7eb',
+                      width: '80px'
+                    }}>Qty</th>
+                    <th style={{
+                      padding: '16px 12px',
+                      textAlign: 'right',
+                      fontWeight: '600',
+                      color: '#374151',
+                      borderBottom: '2px solid #e5e7eb',
+                      minWidth: '120px'
+                    }}>Cost Price</th>
+                    <th style={{
+                      padding: '16px 12px',
+                      textAlign: 'right',
+                      fontWeight: '600',
+                      color: '#374151',
+                      borderBottom: '2px solid #e5e7eb',
+                      minWidth: '120px'
+                    }}>Selling Price</th>
+                    <th style={{
+                      padding: '16px 12px',
+                      textAlign: 'left',
+                      fontWeight: '600',
+                      color: '#374151',
+                      borderBottom: '2px solid #e5e7eb',
+                      minWidth: '130px'
+                    }}>Supplier</th>
+                    <th style={{
+                      padding: '16px 12px',
+                      textAlign: 'center',
+                      fontWeight: '600',
+                      color: '#374151',
+                      borderBottom: '2px solid #e5e7eb',
+                      minWidth: '120px'
+                    }}>Product Date</th>
+                    <th style={{
+                      padding: '16px 12px',
+                      textAlign: 'center',
+                      fontWeight: '600',
+                      color: '#374151',
+                      borderBottom: '2px solid #e5e7eb',
+                      width: '100px'
+                    }}>Days in Stock</th>
+                    <th style={{
+                      padding: '16px 12px',
+                      textAlign: 'center',
+                      fontWeight: '600',
+                      color: '#374151',
+                      borderBottom: '2px solid #e5e7eb',
+                      minWidth: '120px'
+                    }}>Validity</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {filteredEntries.map((it, idx) => (
+                    <tr 
+                      key={it._id || idx}
+                      style={{
+                        borderBottom: '1px solid #f1f5f9',
+                        transition: 'background-color 0.2s ease'
+                      }}
+                      onMouseOver={(e) => e.target.parentElement.style.backgroundColor = '#f8fafc'}
+                      onMouseOut={(e) => e.target.parentElement.style.backgroundColor = 'transparent'}
+                    >
+                      <td style={{ padding: '16px 12px' }}>
+                        <span style={{
+                          background: '#f1f5f9',
+                          color: '#475569',
+                          padding: '4px 8px',
+                          borderRadius: '6px',
+                          fontSize: '12px',
+                          fontFamily: 'monospace'
+                        }}>
+                          {it.productNo || '-'}
+                        </span>
+                      </td>
+                      <td style={{ padding: '16px 12px' }}>
+                        <div style={{ fontWeight: '500', color: '#1e293b' }}>
+                          {it.productName || '-'}
+                        </div>
+                      </td>
+                      <td style={{ padding: '16px 12px', color: '#475569' }}>
+                        {it.brand || '-'}
+                      </td>
+                      <td style={{ padding: '16px 12px', color: '#475569' }}>
+                        {it.model || '-'}
+                      </td>
+                      <td style={{ padding: '16px 12px', textAlign: 'center' }}>
+                        <span style={{
+                          background: '#dbeafe',
+                          color: '#1d4ed8',
+                          padding: '4px 8px',
+                          borderRadius: '6px',
+                          fontSize: '12px',
+                          fontWeight: '600'
+                        }}>
+                          {it.branchQty ?? (it.qty ?? '-')}
+                        </span>
+                      </td>
+                      <td style={{ padding: '16px 12px', textAlign: 'right' }}>
+                        <span style={{
+                          color: '#dc2626',
+                          fontWeight: '600'
+                        }}>
+                          {(() => {
+                            // Determine whether this row references a central InStock item.
+                            // Central refs are stored as '<docId>_<idx>' where docId is a 24-char hex ObjectId.
+                            // Treat anything else (including 'branch_...') as branch-only so costPrice is shown.
+                            const pid = String(it.productId || '');
+                            const isCentralRef = /^[0-9a-fA-F]{24}_[0-9]+$/.test(pid);
+                            const isBranchOnly = !isCentralRef;
+                            if (!isBranchOnly) return '-';
+                            const qtyVal = Number(it.branchQty ?? it.qty ?? 0) || 0;
+                            const rawCost = (it.costPrice ?? it.cost ?? null);
+                            let unitCost = null;
+                            if (rawCost != null) unitCost = Number(rawCost) || 0;
+                            else if (it.totalCostPrice != null && qtyVal > 0) unitCost = Number(it.totalCostPrice) / qtyVal;
+                            return unitCost != null ? currency(unitCost) : '-';
+                          })()}
+                        </span>
+                      </td>
+                      <td style={{ padding: '16px 12px', textAlign: 'right' }}>
+                        <span style={{
+                          color: '#059669',
+                          fontWeight: '600'
+                        }}>
+                          {it.sellingPrice != null ? currency(it.sellingPrice) : '-'}
+                        </span>
+                      </td>
+                      <td style={{ padding: '16px 12px' }}>
+                        <div style={{ fontWeight: '500', color: '#1e293b' }}>
+                          {it.supplierName || '-'}
+                        </div>
+                      </td>
+                      <td style={{ padding: '16px 12px', textAlign: 'center', fontSize: '12px', color: '#64748b' }}>
+                        {it.productCreatedAt ? new Date(it.productCreatedAt).toLocaleDateString() : '-'}
+                      </td>
+                      <td style={{ padding: '16px 12px', textAlign: 'center' }}>
+                        <span style={{
+                          background: '#f3f4f6',
+                          color: '#374151',
+                          padding: '4px 8px',
+                          borderRadius: '6px',
+                          fontSize: '12px'
+                        }}>
+                          {(() => {
+                            if (!it.productCreatedAt) return '-';
+                            try {
+                              const created = new Date(it.productCreatedAt);
+                              const now = new Date();
+                              // Calculate calendar day difference using UTC to avoid timezone/time-of-day issues
+                              const utcToday = Date.UTC(now.getFullYear(), now.getMonth(), now.getDate());
+                              const utcCreated = Date.UTC(created.getFullYear(), created.getMonth(), created.getDate());
+                              const diffDays = Math.floor((utcToday - utcCreated) / (1000 * 60 * 60 * 24));
+                              return diffDays >= 0 ? `${diffDays} days` : '-';
+                            } catch (e) { return '-'; }
+                          })()}
+                        </span>
+                      </td>
+                      <td style={{ padding: '16px 12px', textAlign: 'center', fontSize: '12px', color: '#64748b' }}>
+                        {it.validity ? new Date(it.validity).toLocaleDateString() : '-'}
+                      </td>
                     </tr>
-                  </thead>
-                  <tbody>
-                    {itemsToAdd.map((it, idx) => (
-                      <tr key={idx}>
-                        <td><input value={it.productNo} onChange={e=>updateAddItem(idx,'productNo',e.target.value)} placeholder="Product No (optional)" /></td>
-                        <td><input value={it.productName} onChange={e=>updateAddItem(idx,'productName',e.target.value)} placeholder="Name" /></td>
-                        <td><input value={it.brand} onChange={e=>updateAddItem(idx,'brand',e.target.value)} placeholder="Brand" /></td>
-                        <td><input value={it.model} onChange={e=>updateAddItem(idx,'model',e.target.value)} placeholder="Model" /></td>
-                        <td style={{maxWidth:140}}><input type="number" style={{width:'120px'}} value={it.qty === undefined ? '' : it.qty} onChange={e=>updateAddItem(idx,'qty',e.target.value)} placeholder="1" /></td>
-                        <td><input type="number" value={it.costPrice} onChange={e=>updateAddItem(idx,'costPrice',e.target.value)} placeholder="0" /></td>
-                        <td><input type="number" value={it.sellingPrice} onChange={e=>updateAddItem(idx,'sellingPrice',e.target.value)} placeholder="0" /></td>
-                        {category === 'Mobile' && (
-                          <td style={{width: '220px'}}>
-                            <div style={{display:'flex', gap:8, flexWrap:'wrap'}}>
-                              {(() => {
-                                const qty = Number(it.qty) || 1;
-                                const imesArr = Array.isArray(it.imes) && it.imes.length ? it.imes.slice(0, qty) : Array.from({ length: qty }, () => '');
-                                return imesArr.map((im, iim) => (
-                                  <input
-                                    key={iim}
-                                    value={im}
-                                    onChange={e => {
-                                      const val = e.target.value;
-                                      setItemsToAdd(list => list.map((row, rIdx) => {
-                                        if (rIdx !== idx) return row;
-                                        const qtyLocal = Number(row.qty) || 1;
-                                        const newImes = Array.isArray(row.imes) ? row.imes.slice(0, qtyLocal) : Array.from({ length: qtyLocal }, () => '');
-                                        while (newImes.length < qtyLocal) newImes.push('');
-                                        newImes[iim] = val;
-                                        return { ...row, imes: newImes };
-                                      }));
-                                    }}
-                                    placeholder={`IMEI ${iim+1}`}
-                                    style={{ width: 160 }}
-                                  />
-                                ));
-                              })()}
-                            </div>
-                          </td>
-                        )}
-                        <td><input type="date" value={it.validity || ''} onChange={e=>updateAddItem(idx,'validity',e.target.value)} /></td>
-                        <td><button className="btn secondary" type="button" onClick={()=>removeAddRow(idx)}>Remove</button></td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
+        {error && (
+          <div style={{
+            background: '#fef2f2',
+            border: '1px solid #fecaca',
+            color: '#dc2626',
+            padding: '12px 16px',
+            borderRadius: '8px',
+            marginTop: '16px',
+            fontSize: '14px'
+          }}>
+            {error}
+          </div>
+        )}
+      </div>
+
+      {/* Add Stock Modal */}
+      {openAdd && (
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          backgroundColor: 'rgba(0, 0, 0, 0.5)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          zIndex: 1000,
+          padding: '20px'
+        }}>
+          <div style={{
+            background: 'white',
+            borderRadius: '16px',
+            width: '100%',
+            maxWidth: '1200px',
+            maxHeight: '90vh',
+            overflowY: 'auto',
+            boxShadow: '0 25px 50px rgba(0, 0, 0, 0.25)'
+          }}>
+            {/* Modal Header */}
+            <div style={{
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              padding: '24px 32px',
+              borderBottom: '1px solid #e5e7eb',
+              position: 'sticky',
+              top: 0,
+              background: 'white',
+              borderRadius: '16px 16px 0 0',
+              zIndex: 10
+            }}>
+              <div>
+                <h2 style={{ 
+                  fontSize: '24px', 
+                  fontWeight: '700', 
+                  color: '#1e293b',
+                  margin: 0,
+                  marginBottom: '4px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '8px'
+                }}>
+                  📦 Add Branch Stock
+                </h2>
+                <p style={{ 
+                  color: '#64748b', 
+                  fontSize: '14px', 
+                  margin: 0 
+                }}>Add new products to your branch inventory</p>
               </div>
-              <div className="row mt-2">
-                <button className="btn secondary" type="button" onClick={addAddRow}>Add Row</button>
+              <button 
+                style={{
+                  background: '#f1f5f9',
+                  color: '#475569',
+                  border: 'none',
+                  borderRadius: '8px',
+                  padding: '8px 16px',
+                  fontSize: '14px',
+                  cursor: 'pointer'
+                }}
+                onClick={() => { 
+                  setOpenAdd(false); 
+                  setAddError(''); 
+                  setItemsToAdd([{ productNo: '', productName: '', brand: '', model: '', qty: 1, costPrice: '', sellingPrice: '', validity: '', imes: [] }]); 
+                }}
+              >
+                ✕ Close
+              </button>
+            </div>
+
+            <div style={{ padding: '32px' }}>
+              {addError && (
+                <div style={{
+                  background: '#fef2f2',
+                  border: '1px solid #fecaca',
+                  color: '#dc2626',
+                  padding: '12px 16px',
+                  borderRadius: '8px',
+                  marginBottom: '24px',
+                  fontSize: '14px'
+                }}>
+                  {addError}
+                </div>
+              )}
+
+              {/* Supply Information Section */}
+              <div style={{ marginBottom: '32px' }}>
+                <h3 style={{ 
+                  fontSize: '18px', 
+                  fontWeight: '600', 
+                  color: '#1e293b',
+                  marginBottom: '16px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '8px'
+                }}>
+                  ℹ️ Supply Information
+                </h3>
+                
+                <div style={{ 
+                  display: 'grid', 
+                  gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', 
+                  gap: '20px' 
+                }}>
+                  <div>
+                    <label style={{ 
+                      display: 'block', 
+                      fontSize: '14px', 
+                      fontWeight: '500', 
+                      color: '#374151',
+                      marginBottom: '6px'
+                    }}>Supplier *</label>
+                    <select 
+                      value={supplierId} 
+                      onChange={e=>setSupplierId(e.target.value)}
+                      style={{
+                        width: '100%',
+                        padding: '12px 16px',
+                        border: '2px solid #e5e7eb',
+                        borderRadius: '8px',
+                        fontSize: '14px',
+                        backgroundColor: 'white',
+                        cursor: 'pointer',
+                        outline: 'none'
+                      }}
+                    >
+                      <option value="">Select supplier</option>
+                      {suppliers.map(s => (
+                        <option key={s._id} value={s._id}>
+                          {s.supplierName || s.agencyName || s._id}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div>
+                    <label style={{ 
+                      display: 'block', 
+                      fontSize: '14px', 
+                      fontWeight: '500', 
+                      color: '#374151',
+                      marginBottom: '6px'
+                    }}>Bank Account *</label>
+                    <select 
+                      value={bankId} 
+                      onChange={e=>setBankId(e.target.value)}
+                      style={{
+                        width: '100%',
+                        padding: '12px 16px',
+                        border: '2px solid #e5e7eb',
+                        borderRadius: '8px',
+                        fontSize: '14px',
+                        backgroundColor: 'white',
+                        cursor: 'pointer',
+                        outline: 'none'
+                      }}
+                    >
+                      <option value="">Select bank</option>
+                      {banks.map(b => (
+                        <option key={b._id} value={b._id}>
+                          {b.bankName || b.accountNumber || b._id}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div>
+                    <label style={{ 
+                      display: 'block', 
+                      fontSize: '14px', 
+                      fontWeight: '500', 
+                      color: '#374151',
+                      marginBottom: '6px'
+                    }}>Supplier Amount</label>
+                    <input 
+                      type="number" 
+                      value={supplierAmount} 
+                      onChange={e=>setSupplierAmount(e.target.value)} 
+                      placeholder="0.00"
+                      style={{
+                        width: '100%',
+                        padding: '12px 16px',
+                        border: '2px solid #e5e7eb',
+                        borderRadius: '8px',
+                        fontSize: '14px',
+                        outline: 'none'
+                      }}
+                    />
+                  </div>
+
+                  <div>
+                    <label style={{ 
+                      display: 'block', 
+                      fontSize: '14px', 
+                      fontWeight: '500', 
+                      color: '#374151',
+                      marginBottom: '6px'
+                    }}>GST Amount</label>
+                    <input 
+                      type="number" 
+                      value={gstAmount} 
+                      onChange={e=>setGstAmount(e.target.value)} 
+                      placeholder="0.00"
+                      style={{
+                        width: '100%',
+                        padding: '12px 16px',
+                        border: '2px solid #e5e7eb',
+                        borderRadius: '8px',
+                        fontSize: '14px',
+                        outline: 'none'
+                      }}
+                    />
+                  </div>
+
+                  <div>
+                    <label style={{ 
+                      display: 'block', 
+                      fontSize: '14px', 
+                      fontWeight: '500', 
+                      color: '#374151',
+                      marginBottom: '6px'
+                    }}>Category</label>
+                    <select 
+                      value={category} 
+                      onChange={e=>setCategory(e.target.value)}
+                      style={{
+                        width: '100%',
+                        padding: '12px 16px',
+                        border: '2px solid #e5e7eb',
+                        borderRadius: '8px',
+                        fontSize: '14px',
+                        backgroundColor: 'white',
+                        cursor: 'pointer',
+                        outline: 'none'
+                      }}
+                    >
+                      <option value="">Select category</option>
+                      <option value="Accessories">Accessories</option>
+                      <option value="Mobile">Mobile</option>
+                    </select>
+                  </div>
+                </div>
+              </div>
+              {/* Products Section */}
+              <div>
+                <div style={{ 
+                  display: 'flex', 
+                  justifyContent: 'space-between', 
+                  alignItems: 'center', 
+                  marginBottom: '16px' 
+                }}>
+                  <h3 style={{ 
+                    fontSize: '18px', 
+                    fontWeight: '600', 
+                    color: '#1e293b',
+                    margin: 0,
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '8px'
+                  }}>
+                    📋 Product Details
+                  </h3>
+                  <button 
+                    style={{
+                      background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)',
+                      color: 'white',
+                      border: 'none',
+                      borderRadius: '8px',
+                      padding: '8px 16px',
+                      fontSize: '14px',
+                      fontWeight: '500',
+                      cursor: 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '4px'
+                    }}
+                    type="button" 
+                    onClick={addAddRow}
+                  >
+                    ➕ Add Product
+                  </button>
+                </div>
+
+                <div style={{ 
+                  border: '1px solid #e5e7eb',
+                  borderRadius: '12px',
+                  overflow: 'hidden',
+                  background: '#fff'
+                }}>
+                  <div style={{ overflowX: 'auto' }}>
+                    <table style={{ 
+                      width: '100%', 
+                      borderCollapse: 'collapse',
+                      fontSize: '14px'
+                    }}>
+                      <thead>
+                        <tr style={{ background: '#f8fafc' }}>
+                          <th style={{
+                            padding: '12px',
+                            textAlign: 'left',
+                            fontWeight: '600',
+                            color: '#374151',
+                            borderBottom: '1px solid #e5e7eb',
+                            minWidth: '120px'
+                          }}>Product No</th>
+                          <th style={{
+                            padding: '12px',
+                            textAlign: 'left',
+                            fontWeight: '600',
+                            color: '#374151',
+                            borderBottom: '1px solid #e5e7eb',
+                            minWidth: '150px'
+                          }}>Product Name *</th>
+                          <th style={{
+                            padding: '12px',
+                            textAlign: 'left',
+                            fontWeight: '600',
+                            color: '#374151',
+                            borderBottom: '1px solid #e5e7eb',
+                            minWidth: '100px'
+                          }}>Brand</th>
+                          <th style={{
+                            padding: '12px',
+                            textAlign: 'left',
+                            fontWeight: '600',
+                            color: '#374151',
+                            borderBottom: '1px solid #e5e7eb',
+                            minWidth: '100px'
+                          }}>Model</th>
+                          <th style={{
+                            padding: '12px',
+                            textAlign: 'center',
+                            fontWeight: '600',
+                            color: '#374151',
+                            borderBottom: '1px solid #e5e7eb',
+                            width: '80px'
+                          }}>Qty</th>
+                          <th style={{
+                            padding: '12px',
+                            textAlign: 'right',
+                            fontWeight: '600',
+                            color: '#374151',
+                            borderBottom: '1px solid #e5e7eb',
+                            minWidth: '120px'
+                          }}>Cost Price</th>
+                          <th style={{
+                            padding: '12px',
+                            textAlign: 'right',
+                            fontWeight: '600',
+                            color: '#374151',
+                            borderBottom: '1px solid #e5e7eb',
+                            minWidth: '120px'
+                          }}>Selling Price</th>
+                          {category === 'Mobile' && (
+                            <th style={{
+                              padding: '12px',
+                              textAlign: 'left',
+                              fontWeight: '600',
+                              color: '#374151',
+                              borderBottom: '1px solid #e5e7eb',
+                              minWidth: '220px'
+                            }}>IMEI Numbers</th>
+                          )}
+                          <th style={{
+                            padding: '12px',
+                            textAlign: 'center',
+                            fontWeight: '600',
+                            color: '#374151',
+                            borderBottom: '1px solid #e5e7eb',
+                            minWidth: '130px'
+                          }}>Validity</th>
+                          <th style={{
+                            padding: '12px',
+                            textAlign: 'center',
+                            fontWeight: '600',
+                            color: '#374151',
+                            borderBottom: '1px solid #e5e7eb',
+                            width: '60px'
+                          }}></th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {itemsToAdd.map((it, idx) => (
+                          <tr key={idx} style={{ borderBottom: '1px solid #f1f5f9' }}>
+                            <td style={{ padding: '12px' }}>
+                              <input 
+                                value={it.productNo} 
+                                onChange={e=>updateAddItem(idx,'productNo',e.target.value)} 
+                                placeholder="Auto-generated"
+                                style={{
+                                  width: '100%',
+                                  padding: '8px 12px',
+                                  border: '1px solid #d1d5db',
+                                  borderRadius: '6px',
+                                  fontSize: '13px',
+                                  outline: 'none'
+                                }}
+                              />
+                            </td>
+                            <td style={{ padding: '12px' }}>
+                              <input 
+                                value={it.productName} 
+                                onChange={e=>updateAddItem(idx,'productName',e.target.value)} 
+                                placeholder="Enter product name"
+                                style={{
+                                  width: '100%',
+                                  padding: '8px 12px',
+                                  border: '2px solid #d1d5db',
+                                  borderRadius: '6px',
+                                  fontSize: '13px',
+                                  outline: 'none'
+                                }}
+                              />
+                            </td>
+                            <td style={{ padding: '12px' }}>
+                              <input 
+                                value={it.brand} 
+                                onChange={e=>updateAddItem(idx,'brand',e.target.value)} 
+                                placeholder="Brand"
+                                style={{
+                                  width: '100%',
+                                  padding: '8px 12px',
+                                  border: '1px solid #d1d5db',
+                                  borderRadius: '6px',
+                                  fontSize: '13px',
+                                  outline: 'none'
+                                }}
+                              />
+                            </td>
+                            <td style={{ padding: '12px' }}>
+                              <input 
+                                value={it.model} 
+                                onChange={e=>updateAddItem(idx,'model',e.target.value)} 
+                                placeholder="Model"
+                                style={{
+                                  width: '100%',
+                                  padding: '8px 12px',
+                                  border: '1px solid #d1d5db',
+                                  borderRadius: '6px',
+                                  fontSize: '13px',
+                                  outline: 'none'
+                                }}
+                              />
+                            </td>
+                            <td style={{ padding: '12px' }}>
+                              <input 
+                                type="number" 
+                                value={it.qty === undefined ? '' : it.qty} 
+                                onChange={e=>updateAddItem(idx,'qty',e.target.value)} 
+                                placeholder="1"
+                                min="1"
+                                style={{
+                                  width: '100%',
+                                  padding: '8px 12px',
+                                  border: '1px solid #d1d5db',
+                                  borderRadius: '6px',
+                                  fontSize: '13px',
+                                  textAlign: 'center',
+                                  outline: 'none'
+                                }}
+                              />
+                            </td>
+                            <td style={{ padding: '12px' }}>
+                              <input 
+                                type="number" 
+                                value={it.costPrice} 
+                                onChange={e=>updateAddItem(idx,'costPrice',e.target.value)} 
+                                placeholder="0.00"
+                                step="0.01"
+                                style={{
+                                  width: '100%',
+                                  padding: '8px 12px',
+                                  border: '1px solid #d1d5db',
+                                  borderRadius: '6px',
+                                  fontSize: '13px',
+                                  textAlign: 'right',
+                                  outline: 'none'
+                                }}
+                              />
+                            </td>
+                            <td style={{ padding: '12px' }}>
+                              <input 
+                                type="number" 
+                                value={it.sellingPrice} 
+                                onChange={e=>updateAddItem(idx,'sellingPrice',e.target.value)} 
+                                placeholder="0.00"
+                                step="0.01"
+                                style={{
+                                  width: '100%',
+                                  padding: '8px 12px',
+                                  border: '1px solid #d1d5db',
+                                  borderRadius: '6px',
+                                  fontSize: '13px',
+                                  textAlign: 'right',
+                                  outline: 'none'
+                                }}
+                              />
+                            </td>
+                            {category === 'Mobile' && (
+                              <td style={{ padding: '12px' }}>
+                                <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
+                                  {(() => {
+                                    const qty = Number(it.qty) || 1;
+                                    const imesArr = Array.isArray(it.imes) && it.imes.length ? it.imes.slice(0, qty) : Array.from({ length: qty }, () => '');
+                                    return imesArr.map((im, iim) => (
+                                      <input
+                                        key={iim}
+                                        value={im}
+                                        onChange={e => {
+                                          const val = e.target.value;
+                                          setItemsToAdd(list => list.map((row, rIdx) => {
+                                            if (rIdx !== idx) return row;
+                                            const qtyLocal = Number(row.qty) || 1;
+                                            const newImes = Array.isArray(row.imes) ? row.imes.slice(0, qtyLocal) : Array.from({ length: qtyLocal }, () => '');
+                                            while (newImes.length < qtyLocal) newImes.push('');
+                                            newImes[iim] = val;
+                                            return { ...row, imes: newImes };
+                                          }));
+                                        }}
+                                        placeholder={`IMEI ${iim+1}`}
+                                        style={{ 
+                                          width: '140px',
+                                          padding: '6px 8px',
+                                          border: '1px solid #d1d5db',
+                                          borderRadius: '4px',
+                                          fontSize: '12px',
+                                          outline: 'none'
+                                        }}
+                                      />
+                                    ));
+                                  })()}
+                                </div>
+                              </td>
+                            )}
+                            <td style={{ padding: '12px' }}>
+                              <input 
+                                type="date" 
+                                value={it.validity || ''} 
+                                onChange={e=>updateAddItem(idx,'validity',e.target.value)}
+                                style={{
+                                  width: '100%',
+                                  padding: '8px 12px',
+                                  border: '1px solid #d1d5db',
+                                  borderRadius: '6px',
+                                  fontSize: '13px',
+                                  outline: 'none'
+                                }}
+                              />
+                            </td>
+                            <td style={{ padding: '12px', textAlign: 'center' }}>
+                              <button 
+                                style={{
+                                  background: '#fee2e2',
+                                  color: '#dc2626',
+                                  border: 'none',
+                                  borderRadius: '6px',
+                                  padding: '6px 8px',
+                                  fontSize: '12px',
+                                  cursor: 'pointer'
+                                }}
+                                type="button" 
+                                onClick={()=>removeAddRow(idx)}
+                              >
+                                🗑️
+                              </button>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
               </div>
             </div>
-            <div className="modal-footer">
-              <button className="btn" disabled={adding || !canSubmitAdd} onClick={async ()=>{ await submitAdd(); }}>{adding ? 'Saving…' : 'Save'}</button>
+
+            {/* Modal Footer */}
+            <div style={{
+              display: 'flex',
+              justifyContent: 'flex-end',
+              gap: '12px',
+              padding: '24px 32px',
+              borderTop: '1px solid #e5e7eb',
+              background: '#f8fafc',
+              borderRadius: '0 0 16px 16px'
+            }}>
+              <button 
+                style={{
+                  background: '#f1f5f9',
+                  color: '#475569',
+                  border: 'none',
+                  borderRadius: '8px',
+                  padding: '10px 20px',
+                  fontSize: '14px',
+                  cursor: 'pointer'
+                }}
+                onClick={() => { 
+                  setOpenAdd(false); 
+                  setAddError(''); 
+                  setItemsToAdd([{ productNo: '', productName: '', brand: '', model: '', qty: 1, costPrice: '', sellingPrice: '', validity: '', imes: [] }]); 
+                }}
+              >
+                Cancel
+              </button>
+              <button 
+                disabled={adding || !canSubmitAdd}
+                onClick={async ()=>{ await submitAdd(); }}
+                style={{
+                  background: canSubmitAdd && !adding 
+                    ? 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)' 
+                    : '#9ca3af',
+                  color: 'white',
+                  border: 'none',
+                  borderRadius: '8px',
+                  padding: '10px 24px',
+                  fontSize: '14px',
+                  fontWeight: '600',
+                  cursor: canSubmitAdd && !adding ? 'pointer' : 'not-allowed',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '8px'
+                }}
+              >
+                {adding ? '💾 Saving...' : '✅ Save Stock'}
+              </button>
             </div>
           </div>
         </div>
