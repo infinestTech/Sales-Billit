@@ -93,7 +93,8 @@ export default function MobileRecordForm({ shopId, isLimitReached, setIsLimitRea
           Authorization: `Bearer ${token}`,
         },
         body: JSON.stringify({ 
-          prefix: prefix 
+          prefix: prefix,
+          userId: shopId
         }),
       })
 
@@ -139,7 +140,8 @@ export default function MobileRecordForm({ shopId, isLimitReached, setIsLimitRea
           Authorization: `Bearer ${token}`,
         },
         body: JSON.stringify({ 
-          billNumber: billNumber 
+          billNumber: billNumber,
+          userId: shopId
         }),
       })
 

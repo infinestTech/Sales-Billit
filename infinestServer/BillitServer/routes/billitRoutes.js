@@ -234,6 +234,17 @@ router.post("/mobile-brands", authenticateToken, addMobileBrand);
 router.get("/mobile-issues/:shopId", authenticateToken, getMobileIssues);
 router.post("/mobile-issues", authenticateToken, addMobileIssue);
 
+// ======================================
+// 🧾 Bill Number Management Routes
+// ======================================
+const { generateNextBillNumber, checkBillNumberExists } = require("../controllers/api/billNumberController");
+
+// Generate next sequential bill number
+router.post("/next-bill-number", authenticateToken, generateNextBillNumber);
+
+// Check if bill number exists
+router.post("/check-bill-number", authenticateToken, checkBillNumberExists);
+
 module.exports = router;
 
 
