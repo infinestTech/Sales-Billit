@@ -332,7 +332,7 @@ export default function Home() {
   }));
 
 
-  // SALES plans (dummy)
+  // SALES plans (live)
   const salesPlans = [
     {
       name: "Basic",
@@ -345,10 +345,11 @@ export default function Home() {
       renewalTerm: "No Expiration",
       mongoPlanId: "sales-basic",
       mongoCategoryId: "Sales",
-      description: "Starter sales tools for small shops (demo)",
+      description: "Perfect for small shops starting their sales journey with essential tools and basic features.",
       features: [
         { label: "5 products", key: "sales_products_limit" },
-        { label: "No analytics", key: "sales_analytics", value: false },
+        { label: "Max 3 bank accounts", key: "bank_accounts_limit" },
+        { label: "Max 5 suppliers", key: "suppliers_limit" },
         { label: "Ads shown", key: "show_ads", value: true }
       ],
       isPopular: false,
@@ -357,18 +358,21 @@ export default function Home() {
       name: "Gold",
       price: 299,
       originalPrice: "₹899",
-      savePercentage: 65,
-      term: "Monthly plan",
+      savePercentage: 67,
+      term: "Monthly Plan",
       bonusOffer: null,
       renewalPrice: "₹299",
-      renewalTerm: "Monthly",
+      renewalTerm: "per month",
       mongoPlanId: "sales-gold",
       mongoCategoryId: "Sales",
-      description: "Advanced sales inventory and billing (demo)",
+      description: "Advanced sales inventory and billing system for growing retail businesses with smart analytics.",
       features: [
         { label: "100 products", key: "sales_products_limit" },
+        { label: "Max 7 bank accounts", key: "bank_accounts_limit" },
+        { label: "Max 10 suppliers", key: "suppliers_limit" },
+        { label: "GST Calculator enabled", key: "gst_calculator_enabled", value: true },
         { label: "Basic analytics", key: "sales_analytics", value: true },
-        { label: "Ads removed", key: "show_ads", value: false }
+        { label: "No ads", key: "show_ads", value: false }
       ],
       isPopular: true,
     },
@@ -376,16 +380,19 @@ export default function Home() {
       name: "Premium",
       price: 399,
       originalPrice: "₹1499",
-      savePercentage: 70,
-      term: "Monthly plan",
+      savePercentage: 73,
+      term: "Monthly Plan",
       bonusOffer: null,
       renewalPrice: "₹399",
-      renewalTerm: "Monthly",
+      renewalTerm: "per month",
       mongoPlanId: "sales-premium",
       mongoCategoryId: "Sales",
-      description: "Full sales suite for high volume (demo)",
+      description: "Complete sales suite for high-volume retailers with advanced analytics, unlimited products and priority support.",
       features: [
         { label: "Unlimited products", key: "sales_products_limit" },
+        { label: "Max 30 bank accounts", key: "bank_accounts_limit" },
+        { label: "Max 100 suppliers", key: "suppliers_limit" },
+        { label: "GST Calculator enabled", key: "gst_calculator_enabled", value: true },
         { label: "Advanced analytics", key: "sales_analytics", value: true },
         { label: "Priority support", key: "priority_support", value: true }
       ],
@@ -473,6 +480,19 @@ export default function Home() {
       ? salesPlans
       : enterprisePlans;
 
+  // Dynamic title based on active category
+  const getTitle = () => {
+    switch (activeCategory) {
+      case "SERVICE":
+        return "Choose the Best Service Plan for Your Mobile Shop";
+      case "SALES":
+        return "Choose the Best Sales Plan for Your Business";
+      case "ENTERPRISE":
+        return "Choose the Best Enterprise Plan for Your Organization";
+      default:
+        return "Choose the Best Plan for Your Business";
+    }
+  };
 
   return (
     <div className="min-h-screen bg-black">
@@ -542,8 +562,8 @@ export default function Home() {
 
 
       <PricingSection
-        title="Choose the Best Service Plan for Your Mobile Shop"
-        subtitle="Flexible plans tailored for every stage of your service business"
+        title={getTitle()}
+        subtitle="Flexible plans tailored for every stage of your business"
         plans={pricingPlans}
       />
     </div>
