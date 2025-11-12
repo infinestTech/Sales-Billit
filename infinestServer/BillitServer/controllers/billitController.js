@@ -853,6 +853,51 @@ const getFilteredProductHistory = async (req, res) => {
   }
 };
 
+const increaseStock = async (req, res) => {
+  const { productId, quantityToAdd, costPrice } = req.body;
+
+  if (!productId || !quantityToAdd || !costPrice) {
+    return res.status(400).json({ error: "Missing required fields." });
+  }
+
+  if (!productId.match(/^[0-9a-fA-F]{24}$/)) {
+    return res.status(400).json({ error: "Invalid productId format." });
+  }
+
+  try {
+    const product = await Product.findById(productId);
+
+    if (!product) {
+      return res.status(404).json({ error: "Product not found." });
+    }
+
+    const updatedQuantity = product.quantity + parseInt(quantityToAdd);
+    const updatedTotalCost = updatedQuantity * costPrice;
+
+    // Update product quantity and total cost
+    await Product.findByIdAndUpdate(productId, {
+      quantity: updatedQuantity,
+      totalCost: updatedTotalCost,
+      costPrice: costPrice,
+      updatedAt: new Date(),
+    });
+
+    // Create history entry
+    await ProductHistory.create({
+      productId: product._id,
+      changeType: "RESTOCK",
+      quantity: quantityToAdd,
+      costPrice: costPrice,
+      notes: "Stock increased",
+    });
+
+    res.status(200).json({ message: "Stock increased successfully.", product: { ...product.toObject(), quantity: updatedQuantity } });
+  } catch (error) {
+    console.error("Error increasing stock:", error);
+    res.status(500).json({ error: "Failed to increase stock." });
+  }
+};
+
 const sellProduct = async (req, res) => {
   const { productId, quantitySold, paidAmount } = req.body;
 
@@ -1232,7 +1277,7 @@ const addMobileIssue = async (req, res) => {
 
 module.exports = {
   createCustomer, getCustomersWithBalance, updateBalanceAmount, clearBalanceAmount,addProduct,
-  listProducts, getProductHistory,getFilteredProductHistory, sellProduct, getProductRevenueToday ,
+  listProducts, getProductHistory,getFilteredProductHistory, sellProduct, increaseStock, getProductRevenueToday ,
 addExpense, getTodayExpenses, updateDailySummary, getAllDailySummaries, getDailySummary,
   createDealer, getDealersWithBalance,updatePaidAmount,toggleDeliveryStatus,toggleMobileStatus,
   getAllDealers,getRecords,getTodayRecords,getTodaySales,updateBalance,fetchAllData , deleteMobileOrClient,

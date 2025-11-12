@@ -149,6 +149,9 @@ router.post("/products/list",authenticateToken, listProducts);
 const { sellProduct } = require("../controllers/api/sellProductController");
 router.post("/products/sell",authenticateToken, sellProduct);
 
+const { increaseStock } = require("../controllers/billitController");
+router.post("/products/increase-stock", authenticateToken, increaseStock);
+
 const { adminSell } = require('../controllers/api/adminSellController');
 router.post('/products/admin-sell', authenticateToken, adminSell);
 

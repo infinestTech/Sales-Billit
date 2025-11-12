@@ -27,3 +27,5 @@ coverage/
 Thumbs.db
 .vscode/
 .idea/
+
+.nvmrc
