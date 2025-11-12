@@ -2,12 +2,15 @@
 
 import { useState } from "react"
 import api from "../../components/api"
-import { ShoppingCart, Package, DollarSign, Hash } from "lucide-react"
+import { ShoppingCart, Package, DollarSign, Hash, PlusCircle } from "lucide-react"
 import { logAndNotify, logError } from "@/utils/logger"
+import IncreaseStockModal from "./IncreaseStockModal"
 
 
 const ProductTable = ({ products, onRefresh, shop_id }) => {
   const [sellInputs, setSellInputs] = useState({})
+  const [selectedProduct, setSelectedProduct] = useState(null)
+  const [showIncreaseStockModal, setShowIncreaseStockModal] = useState(false)
 
 
   const handleInputChange = (productId, field, value) => {
@@ -57,6 +60,11 @@ const ProductTable = ({ products, onRefresh, shop_id }) => {
       logError("Failed to sell product", error)
       logAndNotify("Failed to sell product.", "error", shop_id)
     }
+  }
+
+  const handleIncreaseStock = (product) => {
+    setSelectedProduct(product)
+    setShowIncreaseStockModal(true)
   }
 
 
@@ -118,8 +126,19 @@ const ProductTable = ({ products, onRefresh, shop_id }) => {
                   }`}
                 >
                   <td className="px-6 py-4 border-b border-gray-200">
-                    <div className="font-semibold text-gray-800">{product.name}</div>
-                    {product.category && <div className="text-sm text-gray-500 mt-1">{product.category}</div>}
+                    <div className="flex items-center space-x-2">
+                      <div>
+                        <div className="font-semibold text-gray-800">{product.name}</div>
+                        {product.category && <div className="text-sm text-gray-500 mt-1">{product.category}</div>}
+                      </div>
+                      <button
+                        onClick={() => handleIncreaseStock(product)}
+                        className="ml-2 p-1.5 text-blue-600 hover:text-blue-700 hover:bg-blue-50 rounded-lg transition-all duration-200 group"
+                        title="Increase stock"
+                      >
+                        <PlusCircle className="h-5 w-5 group-hover:scale-110 transition-transform" />
+                      </button>
+                    </div>
                   </td>
                   <td className="px-6 py-4 border-b border-gray-200">
                     <span className="font-semibold text-green-700">
@@ -175,6 +194,23 @@ const ProductTable = ({ products, onRefresh, shop_id }) => {
           </tbody>
         </table>
       </div>
+
+      {/* Increase Stock Modal */}
+      {showIncreaseStockModal && selectedProduct && (
+        <IncreaseStockModal
+          product={selectedProduct}
+          shop_id={shop_id}
+          onClose={() => {
+            setShowIncreaseStockModal(false)
+            setSelectedProduct(null)
+          }}
+          onSuccess={() => {
+            setShowIncreaseStockModal(false)
+            setSelectedProduct(null)
+            onRefresh()
+          }}
+        />
+      )}
     </div>
   )
 }

@@ -1,5 +1,5 @@
 // Seed MySQL Plan table with entries mapped to Mongo plans/categories
-require('dotenv').config();
+require('dotenv').config({ path: require('path').join(__dirname, '../.env') });
 const { PrismaClient } = require('@prisma/client');
 const prisma = new PrismaClient();
 

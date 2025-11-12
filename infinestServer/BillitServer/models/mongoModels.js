@@ -224,7 +224,7 @@ productSchema.pre("save", function (next) {
 const productHistorySchema = new mongoose.Schema({
   productId: { type: mongoose.Schema.Types.ObjectId, ref: "Product", required: true },
   changeDate: { type: Date, default: Date.now },
-  changeType: { type: String, enum: ["ADD", "REMOVE", "EDIT", "SELL"], required: true },
+  changeType: { type: String, enum: ["ADD", "REMOVE", "EDIT", "SELL", "RESTOCK"], required: true },
   quantity: { type: Number, required: true },
   costPrice: { type: Number, required: true },
   paidAmount: { type: Number },
