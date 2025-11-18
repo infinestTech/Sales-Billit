@@ -1,18 +1,25 @@
 "use client"
 
+
 import { useEffect, useState } from "react"
 import AddProductModal from "./AddProductModal"
 import ProductHistoryModal from "./ProductHistoryModal"
 import ProductTable from "./ProductTable"
 import api from "../../components/api"
-import { Plus, History, Search, Package, AlertTriangle } from "lucide-react"
+import { Plus, History, Search, Package, AlertTriangle, UserPlus, List } from "lucide-react"
+import { useRouter } from "next/navigation"
+import AddSupplierModal from "./AddSupplierModal"
+
 
 const ProductInventoryPage = ({ shopId }) => {
   const [products, setProducts] = useState([])
   const [searchQuery, setSearchQuery] = useState("")
   const [showAddModal, setShowAddModal] = useState(false)
   const [showHistoryModal, setShowHistoryModal] = useState(false)
+  const [showSupplierModal, setShowSupplierModal] = useState(false)
+  const router = useRouter()
   const [showLowStockOnly, setShowLowStockOnly] = useState(false)
+
 
   const fetchProducts = async () => {
     try {
@@ -32,20 +39,25 @@ const ProductInventoryPage = ({ shopId }) => {
     }
   }
 
+
   const filteredProducts = searchQuery
     ? products.filter((product) => product.name.toLowerCase().includes(searchQuery.toLowerCase()))
     : products
+
 
   // Further filter by low stock if the toggle is enabled
   const finalFilteredProducts = showLowStockOnly
     ? filteredProducts.filter((product) => product.quantity <= 10) // Show products with 10 or less stock
     : filteredProducts
 
+
   const lowStockCount = products.filter((product) => product.quantity <= 10).length
+
 
   useEffect(() => {
     if (shopId) fetchProducts()
   }, [shopId])
+
 
   return (
     <div className="h-screen bg-white flex flex-col">
@@ -62,6 +74,7 @@ const ProductInventoryPage = ({ shopId }) => {
             </div>
           </div>
 
+
           <div className="flex flex-col sm:flex-row gap-3">
             <button
               onClick={() => setShowAddModal(true)}
@@ -69,6 +82,13 @@ const ProductInventoryPage = ({ shopId }) => {
             >
               <Plus className="h-5 w-5" />
               <span>Add Product</span>
+            </button>
+            <button
+              onClick={() => setShowSupplierModal(true)}
+              className="bg-white/20 hover:bg-white/30 text-white px-6 py-3 rounded-xl font-semibold transition-all duration-200 flex items-center justify-center space-x-2 backdrop-blur-sm border border-white/20 hover:border-white/30"
+            >
+              <UserPlus className="h-5 w-5" />
+              <span>Add Supplier</span>
             </button>
             <button
               onClick={() => setShowHistoryModal(true)}
@@ -80,6 +100,7 @@ const ProductInventoryPage = ({ shopId }) => {
           </div>
         </div>
       </div>
+
 
       {/* Search Bar */}
       <div className="px-8 py-6 bg-gradient-to-r from-gray-50 to-blue-50 border-b border-gray-200 flex-shrink-0">
@@ -97,6 +118,7 @@ const ProductInventoryPage = ({ shopId }) => {
             />
           </div>
 
+
           {/* Low Stock Filter Button */}
           <button
             onClick={() => setShowLowStockOnly(!showLowStockOnly)}
@@ -112,23 +134,34 @@ const ProductInventoryPage = ({ shopId }) => {
             </span>
             {lowStockCount > 0 && (
               <span className={`px-2 py-1 text-xs rounded-full font-bold ${
-                showLowStockOnly 
-                  ? 'bg-white/20 text-white' 
+                showLowStockOnly
+                  ? 'bg-white/20 text-white'
                   : 'bg-red-100 text-red-800'
               }`}>
                 {lowStockCount}
               </span>
             )}
           </button>
+
+
+          {/* Supplier List Button */}
+          <button
+            onClick={() => router.push('/supplierlist')}
+            className="px-6 py-3 rounded-xl font-semibold transition-all duration-200 flex items-center space-x-2 shadow-sm bg-white hover:bg-blue-50 text-blue-600 border border-blue-300 hover:border-blue-400"
+            title="View all suppliers"
+          >
+            <List className="h-5 w-5" />
+            <span>Supplier List</span>
+          </button>
         </div>
-        
+       
         {searchQuery && (
           <p className="mt-2 text-sm text-gray-600">
             Found {finalFilteredProducts.length} product{finalFilteredProducts.length !== 1 ? "s" : ""} matching "{searchQuery}"
             {showLowStockOnly && " with low stock"}
           </p>
         )}
-        
+       
         {showLowStockOnly && !searchQuery && (
           <p className="mt-2 text-sm text-red-600 font-medium">
             Showing {finalFilteredProducts.length} product{finalFilteredProducts.length !== 1 ? "s" : ""} with low stock (≤10 items)
@@ -136,10 +169,12 @@ const ProductInventoryPage = ({ shopId }) => {
         )}
       </div>
 
+
       {/* Product Table - This will expand to fill remaining space */}
       <div className="flex-1 px-8 py-6 overflow-auto bg-white">
         <ProductTable products={finalFilteredProducts} onRefresh={fetchProducts} shop_id={shopId} />
       </div>
+
 
       {/* Modals */}
       {showAddModal && (
@@ -153,11 +188,24 @@ const ProductInventoryPage = ({ shopId }) => {
         />
       )}
 
+
       {showHistoryModal && (
         <ProductHistoryModal products={products} shop_id={shopId} onClose={() => setShowHistoryModal(false)} />
+      )}
+
+
+      {showSupplierModal && (
+        <AddSupplierModal
+          shop_id={shopId}
+          onClose={() => setShowSupplierModal(false)}
+          onSuccess={() => {
+            setShowSupplierModal(false)
+          }}
+        />
       )}
     </div>
   )
 }
+
 
 export default ProductInventoryPage

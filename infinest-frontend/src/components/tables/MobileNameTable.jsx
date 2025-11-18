@@ -1,18 +1,41 @@
 "use client"
 
-import { useState } from "react"
+
+import { useEffect, useState } from "react"
 import Pagination from "./Pagination"
 import api from "../api"
-import { Calendar, Smartphone, AlertCircle, CheckCircle, RotateCcw, DollarSign, Truck } from "lucide-react"
+import { Calendar, Smartphone, AlertCircle, CheckCircle, RotateCcw, DollarSign, Truck, Package } from "lucide-react"
+import { jwtDecode } from "jwt-decode"
+
 
 const MobileNameTable = ({ mobileData, setMobileData, onRevenueUpdate, hideActions }) => {
   const validMobileData = Array.isArray(mobileData) ? mobileData : []
   const [currentPage, setCurrentPage] = useState(1)
+  const [sellOpen, setSellOpen] = useState(false)
+  const [shopId, setShopId] = useState(null)
+  const [products, setProducts] = useState([])
+  const [selectedProductId, setSelectedProductId] = useState("")
+  const [sellQty, setSellQty] = useState(1)
+  const [paidAmount, setPaidAmount] = useState(0)
+  const [selling, setSelling] = useState(false)
+
+
+  useEffect(() => {
+    try {
+      const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null
+      if (token) {
+        const dec = jwtDecode(token)
+        if (dec?.shop_id) setShopId(dec.shop_id)
+      }
+    } catch {}
+  }, [])
   const itemsPerPage = 5
+
 
   const indexOfLastItem = currentPage * itemsPerPage
   const indexOfFirstItem = indexOfLastItem - itemsPerPage
   const currentMobileData = validMobileData.slice(indexOfFirstItem, indexOfLastItem)
+
 
   const formatDate = (dateStr) => {
     if (!dateStr) return "N/A"
@@ -23,13 +46,17 @@ const MobileNameTable = ({ mobileData, setMobileData, onRevenueUpdate, hideActio
     })
   }
 
+
   const paginate = (pageNumber) => setCurrentPage(pageNumber)
+
 
   const toggleStatus = async (index, field) => {
     if (hideActions) return
 
+
     const mobile = currentMobileData[index]
     const globalIndex = indexOfFirstItem + index
+
 
     try {
       const token = localStorage.getItem("token")
@@ -46,9 +73,11 @@ const MobileNameTable = ({ mobileData, setMobileData, onRevenueUpdate, hideActio
         },
       )
 
+
       const updated = response.data.updatedMobile
       const updatedData = [...mobileData]
       updatedData[globalIndex] = { ...updated, deliveryDate: updated.deliveryDate }
+
 
       setMobileData(updatedData)
     } catch (error) {
@@ -56,11 +85,14 @@ const MobileNameTable = ({ mobileData, setMobileData, onRevenueUpdate, hideActio
     }
   }
 
+
   const updatePaidAmount = async (index, value) => {
     if (hideActions) return
 
+
     const mobile = currentMobileData[index]
     const globalIndex = indexOfFirstItem + index
+
 
     try {
       const token = localStorage.getItem("token")
@@ -78,11 +110,14 @@ const MobileNameTable = ({ mobileData, setMobileData, onRevenueUpdate, hideActio
         },
       )
 
+
       const updated = response.data.updatedMobile
       const updatedData = [...mobileData]
       updatedData[globalIndex] = { ...updated }
 
+
       setMobileData(updatedData)
+
 
       if (typeof onRevenueUpdate === "function") {
         onRevenueUpdate()
@@ -91,6 +126,56 @@ const MobileNameTable = ({ mobileData, setMobileData, onRevenueUpdate, hideActio
       console.error("Failed to update paid amount:", error.message)
     }
   }
+
+
+  const openSellModal = async () => {
+    if (hideActions) return
+    setSellOpen(true)
+    try {
+      const token = localStorage.getItem("token")
+      if (!token || !shopId) return
+      const res = await api.post(
+        "/api/products/list",
+        { shop_id: shopId },
+        { headers: { Authorization: `Bearer ${token}` } }
+      )
+      setProducts(res?.data?.products || [])
+      if ((res?.data?.products || []).length) {
+        setSelectedProductId(res.data.products[0]._id)
+      }
+    } catch (e) {
+      console.error("Failed to load products", e)
+    }
+  }
+
+
+  const closeSellModal = () => {
+    setSellOpen(false)
+    setSelectedProductId("")
+    setSellQty(1)
+    setPaidAmount(0)
+  }
+
+
+  const submitSell = async () => {
+    if (!selectedProductId || !sellQty) return
+    setSelling(true)
+    try {
+      const token = localStorage.getItem("token")
+      await api.post(
+        "/api/products/sell",
+        { productId: selectedProductId, quantitySold: Number(sellQty), paidAmount: Number(paidAmount || 0) },
+        { headers: { Authorization: `Bearer ${token}` } }
+      )
+      closeSellModal()
+    } catch (e) {
+      const msg = e?.response?.data?.error || e.message
+      alert(msg || "Failed to sell product")
+    } finally {
+      setSelling(false)
+    }
+  }
+
 
   if (validMobileData.length === 0) {
     return (
@@ -103,6 +188,7 @@ const MobileNameTable = ({ mobileData, setMobileData, onRevenueUpdate, hideActio
       </div>
     )
   }
+
 
   return (
     <div className="bg-white border border-gray-200 overflow-hidden shadow-lg rounded-xl">
@@ -150,6 +236,12 @@ const MobileNameTable = ({ mobileData, setMobileData, onRevenueUpdate, hideActio
                 <div className="flex items-center">
                   <RotateCcw className="h-4 w-4 mr-2 text-red-600" />
                   Returned
+                </div>
+              </th>
+              <th className="px-6 py-4 text-left text-sm font-bold text-gray-700 border-b border-gray-300">
+                <div className="flex items-center">
+                  <Package className="h-4 w-4 mr-2 text-blue-600" />
+                  Product
                 </div>
               </th>
               <th className="px-6 py-4 text-left text-sm font-bold text-gray-700 border-b border-gray-300">
@@ -220,6 +312,15 @@ const MobileNameTable = ({ mobileData, setMobileData, onRevenueUpdate, hideActio
                   </button>
                 </td>
                 <td className="px-6 py-4 border-b border-gray-200">
+                  <button
+                    onClick={openSellModal}
+                    disabled={hideActions}
+                    className={`px-3 py-1 text-xs font-semibold rounded-full transition-all duration-200 bg-blue-600 text-white hover:bg-blue-700 ${hideActions ? "cursor-not-allowed opacity-60" : "cursor-pointer"}`}
+                  >
+                    Use
+                  </button>
+                </td>
+                <td className="px-6 py-4 border-b border-gray-200">
                   <input
                     type="number"
                     placeholder="₹0"
@@ -244,6 +345,7 @@ const MobileNameTable = ({ mobileData, setMobileData, onRevenueUpdate, hideActio
         </table>
       </div>
 
+
       {/* Pagination */}
       <div className="px-6 py-4 bg-gray-50 border-t border-gray-200">
         <Pagination
@@ -253,8 +355,59 @@ const MobileNameTable = ({ mobileData, setMobileData, onRevenueUpdate, hideActio
           currentPage={currentPage}
         />
       </div>
+
+
+      {/* Sell Product Modal */}
+      {sellOpen && (
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
+          <div className="bg-white rounded-xl shadow-xl w-full max-w-md p-6">
+            <h3 className="text-lg font-semibold mb-4">Sell Product</h3>
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Product</label>
+                <select
+                  className="w-full border rounded-lg px-3 py-2"
+                  value={selectedProductId}
+                  onChange={(e) => setSelectedProductId(e.target.value)}
+                >
+                  {products.map(p => (
+                    <option key={p._id} value={p._id}>{p.name} (Qty: {p.quantity})</option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Quantity</label>
+                <input
+                  type="number"
+                  min={1}
+                  className="w-full border rounded-lg px-3 py-2"
+                  value={sellQty}
+                  onChange={(e) => setSellQty(e.target.value)}
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Paid Amount (optional)</label>
+                <input
+                  type="number"
+                  min={0}
+                  className="w-full border rounded-lg px-3 py-2"
+                  value={paidAmount}
+                  onChange={(e) => setPaidAmount(e.target.value)}
+                />
+              </div>
+            </div>
+            <div className="mt-6 flex justify-end gap-3">
+              <button className="px-3 py-2 rounded-lg border" onClick={closeSellModal} disabled={selling}>Cancel</button>
+              <button className="px-3 py-2 rounded-lg bg-blue-600 text-white" onClick={submitSell} disabled={selling}>
+                {selling ? "Selling..." : "Sell"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
+
 
 export default MobileNameTable
