@@ -1,12 +1,15 @@
 "use client"
 
+
 import { useEffect, useState } from "react"
 import api from "../../components/api"
-import { Plus, Calendar, Receipt, TrendingUp, TrendingDown, DollarSign, Clock, Hash, Smartphone, Package } from "lucide-react"
+import { Plus, Calendar, Receipt, TrendingUp, TrendingDown, DollarSign, Clock, Hash, Smartphone, Package, Coins } from "lucide-react"
+
 
 const TodayExpenses = ({ shopId }) => {
   const [title, setTitle] = useState("")
   const [amount, setAmount] = useState("")
+  const [paymentMethod, setPaymentMethod] = useState("cash")
   const [expenses, setExpenses] = useState([])
   const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split("T")[0])
   const [totalExpense, setTotalExpense] = useState(0)
@@ -14,6 +17,7 @@ const TodayExpenses = ({ shopId }) => {
   const [serviceRevenue, setServiceRevenue] = useState(0)
   const [stockRevenue, setStockRevenue] = useState(0)
   const [isLoading, setIsLoading] = useState(false)
+
 
   const fetchExpenses = async (date = selectedDate) => {
     try {
@@ -29,6 +33,7 @@ const TodayExpenses = ({ shopId }) => {
       console.error("Failed to fetch expenses", err)
     }
   }
+
 
   const fetchDailyRevenue = async (date = selectedDate) => {
     try {
@@ -46,20 +51,22 @@ const TodayExpenses = ({ shopId }) => {
     }
   }
 
+
   const handleAdd = async () => {
     if (!shopId || !title.trim() || !amount) {
       console.warn("Please fill all fields.");
       return
     }
 
+
     try {
       setIsLoading(true)
       const token = localStorage.getItem("token")
-      
+     
       // Create a proper date object with current time for the selected date
       const now = new Date()
       let expenseDate
-      
+     
       if (selectedDate === new Date().toISOString().split("T")[0]) {
         // If it's today, use the current time
         expenseDate = now
@@ -68,13 +75,14 @@ const TodayExpenses = ({ shopId }) => {
         const [year, month, day] = selectedDate.split('-')
         expenseDate = new Date(year, month - 1, day, now.getHours(), now.getMinutes(), now.getSeconds())
       }
-      
+     
       await api.post(
         "/api/expenses/add",
         {
           shop_id: shopId,
           title,
           amount: Number.parseInt(amount, 10),
+          paymentMethod,
           createdAt: expenseDate.toISOString(),
         },
         {
@@ -83,6 +91,7 @@ const TodayExpenses = ({ shopId }) => {
       )
       setTitle("")
       setAmount("")
+      setPaymentMethod("cash")
       fetchExpenses()
       fetchDailyRevenue()
     } catch (err) {
@@ -92,12 +101,15 @@ const TodayExpenses = ({ shopId }) => {
     }
   }
 
+
   useEffect(() => {
     fetchExpenses()
     fetchDailyRevenue()
   }, [selectedDate])
 
+
   const netRevenue = dailyRevenue - totalExpense
+
 
   return (
     <div className="h-screen bg-white flex flex-col">
@@ -114,6 +126,7 @@ const TodayExpenses = ({ shopId }) => {
         </div>
       </div>
 
+
       {/* Add Expense Form */}
       <div className="px-8 py-6 bg-gradient-to-r from-gray-50 to-blue-50 border-b border-gray-200 flex-shrink-0">
         <div className="bg-white rounded-xl p-6 shadow-lg border border-gray-200">
@@ -122,7 +135,8 @@ const TodayExpenses = ({ shopId }) => {
             Add New Expense
           </h3>
 
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+
+          <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
             {/* Title Input */}
             <div className="space-y-2">
               <label className="text-sm font-semibold text-gray-700 flex items-center">
@@ -136,6 +150,7 @@ const TodayExpenses = ({ shopId }) => {
                 onChange={(e) => setTitle(e.target.value)}
               />
             </div>
+
 
             {/* Amount Input */}
             <div className="space-y-2">
@@ -152,6 +167,25 @@ const TodayExpenses = ({ shopId }) => {
               />
             </div>
 
+
+            {/* Payment Method */}
+            <div className="space-y-2">
+              <label className="text-sm font-semibold text-gray-700 flex items-center">
+                <DollarSign className="h-4 w-4 mr-2 text-emerald-600" />
+                Payment Method
+              </label>
+              <select
+                className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition-all duration-200 bg-gray-50 hover:bg-white"
+                value={paymentMethod}
+                onChange={(e) => setPaymentMethod(e.target.value)}
+                title="Choose payment method"
+              >
+                <option value="cash">Cash</option>
+                <option value="upi">UPI</option>
+              </select>
+            </div>
+
+
             {/* Date Input */}
             <div className="space-y-2">
               <label className="text-sm font-semibold text-gray-700 flex items-center">
@@ -166,6 +200,7 @@ const TodayExpenses = ({ shopId }) => {
                 title="Select date for entry (Default: Today)"
               />
             </div>
+
 
             {/* Add Button */}
             <div className="space-y-2">
@@ -206,6 +241,7 @@ const TodayExpenses = ({ shopId }) => {
         </div>
       </div>
 
+
       {/* Summary Cards */}
       <div className="px-8 py-6 bg-gradient-to-r from-gray-50 to-blue-50 border-b border-gray-200 flex-shrink-0">
         <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
@@ -222,6 +258,7 @@ const TodayExpenses = ({ shopId }) => {
             </div>
           </div>
 
+
           {/* Stock Revenue Card */}
           <div className="bg-white rounded-xl p-6 shadow-lg border border-gray-200 hover:shadow-xl transition-shadow duration-200">
             <div className="flex items-center justify-between">
@@ -234,6 +271,7 @@ const TodayExpenses = ({ shopId }) => {
               </div>
             </div>
           </div>
+
 
           {/* Total Revenue Card */}
           <div className="bg-white rounded-xl p-6 shadow-lg border border-gray-200 hover:shadow-xl transition-shadow duration-200">
@@ -248,6 +286,7 @@ const TodayExpenses = ({ shopId }) => {
             </div>
           </div>
 
+
           {/* Total Expense Card */}
           <div className="bg-white rounded-xl p-6 shadow-lg border border-gray-200 hover:shadow-xl transition-shadow duration-200">
             <div className="flex items-center justify-between">
@@ -260,6 +299,7 @@ const TodayExpenses = ({ shopId }) => {
               </div>
             </div>
           </div>
+
 
           {/* Net Revenue Card */}
           <div className="bg-white rounded-xl p-6 shadow-lg border border-gray-200 hover:shadow-xl transition-shadow duration-200">
@@ -277,6 +317,7 @@ const TodayExpenses = ({ shopId }) => {
           </div>
         </div>
       </div>
+
 
       {/* Expenses Table */}
       <div className="flex-1 px-8 py-6 overflow-auto bg-white">
@@ -314,6 +355,12 @@ const TodayExpenses = ({ shopId }) => {
                     </th>
                     <th className="px-6 py-4 text-left text-sm font-bold text-gray-700 border-b border-gray-300">
                       <div className="flex items-center">
+                        <Coins className="h-4 w-4 mr-2 text-orange-600" />
+                        Payment Method
+                      </div>
+                    </th>
+                    <th className="px-6 py-4 text-left text-sm font-bold text-gray-700 border-b border-gray-300">
+                      <div className="flex items-center">
                         <Clock className="h-4 w-4 mr-2 text-orange-600" />
                         Time
                       </div>
@@ -341,6 +388,11 @@ const TodayExpenses = ({ shopId }) => {
                           ₹{exp.amount}
                         </span>
                       </td>
+                       <td className="px-6 py-4 border-b border-gray-200">
+                        <span className="inline-flex items-center px-3 py-1 rounded-full text-sm font-semibold bg-red-100 text-red-800">
+                          {exp.paymentMethod}
+                        </span>
+                      </td>
                       <td className="px-6 py-4 border-b border-gray-200">
                         <span className="text-sm text-gray-600 font-medium">
                           {new Date(exp.createdAt).toLocaleTimeString("en-IN", {
@@ -363,4 +415,9 @@ const TodayExpenses = ({ shopId }) => {
   )
 }
 
+
 export default TodayExpenses
+
+
+
+

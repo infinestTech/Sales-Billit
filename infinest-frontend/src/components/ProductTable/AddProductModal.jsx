@@ -1,9 +1,12 @@
 "use client"
 
-import { useState } from "react"
+
+import { useEffect, useState } from "react"
 import api from "../../components/api"
 import { X, Package, Tag, DollarSign, Hash } from "lucide-react"
 import { logAndNotify, logError, logSystem } from "@/utils/logger"
+
+
 
 
 const AddProductModal = ({ shop_id, onClose, onSuccess }) => {
@@ -13,13 +16,40 @@ const AddProductModal = ({ shop_id, onClose, onSuccess }) => {
     costPrice: "",
     sellingPrice: "",
     quantity: "",
+    supplierId: "",
+    paymentMethod: "cash",
   })
   const [loading, setLoading] = useState(false)
+  const [suppliers, setSuppliers] = useState([])
+
+
+  useEffect(() => {
+    const fetchSuppliers = async () => {
+      if (!shop_id) return
+      try {
+        const token = localStorage.getItem("token")
+        const res = await api.post(
+          "/api/suppliers/list",
+          { shop_id },
+          { headers: { Authorization: `Bearer ${token}` } }
+        )
+        setSuppliers(Array.isArray(res.data.suppliers) ? res.data.suppliers : [])
+      } catch (err) {
+        logError("Failed to load suppliers", err)
+        setSuppliers([])
+      }
+    }
+    fetchSuppliers()
+  }, [shop_id])
+
+
 
 
   const handleChange = (e) => {
     setForm({ ...form, [e.target.name]: e.target.value })
   }
+
+
 
 
   const handleSubmit = async (e) => {
@@ -30,14 +60,20 @@ const AddProductModal = ({ shop_id, onClose, onSuccess }) => {
     }
 
 
+
+
     console.log("Sending data:", {
       name: form.name,
       category: form.category,
       costPrice: Number.parseInt(form.costPrice),
       sellingPrice: form.sellingPrice ? Number.parseInt(form.sellingPrice) : undefined,
       quantity: Number.parseInt(form.quantity),
+      supplierId: form.supplierId || undefined,
+      paymentMethod: form.paymentMethod,
       shop_id,
     })
+
+
 
 
     try {
@@ -51,6 +87,8 @@ const AddProductModal = ({ shop_id, onClose, onSuccess }) => {
           costPrice: Number.parseInt(form.costPrice),
           sellingPrice: form.sellingPrice ? Number.parseInt(form.sellingPrice) : undefined,
           quantity: Number.parseInt(form.quantity),
+          supplierId: form.supplierId || undefined,
+          paymentMethod: form.paymentMethod,
           shop_id,
         },
         {
@@ -69,6 +107,8 @@ const AddProductModal = ({ shop_id, onClose, onSuccess }) => {
   }
 
 
+
+
   return (
     <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
       <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md border border-gray-200 overflow-hidden">
@@ -84,6 +124,8 @@ const AddProductModal = ({ shop_id, onClose, onSuccess }) => {
             <X className="h-5 w-5 text-white" />
           </button>
         </div>
+
+
 
 
         {/* Form */}
@@ -105,6 +147,8 @@ const AddProductModal = ({ shop_id, onClose, onSuccess }) => {
           </div>
 
 
+
+
           {/* Category */}
           <div className="space-y-2">
             <label className="text-sm font-semibold text-gray-700 flex items-center">
@@ -119,6 +163,8 @@ const AddProductModal = ({ shop_id, onClose, onSuccess }) => {
               className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all duration-200 bg-gray-50 hover:bg-white"
             />
           </div>
+
+
 
 
           {/* Price Fields */}
@@ -155,6 +201,47 @@ const AddProductModal = ({ shop_id, onClose, onSuccess }) => {
           </div>
 
 
+          {/* Supplier & Payment */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <label className="text-sm font-semibold text-gray-700 flex items-center">
+                Supplier
+              </label>
+              <select
+                name="supplierId"
+                value={form.supplierId}
+                onChange={handleChange}
+                className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 bg-gray-50 hover:bg-white"
+              >
+                <option value="">Select supplier (optional)</option>
+                {suppliers.map((s) => (
+                  <option key={s._id} value={s._id}>
+                    {s.supplierName}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+
+            <div className="space-y-2">
+              <label className="text-sm font-semibold text-gray-700 flex items-center">
+                Payment Method
+              </label>
+              <select
+                name="paymentMethod"
+                value={form.paymentMethod}
+                onChange={handleChange}
+                className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all duration-200 bg-gray-50 hover:bg-white"
+              >
+                <option value="cash">Cash</option>
+                <option value="upi">UPI</option>
+              </select>
+            </div>
+          </div>
+
+
+
+
           {/* Quantity */}
           <div className="space-y-2">
             <label className="text-sm font-semibold text-gray-700 flex items-center">
@@ -171,6 +258,8 @@ const AddProductModal = ({ shop_id, onClose, onSuccess }) => {
               required
             />
           </div>
+
+
 
 
           {/* Buttons */}
@@ -218,6 +307,6 @@ const AddProductModal = ({ shop_id, onClose, onSuccess }) => {
 }
 
 
+
+
 export default AddProductModal
-
-
