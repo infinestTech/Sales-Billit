@@ -224,6 +224,25 @@ const {viewPublicReceiptController} = require("../controllers/api/viewReceiptCon
 // Add this new route WITHOUT authentication middleware
 router.get("/receipt/public/:id", viewPublicReceiptController);
 
+
+
+
+// =============================
+// Supplier Routes (BillitServer)
+// =============================
+const { addSupplier, listSuppliers } = require("../controllers/api/supplierController");
+router.post("/suppliers/add", authenticateToken, addSupplier);
+router.post("/suppliers/list", authenticateToken, listSuppliers);
+const { getSupplierHistory, updateSupplier } = require("../controllers/api/supplierController");
+router.post("/suppliers/history", authenticateToken, getSupplierHistory);
+router.post("/suppliers/update", authenticateToken, updateSupplier);
+console.log("[billitRoutes] Supplier routes registered: POST /api/suppliers/add, POST /api/suppliers/list");
+console.log("[billitRoutes] Supplier routes registered: POST /api/suppliers/history");
+console.log("[billitRoutes] Supplier routes registered: POST /api/suppliers/update");
+
+
+
+
 // ======================================
 // 📱 Mobile Brands & Issues Routes
 // ======================================

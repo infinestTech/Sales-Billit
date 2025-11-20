@@ -212,6 +212,8 @@ const productSchema = new mongoose.Schema({
   sellingPrice: { type: Number },
   quantity: { type: Number, required: true },
   totalCost: { type: Number, required: true }, // should be calculated on save
+  supplierId: { type: mongoose.Schema.Types.ObjectId, ref: "Supplier" },
+  paymentMethod: { type: String, enum: ["cash", "upi"], default: "cash" },
   addedDate: { type: Date, default: Date.now },
   updatedAt: { type: Date, default: Date.now }
 });
@@ -220,6 +222,20 @@ productSchema.pre("save", function (next) {
   this.totalCost = this.costPrice * this.quantity;
   next();
 });
+
+// ==============================
+// 🧾 Supplier History Schema
+// ==============================
+const supplierHistorySchema = new mongoose.Schema({
+  supplierId: { type: mongoose.Schema.Types.ObjectId, ref: "Supplier", required: true },
+  userId: { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true },
+  changeDate: { type: Date, default: Date.now },
+  changeType: { type: String, enum: ["ADMIN_EDIT", "NOTE"], required: true },
+  message: { type: String, default: "" },
+  totalAmount: { type: Number },
+  paymentMethod: { type: String, enum: ["cash", "upi", "", null], default: "" }
+});
+
 
 const productHistorySchema = new mongoose.Schema({
   productId: { type: mongoose.Schema.Types.ObjectId, ref: "Product", required: true },
@@ -231,11 +247,11 @@ const productHistorySchema = new mongoose.Schema({
   notes: { type: String }
 });
 
-
 const expenseSchema = new mongoose.Schema({
   userId: { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true },
   title: { type: String, required: true },
   amount: { type: Number, required: true },
+  paymentMethod: { type: String, enum: ["upi", "cash"], default: "cash" },
   createdAt: { type: Date, default: Date.now }
 });
 
@@ -267,6 +283,7 @@ const Feature = mongoose.model("Feature", featureSchema);
 const Product = mongoose.model("Product", productSchema);
 const Notification = mongoose.model("Notification", notificationSchema);
 const ProductHistory = mongoose.model("ProductHistory", productHistorySchema);
+const SupplierHistory = mongoose.model("SupplierHistory", supplierHistorySchema);
 // ==============================
 // 🧾 Admin Sale Schema
 // ==============================
@@ -332,5 +349,5 @@ const MobileIssue = mongoose.model("MobileIssue", mobileIssueSchema);
 module.exports = {
   Role, User, Manager, Branch, Shop, Dealer, Customer, Notification, Mobile, Technician,
   PlanCategory, Plan, Feature, DailySummary, Expense, ProductHistory, Product,
-  MobileBrand, MobileIssue, AdminSale
+  MobileBrand, MobileIssue, AdminSale, SupplierHistory
 };
