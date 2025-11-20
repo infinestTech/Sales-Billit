@@ -1,4 +1,8 @@
+
+
 "use client"
+
+
 
 
 import { useEffect, useState } from "react"
@@ -6,6 +10,8 @@ import Pagination from "./Pagination"
 import api from "../api"
 import { Calendar, Smartphone, AlertCircle, CheckCircle, RotateCcw, DollarSign, Truck, Package } from "lucide-react"
 import { jwtDecode } from "jwt-decode"
+
+
 
 
 const MobileNameTable = ({ mobileData, setMobileData, onRevenueUpdate, hideActions }) => {
@@ -20,6 +26,8 @@ const MobileNameTable = ({ mobileData, setMobileData, onRevenueUpdate, hideActio
   const [selling, setSelling] = useState(false)
 
 
+
+
   useEffect(() => {
     try {
       const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null
@@ -32,9 +40,13 @@ const MobileNameTable = ({ mobileData, setMobileData, onRevenueUpdate, hideActio
   const itemsPerPage = 5
 
 
+
+
   const indexOfLastItem = currentPage * itemsPerPage
   const indexOfFirstItem = indexOfLastItem - itemsPerPage
   const currentMobileData = validMobileData.slice(indexOfFirstItem, indexOfLastItem)
+
+
 
 
   const formatDate = (dateStr) => {
@@ -47,15 +59,23 @@ const MobileNameTable = ({ mobileData, setMobileData, onRevenueUpdate, hideActio
   }
 
 
+
+
   const paginate = (pageNumber) => setCurrentPage(pageNumber)
+
+
 
 
   const toggleStatus = async (index, field) => {
     if (hideActions) return
 
 
+
+
     const mobile = currentMobileData[index]
     const globalIndex = indexOfFirstItem + index
+
+
 
 
     try {
@@ -74,9 +94,13 @@ const MobileNameTable = ({ mobileData, setMobileData, onRevenueUpdate, hideActio
       )
 
 
+
+
       const updated = response.data.updatedMobile
       const updatedData = [...mobileData]
       updatedData[globalIndex] = { ...updated, deliveryDate: updated.deliveryDate }
+
+
 
 
       setMobileData(updatedData)
@@ -86,12 +110,18 @@ const MobileNameTable = ({ mobileData, setMobileData, onRevenueUpdate, hideActio
   }
 
 
-  const updatePaidAmount = async (index, value) => {
+
+
+  const updatePaidAmount = async (index, value, paymentMethod) => {
     if (hideActions) return
+
+
 
 
     const mobile = currentMobileData[index]
     const globalIndex = indexOfFirstItem + index
+
+
 
 
     try {
@@ -102,6 +132,7 @@ const MobileNameTable = ({ mobileData, setMobileData, onRevenueUpdate, hideActio
           id: mobile._id,
           paidAmount: Number.parseInt(value, 10),
           updateDate: new Date().toISOString(),
+          payment: paymentMethod !== undefined ? paymentMethod : (mobile.payment || undefined),
         },
         {
           headers: {
@@ -111,12 +142,18 @@ const MobileNameTable = ({ mobileData, setMobileData, onRevenueUpdate, hideActio
       )
 
 
+
+
       const updated = response.data.updatedMobile
       const updatedData = [...mobileData]
       updatedData[globalIndex] = { ...updated }
 
 
+
+
       setMobileData(updatedData)
+
+
 
 
       if (typeof onRevenueUpdate === "function") {
@@ -126,6 +163,8 @@ const MobileNameTable = ({ mobileData, setMobileData, onRevenueUpdate, hideActio
       console.error("Failed to update paid amount:", error.message)
     }
   }
+
+
 
 
   const openSellModal = async () => {
@@ -149,12 +188,16 @@ const MobileNameTable = ({ mobileData, setMobileData, onRevenueUpdate, hideActio
   }
 
 
+
+
   const closeSellModal = () => {
     setSellOpen(false)
     setSelectedProductId("")
     setSellQty(1)
     setPaidAmount(0)
   }
+
+
 
 
   const submitSell = async () => {
@@ -177,6 +220,8 @@ const MobileNameTable = ({ mobileData, setMobileData, onRevenueUpdate, hideActio
   }
 
 
+
+
   if (validMobileData.length === 0) {
     return (
       <div className="text-center py-8">
@@ -188,6 +233,8 @@ const MobileNameTable = ({ mobileData, setMobileData, onRevenueUpdate, hideActio
       </div>
     )
   }
+
+
 
 
   return (
@@ -248,6 +295,11 @@ const MobileNameTable = ({ mobileData, setMobileData, onRevenueUpdate, hideActio
                 <div className="flex items-center">
                   <DollarSign className="h-4 w-4 mr-2 text-emerald-600" />
                   Paid Amount
+                </div>
+              </th>
+              <th className="px-6 py-4 text-left text-sm font-bold text-gray-700 border-b border-gray-300">
+                <div className="flex items-center">
+                  Payment
                 </div>
               </th>
             </tr>
@@ -335,15 +387,37 @@ const MobileNameTable = ({ mobileData, setMobileData, onRevenueUpdate, hideActio
                         setMobileData(updated)
                       }
                     }}
-                    onBlur={(e) => updatePaidAmount(index, e.target.value || 0)}
+                    onBlur={(e) => updatePaidAmount(index, e.target.value || 0, (currentMobileData[index]?.payment))}
                     disabled={hideActions}
                   />
+                </td>
+                <td className="px-6 py-4 border-b border-gray-200">
+                  <select
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200"
+                    value={mobile.payment || ""}
+                    onChange={(e) => {
+                      if (hideActions) return
+                      const val = e.target.value
+                      const updated = [...mobileData]
+                      updated[indexOfFirstItem + index].payment = val
+                      setMobileData(updated)
+                      const currentAmount = currentMobileData[index]?.paid_amount || 0
+                      updatePaidAmount(index, currentAmount, val)
+                    }}
+                    disabled={hideActions}
+                  >
+                    <option value="">Select</option>
+                    <option value="cash">Cash</option>
+                    <option value="UPI">UPI</option>
+                  </select>
                 </td>
               </tr>
             ))}
           </tbody>
         </table>
       </div>
+
+
 
 
       {/* Pagination */}
@@ -355,6 +429,8 @@ const MobileNameTable = ({ mobileData, setMobileData, onRevenueUpdate, hideActio
           currentPage={currentPage}
         />
       </div>
+
+
 
 
       {/* Sell Product Modal */}
@@ -408,6 +484,8 @@ const MobileNameTable = ({ mobileData, setMobileData, onRevenueUpdate, hideActio
     </div>
   )
 }
+
+
 
 
 export default MobileNameTable
