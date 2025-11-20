@@ -660,7 +660,7 @@ const clearBalanceAmount = async (req, res) => {
 };
 
 const updatePaidAmount = async (req, res) => {
-  const { id, paidAmount, updateDate } = req.body;
+  const { id, paidAmount, updateDate, payment } = req.body;
 
   if (!id || paidAmount === undefined || !updateDate) {
     return res.status(400).json({ error: "Missing required parameters" });
@@ -672,14 +672,22 @@ const updatePaidAmount = async (req, res) => {
       return res.status(404).json({ error: "Mobile not found" });
     }
 
-    // Keep the old delivery date, update paid amount and update date
+    // Prepare update object
+    const updateFields = {
+      paid_amount: paidAmount,
+      update_date: new Date(updateDate),
+      delivery_date: existingMobile.delivery_date
+    };
+
+    // Add payment method if provided
+    if (payment !== undefined && payment !== null) {
+      updateFields.payment = payment;
+    }
+
+    // Keep the old delivery date, update paid amount, payment method and update date
     const updatedMobile = await Mobile.findByIdAndUpdate(
       id,
-      {
-        paid_amount: paidAmount,
-        update_date: new Date(updateDate),
-        delivery_date: existingMobile.delivery_date
-      },
+      updateFields,
       { new: true }
     );
 

@@ -118,7 +118,7 @@ if (!shop) {
         { dealer_id: { $in: dealerIds } },
       ]
     }).select(
-      "mobile_name issue ready delivered returned paid_amount added_date delivery_date customer_id dealer_id"
+      "mobile_name issue ready delivered returned paid_amount added_date delivery_date customer_id dealer_id payment"
     );
 
 

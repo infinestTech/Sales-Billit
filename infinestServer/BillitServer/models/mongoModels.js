@@ -116,7 +116,7 @@ const mobileSchema = new mongoose.Schema({
   delivered: { type: Boolean, default: false },
   returned: { type: Boolean, default: false },
   paid_amount: { type: Number, default: 0 },
-  payment: { type: String, enum: ["cash", "UPI"], required: false },
+  payment: { type: String, enum: ["cash", "UPI", ""], default: "" },
   delivery_date: { type: Date },
   created_at: { type: Date, default: Date.now }
 });
