@@ -1,11 +1,14 @@
 const { Mobile } = require("../../models/mongoModels");
 
+
 const updatePaidAmount = async (req, res) => {
-  const { id, paidAmount, updateDate } = req.body;
+  const { id, paidAmount, updateDate, payment } = req.body;
+
 
   if (!id || paidAmount === undefined || !updateDate) {
     return res.status(400).json({ error: "Missing required parameters" });
   }
+
 
   try {
     const existingMobile = await Mobile.findById(id);
@@ -13,15 +16,25 @@ const updatePaidAmount = async (req, res) => {
       return res.status(404).json({ error: "Mobile not found" });
     }
 
+
+    const updatePayload = {
+      paid_amount: paidAmount,
+      update_date: new Date(updateDate),
+      delivery_date: existingMobile.delivery_date,
+    };
+
+
+    if (payment === "cash" || payment === "UPI") {
+      updatePayload.payment = payment;
+    }
+
+
     const updatedMobile = await Mobile.findByIdAndUpdate(
       id,
-      {
-        paid_amount: paidAmount,
-        update_date: new Date(updateDate),
-        delivery_date: existingMobile.delivery_date, // Preserve existing delivery date
-      },
+      updatePayload,
       { new: true }
     );
+
 
     return res.status(200).json({ success: true, updatedMobile });
   } catch (error) {
@@ -30,4 +43,9 @@ const updatePaidAmount = async (req, res) => {
   }
 };
 
+
 module.exports = { updatePaidAmount };
+
+
+
+
