@@ -5,6 +5,7 @@ import { useEffect, useState } from "react"
 import { useParams, useRouter } from "next/navigation"
 import { jwtDecode } from "jwt-decode"
 import api from "@/components/api"
+import { History, ArrowLeft, Package, Calendar, CreditCard, MessageSquare, TrendingUp } from "lucide-react"
 
 
 export default function SupplierHistoryPage() {
@@ -63,57 +64,163 @@ export default function SupplierHistoryPage() {
 
 
   return (
-    <div className="min-h-screen bg-white">
-      <div className="px-6 py-4 border-b flex items-center gap-3">
-        <button
-          onClick={() => router.push("/supplierlist")}
-          className="px-3 py-2 rounded-lg bg-gray-100 hover:bg-gray-200"
-        >
-          ← Back
-        </button>
-        <h1 className="text-xl font-semibold">Supplier History</h1>
+    <div className="h-screen bg-white flex flex-col">
+      {/* Header */}
+      <div className="bg-gradient-to-r from-blue-600 to-indigo-600 px-8 py-6 flex-shrink-0">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center space-x-4">
+            <button
+              onClick={() => router.push("/supplierlist")}
+              className="p-2 bg-white/20 hover:bg-white/30 rounded-lg transition-all duration-200 backdrop-blur-sm"
+              title="Back to Suppliers"
+            >
+              <ArrowLeft className="h-5 w-5 text-white" />
+            </button>
+            <div className="flex items-center space-x-3">
+              <div className="p-3 bg-white/20 rounded-xl">
+                <History className="h-8 w-8 text-white" />
+              </div>
+              <div>
+                <h2 className="text-2xl font-bold text-white">Supplier History</h2>
+                <p className="text-blue-100">View all transactions and activities</p>
+              </div>
+            </div>
+          </div>
+          {!loading && items.length > 0 && (
+            <div className="hidden md:flex items-center space-x-2 bg-white/20 backdrop-blur-sm px-4 py-2 rounded-lg">
+              <TrendingUp className="h-5 w-5 text-white" />
+              <span className="text-white font-semibold">{items.length} Transaction{items.length !== 1 ? "s" : ""}</span>
+            </div>
+          )}
+        </div>
       </div>
 
-
-      <div className="p-6">
+      {/* Content */}
+      <div className="flex-1 px-8 py-6 overflow-auto bg-gradient-to-br from-gray-50 to-blue-50">
         {loading ? (
-          <div className="text-gray-600">Loading history…</div>
+          <div className="flex items-center justify-center py-20">
+            <div className="text-center">
+              <div className="inline-flex items-center justify-center w-20 h-20 bg-gradient-to-r from-blue-100 to-indigo-100 rounded-full mb-6 animate-pulse">
+                <History className="h-10 w-10 text-blue-600" />
+              </div>
+              <h3 className="text-xl font-semibold text-gray-800 mb-2">Loading History...</h3>
+              <p className="text-gray-600">Please wait while we fetch your data.</p>
+            </div>
+          </div>
         ) : error ? (
-          <div className="text-red-600">{error}</div>
+          <div className="flex items-center justify-center py-20">
+            <div className="text-center">
+              <div className="inline-flex items-center justify-center w-20 h-20 bg-red-100 rounded-full mb-6">
+                <History className="h-10 w-10 text-red-600" />
+              </div>
+              <h3 className="text-xl font-semibold text-gray-800 mb-2">Error Loading History</h3>
+              <p className="text-red-600">{error}</p>
+              <button
+                onClick={() => window.location.reload()}
+                className="mt-4 px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+              >
+                Try Again
+              </button>
+            </div>
+          </div>
         ) : items.length === 0 ? (
-          <div className="text-gray-600">No history found.</div>
+          <div className="flex items-center justify-center py-20">
+            <div className="text-center">
+              <div className="inline-flex items-center justify-center w-20 h-20 bg-gradient-to-r from-blue-100 to-indigo-100 rounded-full mb-6">
+                <History className="h-10 w-10 text-blue-600" />
+              </div>
+              <h3 className="text-xl font-semibold text-gray-800 mb-2">No History Found</h3>
+              <p className="text-gray-600">This supplier has no transaction history yet.</p>
+            </div>
+          </div>
         ) : (
-          <div className="overflow-x-auto border rounded-lg">
-            <table className="min-w-full text-sm">
-              <thead className="bg-gray-100">
-                <tr>
-                  <th className="px-4 py-3 text-left font-semibold text-gray-700">Type</th>
-                  <th className="px-4 py-3 text-left font-semibold text-gray-700">Date</th>
-                  <th className="px-4 py-3 text-left font-semibold text-gray-700">Product</th>
-                  <th className="px-4 py-3 text-left font-semibold text-gray-700">Quantity</th>
-                  <th className="px-4 py-3 text-left font-semibold text-gray-700">Cost Price</th>
-                  <th className="px-4 py-3 text-left font-semibold text-gray-700">Total</th>
-                  <th className="px-4 py-3 text-left font-semibold text-gray-700">Payment</th>
-                  <th className="px-4 py-3 text-left font-semibold text-gray-700">Message</th>
-                </tr>
-              </thead>
-              <tbody>
-                {items.map((it, i) => (
-                  <tr key={i} className={i % 2 === 0 ? "bg-white" : "bg-gray-50"}>
-                    <td className="px-4 py-3 text-gray-700 capitalize">{(it.type || '').toLowerCase()}</td>
-                    <td className="px-4 py-3 text-gray-700">
-                      {it.date ? new Date(it.date).toLocaleString("en-IN") : "-"}
-                    </td>
-                    <td className="px-4 py-3 text-gray-800 font-medium">{it.productName || "-"}</td>
-                    <td className="px-4 py-3 text-gray-700">{it.quantity}</td>
-                    <td className="px-4 py-3 text-gray-700">₹{Number(it.costPrice || 0).toLocaleString("en-IN")}</td>
-                    <td className="px-4 py-3 text-gray-900 font-semibold">₹{Number(it.total || 0).toLocaleString("en-IN")}</td>
-                    <td className="px-4 py-3 text-gray-700 capitalize">{it.paymentMethod || "-"}</td>
-                    <td className="px-4 py-3 text-gray-700">{it.message || "-"}</td>
+          <div className="bg-white border border-gray-200 overflow-hidden shadow-lg rounded-xl">
+            <div className="overflow-x-auto">
+              <table className="min-w-full">
+                <thead className="bg-gradient-to-r from-gray-100 to-gray-200">
+                  <tr>
+                    <th className="px-6 py-4 text-left text-sm font-bold text-gray-700 border-b border-gray-300">
+                      <div className="flex items-center space-x-2">
+                        <Package className="h-4 w-4" />
+                        <span>Type</span>
+                      </div>
+                    </th>
+                    <th className="px-6 py-4 text-left text-sm font-bold text-gray-700 border-b border-gray-300">
+                      <div className="flex items-center space-x-2">
+                        <Calendar className="h-4 w-4" />
+                        <span>Date & Time</span>
+                      </div>
+                    </th>
+                    <th className="px-6 py-4 text-left text-sm font-bold text-gray-700 border-b border-gray-300">Product Name</th>
+                    <th className="px-6 py-4 text-left text-sm font-bold text-gray-700 border-b border-gray-300">Quantity</th>
+                    <th className="px-6 py-4 text-left text-sm font-bold text-gray-700 border-b border-gray-300">Cost Price</th>
+                    <th className="px-6 py-4 text-left text-sm font-bold text-gray-700 border-b border-gray-300">Total Amount</th>
+                    <th className="px-6 py-4 text-left text-sm font-bold text-gray-700 border-b border-gray-300">
+                      <div className="flex items-center space-x-2">
+                        <CreditCard className="h-4 w-4" />
+                        <span>Payment</span>
+                      </div>
+                    </th>
+                    <th className="px-6 py-4 text-left text-sm font-bold text-gray-700 border-b border-gray-300">
+                      <div className="flex items-center space-x-2">
+                        <MessageSquare className="h-4 w-4" />
+                        <span>Message</span>
+                      </div>
+                    </th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody>
+                  {items.map((it, i) => (
+                    <tr
+                      key={i}
+                      className={`hover:bg-blue-50 transition-colors duration-200 ${i % 2 === 0 ? 'bg-white' : 'bg-gray-50/50'}`}
+                    >
+                      <td className="px-6 py-4 border-b border-gray-200">
+                        <span className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold ${
+                          (it.type || '').toLowerCase() === 'purchase' 
+                            ? 'bg-green-100 text-green-800' 
+                            : (it.type || '').toLowerCase() === 'payment'
+                            ? 'bg-blue-100 text-blue-800'
+                            : 'bg-gray-100 text-gray-800'
+                        }`}>
+                          {(it.type || 'N/A').toLowerCase()}
+                        </span>
+                      </td>
+                      <td className="px-6 py-4 border-b border-gray-200 text-gray-700">
+                        {it.date ? new Date(it.date).toLocaleString("en-IN", {
+                          dateStyle: "medium",
+                          timeStyle: "short"
+                        }) : "-"}
+                      </td>
+                      <td className="px-6 py-4 border-b border-gray-200 text-gray-900 font-semibold">
+                        {it.productName || "-"}
+                      </td>
+                      <td className="px-6 py-4 border-b border-gray-200 text-gray-700">
+                        <span className="inline-flex items-center px-2 py-1 rounded bg-gray-100 text-gray-800 font-medium">
+                          {it.quantity || 0}
+                        </span>
+                      </td>
+                      <td className="px-6 py-4 border-b border-gray-200 text-gray-700 font-medium">
+                        ₹{Number(it.costPrice || 0).toLocaleString("en-IN")}
+                      </td>
+                      <td className="px-6 py-4 border-b border-gray-200">
+                        <span className="text-blue-600 font-bold text-lg">
+                          ₹{Number(it.total || 0).toLocaleString("en-IN")}
+                        </span>
+                      </td>
+                      <td className="px-6 py-4 border-b border-gray-200">
+                        <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold bg-indigo-100 text-indigo-800 capitalize">
+                          {it.paymentMethod || "N/A"}
+                        </span>
+                      </td>
+                      <td className="px-6 py-4 border-b border-gray-200 text-gray-600 max-w-xs truncate" title={it.message}>
+                        {it.message || "-"}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           </div>
         )}
       </div>
