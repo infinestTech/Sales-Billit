@@ -1,6 +1,8 @@
 
 const jwt = require("jsonwebtoken");
 const { PrismaClient } = require("@prisma/client");
+const { isUserBlacklisted } = require("../utils/tokenBlacklist");
+
 const prisma = new PrismaClient();
 
 const authenticateToken = async (req, res, next) => {
@@ -9,6 +11,25 @@ const authenticateToken = async (req, res, next) => {
 
     try {
         const decodedUser = jwt.verify(token, process.env.JWT_SECRET);
+
+        // Check if user is blacklisted (deleted)
+        if (isUserBlacklisted(decodedUser.userId)) {
+            return res.status(403).json({ 
+                message: "Account has been deleted. Please contact support if you believe this is an error." 
+            });
+        }
+
+        // Verify user still exists in database
+        const userExists = await prisma.user.findUnique({
+            where: { id: decodedUser.userId },
+            select: { id: true }
+        });
+
+        if (!userExists) {
+            return res.status(403).json({ 
+                message: "Account no longer exists. Please contact support if you believe this is an error." 
+            });
+        }
 
         const subscription = await prisma.subscription.findFirst({
             where: { userId: decodedUser.userId, status: "ACTIVE" },

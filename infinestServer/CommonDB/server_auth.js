@@ -9,6 +9,7 @@ const path = require('path');
 
 const profileRoutes = require('./routes/profile');
 const subscriptionRoutes = require('./routes/subscription');
+const adminRoutes = require('./routes/admin');
 
 const moment = require('moment-timezone');
 const express = require('express');
@@ -129,6 +130,7 @@ app.get('/auth/google/callback', passport.authenticate('google', { session: fals
 });
 
 app.use('/profile', profileRoutes);
+app.use('/admin', adminRoutes);
 
 // ✅ USER SIGNUP
 app.post('/signup', authLimiter, async (req, res) => {
@@ -425,6 +427,12 @@ app.post("/mysql-subscribe", authenticateToken, async (req, res) => {
       }
     });
 
+    // ✅ Update User's subscriptionId to link the subscription
+    await prisma.user.update({
+      where: { id: userId },
+      data: { subscriptionId: subscription.id }
+    });
+
     // ✅ Step 5: Ensure Product Access
     const access = await prisma.productAccess.findFirst({
       where: {
@@ -604,6 +612,9 @@ app.post("/upgrade-subscription", authenticateToken, async (req, res) => {
           }
         });
 
+        // Note: Don't update User.subscriptionId for QUEUED subscriptions
+        // Only update when subscription becomes ACTIVE
+
         // Log SUBSCRIPTION_STARTED (queued)
         try {
           await axios.post(`${process.env.SERVER_URL}/log-subscription-event`, {
@@ -705,6 +716,12 @@ app.post("/upgrade-subscription", authenticateToken, async (req, res) => {
           }
         });
 
+        // ✅ Update User's subscriptionId to link the subscription
+        await prisma.user.update({
+          where: { id: userId },
+          data: { subscriptionId: newSub.id }
+        });
+
         // Grant product access
     await prisma.productAccess.create({
           data: {
@@ -774,6 +791,12 @@ app.post("/upgrade-subscription", authenticateToken, async (req, res) => {
           startDate,
           endDate
         }
+      });
+
+      // ✅ Update User's subscriptionId to link the subscription
+      await prisma.user.update({
+        where: { id: userId },
+        data: { subscriptionId: newSub.id }
       });
 
       // Grant product access
@@ -1136,6 +1159,12 @@ cron.schedule("30 18 * * *", async () => {
             }
           });
 
+          // ✅ Update User's subscriptionId to link the newly activated subscription
+          await prisma.user.update({
+            where: { id: sub.userId },
+            data: { subscriptionId: nextQueued.id }
+          });
+
           // Ensure product access is restored
           await prisma.productAccess.create({
             data: {
@@ -1176,6 +1205,12 @@ cron.schedule("30 18 * * *", async () => {
                   startDate: new Date(),
                   endDate: null // ✅ Basic plan never expires
                 }
+              });
+
+              // ✅ Update User's subscriptionId to link the subscription
+              await prisma.user.update({
+                where: { id: sub.userId },
+                data: { subscriptionId: basicSubscription.id }
               });
 
               // Ensure product access is restored
@@ -1386,6 +1421,12 @@ app.post("/mysql-subscribe-free", authenticateToken, async (req, res) => {
         status: "ACTIVE",
         endDate: null // ✅ NULL for basic plan - no expiry
       }
+    });
+
+    // ✅ Update User's subscriptionId to link the subscription
+    await prisma.user.update({
+      where: { id: userId },
+      data: { subscriptionId: subscription.id }
     });
 
     // ✅ Step 5: Ensure Product Access
