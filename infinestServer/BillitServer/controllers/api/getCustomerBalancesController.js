@@ -19,7 +19,7 @@ const getCustomerBalances = async (req, res) => {
     const customerIds = customers.map(c => c._id);
     const mobiles = await Mobile.find({
       customer_id: { $in: customerIds }
-    }).select("mobile_name issue added_date customer_id").lean();
+    }).select("mobile_name model issue added_date customer_id").lean();
 
     // Group mobiles by customer_id
     const mobilesByCustomer = {};
@@ -28,6 +28,7 @@ const getCustomerBalances = async (req, res) => {
       if (!mobilesByCustomer[cid]) mobilesByCustomer[cid] = [];
       mobilesByCustomer[cid].push({
         mobileName: mobile.mobile_name,
+        model: mobile.model,
         issue: mobile.issue,
         addedDate: mobile.added_date,
       });

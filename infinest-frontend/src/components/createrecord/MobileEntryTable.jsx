@@ -6,12 +6,15 @@ import api from '@/components/api'
 export default function MobileEntryTable({ rows, setRows }) {
   const [mobileBrands, setMobileBrands] = useState([])
   const [mobileIssues, setMobileIssues] = useState([])
+  const [previousModels, setPreviousModels] = useState([])
   const [showBrandModal, setShowBrandModal] = useState(false)
   const [showIssueModal, setShowIssueModal] = useState(false)
   const [newBrandName, setNewBrandName] = useState('')
   const [newIssueName, setNewIssueName] = useState('')
   const [newIssueCategory, setNewIssueCategory] = useState('General')
   const [loading, setLoading] = useState(true)
+  const [focusedModelIndex, setFocusedModelIndex] = useState(null)
+  const [modelSearchTerm, setModelSearchTerm] = useState({})
 
   // Get shopId from localStorage token
   const getShopId = () => {
@@ -26,11 +29,38 @@ export default function MobileEntryTable({ rows, setRows }) {
     }
   }
 
-  // Load mobile brands and issues
+  // Load mobile brands, issues and previous models
   useEffect(() => {
     loadMobileBrands()
     loadMobileIssues()
+    loadPreviousModels()
   }, [])
+
+  const loadPreviousModels = () => {
+    try {
+      const shopId = getShopId()
+      if (!shopId) return
+      const stored = localStorage.getItem(`mobile_models_${shopId}`)
+      if (stored) {
+        setPreviousModels(JSON.parse(stored))
+      }
+    } catch (error) {
+      console.error('Error loading previous models:', error)
+    }
+  }
+
+  const saveModelToHistory = (model) => {
+    if (!model || model.trim() === '') return
+    const trimmedModel = model.trim()
+    const shopId = getShopId()
+    if (!shopId) return
+
+    setPreviousModels(prev => {
+      const updated = prev.includes(trimmedModel) ? prev : [...prev, trimmedModel]
+      localStorage.setItem(`mobile_models_${shopId}`, JSON.stringify(updated))
+      return updated
+    })
+  }
 
   const loadMobileBrands = async () => {
     try {
@@ -196,6 +226,9 @@ export default function MobileEntryTable({ rows, setRows }) {
                 </div>
               </th>
               <th className="px-6 py-3 text-left text-sm font-medium text-gray-700 border-b border-gray-200">
+                <span>Model</span>
+              </th>
+              <th className="px-6 py-3 text-left text-sm font-medium text-gray-700 border-b border-gray-200">
                 <div className="flex items-center justify-between">
                   <span>Issues</span>
                   <button
@@ -235,6 +268,53 @@ export default function MobileEntryTable({ rows, setRows }) {
                       ))}
                     </select>
                     <ChevronDown className="absolute right-2 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400 pointer-events-none" />
+                  </div>
+                </td>
+                <td className="px-6 py-4 border-b border-gray-200">
+                  <div className="relative">
+                    <input
+                      type="text"
+                      name="model"
+                      value={row.model || ''}
+                      onChange={(e) => {
+                        handleInputChange(index, e)
+                        setModelSearchTerm(prev => ({ ...prev, [index]: e.target.value }))
+                      }}
+                      onFocus={() => setFocusedModelIndex(index)}
+                      onBlur={() => {
+                        setTimeout(() => {
+                          setFocusedModelIndex(null)
+                          if (row.model && row.model.trim()) {
+                            saveModelToHistory(row.model)
+                          }
+                        }, 200)
+                      }}
+                      placeholder="Enter model"
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    />
+                    {focusedModelIndex === index && previousModels.length > 0 && (
+                      <div className="absolute z-10 w-full mt-1 bg-white border border-gray-300 rounded-md shadow-lg max-h-48 overflow-y-auto">
+                        {previousModels
+                          .filter(model => 
+                            model.toLowerCase().includes((modelSearchTerm[index] || row.model || '').toLowerCase())
+                          )
+                          .map((model, idx) => (
+                            <div
+                              key={idx}
+                              onClick={() => {
+                                const updatedRows = [...rows]
+                                updatedRows[index].model = model
+                                setRows(updatedRows)
+                                setFocusedModelIndex(null)
+                              }}
+                              className="px-3 py-2 hover:bg-blue-50 cursor-pointer text-sm text-gray-700"
+                            >
+                              {model}
+                            </div>
+                          ))
+                        }
+                      </div>
+                    )}
                   </div>
                 </td>
                 <td className="px-6 py-4 border-b border-gray-200">

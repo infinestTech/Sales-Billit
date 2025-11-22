@@ -2,9 +2,6 @@
 
 "use client"
 
-
-
-
 import { useEffect, useState } from "react"
 import Pagination from "./Pagination"
 import api from "../api"
@@ -24,6 +21,15 @@ const MobileNameTable = ({ mobileData, setMobileData, onRevenueUpdate, hideActio
   const [sellQty, setSellQty] = useState(1)
   const [paidAmount, setPaidAmount] = useState(0)
   const [selling, setSelling] = useState(false)
+
+  // Console log all mobile data with model values
+  useEffect(() => {
+    console.log("Mobile Data with Models:", validMobileData.map(m => ({
+      name: m.mobile_name,
+      model: m.model,
+      id: m._id
+    })))
+  }, [validMobileData])
 
 
 
@@ -45,7 +51,6 @@ const MobileNameTable = ({ mobileData, setMobileData, onRevenueUpdate, hideActio
   const indexOfLastItem = currentPage * itemsPerPage
   const indexOfFirstItem = indexOfLastItem - itemsPerPage
   const currentMobileData = validMobileData.slice(indexOfFirstItem, indexOfLastItem)
-
 
 
 
@@ -120,6 +125,9 @@ const MobileNameTable = ({ mobileData, setMobileData, onRevenueUpdate, hideActio
 
     const mobile = currentMobileData[index]
     const globalIndex = indexOfFirstItem + index
+
+    // Console log the model value
+    console.log("Mobile Model:", mobile.model)
 
 
 
@@ -316,7 +324,12 @@ const MobileNameTable = ({ mobileData, setMobileData, onRevenueUpdate, hideActio
                   <span className="text-sm font-medium text-gray-700">{formatDate(mobile.added_date)}</span>
                 </td>
                 <td className="px-6 py-4 border-b border-gray-200">
-                  <span className="font-semibold text-gray-800">{mobile.mobile_name}</span>
+                  <div className="flex flex-col">
+                    <span className="font-semibold text-gray-800">{mobile.mobile_name}</span>
+                    {mobile.model && (
+                      <span className="text-xs text-gray-500 mt-0.5">{mobile.model}</span>
+                    )}
+                  </div>
                 </td>
                 <td className="px-6 py-4 border-b border-gray-200">
                   <span className="text-sm text-gray-600">{mobile.issue || "N/A"}</span>

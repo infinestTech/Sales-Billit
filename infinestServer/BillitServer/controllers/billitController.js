@@ -537,7 +537,7 @@ const getCustomersWithBalance = async (req, res) => {
     const enrichedCustomers = await Promise.all(
       customers.map(async (customer) => {
         const mobiles = await Mobile.find({ customer_id: customer._id })
-          .select("mobile_name issue added_date -_id")
+          .select("mobile_name model issue added_date -_id")
           .lean();
 
         return {
@@ -574,7 +574,7 @@ const getDealersWithBalance = async (req, res) => {
     const enrichedDealers = await Promise.all(
       dealers.map(async (dealer) => {
         const mobiles = await Mobile.find({ dealer_id: dealer._id })
-          .select("mobile_name issue ready delivered returned paid_amount")
+          .select("mobile_name model issue ready delivered returned paid_amount")
           .lean();
 
         return {

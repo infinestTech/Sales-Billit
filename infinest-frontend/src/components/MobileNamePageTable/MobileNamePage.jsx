@@ -40,6 +40,7 @@ const MobileNamePage = ({ shopId }) => {
           clientName: entry.client_name,
           customerType: entry.customer_type,
           mobileName: mobile.mobile_name,
+          model: mobile.model || "",
           issues: mobile.issue || "No issues specified",
           technician: mobile.technician_name || "",
           isReady: mobile.ready,
@@ -280,7 +281,12 @@ const MobileNamePage = ({ shopId }) => {
                         </div>
                       </td>
                       <td className="px-6 py-4 border-b border-gray-200">
-                        <span className="font-medium text-gray-700">{data.mobileName}</span>
+                        <div className="flex flex-col">
+                          <span className="font-medium text-gray-700">{data.mobileName}</span>
+                          {data.model && (
+                            <span className="text-xs text-gray-500 mt-0.5">{data.model}</span>
+                          )}
+                        </div>
                       </td>
                       <td className="px-6 py-4 border-b border-gray-200">
                         <span className="text-sm text-gray-600">{data.issues}</span>

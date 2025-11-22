@@ -108,6 +108,7 @@ const mobileSchema = new mongoose.Schema({
   customer_id: { type: mongoose.Schema.Types.ObjectId, ref: "Customer" },
   dealer_id: { type: mongoose.Schema.Types.ObjectId, ref: "Dealer" },
   mobile_name: { type: String, required: true },
+  model: { type: String }, // ✅ New field for mobile model
   issue: { type: String },
   technician_name: { type: String },
   added_date: { type: Date, default: Date.now },
