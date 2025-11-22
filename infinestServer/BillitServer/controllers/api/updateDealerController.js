@@ -31,6 +31,7 @@ const updateDealer = async (req, res) => {
         shop_id: dealer.shop_id, // from dealer document
         dealer_id: dealer._id,
         mobile_name: mobile.mobileName,
+        model: mobile.model || "",
         issue: mobile.issues,
         added_date: new Date(mobile.date),
         technician_name: technicianname,

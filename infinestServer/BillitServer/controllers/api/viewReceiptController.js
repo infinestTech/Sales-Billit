@@ -104,6 +104,7 @@ const viewPublicReceiptController = async (req, res) => {
 
     const mobileRecords = mobileList.map((m) => ({
       mobile_name: m.mobile_name,
+      model: m.model || "",
       issue: m.issue || "N/A",
       added_date: m.added_date || null,
       delivery_date: m.delivery_date || null,

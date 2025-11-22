@@ -20,7 +20,7 @@ const getDealerBalances = async (req, res) => {
     // Get related mobiles
     const mobiles = await Mobile.find({
       dealer_id: { $in: dealerIds }
-    }).select("dealer_id mobile_name issue ready delivered returned paid_amount").lean();
+    }).select("dealer_id mobile_name model issue ready delivered returned paid_amount").lean();
 
     // Group mobiles by dealer
     const mobilesByDealer = {};
@@ -30,6 +30,7 @@ const getDealerBalances = async (req, res) => {
       mobilesByDealer[did].push({
         id: m._id,
         mobileName: m.mobile_name,
+        model: m.model,
         issue: m.issue,
         ready: m.ready,
         delivered: m.delivered,

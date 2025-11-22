@@ -252,6 +252,7 @@ export default function CreateRecordForm({ shopId, isLimitReached, setIsLimitRea
 
     const mobileNameIssues = rows.map((row) => ({
       mobileName: row.description,
+      model: row.model || "",
       issues: row.descriptionIssue,
       date: row.date,
       ready: false,

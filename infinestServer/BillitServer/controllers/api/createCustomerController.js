@@ -59,6 +59,7 @@ const createCustomerController = async (req, res) => {
         shop_id: userId,
         customer_id: customer._id,
         mobile_name: mobile.mobileName,
+        model: mobile.model || "",
         issue: mobile.issues || null,
         added_date: istDate,
         technician_name: technicianname || ""

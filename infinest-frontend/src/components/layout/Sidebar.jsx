@@ -106,7 +106,7 @@ export function AppSidebar({ sidebarOpen, setSidebarOpen, role }) {
     { title: "Balance Summary", url: "/balanceamount", icon: Wallet },
     { title: "Analytics Dashboard", url: "/analytics", icon: BarChart3, featureKey: "analytics_dashboard_enabled" },
     ...(role === "admin" ? [{ title: "Admin Dashboard", url: "/admin-dashboard", icon: Shield }] : []),
-    { title: "Manage Stock", url: "/product", icon: Package, featureKey: "product_inventory_enabled" },
+    { title: "Service Inventory", url: "/product", icon: Package, featureKey: "product_inventory_enabled" },
      { title: "Attendance", url: "/attendance", icon: CalendarCheck },
     { title: "Expenses", url: "/todayexpenses", icon: Receipt, featureKey: "expense_tracker_enabled" },
   ]
@@ -180,7 +180,7 @@ export function AppSidebar({ sidebarOpen, setSidebarOpen, role }) {
                         
                         // Map navigation titles to feature config
                         let featureName = item.title;
-                        if (item.title === "Manage Stock") {
+                        if (item.title === "Service Inventory") {
                           const config = FEATURE_CONFIG.product_inventory;
                           checkFeatureAccess(config.key, config.name, features, shopId, config.requiredPlans);
                         } else if (item.title === "Expenses") {
