@@ -576,16 +576,22 @@ router.delete('/user/:userId', adminAuth, async (req, res) => {
             });
             deletionSummary.mysql.subscriptionLogs = logsDeleted.count;
 
-            // Delete branches owned by user (also deletes admin branches due to cascade)
-            const branchesDeleted = await prisma.branch.deleteMany({
-                where: { 
-                    OR: [
-                        { ownerId: userId },
-                        { adminUserId: userId }
-                    ]
-                }
-            });
-            deletionSummary.mysql.branches = branchesDeleted.count;
+            // Delete branches owned by user (optional - only if Branch table exists)
+            try {
+                const branchesDeleted = await prisma.branch.deleteMany({
+                    where: { 
+                        OR: [
+                            { ownerId: userId },
+                            { adminUserId: userId }
+                        ]
+                    }
+                });
+                deletionSummary.mysql.branches = branchesDeleted.count;
+            } catch (branchError) {
+                // Branch table doesn't exist in this database - skip
+                console.log('⚠️ Branch table not found, skipping branch deletion');
+                deletionSummary.mysql.branches = 0;
+            }
 
             // Finally delete user
             await prisma.user.delete({
