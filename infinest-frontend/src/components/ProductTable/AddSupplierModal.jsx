@@ -49,8 +49,6 @@ const AddSupplierModal = ({ shop_id, onClose, onSuccess }) => {
       if (res?.data?.success) {
         logAndNotify("Supplier added successfully", "success", shop_id)
         onSuccess && onSuccess(res.data.supplier)
-        // Optional: navigate to supplier list for immediate view
-        router.push("/supplierlist")
       } else {
         logAndNotify("Failed to add supplier", "error", shop_id)
       }

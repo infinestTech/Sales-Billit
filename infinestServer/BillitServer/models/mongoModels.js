@@ -232,9 +232,11 @@ const supplierHistorySchema = new mongoose.Schema({
   supplierId: { type: mongoose.Schema.Types.ObjectId, ref: "Supplier", required: true },
   userId: { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true },
   changeDate: { type: Date, default: Date.now },
-  changeType: { type: String, enum: ["ADMIN_EDIT", "NOTE"], required: true },
+  // Extend types to capture credit / debt adjustments
+  changeType: { type: String, enum: ["ADMIN_EDIT", "NOTE", "CREDIT", "DEBT"], required: true },
   message: { type: String, default: "" },
-  totalAmount: { type: Number },
+  totalAmount: { type: Number }, // resulting total after change
+  adjustmentAmount: { type: Number }, // delta applied (positive value)
   paymentMethod: { type: String, enum: ["cash", "upi", "", null], default: "" }
 });
 

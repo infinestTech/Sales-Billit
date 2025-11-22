@@ -197,6 +197,7 @@ const MobileNameTable = ({ mobileData, setMobileData, onRevenueUpdate, hideActio
     setPaidAmount(0)
   }
 
+// MobileNameTable.jsx  this page Sell Product section i have change in first supplier list dropdown i type first letter like a the which supplier name started "a" list only that supplier defalut list all supplier next message input box like this flow is one time i enter some value in this input box next time i enter first letter that value show in top like same supplier list filter method next only just inputbox Quantity  
 
 
 

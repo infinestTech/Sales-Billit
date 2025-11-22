@@ -158,7 +158,7 @@ exports.getSupplierHistory = async (req, res) => {
 // Expects: { shop_id, supplierId, totalAmount, lastPaymentMethod, message }
 exports.updateSupplier = async (req, res) => {
   try {
-    const { shop_id, supplierId, totalAmount, lastPaymentMethod, message } = req.body || {};
+    const { shop_id, supplierId, totalAmount, lastPaymentMethod, message, adjustmentType, adjustmentAmount } = req.body || {};
     if (!shop_id || !supplierId) {
       return res.status(400).json({ success: false, message: "shop_id and supplierId are required" });
     }
@@ -190,12 +190,17 @@ exports.updateSupplier = async (req, res) => {
 
 
     // Log supplier history message
+    const ct = ["credit", "debt"].includes(String(adjustmentType).toLowerCase())
+      ? String(adjustmentType).toUpperCase()
+      : "ADMIN_EDIT";
+    const adjAmtNum = Number(adjustmentAmount);
     await SupplierHistory.create({
       supplierId,
       userId: shop_id,
-      changeType: "ADMIN_EDIT",
-      message: message || "Admin edited supplier details",
+      changeType: ct,
+      message: message || (ct === "ADMIN_EDIT" ? "Admin edited supplier details" : `${ct === "CREDIT" ? "Credit" : "Debt"} adjustment applied`),
       totalAmount: typeof update.totalAmount === "number" ? update.totalAmount : undefined,
+      adjustmentAmount: !Number.isNaN(adjAmtNum) && adjAmtNum > 0 ? adjAmtNum : undefined,
       paymentMethod: update.lastPaymentMethod || "",
     });
 
