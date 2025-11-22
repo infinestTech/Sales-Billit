@@ -486,8 +486,7 @@ router.delete('/user/:userId', adminAuth, async (req, res) => {
                 subscription: true,
                 productAccess: true,
                 payments: true,
-                logs: true,
-                branchesOwned: true
+                logs: true
             }
         });
 
@@ -663,8 +662,7 @@ router.get('/user/:userId', adminAuth, async (req, res) => {
                 logs: {
                     orderBy: { createdAt: 'desc' },
                     take: 50
-                },
-                branchesOwned: true
+                }
             }
         });
 
