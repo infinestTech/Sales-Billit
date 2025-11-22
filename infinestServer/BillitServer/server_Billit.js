@@ -104,6 +104,9 @@ passport.use(new GoogleStrategy({
   }
 }));
 
+// Import blacklist utility
+const { isUserBlacklisted } = require('./utils/tokenBlacklist');
+
 // 🔐 JWT Middleware for Billit
 const authenticateBillitToken = (req, res, next) => {
   const token = req.headers.authorization?.split(" ")[1];
@@ -121,7 +124,14 @@ const authenticateBillitToken = (req, res, next) => {
       const user = await User.findById(decodedUser.userId).populate('role_id');
 
       if (!user) {
-        return res.status(404).json({ message: "User not found." });
+        return res.status(404).json({ message: "User not found in MongoDB." });
+      }
+
+      // Check if MySQL user is blacklisted (deleted)
+      if (isUserBlacklisted(user.mysql_user_id)) {
+        return res.status(403).json({ 
+          message: "Account has been deleted. Please contact support if you believe this is an error." 
+        });
       }
 
       req.user = {
@@ -147,6 +157,9 @@ app.use("/api", billitUserInfoRoutes);
 
 const userFeatureRoutes = require('./routes/getUserFeatures');
 app.use('/api', userFeatureRoutes);
+
+const adminRoutes = require('./routes/adminRoutes');
+app.use('/api/admin', adminRoutes);
 
 const subscriptionPageRoutes = require('./routes/subscriptionPageRoutes');
 const userSyncRoutes = require('./routes/userSyncRoutes');
