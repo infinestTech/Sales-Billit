@@ -2,7 +2,7 @@
 import { useState, useEffect, useRef } from "react"
 import { usePathname } from "next/navigation"
 import Link from "next/link"
-import { Plus, Database, Smartphone, Wallet, Shield, Package, Receipt, X, Lock, Power, BarChart3 } from "lucide-react"
+import { Plus, Database, Smartphone, Wallet, Shield, Package, Receipt, X, Lock, Power, BarChart3, CalendarCheck } from "lucide-react"
 import { usePlanFeatures } from "@/context/PlanFeatureContext"
 import { checkFeatureAccess, FEATURE_CONFIG } from "@/utils/featureAccess"
 import authApi from "../authApi"
@@ -107,6 +107,7 @@ export function AppSidebar({ sidebarOpen, setSidebarOpen, role }) {
     { title: "Analytics Dashboard", url: "/analytics", icon: BarChart3, featureKey: "analytics_dashboard_enabled" },
     ...(role === "admin" ? [{ title: "Admin Dashboard", url: "/admin-dashboard", icon: Shield }] : []),
     { title: "Manage Stock", url: "/product", icon: Package, featureKey: "product_inventory_enabled" },
+     { title: "Attendance", url: "/attendance", icon: CalendarCheck },
     { title: "Expenses", url: "/todayexpenses", icon: Receipt, featureKey: "expense_tracker_enabled" },
   ]
 

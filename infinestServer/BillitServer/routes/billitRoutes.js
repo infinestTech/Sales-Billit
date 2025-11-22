@@ -267,6 +267,20 @@ router.post("/next-bill-number", authenticateToken, generateNextBillNumber);
 // Check if bill number exists
 router.post("/check-bill-number", authenticateToken, checkBillNumberExists);
 
+// ======================================
+// 👥 Employee Routes
+// ======================================
+const { addEmployee, listEmployees } = require("../controllers/api/employeeController");
+router.post("/employees/add", authenticateToken, addEmployee);
+router.get("/employees/:shopId", authenticateToken, listEmployees);
+
+// ======================================
+// 🗓️ Attendance Routes
+// ======================================
+const { listTodayAttendance, markAttendance } = require("../controllers/api/attendanceController");
+router.get("/employees/attendance/:shopId", authenticateToken, listTodayAttendance); // optional ?date=YYYY-MM-DD
+router.post("/employees/attendance/mark", authenticateToken, markAttendance);
+
 module.exports = router;
 
 

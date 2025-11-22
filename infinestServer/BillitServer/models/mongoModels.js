@@ -342,14 +342,47 @@ const mobileIssueSchema = new mongoose.Schema({
 // Compound index to ensure unique issue per shop
 mobileIssueSchema.index({ shop_id: 1, issue_name: 1 }, { unique: true });
 
+// ==============================
+// 👥 Employee Schema
+// ==============================
+const employeeSchema = new mongoose.Schema({
+  shop_id: { type: mongoose.Schema.Types.ObjectId, ref: 'Shop', required: true, index: true },
+  employee_name: { type: String, required: true, trim: true },
+  mobile_number: { type: String, required: true, trim: true },
+  address: { type: String, default: '' },
+  blood_group: { type: String, default: '' },
+  created_at: { type: Date, default: Date.now }
+});
+
+// Optional: ensure one employee mobile per shop
+// employeeSchema.index({ shop_id: 1, mobile_number: 1 }, { unique: true }); // Uncomment if needed later
+
+// ==============================
+// 🗓️ Attendance Schema (Daily Status)
+// ==============================
+const attendanceSchema = new mongoose.Schema({
+  shop_id: { type: mongoose.Schema.Types.ObjectId, ref: 'Shop', required: true, index: true },
+  employee_id: { type: mongoose.Schema.Types.ObjectId, ref: 'Employee', required: true, index: true },
+  date: { type: String, required: true, index: true }, // Store as YYYY-MM-DD string for simplicity
+  status: { type: String, enum: ['present', 'absent'], required: true },
+  locked: { type: Boolean, default: true }, // once marked true, prevents changes
+  created_at: { type: Date, default: Date.now }
+});
+
+attendanceSchema.index({ employee_id: 1, date: 1 }, { unique: true });
+
 const AdminSale = mongoose.model('AdminSale', adminSaleSchema);
 const Expense = mongoose.model("Expense", expenseSchema);
 const DailySummary = mongoose.model("DailySummary", dailySummarySchema);
 const MobileBrand = mongoose.model("MobileBrand", mobileBrandSchema);
 const MobileIssue = mongoose.model("MobileIssue", mobileIssueSchema);
+const Employee = mongoose.model("Employee", employeeSchema);
+const Attendance = mongoose.model("Attendance", attendanceSchema);
 
 module.exports = {
   Role, User, Manager, Branch, Shop, Dealer, Customer, Notification, Mobile, Technician,
   PlanCategory, Plan, Feature, DailySummary, Expense, ProductHistory, Product,
   MobileBrand, MobileIssue, AdminSale, SupplierHistory
+  , Employee
+  , Attendance
 };
