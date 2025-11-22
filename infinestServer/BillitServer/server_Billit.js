@@ -19,32 +19,32 @@ mongoose.connect(process.env.BILLIT_MONGO_URI)
 
 const app = express(); // ✅ MOVE THIS TO THE TOP
 app.use(express.json());
-// app.use(cors({
-// origin: [
-//    process.env.FRONTEND_URL || 'http://localhost:3000',
-//    process.env.AUTH_SERVER_URL || 'http://localhost:7000',
-//    'http://localhost:7000',
-//    'http://127.0.0.1:7000',
-//    'http://127.0.0.1:3000',
-//    'http://[::1]:7000',        // ✅ Add IPv6 localhost for auth server
-//    'http://localhost:8000',
-//    'http://127.0.0.1:8000',
-//    'http://[::1]:8000',        // ✅ Add IPv6 localhost for billit server
-//    'http://89.116.121.212:3000',
-//     //Production domains
-//    'https://sales.infinestech.com',    // ✅ Production sales frontend
-//    'http://sales.infinestech.com',     // ✅ Fallback for sales frontend
-//    'https://auth.infinestech.com',     // ✅ Production auth server
-//    'http://auth.infinestech.com',      // ✅ Fallback for auth server
-//     //Sales Server Communication
-//    'http://localhost:9000',            // ✅ Sales server local
-//    'http://127.0.0.1:9000',
-//    'http://[::1]:9000'                 // ✅ IPv6 localhost for sales server
-//  ],
-//  credentials: true,
-//  methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
-//  allowedHeaders: ['Content-Type', 'Authorization', 'x-internal-key']
-// }));
+app.use(cors({
+ origin: [
+    process.env.FRONTEND_URL || 'http://localhost:3000',
+    process.env.AUTH_SERVER_URL || 'http://localhost:7000',
+    'http://localhost:7000',
+    'http://127.0.0.1:7000',
+    'http://127.0.0.1:3000',
+    'http://[::1]:7000',        // ✅ Add IPv6 localhost for auth server
+    'http://localhost:8000',
+    'http://127.0.0.1:8000',
+    'http://[::1]:8000',        // ✅ Add IPv6 localhost for billit server
+    'http://89.116.121.212:3000',
+     //Production domains
+    'https://sales.infinestech.com',    // ✅ Production sales frontend
+    'http://sales.infinestech.com',     // ✅ Fallback for sales frontend
+    'https://auth.infinestech.com',     // ✅ Production auth server
+    'http://auth.infinestech.com',      // ✅ Fallback for auth server
+     //Sales Server Communication
+    'http://localhost:9000',            // ✅ Sales server local
+    'http://127.0.0.1:9000',
+    'http://[::1]:9000'                 // ✅ IPv6 localhost for sales server
+  ],
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'x-internal-key']
+ }));
 app.use(passport.initialize());
 app.use("/api",apiRoutes);
 
