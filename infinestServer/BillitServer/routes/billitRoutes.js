@@ -281,6 +281,11 @@ const { listTodayAttendance, markAttendance } = require("../controllers/api/atte
 router.get("/employees/attendance/:shopId", authenticateToken, listTodayAttendance); // optional ?date=YYYY-MM-DD
 router.post("/employees/attendance/mark", authenticateToken, markAttendance);
 
+// Permission routes
+const { startPermission, endPermission } = require("../controllers/api/permissionController");
+router.post("/employees/permission/start", authenticateToken, startPermission);
+router.post("/employees/permission/end", authenticateToken, endPermission);
+
 module.exports = router;
 
 

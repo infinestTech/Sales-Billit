@@ -2,7 +2,7 @@
 import { useState, useEffect, useRef } from "react"
 import { usePathname } from "next/navigation"
 import Link from "next/link"
-import { Plus, Database, Smartphone, Wallet, Shield, Package, Receipt, X, Lock, Power, BarChart3, CalendarCheck } from "lucide-react"
+import { Plus, Database,User, Smartphone, Wallet, Shield, Package, Receipt, X, Lock, Power, BarChart3, CalendarCheck } from "lucide-react"
 import { usePlanFeatures } from "@/context/PlanFeatureContext"
 import { checkFeatureAccess, FEATURE_CONFIG } from "@/utils/featureAccess"
 import authApi from "../authApi"
@@ -102,6 +102,7 @@ export function AppSidebar({ sidebarOpen, setSidebarOpen, role }) {
   const navigationItems = [
     { title: "Create", url: "/", icon: Plus },
     { title: "All Records", url: "/allrecord", icon: Database },
+        { title: "Supplier", url: "/supplier", icon: User },
     { title: "Mobile Registry", url: "/mobilename", icon: Smartphone },
     { title: "Balance Summary", url: "/balanceamount", icon: Wallet },
     { title: "Analytics Dashboard", url: "/analytics", icon: BarChart3, featureKey: "analytics_dashboard_enabled" },

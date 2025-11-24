@@ -1,28 +1,31 @@
 "use client"
 
 import { useEffect, useState } from "react"
+import Supplier from "@/components/Suppliers/supplierList"
 import { jwtDecode } from "jwt-decode"
-import SupplierList from "@/components/Suppliers/supplierList"
 
-export default function SupplierListPage() {
+export default function AllRecordPage() {
   const [shopId, setShopId] = useState(null)
 
   useEffect(() => {
     const token = localStorage.getItem("token")
-    if (!token) {
-      window.location.href = "/billit-login"
-      return
-    }
-    try {
-      const decoded = jwtDecode(token)
-      if (decoded?.shop_id) {
-        setShopId(decoded.shop_id)
-      } else {
+
+    if (token) {
+      try {
+        const decoded = jwtDecode(token)
+
+        if (decoded?.shop_id) {
+          setShopId(decoded.shop_id)
+        } else {
+          console.warn("No shop_id in token")
+          window.location.href = "/billit-login"
+        }
+      } catch (err) {
+        console.error("Token decode failed:", err)
+        localStorage.removeItem("token")
         window.location.href = "/billit-login"
       }
-    } catch (e) {
-      console.error("Failed to decode token", e)
-      localStorage.removeItem("token")
+    } else {
       window.location.href = "/billit-login"
     }
   }, [])
@@ -30,7 +33,7 @@ export default function SupplierListPage() {
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50">
       {shopId ? (
-        <SupplierList shopId={shopId} />
+        <Supplier shopId={shopId} />
       ) : (
         <div className="flex items-center justify-center min-h-screen">
           <div className="text-center">
@@ -51,9 +54,3 @@ export default function SupplierListPage() {
     </div>
   )
 }
-
-
-
-
-
-
