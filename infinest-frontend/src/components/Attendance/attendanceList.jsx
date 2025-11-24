@@ -21,6 +21,13 @@ export default function Attendance({ shopId }) {
 
 	const resetForm = () => setForm({ employee_name: '', mobile_number: '', address: '', blood_group: '' });
 
+	const getTodayString = () => {
+		const d = new Date();
+		return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+	};
+
+	const isTodaySelected = attendanceDate === getTodayString();
+
 	const mergeAttendance = (baseEmployees, attendancePayload) => {
 		// attendancePayload.data entries may include attendance field if using listTodayAttendance
 		return attendancePayload?.data ? attendancePayload.data : baseEmployees;
@@ -47,9 +54,10 @@ export default function Attendance({ shopId }) {
 	};
 
 	useEffect(() => {
-		fetchEmployees();
+		// refetch when shopId or selected date changes
+		if (shopId) fetchEmployees();
 		// eslint-disable-next-line react-hooks/exhaustive-deps
-	}, [shopId]);
+	}, [shopId, attendanceDate]);
 
 	const handleChange = (e) => {
 		const { name, value } = e.target;
@@ -109,6 +117,44 @@ export default function Attendance({ shopId }) {
 		}
 	};
 
+	const formatDuration = (seconds) => {
+		if (!seconds || seconds <= 0) return '00:00:00';
+		const hrs = Math.floor(seconds / 3600);
+		const mins = Math.floor((seconds % 3600) / 60);
+		const secs = seconds % 60;
+		return `${String(hrs).padStart(2,'0')}:${String(mins).padStart(2,'0')}:${String(secs).padStart(2,'0')}`;
+	};
+
+	const startPermission = async (employeeId) => {
+		try {
+			const token = localStorage.getItem('token');
+			const res = await api.post('/api/employees/permission/start', { shop_id: shopId, employee_id: employeeId, date: attendanceDate }, { headers: { Authorization: `Bearer ${token}` } });
+			if (res.data?.success) {
+				await fetchEmployees();
+			} else {
+				alert(res.data?.message || 'Failed to start permission');
+			}
+		} catch (err) {
+			console.error('startPermission error:', err);
+			alert(err.response?.data?.message || 'Error starting permission');
+		}
+	};
+
+	const endPermission = async (employeeId) => {
+		try {
+			const token = localStorage.getItem('token');
+			const res = await api.post('/api/employees/permission/end', { shop_id: shopId, employee_id: employeeId, date: attendanceDate }, { headers: { Authorization: `Bearer ${token}` } });
+			if (res.data?.success) {
+				await fetchEmployees();
+			} else {
+				alert(res.data?.message || 'Failed to end permission');
+			}
+		} catch (err) {
+			console.error('endPermission error:', err);
+			alert(err.response?.data?.message || 'Error ending permission');
+		}
+	};
+
 	return (
 		<div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50 p-6">
 			{/* Header Section */}
@@ -132,16 +178,27 @@ export default function Attendance({ shopId }) {
 									</p>
 								</div>
 							</div>
-							<button
-								onClick={() => setModalOpen(true)}
-								className="flex items-center gap-2 px-6 py-3 bg-white text-indigo-600 font-semibold rounded-xl hover:bg-blue-50 transition-all duration-300 shadow-lg hover:shadow-xl transform hover:scale-105"
-							>
-								<UserPlus className="h-5 w-5" />
-								Add Employee
-							</button>
+							<div className="flex items-center gap-3">
+								<label className="text-sm text-white">Date</label>
+								<input
+									type="date"
+									value={attendanceDate}
+									onChange={(e) => setAttendanceDate(e.target.value)}
+									className="rounded-lg border border-white/30 px-3 py-2 bg-white/10 text-white"
+								/>
+								<button
+									onClick={() => setModalOpen(true)}
+									className="flex items-center gap-2 px-5 py-2 bg-white text-indigo-600 font-semibold rounded-xl hover:bg-blue-50 transition-all duration-300 shadow-lg hover:shadow-xl transform hover:scale-105"
+								>
+									<UserPlus className="h-5 w-5" />
+									Add Employee
+								</button>
+							</div>
 						</div>
 					</div>
 				</div>
+
+				{/* inline date input used instead of popover */}
 
 				{/* Stats Cards */}
 				<div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-6">
@@ -227,10 +284,16 @@ export default function Attendance({ shopId }) {
 										Blood Group
 									</th>
 									<th className="px-6 py-4 text-left text-xs font-bold text-slate-700 uppercase tracking-wider">
-										Joined Date
+										Marked At
 									</th>
+											<th className="px-6 py-4 text-center text-xs font-bold text-slate-700 uppercase tracking-wider">
+												 Attendance Status
+											</th>
+											<th className="px-6 py-4 text-center text-xs font-bold text-slate-700 uppercase tracking-wider">
+												Permission 
+											</th>
 									<th className="px-6 py-4 text-center text-xs font-bold text-slate-700 uppercase tracking-wider">
-										Attendance Status
+										Permission Time
 									</th>
 								</tr>
 							</thead>
@@ -270,8 +333,8 @@ export default function Attendance({ shopId }) {
 												</div>
 											</td>
 											<td className="px-6 py-4 whitespace-nowrap">
-												<div className="text-sm text-slate-500">{new Date(emp.created_at).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' })}</div>
-											</td>
+												<div className="text-sm text-slate-500">{emp.attendance && emp.attendance.created_at ? new Date(emp.attendance.created_at).toLocaleString() : <span className="text-slate-400 italic">Not marked</span>}</div>
+												</td>
 											<td className="px-6 py-4 whitespace-nowrap text-center">
 												{attendanceLoading ? (
 													<div className="inline-flex items-center gap-2 text-slate-400 text-xs">
@@ -298,21 +361,38 @@ export default function Attendance({ shopId }) {
 													</span>
 												) : (
 													<div className="flex gap-2 justify-center">
-														<button 
-															onClick={() => markAttendance(emp._id, 'present')} 
-															className="inline-flex items-center gap-1.5 px-4 py-2 text-sm font-medium rounded-lg bg-green-600 text-white hover:bg-green-700 transition-all duration-200 shadow-md hover:shadow-lg transform hover:scale-105"
+														<button
+															onClick={() => isTodaySelected && markAttendance(emp._id, 'present')}
+															disabled={!isTodaySelected}
+															className={`inline-flex items-center gap-1.5 px-4 py-2 text-sm font-medium rounded-lg ${isTodaySelected ? 'bg-green-600 hover:bg-green-700 text-white' : 'bg-slate-200 text-slate-500 cursor-not-allowed'} transition-all duration-200 shadow-md hover:shadow-lg transform hover:scale-105`}
 														>
-															<CheckCircle2 className="h-4 w-4" />
-															Present
+														<CheckCircle2 className="h-4 w-4" />
+														Present
 														</button>
-														<button 
-															onClick={() => markAttendance(emp._id, 'absent')} 
-															className="inline-flex items-center gap-1.5 px-4 py-2 text-sm font-medium rounded-lg bg-red-600 text-white hover:bg-red-700 transition-all duration-200 shadow-md hover:shadow-lg transform hover:scale-105"
+														<button
+															onClick={() => isTodaySelected && markAttendance(emp._id, 'absent')}
+															disabled={!isTodaySelected}
+															className={`inline-flex items-center gap-1.5 px-4 py-2 text-sm font-medium rounded-lg ${isTodaySelected ? 'bg-red-600 hover:bg-red-700 text-white' : 'bg-slate-200 text-slate-500 cursor-not-allowed'} transition-all duration-200 shadow-md hover:shadow-lg transform hover:scale-105`}
 														>
-															<XCircle className="h-4 w-4" />
-															Absent
+														<XCircle className="h-4 w-4" />
+														Absent
 														</button>
 													</div>
+													)}
+											</td>
+											<td className="px-6 py-4 whitespace-nowrap text-center">
+												{/* Permission start/end button */}
+												{emp.permissionSummary?.active ? (
+													<button onClick={() => isTodaySelected && endPermission(emp._id)} disabled={!isTodaySelected} className={`inline-flex items-center gap-2 px-3 py-1.5 text-sm rounded-lg ${isTodaySelected ? 'bg-orange-500 text-white hover:bg-orange-600' : 'bg-slate-200 text-slate-500 cursor-not-allowed'}`}>End</button>
+												) : (
+													<button onClick={() => isTodaySelected && startPermission(emp._id)} disabled={!isTodaySelected} className={`inline-flex items-center gap-2 px-3 py-1.5 text-sm rounded-lg ${isTodaySelected ? 'bg-indigo-600 text-white hover:bg-indigo-700' : 'bg-slate-200 text-slate-500 cursor-not-allowed'}`}>Start</button>
+												)}
+											</td>
+											<td className="px-6 py-4 whitespace-nowrap text-center">
+												{emp.permissionSummary?.totalSeconds ? (
+													<span className="text-sm font-medium text-slate-700">{formatDuration(emp.permissionSummary.totalSeconds)}</span>
+												) : (
+													<span className="text-slate-400 italic text-sm">00:00:00</span>
 												)}
 											</td>
 										</tr>

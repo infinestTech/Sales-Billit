@@ -15,12 +15,25 @@ const MobileNameTable = ({ mobileData, setMobileData, onRevenueUpdate, hideActio
   const validMobileData = Array.isArray(mobileData) ? mobileData : []
   const [currentPage, setCurrentPage] = useState(1)
   const [sellOpen, setSellOpen] = useState(false)
+  const [activeMobileIndex, setActiveMobileIndex] = useState(null)
+  const [activeMobileId, setActiveMobileId] = useState(null)
   const [shopId, setShopId] = useState(null)
   const [products, setProducts] = useState([])
+  const [suppliers, setSuppliers] = useState([])
+  const [selectedSupplierId, setSelectedSupplierId] = useState("")
+  const [supplierQuery, setSupplierQuery] = useState("")
+  const [showSupplierDropdown, setShowSupplierDropdown] = useState(false)
   const [selectedProductId, setSelectedProductId] = useState("")
+  const [productNameInput, setProductNameInput] = useState("")
   const [sellQty, setSellQty] = useState(1)
   const [paidAmount, setPaidAmount] = useState(0)
   const [selling, setSelling] = useState(false)
+  // Keep last used values so new rows default to the last saved values
+  const [lastSupplierId, setLastSupplierId] = useState("")
+  const [lastSupplierQuery, setLastSupplierQuery] = useState("")
+  const [lastProductName, setLastProductName] = useState("")
+  const [lastSellQty, setLastSellQty] = useState(1)
+  const [lastPaidAmount, setLastPaidAmount] = useState(0)
 
   // Console log all mobile data with model values
   useEffect(() => {
@@ -42,6 +55,21 @@ const MobileNameTable = ({ mobileData, setMobileData, onRevenueUpdate, hideActio
         if (dec?.shop_id) setShopId(dec.shop_id)
       }
     } catch {}
+    // load last-used values from localStorage
+    try {
+      const lsSupplierId = typeof window !== 'undefined' ? localStorage.getItem('lastSupplierId_MobileSell') : null
+      const lsSupplierQuery = typeof window !== 'undefined' ? localStorage.getItem('lastSupplierQuery_MobileSell') : null
+      const lsProductName = typeof window !== 'undefined' ? localStorage.getItem('lastProductName_MobileSell') : null
+      const lsQty = typeof window !== 'undefined' ? localStorage.getItem('lastSellQty_MobileSell') : null
+      const lsPaid = typeof window !== 'undefined' ? localStorage.getItem('lastPaidAmount_MobileSell') : null
+      if (lsSupplierId) setLastSupplierId(lsSupplierId)
+      if (lsSupplierQuery) setLastSupplierQuery(lsSupplierQuery)
+      if (lsProductName) setLastProductName(lsProductName)
+      if (lsQty) setLastSellQty(Number(lsQty))
+      if (lsPaid) setLastPaidAmount(Number(lsPaid))
+    } catch (e) {
+      // ignore
+    }
   }, [])
   const itemsPerPage = 5
 
@@ -175,9 +203,21 @@ const MobileNameTable = ({ mobileData, setMobileData, onRevenueUpdate, hideActio
 
 
 
-  const openSellModal = async () => {
+  const openSellModal = async (mobile, localIndex) => {
     if (hideActions) return
+    // compute global index for updating mobileData later
+    const globalIndex = indexOfFirstItem + (localIndex || 0)
+    setActiveMobileIndex(globalIndex)
+    setActiveMobileId(mobile?._id || null)
     setSellOpen(true)
+    // start with empty defaults; we'll override with saved values from the mobile if present
+    // Use last-used values as defaults; mobile-specific values (if any) will override below
+    setSelectedProductId("")
+    setProductNameInput(lastProductName || "")
+    setSelectedSupplierId(lastSupplierId || "")
+    setSupplierQuery(lastSupplierQuery || "")
+    setPaidAmount(lastPaidAmount || 0)
+    setSellQty(lastSellQty || 1)
     try {
       const token = localStorage.getItem("token")
       if (!token || !shopId) return
@@ -187,8 +227,63 @@ const MobileNameTable = ({ mobileData, setMobileData, onRevenueUpdate, hideActio
         { headers: { Authorization: `Bearer ${token}` } }
       )
       setProducts(res?.data?.products || [])
-      if ((res?.data?.products || []).length) {
-        setSelectedProductId(res.data.products[0]._id)
+      // Do not pre-select product; leave product input empty per request
+      // fetch suppliers for dropdown
+      try {
+        const sres = await api.post(
+          "/api/suppliers/list",
+          { shop_id: shopId },
+          { headers: { Authorization: `Bearer ${token}` } }
+        )
+        const fetchedSuppliers = sres?.data?.suppliers || []
+        setSuppliers(fetchedSuppliers)
+        // If opening for an existing mobile that already has values, prefill them
+          if (mobile) {
+          // Prefill price/paid amount
+          if (mobile.paid_amount !== undefined && mobile.paid_amount !== null) {
+            setPaidAmount(mobile.paid_amount)
+          }
+          // Prefill product name if available on mobile record
+          const possibleProductName = mobile.productName || mobile.product || mobile.itemName || ""
+          if (possibleProductName) setProductNameInput(possibleProductName)
+          if (mobile.quantity) setSellQty(mobile.quantity)
+
+          // Determine supplier id/name from multiple possible fields
+          const mobileSupplierId = mobile.supplierId || (mobile.supplier && (mobile.supplier._id || mobile.supplier.id)) || mobile.supplier_id || mobile.supplier
+          const mobileSupplierName = mobile.supplierName || mobile.supplier_name || (mobile.supplier && (mobile.supplier.supplierName || mobile.supplier.name)) || (typeof mobile.supplier === 'string' ? mobile.supplier : undefined)
+
+          // Try to match supplier by id first
+          if (mobileSupplierId) {
+            const match = fetchedSuppliers.find(s => String(s._id) === String(mobileSupplierId))
+            if (match) {
+              setSelectedSupplierId(match._id)
+              setSupplierQuery(match.supplierName || "")
+            } else if (mobileSupplierName) {
+              // fallback to name if id didn't match
+              setSupplierQuery(mobileSupplierName)
+            }
+          } else if (mobileSupplierName) {
+            const match = fetchedSuppliers.find(s => (s.supplierName || "").toLowerCase() === String(mobileSupplierName).toLowerCase())
+            if (match) {
+              setSelectedSupplierId(match._id)
+              setSupplierQuery(match.supplierName || "")
+            } else {
+              // if supplierName exists but not in list, just show the name
+              setSupplierQuery(mobileSupplierName)
+            }
+          }
+        } else {
+          // if no mobile-specific data, ensure we show last-used values
+          if (!mobile) {
+            if (lastProductName) setProductNameInput(lastProductName)
+            if (lastSellQty) setSellQty(lastSellQty)
+            if (lastPaidAmount) setPaidAmount(lastPaidAmount)
+            if (lastSupplierId) setSelectedSupplierId(lastSupplierId)
+            if (lastSupplierQuery) setSupplierQuery(lastSupplierQuery)
+          }
+        }
+      } catch (e) {
+        console.error("Failed to load suppliers", e)
       }
     } catch (e) {
       console.error("Failed to load products", e)
@@ -203,25 +298,102 @@ const MobileNameTable = ({ mobileData, setMobileData, onRevenueUpdate, hideActio
     setSelectedProductId("")
     setSellQty(1)
     setPaidAmount(0)
+    setSelectedSupplierId("")
+    setSupplierQuery("")
+    setProductNameInput("")
+    setActiveMobileIndex(null)
+    setActiveMobileId(null)
   }
 
 
 
 
   const submitSell = async () => {
-    if (!selectedProductId || !sellQty) return
+    if (!sellQty) return
+    if (!selectedSupplierId) {
+      alert("Please select a supplier")
+      return
+    }
     setSelling(true)
     try {
       const token = localStorage.getItem("token")
+
+      // If typed product matches an existing product by name, use its id to perform product sell
+      const matchingProduct = products.find(p => (p.name || "").toLowerCase() === (productNameInput || "").toLowerCase())
+      if (matchingProduct) {
+        await api.post(
+          "/api/products/sell",
+          { productId: matchingProduct._id || selectedProductId, quantitySold: Number(sellQty), paidAmount: Number(paidAmount || 0) },
+          { headers: { Authorization: `Bearer ${token}` } }
+        )
+      } else {
+        // If no matching product, skip product sell but still proceed to supplier update
+        console.warn("No matching product found by name; skipping product sell and only updating supplier history")
+      }
+
+      // find current supplier total and increment it by the paidAmount (or cost)
+      const currentSupplier = suppliers.find(s => String(s._id) === String(selectedSupplierId))
+      const currentTotal = Number(currentSupplier?.totalAmount || 0)
+      const increment = Number(paidAmount || 0)
+      const newTotal = currentTotal + increment
+
+      // call supplier update to record history and update totalAmount
       await api.post(
-        "/api/products/sell",
-        { productId: selectedProductId, quantitySold: Number(sellQty), paidAmount: Number(paidAmount || 0) },
+        "/api/suppliers/update",
+        { shop_id: shopId, supplierId: selectedSupplierId, totalAmount: newTotal, lastPaymentMethod: (currentSupplier?.lastPaymentMethod || "cash"), message: `Added: ${productNameInput} x${sellQty} - ₹${increment}` },
         { headers: { Authorization: `Bearer ${token}` } }
       )
+
+      // Update the mobile record's paid amount locally and on server so next open shows saved values
+      if (activeMobileId) {
+        try {
+          await api.post(
+            "/api/update-paid-amount",
+            { id: activeMobileId, paidAmount: Number(paidAmount || 0), updateDate: new Date().toISOString(), supplierId: selectedSupplierId, supplierName: supplierQuery, productName: productNameInput, quantity: sellQty },
+            { headers: { Authorization: `Bearer ${token}` } }
+          )
+        } catch (e) {
+          console.warn("Failed to update mobile paid amount on server", e)
+        }
+      }
+
+      if (activeMobileIndex !== null && activeMobileIndex !== undefined) {
+        const updated = [...mobileData]
+        updated[activeMobileIndex] = {
+          ...updated[activeMobileIndex],
+          paid_amount: Number(paidAmount || 0),
+          productName: productNameInput,
+          quantity: sellQty,
+          supplierId: selectedSupplierId,
+          supplierName: supplierQuery,
+        }
+        setMobileData(updated)
+      }
+
+      // save last-used values (persist to localStorage so they survive refresh)
+      try {
+        setLastSupplierId(selectedSupplierId)
+        setLastSupplierQuery(supplierQuery)
+        setLastProductName(productNameInput)
+        setLastSellQty(sellQty)
+        setLastPaidAmount(paidAmount)
+        if (typeof window !== 'undefined') {
+          localStorage.setItem('lastSupplierId_MobileSell', String(selectedSupplierId || ""))
+          localStorage.setItem('lastSupplierQuery_MobileSell', String(supplierQuery || ""))
+          localStorage.setItem('lastProductName_MobileSell', String(productNameInput || ""))
+          localStorage.setItem('lastSellQty_MobileSell', String(sellQty || 1))
+          localStorage.setItem('lastPaidAmount_MobileSell', String(paidAmount || 0))
+        }
+      } catch (e) {
+        // ignore storage errors
+      }
+
+      if (typeof onRevenueUpdate === "function") onRevenueUpdate()
+
       closeSellModal()
     } catch (e) {
-      const msg = e?.response?.data?.error || e.message
-      alert(msg || "Failed to sell product")
+      const msg = e?.response?.data?.error || e?.response?.data?.message || e.message
+      alert(msg || "Failed to sell product / update supplier")
     } finally {
       setSelling(false)
     }
@@ -378,7 +550,7 @@ const MobileNameTable = ({ mobileData, setMobileData, onRevenueUpdate, hideActio
                 </td>
                 <td className="px-6 py-4 border-b border-gray-200">
                   <button
-                    onClick={openSellModal}
+                    onClick={() => openSellModal(mobile, index)}
                     disabled={hideActions}
                     className={`px-3 py-1 text-xs font-semibold rounded-full transition-all duration-200 bg-blue-600 text-white hover:bg-blue-700 ${hideActions ? "cursor-not-allowed opacity-60" : "cursor-pointer"}`}
                   >
@@ -452,17 +624,50 @@ const MobileNameTable = ({ mobileData, setMobileData, onRevenueUpdate, hideActio
           <div className="bg-white rounded-xl shadow-xl w-full max-w-md p-6">
             <h3 className="text-lg font-semibold mb-4">Sell Product</h3>
             <div className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Product</label>
-                <select
+              <div className="relative">
+                <label className="block text-sm font-medium text-gray-700 mb-1">Supplier</label>
+                <input
+                  type="text"
                   className="w-full border rounded-lg px-3 py-2"
-                  value={selectedProductId}
-                  onChange={(e) => setSelectedProductId(e.target.value)}
-                >
-                  {products.map(p => (
-                    <option key={p._id} value={p._id}>{p.name} (Qty: {p.quantity})</option>
-                  ))}
-                </select>
+                  placeholder="Type or select supplier..."
+                  value={supplierQuery}
+                  onChange={(e) => {
+                    setSupplierQuery(e.target.value)
+                    setShowSupplierDropdown(true)
+                  }}
+                  onFocus={() => setShowSupplierDropdown(true)}
+                />
+                {showSupplierDropdown && (
+                  <div className="absolute z-50 left-0 right-0 mt-1 bg-white border border-gray-200 rounded-lg shadow-lg max-h-40 overflow-auto">
+                    {(suppliers.filter(s => s.supplierName.toLowerCase().includes(supplierQuery.toLowerCase()))).map(s => (
+                      <div
+                        key={s._id}
+                        className="px-3 py-2 hover:bg-blue-50 cursor-pointer"
+                        onClick={() => {
+                          setSelectedSupplierId(s._id)
+                          setSupplierQuery(s.supplierName)
+                          setShowSupplierDropdown(false)
+                        }}
+                      >
+                        {s.supplierName} {s.agencyName ? `- ${s.agencyName}` : ''}
+                      </div>
+                    ))}
+                    {suppliers.length === 0 && (
+                      <div className="px-3 py-2 text-sm text-gray-500">No suppliers found</div>
+                    )}
+                  </div>
+                )}
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Product (type name)</label>
+                <input
+                  type="text"
+                  className="w-full border rounded-lg px-3 py-2"
+                  placeholder="Enter product name or select existing"
+                  value={productNameInput}
+                  onChange={(e) => setProductNameInput(e.target.value)}
+                />
+                {/* Product hint removed as requested */}
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Quantity</label>
@@ -475,7 +680,7 @@ const MobileNameTable = ({ mobileData, setMobileData, onRevenueUpdate, hideActio
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Paid Amount (optional)</label>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Price Amount (optional)</label>
                 <input
                   type="number"
                   min={0}

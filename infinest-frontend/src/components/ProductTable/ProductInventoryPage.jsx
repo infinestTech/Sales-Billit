@@ -6,9 +6,9 @@ import AddProductModal from "./AddProductModal"
 import ProductHistoryModal from "./ProductHistoryModal"
 import ProductTable from "./ProductTable"
 import api from "../../components/api"
-import { Plus, History, Search, Package, AlertTriangle, UserPlus, List } from "lucide-react"
+import { Plus, History, Search, Package, AlertTriangle, List } from "lucide-react"
 import { useRouter } from "next/navigation"
-import AddSupplierModal from "./AddSupplierModal"
+// AddSupplierModal removed; supplier creation moved to supplier list page
 
 
 const ProductInventoryPage = ({ shopId }) => {
@@ -16,7 +16,7 @@ const ProductInventoryPage = ({ shopId }) => {
   const [searchQuery, setSearchQuery] = useState("")
   const [showAddModal, setShowAddModal] = useState(false)
   const [showHistoryModal, setShowHistoryModal] = useState(false)
-  const [showSupplierModal, setShowSupplierModal] = useState(false)
+  // supplier modal handled on Supplier List page now
   const router = useRouter()
   const [showLowStockOnly, setShowLowStockOnly] = useState(false)
 
@@ -83,13 +83,7 @@ const ProductInventoryPage = ({ shopId }) => {
               <Plus className="h-5 w-5" />
               <span>Add Product</span>
             </button>
-            <button
-              onClick={() => setShowSupplierModal(true)}
-              className="bg-white/20 hover:bg-white/30 text-white px-6 py-3 rounded-xl font-semibold transition-all duration-200 flex items-center justify-center space-x-2 backdrop-blur-sm border border-white/20 hover:border-white/30"
-            >
-              <UserPlus className="h-5 w-5" />
-              <span>Add Supplier</span>
-            </button>
+            {/* Add Supplier moved to Supplier List page */}
             <button
               onClick={() => setShowHistoryModal(true)}
               className="bg-white/10 hover:bg-white/20 text-white px-6 py-3 rounded-xl font-semibold transition-all duration-200 flex items-center justify-center space-x-2 backdrop-blur-sm border border-white/20 hover:border-white/30"
@@ -145,14 +139,14 @@ const ProductInventoryPage = ({ shopId }) => {
 
 
           {/* Supplier List Button */}
-          <button
+          {/* <button
             onClick={() => router.push('/supplierlist')}
             className="px-6 py-3 rounded-xl font-semibold transition-all duration-200 flex items-center space-x-2 shadow-sm bg-white hover:bg-blue-50 text-blue-600 border border-blue-300 hover:border-blue-400"
             title="View all suppliers"
           >
             <List className="h-5 w-5" />
             <span>Supplier List</span>
-          </button>
+          </button> */}
         </div>
        
         {searchQuery && (
@@ -194,15 +188,7 @@ const ProductInventoryPage = ({ shopId }) => {
       )}
 
 
-      {showSupplierModal && (
-        <AddSupplierModal
-          shop_id={shopId}
-          onClose={() => setShowSupplierModal(false)}
-          onSuccess={() => {
-            setShowSupplierModal(false)
-          }}
-        />
-      )}
+      {/* Supplier modal removed from this page */}
     </div>
   )
 }

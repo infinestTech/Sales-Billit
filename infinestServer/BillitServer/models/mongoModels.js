@@ -372,6 +372,22 @@ const attendanceSchema = new mongoose.Schema({
 
 attendanceSchema.index({ employee_id: 1, date: 1 }, { unique: true });
 
+// ==============================
+// ⏱️ Permission Schema
+// Records start/end permission sessions per employee per date
+// ==============================
+const permissionSchema = new mongoose.Schema({
+  shop_id: { type: mongoose.Schema.Types.ObjectId, ref: 'Shop', required: true, index: true },
+  employee_id: { type: mongoose.Schema.Types.ObjectId, ref: 'Employee', required: true, index: true },
+  date: { type: String, required: true, index: true }, // YYYY-MM-DD
+  start_time: { type: Date, required: true },
+  end_time: { type: Date },
+  duration_seconds: { type: Number, default: 0 },
+  created_at: { type: Date, default: Date.now }
+});
+
+permissionSchema.index({ employee_id: 1, date: 1 });
+
 const AdminSale = mongoose.model('AdminSale', adminSaleSchema);
 const Expense = mongoose.model("Expense", expenseSchema);
 const DailySummary = mongoose.model("DailySummary", dailySummarySchema);
@@ -379,6 +395,7 @@ const MobileBrand = mongoose.model("MobileBrand", mobileBrandSchema);
 const MobileIssue = mongoose.model("MobileIssue", mobileIssueSchema);
 const Employee = mongoose.model("Employee", employeeSchema);
 const Attendance = mongoose.model("Attendance", attendanceSchema);
+const Permission = mongoose.model("Permission", permissionSchema);
 
 module.exports = {
   Role, User, Manager, Branch, Shop, Dealer, Customer, Notification, Mobile, Technician,
@@ -386,4 +403,5 @@ module.exports = {
   MobileBrand, MobileIssue, AdminSale, SupplierHistory
   , Employee
   , Attendance
+  , Permission
 };

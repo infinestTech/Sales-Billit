@@ -62,6 +62,25 @@ export default function SupplierHistoryPage() {
     fetchHistory()
   }, [shopId, supplierId])
 
+  // Helper: try to parse product/quantity/cost from free-form message strings
+  const parseMessage = (msg) => {
+    if (!msg || typeof msg !== 'string') return {}
+    // Examples formats:
+    // "Added: ssss x1 - ₹90"
+    // "Added: productName x2 - ₹120"
+    // Try to match: <label>: <name> x<qty> - ₹<cost>
+    const re = /(?:Added:|added:)?\s*([^x\-\n]+?)\s*[xX]\s*(\d+)\s*[-–]\s*₹?\s*(\d+(?:\.\d+)?)/i
+    const m = msg.match(re)
+    if (m) {
+      return { name: m[1].trim(), qty: Number(m[2]), cost: Number(m[3]) }
+    }
+    // fallback: try to capture "<name> x<qty>" without cost
+    const re2 = /([^x\-\n]+?)\s*[xX]\s*(\d+)/
+    const m2 = msg.match(re2)
+    if (m2) return { name: m2[1].trim(), qty: Number(m2[2]) }
+    return {}
+  }
+
 
   return (
     <div className="h-screen bg-white flex flex-col">
@@ -170,54 +189,60 @@ export default function SupplierHistoryPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {items.map((it, i) => (
-                    <tr
-                      key={i}
-                      className={`hover:bg-blue-50 transition-colors duration-200 ${i % 2 === 0 ? 'bg-white' : 'bg-gray-50/50'}`}
-                    >
-                      <td className="px-6 py-4 border-b border-gray-200">
-                        <span className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold ${
-                          (it.type || '').toLowerCase() === 'purchase' 
-                            ? 'bg-green-100 text-green-800' 
-                            : (it.type || '').toLowerCase() === 'payment'
-                            ? 'bg-blue-100 text-blue-800'
-                            : 'bg-gray-100 text-gray-800'
-                        }`}>
-                          {(it.type || 'N/A').toLowerCase()}
-                        </span>
-                      </td>
-                      <td className="px-6 py-4 border-b border-gray-200 text-gray-700">
-                        {it.date ? new Date(it.date).toLocaleString("en-IN", {
-                          dateStyle: "medium",
-                          timeStyle: "short"
-                        }) : "-"}
-                      </td>
-                      <td className="px-6 py-4 border-b border-gray-200 text-gray-900 font-semibold">
-                        {it.productName || "-"}
-                      </td>
-                      <td className="px-6 py-4 border-b border-gray-200 text-gray-700">
-                        <span className="inline-flex items-center px-2 py-1 rounded bg-gray-100 text-gray-800 font-medium">
-                          {it.quantity || 0}
-                        </span>
-                      </td>
-                      <td className="px-6 py-4 border-b border-gray-200 text-gray-700 font-medium">
-                        ₹{Number(it.costPrice || 0).toLocaleString("en-IN")}
-                      </td>
-                      <td className="px-6 py-4 border-b border-gray-200">
-                        <span className="text-blue-600 font-bold text-lg">
-                          ₹{Number(it.total || 0).toLocaleString("en-IN")}
-                        </span>
-                      </td>
-                      <td className="px-6 py-4 border-b border-gray-200">
-                        <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold bg-indigo-100 text-indigo-800 capitalize">
-                          {it.paymentMethod || "N/A"}
-                        </span>
-                      </td>
-                      <td className="px-6 py-4 border-b border-gray-200 text-gray-600 max-w-xs truncate" title={it.message}>
-                        {it.message || "-"}
-                      </td>
-                    </tr>
-                  ))}
+                  {items.map((it, i) => {
+                    const parsed = parseMessage(it.message)
+                    const productName = it.productName || parsed.name || "-"
+                    const quantity = (it.quantity !== undefined && it.quantity !== null && it.quantity !== 0) ? it.quantity : (parsed.qty || 0)
+                    const costPrice = (it.costPrice !== undefined && it.costPrice !== null && Number(it.costPrice) !== 0) ? it.costPrice : (parsed.cost || 0)
+                    return (
+                      <tr
+                        key={i}
+                        className={`hover:bg-blue-50 transition-colors duration-200 ${((it.message||"").toLowerCase().startsWith('added')) ? 'bg-white' : 'bg-red-100/100'}`}
+                      >
+                        <td className="px-6 py-4 border-b border-gray-200">
+                          <span className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold ${
+                            (it.type || '').toLowerCase() === 'purchase' 
+                              ? 'bg-green-100 text-green-800' 
+                              : (it.type || '').toLowerCase() === 'payment'
+                              ? 'bg-blue-100 text-blue-800'
+                              : 'bg-gray-100 text-gray-800'
+                          }`}>
+                            {(it.type || 'N/A').toLowerCase()}
+                          </span>
+                        </td>
+                        <td className="px-6 py-4 border-b border-gray-200 text-gray-700">
+                          {it.date ? new Date(it.date).toLocaleString("en-IN", {
+                            dateStyle: "medium",
+                            timeStyle: "short"
+                          }) : "-"}
+                        </td>
+                        <td className="px-6 py-4 border-b border-gray-200 text-gray-900 font-semibold">
+                          {productName}
+                        </td>
+                        <td className="px-6 py-4 border-b border-gray-200 text-gray-700">
+                          <span className="inline-flex items-center px-2 py-1 rounded bg-gray-100 text-gray-800 font-medium">
+                            {quantity}
+                          </span>
+                        </td>
+                        <td className="px-6 py-4 border-b border-gray-200 text-gray-700 font-medium">
+                          ₹{Number(costPrice || 0).toLocaleString("en-IN")}
+                        </td>
+                        <td className="px-6 py-4 border-b border-gray-200">
+                          <span className="text-blue-600 font-bold text-lg">
+                            ₹{Number(it.total || 0).toLocaleString("en-IN")}
+                          </span>
+                        </td>
+                        <td className="px-6 py-4 border-b border-gray-200">
+                          <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold bg-indigo-100 text-indigo-800 capitalize">
+                            {it.paymentMethod || "N/A"}
+                          </span>
+                        </td>
+                        <td className="px-6 py-4 border-b border-gray-200 text-gray-600 max-w-xs truncate" title={it.message}>
+                          {it.message || "-"}
+                        </td>
+                      </tr>
+                    )
+                  })}
                 </tbody>
               </table>
             </div>
