@@ -131,7 +131,15 @@ const MobileNameTable = ({ mobileData, setMobileData, onRevenueUpdate, hideActio
 
       const updated = response.data.updatedMobile
       const updatedData = [...mobileData]
-      updatedData[globalIndex] = { ...updated, deliveryDate: updated.deliveryDate }
+      const localRecord = updatedData[globalIndex] || {}
+      const merged = {
+        ...localRecord,
+        ...updated,
+        payment: updated.payment !== undefined ? updated.payment : localRecord.payment,
+        paid_amount: updated.paid_amount !== undefined ? updated.paid_amount : localRecord.paid_amount,
+        deliveryDate: updated.deliveryDate,
+      }
+      updatedData[globalIndex] = merged
 
 
 
@@ -182,7 +190,14 @@ const MobileNameTable = ({ mobileData, setMobileData, onRevenueUpdate, hideActio
 
       const updated = response.data.updatedMobile
       const updatedData = [...mobileData]
-      updatedData[globalIndex] = { ...updated }
+      const localRecord = updatedData[globalIndex] || {}
+      const merged = {
+        ...localRecord,
+        ...updated,
+        payment: updated.payment !== undefined ? updated.payment : (paymentMethod !== undefined ? paymentMethod : localRecord.payment),
+        paid_amount: updated.paid_amount !== undefined ? updated.paid_amount : localRecord.paid_amount,
+      }
+      updatedData[globalIndex] = merged
 
 
 
@@ -239,9 +254,9 @@ const MobileNameTable = ({ mobileData, setMobileData, onRevenueUpdate, hideActio
         setSuppliers(fetchedSuppliers)
         // If opening for an existing mobile that already has values, prefill them
           if (mobile) {
-          // Prefill price/paid amount
-          if (mobile.paid_amount !== undefined && mobile.paid_amount !== null) {
-            setPaidAmount(mobile.paid_amount)
+          // Prefill supplier amount (NOT the customer paid amount)
+          if (mobile.supplier_amount !== undefined && mobile.supplier_amount !== null) {
+            setPaidAmount(mobile.supplier_amount)
           }
           // Prefill product name if available on mobile record
           const possibleProductName = mobile.productName || mobile.product || mobile.itemName || ""
@@ -344,16 +359,17 @@ const MobileNameTable = ({ mobileData, setMobileData, onRevenueUpdate, hideActio
         { headers: { Authorization: `Bearer ${token}` } }
       )
 
-      // Update the mobile record's paid amount locally and on server so next open shows saved values
+      // Save supplier/product details and supplier amount to mobile record
+      // This tracks what was used/sold and the cost for this mobile
       if (activeMobileId) {
         try {
           await api.post(
             "/api/update-paid-amount",
-            { id: activeMobileId, paidAmount: Number(paidAmount || 0), updateDate: new Date().toISOString(), supplierId: selectedSupplierId, supplierName: supplierQuery, productName: productNameInput, quantity: sellQty },
+            { id: activeMobileId, paidAmount: 0, updateDate: new Date().toISOString(), supplierId: selectedSupplierId, supplierName: supplierQuery, productName: productNameInput, quantity: sellQty, supplierAmount: Number(paidAmount || 0) },
             { headers: { Authorization: `Bearer ${token}` } }
           )
         } catch (e) {
-          console.warn("Failed to update mobile paid amount on server", e)
+          console.warn("Failed to update mobile supplier details on server", e)
         }
       }
 
@@ -361,11 +377,13 @@ const MobileNameTable = ({ mobileData, setMobileData, onRevenueUpdate, hideActio
         const updated = [...mobileData]
         updated[activeMobileIndex] = {
           ...updated[activeMobileIndex],
-          paid_amount: Number(paidAmount || 0),
+          // Do NOT update paid_amount here - that's only for the table's "Paid Amount" field
+          // Update supplier/product tracking fields and supplier amount
           productName: productNameInput,
           quantity: sellQty,
           supplierId: selectedSupplierId,
           supplierName: supplierQuery,
+          supplier_amount: Number(paidAmount || 0),
         }
         setMobileData(updated)
       }
@@ -594,6 +612,14 @@ const MobileNameTable = ({ mobileData, setMobileData, onRevenueUpdate, hideActio
                     <option value="">Select</option>
                     <option value="cash">Cash</option>
                     <option value="UPI">UPI</option>
+                    <option value="card">Card</option>
+                    <option value="UPI-h">UPI-H</option>
+                    <option value="UPI-s">UPI-S</option>
+                    <option value="Cash + Card">CASH + CARD</option>
+                    <option value="UPI H + CASH">UPI H + CASH</option>
+                    <option value="UPI S + CASH">UPI S + CASH</option>
+                    <option value="UPI H + CARD">UPI H + CARD</option>
+                    <option value="UPI S + CARD">UPI S + CARD</option>
                   </select>
                 </td>
               </tr>
@@ -680,7 +706,10 @@ const MobileNameTable = ({ mobileData, setMobileData, onRevenueUpdate, hideActio
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Price Amount (optional)</label>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Supplier Amount (optional)
+                  <span className="text-xs text-gray-500 block">Cost paid to supplier for this product</span>
+                </label>
                 <input
                   type="number"
                   min={0}
@@ -693,7 +722,7 @@ const MobileNameTable = ({ mobileData, setMobileData, onRevenueUpdate, hideActio
             <div className="mt-6 flex justify-end gap-3">
               <button className="px-3 py-2 rounded-lg border" onClick={closeSellModal} disabled={selling}>Cancel</button>
               <button className="px-3 py-2 rounded-lg bg-blue-600 text-white" onClick={submitSell} disabled={selling}>
-                {selling ? "Selling..." : "Sell"}
+                {selling ? "Selling..." : "Submit"}
               </button>
             </div>
           </div>

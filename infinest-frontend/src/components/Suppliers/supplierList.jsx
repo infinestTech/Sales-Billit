@@ -15,6 +15,8 @@ export default function SupplierList({ shopId }) {
   const [editAmount, setEditAmount] = useState("")
   const [editPM, setEditPM] = useState("cash")
   const [editMsg, setEditMsg] = useState("")
+  const [editCurrentAmount, setEditCurrentAmount] = useState(0)
+  const [editPaidAmount, setEditPaidAmount] = useState("")
   const [saving, setSaving] = useState(false)
   const router = useRouter()
 
@@ -45,7 +47,8 @@ export default function SupplierList({ shopId }) {
 
   const openEdit = (s) => {
     setEditId(s._id)
-    setEditAmount(String(s.totalAmount || 0))
+    setEditCurrentAmount(Number(s.totalAmount || 0))
+    setEditPaidAmount("")
     setEditPM((s.lastPaymentMethod || "cash").toLowerCase())
     setEditMsg("Admin edited supplier amount/payment method")
   }
@@ -55,6 +58,8 @@ export default function SupplierList({ shopId }) {
     setEditAmount("")
     setEditPM("cash")
     setEditMsg("")
+    setEditCurrentAmount(0)
+    setEditPaidAmount("")
   }
 
   const saveEdit = async () => {
@@ -62,9 +67,11 @@ export default function SupplierList({ shopId }) {
     setSaving(true)
     try {
       const token = localStorage.getItem("token")
+      // prefer sending paidAmount so server subtracts it from current total
+      const paid = Number(editPaidAmount) || 0
       await api.post(
         "/api/suppliers/update",
-        { shop_id: shopId, supplierId: editId, totalAmount: Number(editAmount), lastPaymentMethod: editPM, message: editMsg },
+        { shop_id: shopId, supplierId: editId, paidAmount: paid, lastPaymentMethod: editPM, message: editMsg },
         { headers: { Authorization: `Bearer ${token}` } }
       )
       // refresh list
@@ -176,7 +183,7 @@ export default function SupplierList({ shopId }) {
                       <td className="px-6 py-4 border-b border-gray-200 text-gray-700">{s.agencyName || '-'}</td>
                       <td className="px-6 py-4 border-b border-gray-200 text-gray-700">{s.phoneNumber || '-'}</td>
                       <td className="px-6 py-4 border-b border-gray-200 text-gray-700 max-w-xs truncate" title={s.address}>{s.address || '-'}</td>
-                      <td className="px-6 py-4 border-b border-gray-200 text-gray-900 font-semibold">₹{Number(s.totalAmount || 0).toLocaleString('en-IN')}</td>
+                      <td className="px-6 py-4 border-b border-gray-200 text-gray-900 font-semibold">{Number(s.totalAmount || 0).toLocaleString('en-IN')}</td>
                       <td className="px-6 py-4 border-b border-gray-200 text-gray-700 capitalize">{s.lastPaymentMethod || '-'}</td>
                       <td className="px-6 py-4 border-b border-gray-200 text-sm text-gray-600">{s.createdAt ? new Date(s.createdAt).toLocaleDateString('en-IN') : '-'}</td>
                       <td className="px-6 py-4 border-b border-gray-200 text-sm">
@@ -214,12 +221,23 @@ export default function SupplierList({ shopId }) {
             <h3 className="text-lg font-semibold mb-4">Edit Supplier</h3>
             <div className="space-y-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Supplier Amount (₹)</label>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Current Supplier Amount (₹)</label>
+                <input
+                  type="text"
+                  readOnly
+                  className="w-full border rounded-lg px-3 py-2 bg-gray-50"
+                  value={`₹${Number(editCurrentAmount || 0).toLocaleString('en-IN')}`}
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Paid Supplier Amount (₹)</label>
                 <input
                   type="number"
+                  min="0"
+                  step="0.01"
                   className="w-full border rounded-lg px-3 py-2"
-                  value={editAmount}
-                  onChange={(e) => setEditAmount(e.target.value)}
+                  value={editPaidAmount}
+                  onChange={(e) => setEditPaidAmount(e.target.value)}
                 />
               </div>
               <div>
