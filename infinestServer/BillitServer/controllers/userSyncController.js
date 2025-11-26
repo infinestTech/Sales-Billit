@@ -156,8 +156,8 @@ const syncUserToBillit = async (userId, authHeader) => {
       const shopData = {
         mysql_user_id: userId,
         role_id: role._id,
-        shop_name: "Not Provided",
-        location: "Not Provided",
+        shop_name: mysqlUser.name ? `${mysqlUser.name}'s Shop` : "Shop",
+        location: mysqlUser.location || "Location Not Set",
         category: categoryName,
         owner_name: mysqlUser.name || "",    // ✅ Insert MySQL `name` as `owner_name`
         phone: mysqlUser.phone || "",            // ✅ Insert MySQL `phone`
