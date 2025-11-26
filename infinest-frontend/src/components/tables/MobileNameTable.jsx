@@ -363,9 +363,22 @@ const MobileNameTable = ({ mobileData, setMobileData, onRevenueUpdate, hideActio
       // This tracks what was used/sold and the cost for this mobile
       if (activeMobileId) {
         try {
+          // Get the current mobile record to preserve existing paid_amount
+          const currentMobile = mobileData.find(m => m._id === activeMobileId) || {}
+          const currentPaidAmount = currentMobile.paid_amount || 0
+          
           await api.post(
             "/api/update-paid-amount",
-            { id: activeMobileId, paidAmount: 0, updateDate: new Date().toISOString(), supplierId: selectedSupplierId, supplierName: supplierQuery, productName: productNameInput, quantity: sellQty, supplierAmount: Number(paidAmount || 0) },
+            { 
+              id: activeMobileId, 
+              paidAmount: currentPaidAmount, 
+              updateDate: new Date().toISOString(), 
+              supplierId: selectedSupplierId, 
+              supplierName: supplierQuery, 
+              productName: productNameInput, 
+              quantity: sellQty, 
+              supplierAmount: Number(paidAmount || 0) 
+            },
             { headers: { Authorization: `Bearer ${token}` } }
           )
         } catch (e) {
@@ -567,13 +580,28 @@ const MobileNameTable = ({ mobileData, setMobileData, onRevenueUpdate, hideActio
                   </button>
                 </td>
                 <td className="px-6 py-4 border-b border-gray-200">
-                  <button
-                    onClick={() => openSellModal(mobile, index)}
-                    disabled={hideActions}
-                    className={`px-3 py-1 text-xs font-semibold rounded-full transition-all duration-200 bg-blue-600 text-white hover:bg-blue-700 ${hideActions ? "cursor-not-allowed opacity-60" : "cursor-pointer"}`}
-                  >
-                    Use
-                  </button>
+                  <div className="flex flex-col space-y-1">
+                    {mobile.productName || mobile.product || mobile.itemName ? (
+                      <div className="space-y-1">
+                        <span className="text-sm font-medium text-gray-800">{mobile.productName || mobile.product || mobile.itemName}</span>
+                        {mobile.quantity && (
+                          <span className="text-xs text-gray-500">Qty: {mobile.quantity}</span>
+                        )}
+                        {mobile.supplierName && (
+                          <span className="text-xs text-blue-600">Supplier: {mobile.supplierName}</span>
+                        )}
+                      </div>
+                    ) : (
+                      <span className="text-xs text-gray-400">No product assigned</span>
+                    )}
+                    <button
+                      onClick={() => openSellModal(mobile, index)}
+                      disabled={hideActions}
+                      className={`px-2 py-1 text-xs font-semibold rounded-full transition-all duration-200 bg-blue-600 text-white hover:bg-blue-700 ${hideActions ? "cursor-not-allowed opacity-60" : "cursor-pointer"} w-fit`}
+                    >
+                      {mobile.productName || mobile.product || mobile.itemName ? 'Edit' : 'Use'}
+                    </button>
+                  </div>
                 </td>
                 <td className="px-6 py-4 border-b border-gray-200">
                   <input
