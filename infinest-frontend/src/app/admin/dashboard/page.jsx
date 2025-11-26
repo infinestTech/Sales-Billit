@@ -169,7 +169,8 @@ export default function AdminDashboard() {
               { id: 'active-users', label: 'Active Users', icon: '🟢' },
               { id: 'subscriptions', label: 'Subscriptions', icon: '📝' },
               { id: 'payments', label: 'Payments', icon: '💰' },
-              { id: 'analytics', label: 'Analytics', icon: '📈' }
+              { id: 'analytics', label: 'Analytics', icon: '📈' },
+              { id: 'shop-admins', label: 'Shop Admins', icon: '🏪' }
             ].map(tab => (
               <button
                 key={tab.id}
@@ -205,6 +206,7 @@ export default function AdminDashboard() {
         {activeTab === 'subscriptions' && <SubscriptionsTab logs={subscriptionLogs} />}
         {activeTab === 'payments' && <PaymentsTab payments={payments} />}
         {activeTab === 'analytics' && <AnalyticsTab userAnalytics={userAnalytics} overallAnalytics={overallAnalytics} />}
+        {activeTab === 'shop-admins' && <ShopAdminsTab getAuthHeaders={getAuthHeaders} adminEmail={adminEmail} />}
       </div>
 
       {/* User Details Modal */}
@@ -803,6 +805,496 @@ function UserDetailsModal({ user, onClose }) {
           )}
         </div>
       </div>
+    </div>
+  );
+}
+
+// Shop Admins Tab Component
+function ShopAdminsTab({ getAuthHeaders, adminEmail }) {
+  const [shopAdmins, setShopAdmins] = useState([]);
+  const [shops, setShops] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [showCreateModal, setShowCreateModal] = useState(false);
+  const [formData, setFormData] = useState({
+    shop_admin_username: '',
+    shop_admin_password: '',
+    email: '',
+    phone: '',
+    full_name: ''
+  });
+  const [shopCredentials, setShopCredentials] = useState([{ email: '', password: '' }]);
+  const [error, setError] = useState('');
+  const [success, setSuccess] = useState('');
+
+  const API_URL_BILLIT = process.env.NEXT_PUBLIC_API_URL_BILLIT || 'http://localhost:8000';
+  const API_URL_AUTH = process.env.NEXT_PUBLIC_API_URL_AUTH || 'http://localhost:7000';
+
+  useEffect(() => {
+    fetchData();
+  }, []);
+
+  const fetchData = async () => {
+    setLoading(true);
+    try {
+      const headers = {
+        headers: {
+          'x-internal-key': process.env.NEXT_PUBLIC_INTERNAL_API_KEY || 'your-internal-key'
+        }
+      };
+
+      const [shopAdminsRes, usersRes] = await Promise.all([
+        axios.get(`${API_URL_BILLIT}/api/shop-admin/all`, headers),
+        axios.get(`${API_URL_AUTH}/admin/users?limit=1000`, getAuthHeaders())
+      ]);
+
+      setShopAdmins(shopAdminsRes.data.shopAdmins || []);
+      
+      // Extract shops from users (users with roles)
+      const usersWithShops = usersRes.data.users.filter(user => 
+        user.role && (user.role.role === 'shop_owner' || user.role.role === 'manager')
+      );
+      setShops(usersWithShops);
+    } catch (error) {
+      console.error('Error fetching shop admins:', error);
+      setError('Failed to load shop admins');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleCreateShopAdmin = async (e) => {
+    e.preventDefault();
+    setError('');
+    setSuccess('');
+
+    console.log('🔍 Form data:', formData);
+    console.log('🔍 Shop credentials:', shopCredentials);
+
+    // Validate shop credentials
+    const validCredentials = shopCredentials.filter(cred => cred.email && cred.password);
+    console.log('✅ Valid credentials:', validCredentials);
+    
+    if (validCredentials.length === 0) {
+      setError('At least one shop credential is required. Please fill in at least one shop owner email and password.');
+      return;
+    }
+
+    try {
+      const headers = {
+        headers: {
+          'x-internal-key': process.env.NEXT_PUBLIC_INTERNAL_API_KEY || 'your-internal-key'
+        }
+      };
+
+      const payload = { 
+        ...formData, 
+        shop_credentials: validCredentials,
+        created_by: adminEmail 
+      };
+
+      console.log('📤 Sending payload:', payload);
+
+      const response = await axios.post(
+        `${API_URL_BILLIT}/api/shop-admin/create`,
+        payload,
+        headers
+      );
+
+      setSuccess(response.data.message || 'Shop admin created successfully!');
+      setShowCreateModal(false);
+      setFormData({
+        shop_admin_username: '',
+        shop_admin_password: '',
+        email: '',
+        phone: '',
+        full_name: ''
+      });
+      setShopCredentials([{ email: '', password: '' }]);
+      fetchData();
+    } catch (err) {
+      console.error('❌ Create shop admin error:', err.response?.data || err.message);
+      setError(err.response?.data?.message || err.response?.data?.details || 'Failed to create shop admin');
+    }
+  };
+
+  const handleToggleStatus = async (adminId, currentStatus) => {
+    try {
+      const headers = {
+        headers: {
+          'x-internal-key': process.env.NEXT_PUBLIC_INTERNAL_API_KEY || 'your-internal-key'
+        }
+      };
+
+      await axios.put(
+        `${API_URL_BILLIT}/api/shop-admin/${adminId}`,
+        { is_active: !currentStatus },
+        headers
+      );
+
+      setSuccess('Shop admin status updated!');
+      fetchData();
+    } catch (err) {
+      setError('Failed to update status');
+    }
+  };
+
+  const handleDeleteShopAdmin = async (adminId) => {
+    if (!confirm('Are you sure you want to delete this shop admin?')) return;
+
+    try {
+      const headers = {
+        headers: {
+          'x-internal-key': process.env.NEXT_PUBLIC_INTERNAL_API_KEY || 'your-internal-key'
+        }
+      };
+
+      await axios.delete(`${API_URL_BILLIT}/api/shop-admin/${adminId}`, headers);
+      setSuccess('Shop admin deleted successfully!');
+      fetchData();
+    } catch (err) {
+      setError('Failed to delete shop admin');
+    }
+  };
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-purple-500"></div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-6">
+      {/* Header */}
+      <div className="flex items-center justify-between">
+        <div>
+          <h2 className="text-2xl font-bold text-white">Shop Admin Management</h2>
+          <p className="text-gray-400 mt-1">Create and manage shop administrator accounts</p>
+        </div>
+        <button
+          onClick={() => setShowCreateModal(true)}
+          className="px-6 py-3 bg-gradient-to-r from-blue-500 to-purple-500 hover:from-blue-600 hover:to-purple-600 text-white font-semibold rounded-lg shadow-lg hover:shadow-xl transform hover:scale-105 transition"
+        >
+          + Create Shop Admin
+        </button>
+      </div>
+
+      {/* Alerts */}
+      {error && (
+        <div className="bg-red-500/20 border border-red-500 rounded-lg p-4">
+          <p className="text-red-300">{error}</p>
+        </div>
+      )}
+      {success && (
+        <div className="bg-green-500/20 border border-green-500 rounded-lg p-4">
+          <p className="text-green-300">{success}</p>
+        </div>
+      )}
+
+      {/* Shop Admins Table */}
+      <div className="bg-gray-800 rounded-xl overflow-hidden border border-gray-700">
+        <div className="overflow-x-auto">
+          <table className="w-full">
+            <thead className="bg-gray-900">
+              <tr>
+                <th className="px-6 py-4 text-left text-sm font-semibold text-gray-300">Username</th>
+                <th className="px-6 py-4 text-left text-sm font-semibold text-gray-300">Full Name</th>
+                <th className="px-6 py-4 text-left text-sm font-semibold text-gray-300">Shop</th>
+                <th className="px-6 py-4 text-left text-sm font-semibold text-gray-300">Contact</th>
+                <th className="px-6 py-4 text-left text-sm font-semibold text-gray-300">Status</th>
+                <th className="px-6 py-4 text-left text-sm font-semibold text-gray-300">Last Login</th>
+                <th className="px-6 py-4 text-left text-sm font-semibold text-gray-300">Actions</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-gray-700">
+              {shopAdmins.length === 0 ? (
+                <tr>
+                  <td colSpan="7" className="px-6 py-8 text-center text-gray-400">
+                    No shop admins found. Create your first shop admin account.
+                  </td>
+                </tr>
+              ) : (
+                shopAdmins.map((admin) => (
+                  <tr key={admin._id} className="hover:bg-gray-700/50 transition">
+                    <td className="px-6 py-4">
+                      <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-purple-500 rounded-full flex items-center justify-center">
+                          <span className="text-white font-bold">{admin.username.charAt(0).toUpperCase()}</span>
+                        </div>
+                        <span className="text-white font-medium">{admin.username}</span>
+                      </div>
+                    </td>
+                    <td className="px-6 py-4 text-gray-300">{admin.full_name || 'N/A'}</td>
+                    <td className="px-6 py-4">
+                      {admin.shop_ids && admin.shop_ids.length > 0 ? (
+                        <div className="space-y-1">
+                          {admin.shop_ids.slice(0, 2).map((shop, idx) => (
+                            <div key={idx}>
+                              <p className="text-white font-medium text-sm">{shop.shop_name}</p>
+                              <p className="text-gray-400 text-xs">{shop.location}</p>
+                            </div>
+                          ))}
+                          {admin.shop_ids.length > 2 && (
+                            <p className="text-purple-400 text-xs">+{admin.shop_ids.length - 2} more</p>
+                          )}
+                        </div>
+                      ) : (
+                        <span className="text-gray-500">No shops</span>
+                      )}
+                    </td>
+                    <td className="px-6 py-4">
+                      <div className="text-sm">
+                        <p className="text-gray-300">{admin.email || 'N/A'}</p>
+                        <p className="text-gray-400">{admin.phone || 'N/A'}</p>
+                      </div>
+                    </td>
+                    <td className="px-6 py-4">
+                      <span className={`px-3 py-1 rounded-full text-xs font-semibold ${
+                        admin.is_active 
+                          ? 'bg-green-500/20 text-green-400' 
+                          : 'bg-red-500/20 text-red-400'
+                      }`}>
+                        {admin.is_active ? 'Active' : 'Inactive'}
+                      </span>
+                    </td>
+                    <td className="px-6 py-4 text-gray-300 text-sm">
+                      {admin.last_login ? new Date(admin.last_login).toLocaleString() : 'Never'}
+                    </td>
+                    <td className="px-6 py-4">
+                      <div className="flex items-center gap-2">
+                        <button
+                          onClick={() => handleToggleStatus(admin._id, admin.is_active)}
+                          className={`px-3 py-1 rounded-lg text-sm font-medium transition ${
+                            admin.is_active
+                              ? 'bg-yellow-500/20 text-yellow-400 hover:bg-yellow-500/30'
+                              : 'bg-green-500/20 text-green-400 hover:bg-green-500/30'
+                          }`}
+                        >
+                          {admin.is_active ? 'Deactivate' : 'Activate'}
+                        </button>
+                        <button
+                          onClick={() => handleDeleteShopAdmin(admin._id)}
+                          className="px-3 py-1 bg-red-500/20 text-red-400 hover:bg-red-500/30 rounded-lg text-sm font-medium transition"
+                        >
+                          Delete
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      {/* Create Modal */}
+      {showCreateModal && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-gray-800 rounded-2xl border border-gray-700 max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+            <div className="p-6 border-b border-gray-700">
+              <h3 className="text-2xl font-bold text-white">Create Shop Admin</h3>
+              <p className="text-gray-400 mt-1">Setup a new shop administrator account</p>
+            </div>
+
+            <form onSubmit={handleCreateShopAdmin} className="p-6 space-y-6">
+              {/* Shop Admin Credentials Section */}
+              <div className="space-y-4">
+                <div className="flex items-center gap-2 mb-3">
+                  <div className="h-px flex-1 bg-gradient-to-r from-transparent via-blue-500 to-transparent"></div>
+                  <h4 className="text-blue-400 font-semibold text-sm">Shop Admin Credentials</h4>
+                  <div className="h-px flex-1 bg-gradient-to-r from-transparent via-blue-500 to-transparent"></div>
+                </div>
+                
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-300 mb-2">
+                      Shop Admin Username <span className="text-red-400">*</span>
+                    </label>
+                    <input
+                      type="text"
+                      required
+                      value={formData.shop_admin_username}
+                      onChange={(e) => setFormData({ ...formData, shop_admin_username: e.target.value })}
+                      className="w-full px-4 py-2 bg-gray-900 border border-gray-700 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      placeholder="shop_admin_1"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-300 mb-2">
+                      Shop Admin Password <span className="text-red-400">*</span>
+                    </label>
+                    <input
+                      type="password"
+                      required
+                      value={formData.shop_admin_password}
+                      onChange={(e) => setFormData({ ...formData, shop_admin_password: e.target.value })}
+                      className="w-full px-4 py-2 bg-gray-900 border border-gray-700 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      placeholder="Strong password"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* Shop Owner Credentials Section */}
+              <div className="space-y-4">
+                <div className="flex items-center justify-between gap-2 mb-3">
+                  <div className="flex items-center gap-2 flex-1">
+                    <div className="h-px flex-1 bg-gradient-to-r from-transparent via-purple-500 to-transparent"></div>
+                    <h4 className="text-purple-400 font-semibold text-sm">Shop Owner Credentials</h4>
+                    <div className="h-px flex-1 bg-gradient-to-r from-transparent via-purple-500 to-transparent"></div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setShopCredentials([...shopCredentials, { email: '', password: '' }])}
+                    className="px-3 py-1 bg-purple-500/20 hover:bg-purple-500/30 text-purple-400 rounded-lg text-sm transition flex items-center gap-1"
+                  >
+                    <span>+</span> Add Shop
+                  </button>
+                </div>
+                
+                {shopCredentials.map((cred, index) => (
+                  <div key={index} className="bg-gray-900/50 p-4 rounded-lg border border-gray-700 space-y-3">
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="text-sm font-medium text-gray-300">Shop {index + 1}</span>
+                      {shopCredentials.length > 1 && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const newCreds = shopCredentials.filter((_, i) => i !== index);
+                            setShopCredentials(newCreds);
+                          }}
+                          className="text-red-400 hover:text-red-300 text-sm"
+                        >
+                          Remove
+                        </button>
+                      )}
+                    </div>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div>
+                        <label className="block text-sm font-medium text-gray-300 mb-2">
+                          Shop Owner Email <span className="text-red-400">*</span>
+                        </label>
+                        <input
+                          type="email"
+                          value={cred.email}
+                          onChange={(e) => {
+                            const newCreds = [...shopCredentials];
+                            newCreds[index].email = e.target.value;
+                            setShopCredentials(newCreds);
+                          }}
+                          className="w-full px-4 py-2 bg-gray-900 border border-gray-700 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-purple-500"
+                          placeholder="owner@shop.com"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block text-sm font-medium text-gray-300 mb-2">
+                          Shop Owner Password <span className="text-red-400">*</span>
+                        </label>
+                        <input
+                          type="password"
+                          value={cred.password}
+                          onChange={(e) => {
+                            const newCreds = [...shopCredentials];
+                            newCreds[index].password = e.target.value;
+                            setShopCredentials(newCreds);
+                          }}
+                          className="w-full px-4 py-2 bg-gray-900 border border-gray-700 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-purple-500"
+                          placeholder="Shop owner password"
+                        />
+                      </div>
+                    </div>
+                  </div>
+                ))}
+                
+                <p className="text-gray-400 text-xs bg-gray-900 p-3 rounded-lg border border-gray-700">
+                  ℹ️ Credentials will be verified. Shop admin will get access to all verified shops. Click "+ Add Shop" to add more shops.
+                </p>
+              </div>
+
+              {/* Optional Contact Information */}
+              <div className="space-y-4">
+                <div className="flex items-center gap-2 mb-3">
+                  <div className="h-px flex-1 bg-gradient-to-r from-transparent via-green-500 to-transparent"></div>
+                  <h4 className="text-green-400 font-semibold text-sm">Optional Contact Information</h4>
+                  <div className="h-px flex-1 bg-gradient-to-r from-transparent via-green-500 to-transparent"></div>
+                </div>
+                
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-300 mb-2">
+                      Full Name
+                    </label>
+                    <input
+                      type="text"
+                      value={formData.full_name}
+                      onChange={(e) => setFormData({ ...formData, full_name: e.target.value })}
+                      className="w-full px-4 py-2 bg-gray-900 border border-gray-700 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-green-500"
+                      placeholder="John Doe"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-300 mb-2">
+                      Contact Email
+                    </label>
+                    <input
+                      type="email"
+                      value={formData.email}
+                      onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                      className="w-full px-4 py-2 bg-gray-900 border border-gray-700 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-green-500"
+                      placeholder="contact@example.com"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-300 mb-2">
+                      Phone
+                    </label>
+                    <input
+                      type="tel"
+                      value={formData.phone}
+                      onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
+                      className="w-full px-4 py-2 bg-gray-900 border border-gray-700 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-green-500"
+                      placeholder="+91 1234567890"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex items-center justify-end gap-3 pt-4 border-t border-gray-700">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowCreateModal(false);
+                    setFormData({
+                      shop_admin_username: '',
+                      shop_admin_password: '',
+                      email: '',
+                      phone: '',
+                      full_name: ''
+                    });
+                    setShopCredentials([{ email: '', password: '' }]);
+                    setError('');
+                  }}
+                  className="px-6 py-2 bg-gray-700 hover:bg-gray-600 text-white rounded-lg transition"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="px-6 py-2 bg-gradient-to-r from-blue-500 to-purple-500 hover:from-blue-600 hover:to-purple-600 text-white font-semibold rounded-lg transition"
+                >
+                  Create Shop Admin
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
