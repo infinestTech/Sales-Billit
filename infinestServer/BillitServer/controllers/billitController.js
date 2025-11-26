@@ -660,7 +660,7 @@ const clearBalanceAmount = async (req, res) => {
 };
 
 const updatePaidAmount = async (req, res) => {
-  const { id, paidAmount, updateDate, payment, supplierId, supplierName, productName, quantity } = req.body;
+  const { id, paidAmount, updateDate, payment, supplierId, supplierName, productName, quantity, supplierAmount, supplierPaymentMethod } = req.body;
 
   if (!id || paidAmount === undefined || !updateDate) {
     return res.status(400).json({ error: "Missing required parameters" });
@@ -689,6 +689,8 @@ const updatePaidAmount = async (req, res) => {
     if (supplierName !== undefined) updateFields.supplierName = supplierName;
     if (productName !== undefined) updateFields.productName = productName;
     if (quantity !== undefined) updateFields.quantity = quantity;
+    if (supplierAmount !== undefined) updateFields.supplier_amount = supplierAmount;
+    if (supplierPaymentMethod !== undefined) updateFields.supplierPaymentMethod = supplierPaymentMethod;
 
     // Keep the old delivery date, update paid amount, payment method and update date
     const updatedMobile = await Mobile.findByIdAndUpdate(

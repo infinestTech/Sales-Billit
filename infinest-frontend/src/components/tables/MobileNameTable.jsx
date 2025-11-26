@@ -28,12 +28,14 @@ const MobileNameTable = ({ mobileData, setMobileData, onRevenueUpdate, hideActio
   const [sellQty, setSellQty] = useState(1)
   const [paidAmount, setPaidAmount] = useState(0)
   const [selling, setSelling] = useState(false)
+  const [paymentMethod, setPaymentMethod] = useState("")
   // Keep last used values so new rows default to the last saved values
   const [lastSupplierId, setLastSupplierId] = useState("")
   const [lastSupplierQuery, setLastSupplierQuery] = useState("")
   const [lastProductName, setLastProductName] = useState("")
   const [lastSellQty, setLastSellQty] = useState(1)
   const [lastPaidAmount, setLastPaidAmount] = useState(0)
+  const [lastPaymentMethod, setLastPaymentMethod] = useState("")
 
   // Console log all mobile data with model values
   useEffect(() => {
@@ -62,11 +64,13 @@ const MobileNameTable = ({ mobileData, setMobileData, onRevenueUpdate, hideActio
       const lsProductName = typeof window !== 'undefined' ? localStorage.getItem('lastProductName_MobileSell') : null
       const lsQty = typeof window !== 'undefined' ? localStorage.getItem('lastSellQty_MobileSell') : null
       const lsPaid = typeof window !== 'undefined' ? localStorage.getItem('lastPaidAmount_MobileSell') : null
+      const lsPaymentMethod = typeof window !== 'undefined' ? localStorage.getItem('lastPaymentMethod_MobileSell') : null
       if (lsSupplierId) setLastSupplierId(lsSupplierId)
       if (lsSupplierQuery) setLastSupplierQuery(lsSupplierQuery)
       if (lsProductName) setLastProductName(lsProductName)
       if (lsQty) setLastSellQty(Number(lsQty))
       if (lsPaid) setLastPaidAmount(Number(lsPaid))
+      if (lsPaymentMethod) setLastPaymentMethod(lsPaymentMethod)
     } catch (e) {
       // ignore
     }
@@ -233,6 +237,7 @@ const MobileNameTable = ({ mobileData, setMobileData, onRevenueUpdate, hideActio
     setSupplierQuery(lastSupplierQuery || "")
     setPaidAmount(lastPaidAmount || 0)
     setSellQty(lastSellQty || 1)
+    setPaymentMethod(lastPaymentMethod || "")
     try {
       const token = localStorage.getItem("token")
       if (!token || !shopId) return
@@ -316,6 +321,7 @@ const MobileNameTable = ({ mobileData, setMobileData, onRevenueUpdate, hideActio
     setSelectedSupplierId("")
     setSupplierQuery("")
     setProductNameInput("")
+    setPaymentMethod("")
     setActiveMobileIndex(null)
     setActiveMobileId(null)
   }
@@ -355,7 +361,7 @@ const MobileNameTable = ({ mobileData, setMobileData, onRevenueUpdate, hideActio
       // call supplier update to record history and update totalAmount
       await api.post(
         "/api/suppliers/update",
-        { shop_id: shopId, supplierId: selectedSupplierId, totalAmount: newTotal, lastPaymentMethod: (currentSupplier?.lastPaymentMethod || "cash"), message: `Added: ${productNameInput} x${sellQty} - ₹${increment}` },
+        { shop_id: shopId, supplierId: selectedSupplierId, totalAmount: newTotal, lastPaymentMethod: (paymentMethod || currentSupplier?.lastPaymentMethod || "cash"), message: `Added: ${productNameInput} x${sellQty} - ₹${increment}` },
         { headers: { Authorization: `Bearer ${token}` } }
       )
 
@@ -365,7 +371,7 @@ const MobileNameTable = ({ mobileData, setMobileData, onRevenueUpdate, hideActio
         try {
           await api.post(
             "/api/update-paid-amount",
-            { id: activeMobileId, paidAmount: 0, updateDate: new Date().toISOString(), supplierId: selectedSupplierId, supplierName: supplierQuery, productName: productNameInput, quantity: sellQty, supplierAmount: Number(paidAmount || 0) },
+            { id: activeMobileId, paidAmount: 0, updateDate: new Date().toISOString(), supplierId: selectedSupplierId, supplierName: supplierQuery, productName: productNameInput, quantity: sellQty, supplierAmount: Number(paidAmount || 0), supplierPaymentMethod: paymentMethod },
             { headers: { Authorization: `Bearer ${token}` } }
           )
         } catch (e) {
@@ -384,6 +390,7 @@ const MobileNameTable = ({ mobileData, setMobileData, onRevenueUpdate, hideActio
           supplierId: selectedSupplierId,
           supplierName: supplierQuery,
           supplier_amount: Number(paidAmount || 0),
+          supplierPaymentMethod: paymentMethod,
         }
         setMobileData(updated)
       }
@@ -395,12 +402,14 @@ const MobileNameTable = ({ mobileData, setMobileData, onRevenueUpdate, hideActio
         setLastProductName(productNameInput)
         setLastSellQty(sellQty)
         setLastPaidAmount(paidAmount)
+        setLastPaymentMethod(paymentMethod)
         if (typeof window !== 'undefined') {
           localStorage.setItem('lastSupplierId_MobileSell', String(selectedSupplierId || ""))
           localStorage.setItem('lastSupplierQuery_MobileSell', String(supplierQuery || ""))
           localStorage.setItem('lastProductName_MobileSell', String(productNameInput || ""))
           localStorage.setItem('lastSellQty_MobileSell', String(sellQty || 1))
           localStorage.setItem('lastPaidAmount_MobileSell', String(paidAmount || 0))
+          localStorage.setItem('lastPaymentMethod_MobileSell', String(paymentMethod || ""))
         }
       } catch (e) {
         // ignore storage errors
@@ -717,6 +726,26 @@ const MobileNameTable = ({ mobileData, setMobileData, onRevenueUpdate, hideActio
                   value={paidAmount}
                   onChange={(e) => setPaidAmount(e.target.value)}
                 />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Payment Method</label>
+                <select
+                  className="w-full border rounded-lg px-3 py-2"
+                  value={paymentMethod}
+                  onChange={(e) => setPaymentMethod(e.target.value)}
+                >
+                  <option value="">Select</option>
+                  <option value="cash">Cash</option>
+                  <option value="UPI">UPI</option>
+                  <option value="card">Card</option>
+                  <option value="UPI-h">UPI-H</option>
+                  <option value="UPI-s">UPI-S</option>
+                  <option value="Cash + Card">CASH + CARD</option>
+                  <option value="UPI H + CASH">UPI H + CASH</option>
+                  <option value="UPI S + CASH">UPI S + CASH</option>
+                  <option value="UPI H + CARD">UPI H + CARD</option>
+                  <option value="UPI S + CARD">UPI S + CARD</option>
+                </select>
               </div>
             </div>
             <div className="mt-6 flex justify-end gap-3">
