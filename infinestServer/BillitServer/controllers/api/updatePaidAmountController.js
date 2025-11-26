@@ -2,7 +2,7 @@ const { Mobile } = require("../../models/mongoModels");
 
 
 const updatePaidAmount = async (req, res) => {
-  const { id, paidAmount, updateDate, payment } = req.body;
+  const { id, paidAmount, updateDate, payment, supplierId, supplierName, productName, quantity, supplierAmount } = req.body;
 
 
   if (!id || paidAmount === undefined || !updateDate) {
@@ -17,16 +17,24 @@ const updatePaidAmount = async (req, res) => {
     }
 
 
-    const updatePayload = {
-      paid_amount: paidAmount,
-      update_date: new Date(updateDate),
-      delivery_date: existingMobile.delivery_date,
-    };
+      const updatePayload = {
+        paid_amount: Number(paidAmount),
+        update_date: new Date(updateDate),
+        delivery_date: existingMobile.delivery_date,
+      };
 
+      // Accept and persist any non-empty payment string (trimmed).
+      // This allows frontend to send new types like card, UPI-h, UPI-s, Cash + Card, etc.
+      if (typeof payment === "string" && payment.trim() !== "") {
+        updatePayload.payment = payment.trim();
+      }
 
-    if (payment === "cash" || payment === "UPI") {
-      updatePayload.payment = payment;
-    }
+      // Optionally persist supplier/product details so UI shows them after refresh
+      if (supplierId !== undefined) updatePayload.supplierId = supplierId;
+      if (supplierName !== undefined) updatePayload.supplierName = supplierName;
+      if (productName !== undefined) updatePayload.productName = productName;
+      if (quantity !== undefined) updatePayload.quantity = quantity;
+      if (supplierAmount !== undefined) updatePayload.supplier_amount = Number(supplierAmount);
 
 
     const updatedMobile = await Mobile.findByIdAndUpdate(

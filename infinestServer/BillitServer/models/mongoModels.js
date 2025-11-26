@@ -116,9 +116,15 @@ const mobileSchema = new mongoose.Schema({
   ready: { type: Boolean, default: false },
   delivered: { type: Boolean, default: false },
   returned: { type: Boolean, default: false },
-  paid_amount: { type: Number, default: 0 },
-  payment: { type: String, enum: ["cash", "UPI", ""], default: "" },
+  paid_amount: { type: Number, default: 0 }, // Customer payment amount
+  payment: { type: String, enum: ["cash", "UPI", "card", "UPI-h", "UPI-s", "Cash + Card", "UPI H + CASH", "UPI S + CASH", "UPI H + CARD", "UPI S + CARD", ""], default: "" },
   delivery_date: { type: Date },
+  // Supplier-related fields for tracking product/supplier usage
+  supplierId: { type: mongoose.Schema.Types.ObjectId, ref: "Supplier" },
+  supplierName: { type: String },
+  productName: { type: String },
+  quantity: { type: Number },
+  supplier_amount: { type: Number, default: 0 }, // Amount paid to supplier (separate from customer payment)
   created_at: { type: Date, default: Date.now }
 });
 
@@ -236,6 +242,10 @@ const supplierHistorySchema = new mongoose.Schema({
   changeType: { type: String, enum: ["ADMIN_EDIT", "NOTE"], required: true },
   message: { type: String, default: "" },
   totalAmount: { type: Number },
+  // amount paid in this change (if this history entry represents a payment)
+  paidAmount: { type: Number },
+  // previous total before this change
+  previousAmount: { type: Number },
   paymentMethod: { type: String, enum: ["cash", "upi", "", null], default: "" }
 });
 

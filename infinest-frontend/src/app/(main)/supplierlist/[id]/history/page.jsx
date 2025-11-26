@@ -81,6 +81,75 @@ export default function SupplierHistoryPage() {
     return {}
   }
 
+  // Filters
+  const [startDate, setStartDate] = useState("")
+  const [endDate, setEndDate] = useState("")
+  const [paymentFilter, setPaymentFilter] = useState("all")
+  const [minCost, setMinCost] = useState("")
+  const [maxCost, setMaxCost] = useState("")
+  const [minPaid, setMinPaid] = useState("")
+  const [maxPaid, setMaxPaid] = useState("")
+  const [messageFilter, setMessageFilter] = useState("")
+
+  const clearFilters = () => {
+    setStartDate("")
+    setEndDate("")
+    setPaymentFilter("all")
+    setMinCost("")
+    setMaxCost("")
+    setMinPaid("")
+    setMaxPaid("")
+    setMessageFilter("")
+  }
+
+  // Compute filtered items (move complex logic out of JSX to avoid parser issues)
+  const filteredItems = items.filter(it => {
+    // date filter
+    const itDate = it.date ? new Date(it.date) : null
+    if (startDate) {
+      const sd = new Date(startDate)
+      if (!itDate || itDate < sd) return false
+    }
+    if (endDate) {
+      const ed = new Date(endDate)
+      ed.setHours(23,59,59,999)
+      if (!itDate || itDate > ed) return false
+    }
+
+    // payment method filter
+    if (paymentFilter && paymentFilter !== 'all') {
+      const pm = (it.paymentMethod || '').toLowerCase()
+      if (pm !== paymentFilter) return false
+    }
+
+    // cost filter (use costPrice if available or try to parse from message)
+    const parsed = parseMessage(it.message)
+    const cost = Number(it.costPrice || parsed.cost || 0)
+    if (minCost !== "") {
+      if (Number.isNaN(Number(minCost)) || cost < Number(minCost)) return false
+    }
+    if (maxCost !== "") {
+      if (Number.isNaN(Number(maxCost)) || cost > Number(maxCost)) return false
+    }
+
+    // paid filter
+    const paidVal = (typeof it.paidAmount !== 'undefined' && it.paidAmount !== null) ? Number(it.paidAmount) : null
+    if (minPaid !== "") {
+      if (paidVal === null || paidVal < Number(minPaid)) return false
+    }
+    if (maxPaid !== "") {
+      if (paidVal === null || paidVal > Number(maxPaid)) return false
+    }
+
+    // message text filter
+    if (messageFilter && messageFilter.trim() !== '') {
+      const mf = messageFilter.trim().toLowerCase()
+      if (!((it.message || '').toLowerCase().includes(mf))) return false
+    }
+
+    return true
+  })
+
 
   return (
     <div className="h-screen bg-white flex flex-col">
@@ -154,6 +223,97 @@ export default function SupplierHistoryPage() {
           </div>
         ) : (
           <div className="bg-white border border-gray-200 overflow-hidden shadow-lg rounded-xl">
+            {/* Simple Filters bar */}
+            <div className="px-6 py-4 border-b bg-gray-50">
+              <div className="flex flex-wrap items-center gap-4">
+                <div className="flex items-center gap-2">
+                  <label className="text-sm font-medium text-gray-700">From</label>
+                  <input 
+                    type="date" 
+                    className="border border-gray-300 rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" 
+                    value={startDate} 
+                    onChange={e=>setStartDate(e.target.value)} 
+                  />
+                </div>
+                <div className="flex items-center gap-2">
+                  <label className="text-sm font-medium text-gray-700">To</label>
+                  <input 
+                    type="date" 
+                    className="border border-gray-300 rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" 
+                    value={endDate} 
+                    onChange={e=>setEndDate(e.target.value)} 
+                  />
+                </div>
+                <div className="flex items-center gap-2">
+                  <label className="text-sm font-medium text-gray-700">Payment</label>
+                  <select 
+                    className="border border-gray-300 rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    value={paymentFilter} 
+                    onChange={e=>setPaymentFilter(e.target.value)}
+                  >
+                    <option value="all">All</option>
+                    <option value="cash">Cash</option>
+                    <option value="upi">UPI</option>
+                  </select>
+                </div>
+                <div className="flex items-center gap-2">
+                  <label className="text-sm font-medium text-gray-700">Cost ₹</label>
+                  <input 
+                    type="number" 
+                    placeholder="Min" 
+                    className="border border-gray-300 rounded px-3 py-2 w-20 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" 
+                    value={minCost} 
+                    onChange={e=>setMinCost(e.target.value)} 
+                  />
+                  <span className="text-gray-400">-</span>
+                  <input 
+                    type="number" 
+                    placeholder="Max" 
+                    className="border border-gray-300 rounded px-3 py-2 w-20 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" 
+                    value={maxCost} 
+                    onChange={e=>setMaxCost(e.target.value)} 
+                  />
+                </div>
+                <div className="flex items-center gap-2">
+                  <label className="text-sm font-medium text-gray-700">Paid ₹</label>
+                  <input 
+                    type="number" 
+                    placeholder="Min" 
+                    className="border border-gray-300 rounded px-3 py-2 w-20 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" 
+                    value={minPaid} 
+                    onChange={e=>setMinPaid(e.target.value)} 
+                  />
+                  <span className="text-gray-400">-</span>
+                  <input 
+                    type="number" 
+                    placeholder="Max" 
+                    className="border border-gray-300 rounded px-3 py-2 w-20 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" 
+                    value={maxPaid} 
+                    onChange={e=>setMaxPaid(e.target.value)} 
+                  />
+                </div>
+                <div className="flex items-center gap-2 flex-1 min-w-[200px]">
+                  <input 
+                    type="text" 
+                    placeholder="Search message..." 
+                    className="flex-1 border border-gray-300 rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" 
+                    value={messageFilter} 
+                    onChange={e=>setMessageFilter(e.target.value)} 
+                  />
+                </div>
+                <div className="flex items-center gap-3">
+                  <button 
+                    className="px-4 py-2 text-sm bg-gray-100 hover:bg-gray-200 border border-gray-300 rounded transition-colors" 
+                    onClick={clearFilters}
+                  >
+                    Clear
+                  </button>
+                  <span className="text-sm text-gray-600 bg-blue-50 px-3 py-2 rounded border">
+                    {filteredItems.length} / {items.length}
+                  </span>
+                </div>
+              </div>
+            </div>
             <div className="overflow-x-auto">
               <table className="min-w-full">
                 <thead className="bg-gradient-to-r from-gray-100 to-gray-200">
@@ -173,6 +333,7 @@ export default function SupplierHistoryPage() {
                     <th className="px-6 py-4 text-left text-sm font-bold text-gray-700 border-b border-gray-300">Product Name</th>
                     <th className="px-6 py-4 text-left text-sm font-bold text-gray-700 border-b border-gray-300">Quantity</th>
                     <th className="px-6 py-4 text-left text-sm font-bold text-gray-700 border-b border-gray-300">Cost Price</th>
+                    <th className="px-6 py-4 text-left text-sm font-bold text-gray-700 border-b border-gray-300">Paid</th>
                     <th className="px-6 py-4 text-left text-sm font-bold text-gray-700 border-b border-gray-300">Total Amount</th>
                     <th className="px-6 py-4 text-left text-sm font-bold text-gray-700 border-b border-gray-300">
                       <div className="flex items-center space-x-2">
@@ -189,7 +350,7 @@ export default function SupplierHistoryPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {items.map((it, i) => {
+                  {filteredItems.map((it, i) => {
                     const parsed = parseMessage(it.message)
                     const productName = it.productName || parsed.name || "-"
                     const quantity = (it.quantity !== undefined && it.quantity !== null && it.quantity !== 0) ? it.quantity : (parsed.qty || 0)
@@ -226,6 +387,16 @@ export default function SupplierHistoryPage() {
                         </td>
                         <td className="px-6 py-4 border-b border-gray-200 text-gray-700 font-medium">
                           ₹{Number(costPrice || 0).toLocaleString("en-IN")}
+                        </td>
+                        <td className="px-6 py-4 border-b border-gray-200 text-gray-700 font-medium">
+                          {typeof it.paidAmount === 'number' && it.paidAmount !== null ? (
+                            <span className="text-green-600 font-bold">₹{Number(it.paidAmount || 0).toLocaleString("en-IN")}</span>
+                          ) : (
+                            <span className="text-gray-500">-</span>
+                          )}
+                          {typeof it.previousAmount === 'number' && it.previousAmount !== null && (
+                            <div className="text-xs text-gray-400">Prev: ₹{Number(it.previousAmount).toLocaleString("en-IN")}</div>
+                          )}
                         </td>
                         <td className="px-6 py-4 border-b border-gray-200">
                           <span className="text-blue-600 font-bold text-lg">

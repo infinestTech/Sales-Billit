@@ -136,6 +136,8 @@ exports.getSupplierHistory = async (req, res) => {
       quantity: null,
       costPrice: null,
       total: h.totalAmount ?? null,
+      paidAmount: typeof h.paidAmount !== 'undefined' ? h.paidAmount : null,
+      previousAmount: typeof h.previousAmount !== 'undefined' ? h.previousAmount : null,
       paymentMethod: h.paymentMethod || "",
       date: h.changeDate || h.createdAt || null,
       message: h.message || "",
@@ -158,14 +160,30 @@ exports.getSupplierHistory = async (req, res) => {
 // Expects: { shop_id, supplierId, totalAmount, lastPaymentMethod, message }
 exports.updateSupplier = async (req, res) => {
   try {
-    const { shop_id, supplierId, totalAmount, lastPaymentMethod, message } = req.body || {};
+    const { shop_id, supplierId, totalAmount, lastPaymentMethod, message, paidAmount } = req.body || {};
     if (!shop_id || !supplierId) {
       return res.status(400).json({ success: false, message: "shop_id and supplierId are required" });
     }
 
 
     const update = {};
-    if (typeof totalAmount !== "undefined" && totalAmount !== null && totalAmount !== "") {
+    let prevForHistory = undefined;
+    // If frontend sends a paidAmount, subtract it from current supplier total server-side
+    if (typeof paidAmount !== "undefined" && paidAmount !== null && paidAmount !== "") {
+      const paid = Number(paidAmount);
+      if (Number.isNaN(paid)) {
+        return res.status(400).json({ success: false, message: "paidAmount must be a number" });
+      }
+      // fetch current supplier to compute new total
+      const existing = await Supplier.findOne({ _id: supplierId, userId: shop_id });
+      if (!existing) {
+        return res.status(404).json({ success: false, message: "Supplier not found" });
+      }
+      const curr = Number(existing.totalAmount || 0);
+      prevForHistory = curr;
+      const newTotal = curr - paid;
+      update.totalAmount = newTotal;
+    } else if (typeof totalAmount !== "undefined" && totalAmount !== null && totalAmount !== "") {
       const amt = Number(totalAmount);
       if (Number.isNaN(amt)) {
         return res.status(400).json({ success: false, message: "totalAmount must be a number" });
@@ -190,14 +208,23 @@ exports.updateSupplier = async (req, res) => {
 
 
     // Log supplier history message
-    await SupplierHistory.create({
+    const historyPayload = {
       supplierId,
       userId: shop_id,
       changeType: "ADMIN_EDIT",
       message: message || "Admin edited supplier details",
       totalAmount: typeof update.totalAmount === "number" ? update.totalAmount : undefined,
       paymentMethod: update.lastPaymentMethod || "",
-    });
+    };
+
+    // If this update was a payment subtraction, include paid and previous amounts
+    if (typeof paidAmount !== "undefined" && paidAmount !== null && paidAmount !== "") {
+      const paid = Number(paidAmount) || 0;
+      historyPayload.paidAmount = paid;
+      historyPayload.previousAmount = typeof prevForHistory !== 'undefined' ? prevForHistory : undefined;
+      // note: totalAmount in payload is the new total we already set in update
+    }
+    await SupplierHistory.create(historyPayload);
 
 
     return res.json({ success: true, supplier: updated });
