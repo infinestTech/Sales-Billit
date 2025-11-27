@@ -27,6 +27,8 @@ const MobileNameTable = ({ mobileData, setMobileData, onRevenueUpdate, hideActio
   const [productNameInput, setProductNameInput] = useState("")
   const [sellQty, setSellQty] = useState(1)
   const [paidAmount, setPaidAmount] = useState(0)
+  const [paymentMethod, setPaymentMethod] = useState("")
+  const [warranty, setWarranty] = useState("")
   const [selling, setSelling] = useState(false)
   // Keep last used values so new rows default to the last saved values
   const [lastSupplierId, setLastSupplierId] = useState("")
@@ -34,6 +36,8 @@ const MobileNameTable = ({ mobileData, setMobileData, onRevenueUpdate, hideActio
   const [lastProductName, setLastProductName] = useState("")
   const [lastSellQty, setLastSellQty] = useState(1)
   const [lastPaidAmount, setLastPaidAmount] = useState(0)
+  const [lastPaymentMethod, setLastPaymentMethod] = useState("")
+  const [lastWarranty, setLastWarranty] = useState("")
 
   // Console log all mobile data with model values
   useEffect(() => {
@@ -62,11 +66,15 @@ const MobileNameTable = ({ mobileData, setMobileData, onRevenueUpdate, hideActio
       const lsProductName = typeof window !== 'undefined' ? localStorage.getItem('lastProductName_MobileSell') : null
       const lsQty = typeof window !== 'undefined' ? localStorage.getItem('lastSellQty_MobileSell') : null
       const lsPaid = typeof window !== 'undefined' ? localStorage.getItem('lastPaidAmount_MobileSell') : null
+      const lsPaymentMethod = typeof window !== 'undefined' ? localStorage.getItem('lastPaymentMethod_MobileSell') : null
+      const lsWarranty = typeof window !== 'undefined' ? localStorage.getItem('lastWarranty_MobileSell') : null
       if (lsSupplierId) setLastSupplierId(lsSupplierId)
       if (lsSupplierQuery) setLastSupplierQuery(lsSupplierQuery)
       if (lsProductName) setLastProductName(lsProductName)
       if (lsQty) setLastSellQty(Number(lsQty))
       if (lsPaid) setLastPaidAmount(Number(lsPaid))
+      if (lsPaymentMethod) setLastPaymentMethod(lsPaymentMethod)
+      if (lsWarranty) setLastWarranty(lsWarranty)
     } catch (e) {
       // ignore
     }
@@ -233,6 +241,8 @@ const MobileNameTable = ({ mobileData, setMobileData, onRevenueUpdate, hideActio
     setSupplierQuery(lastSupplierQuery || "")
     setPaidAmount(lastPaidAmount || 0)
     setSellQty(lastSellQty || 1)
+    setPaymentMethod(lastPaymentMethod || "")
+    setWarranty(lastWarranty || "")
     try {
       const token = localStorage.getItem("token")
       if (!token || !shopId) return
@@ -262,6 +272,9 @@ const MobileNameTable = ({ mobileData, setMobileData, onRevenueUpdate, hideActio
           const possibleProductName = mobile.productName || mobile.product || mobile.itemName || ""
           if (possibleProductName) setProductNameInput(possibleProductName)
           if (mobile.quantity) setSellQty(mobile.quantity)
+          // Prefill payment method and warranty if available
+          if (mobile.paymentMethod) setPaymentMethod(mobile.paymentMethod)
+          if (mobile.warranty) setWarranty(mobile.warranty)
 
           // Determine supplier id/name from multiple possible fields
           const mobileSupplierId = mobile.supplierId || (mobile.supplier && (mobile.supplier._id || mobile.supplier.id)) || mobile.supplier_id || mobile.supplier
@@ -293,6 +306,8 @@ const MobileNameTable = ({ mobileData, setMobileData, onRevenueUpdate, hideActio
             if (lastProductName) setProductNameInput(lastProductName)
             if (lastSellQty) setSellQty(lastSellQty)
             if (lastPaidAmount) setPaidAmount(lastPaidAmount)
+            if (lastPaymentMethod) setPaymentMethod(lastPaymentMethod)
+            if (lastWarranty) setWarranty(lastWarranty)
             if (lastSupplierId) setSelectedSupplierId(lastSupplierId)
             if (lastSupplierQuery) setSupplierQuery(lastSupplierQuery)
           }
@@ -313,6 +328,8 @@ const MobileNameTable = ({ mobileData, setMobileData, onRevenueUpdate, hideActio
     setSelectedProductId("")
     setSellQty(1)
     setPaidAmount(0)
+    setPaymentMethod("")
+    setWarranty("")
     setSelectedSupplierId("")
     setSupplierQuery("")
     setProductNameInput("")
@@ -355,7 +372,7 @@ const MobileNameTable = ({ mobileData, setMobileData, onRevenueUpdate, hideActio
       // call supplier update to record history and update totalAmount
       await api.post(
         "/api/suppliers/update",
-        { shop_id: shopId, supplierId: selectedSupplierId, totalAmount: newTotal, lastPaymentMethod: (currentSupplier?.lastPaymentMethod || "cash"), message: `Added: ${productNameInput} x${sellQty} - ₹${increment}` },
+        { shop_id: shopId, supplierId: selectedSupplierId, totalAmount: newTotal, lastPaymentMethod: paymentMethod || "cash", message: `Added: ${productNameInput} x${sellQty} - ₹${increment}` },
         { headers: { Authorization: `Bearer ${token}` } }
       )
 
@@ -377,7 +394,9 @@ const MobileNameTable = ({ mobileData, setMobileData, onRevenueUpdate, hideActio
               supplierName: supplierQuery, 
               productName: productNameInput, 
               quantity: sellQty, 
-              supplierAmount: Number(paidAmount || 0) 
+              supplierAmount: Number(paidAmount || 0),
+              paymentMethod: paymentMethod,
+              warranty: warranty
             },
             { headers: { Authorization: `Bearer ${token}` } }
           )
@@ -397,6 +416,8 @@ const MobileNameTable = ({ mobileData, setMobileData, onRevenueUpdate, hideActio
           supplierId: selectedSupplierId,
           supplierName: supplierQuery,
           supplier_amount: Number(paidAmount || 0),
+          paymentMethod: paymentMethod,
+          warranty: warranty,
         }
         setMobileData(updated)
       }
@@ -408,12 +429,16 @@ const MobileNameTable = ({ mobileData, setMobileData, onRevenueUpdate, hideActio
         setLastProductName(productNameInput)
         setLastSellQty(sellQty)
         setLastPaidAmount(paidAmount)
+        setLastPaymentMethod(paymentMethod)
+        setLastWarranty(warranty)
         if (typeof window !== 'undefined') {
           localStorage.setItem('lastSupplierId_MobileSell', String(selectedSupplierId || ""))
           localStorage.setItem('lastSupplierQuery_MobileSell', String(supplierQuery || ""))
           localStorage.setItem('lastProductName_MobileSell', String(productNameInput || ""))
           localStorage.setItem('lastSellQty_MobileSell', String(sellQty || 1))
           localStorage.setItem('lastPaidAmount_MobileSell', String(paidAmount || 0))
+          localStorage.setItem('lastPaymentMethod_MobileSell', String(paymentMethod || ""))
+          localStorage.setItem('lastWarranty_MobileSell', String(warranty || ""))
         }
       } catch (e) {
         // ignore storage errors
@@ -745,6 +770,38 @@ const MobileNameTable = ({ mobileData, setMobileData, onRevenueUpdate, hideActio
                   value={paidAmount}
                   onChange={(e) => setPaidAmount(e.target.value)}
                 />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Payment Method</label>
+                <select
+                  className="w-full border rounded-lg px-3 py-2"
+                  value={paymentMethod}
+                  onChange={(e) => setPaymentMethod(e.target.value)}
+                >
+                  <option value="">Select</option>
+                  <option value="cash">Cash</option>
+                  <option value="UPI">UPI</option>
+                  <option value="card">Card</option>
+                  <option value="UPI-h">UPI-H</option>
+                  <option value="UPI-s">UPI-S</option>
+                  <option value="Cash + Card">CASH + CARD</option>
+                  <option value="UPI H + CASH">UPI H + CASH</option>
+                  <option value="UPI S + CASH">UPI S + CASH</option>
+                  <option value="UPI H + CARD">UPI H + CARD</option>
+                  <option value="UPI S + CARD">UPI S + CARD</option>
+                </select>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Warranty</label>
+                <select
+                  className="w-full border rounded-lg px-3 py-2"
+                  value={warranty}
+                  onChange={(e) => setWarranty(e.target.value)}
+                >
+                  <option value="">Select</option>
+                  <option value="warranty">Warranty</option>
+                  <option value="no-warranty">No Warranty</option>
+                </select>
               </div>
             </div>
             <div className="mt-6 flex justify-end gap-3">

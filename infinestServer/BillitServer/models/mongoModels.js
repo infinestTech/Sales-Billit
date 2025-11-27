@@ -125,6 +125,8 @@ const mobileSchema = new mongoose.Schema({
   productName: { type: String },
   quantity: { type: Number },
   supplier_amount: { type: Number, default: 0 }, // Amount paid to supplier (separate from customer payment)
+  paymentMethod: { type: String, enum: ["cash", "UPI", "card", "UPI-h", "UPI-s", "Cash + Card", "UPI H + CASH", "UPI S + CASH", "UPI H + CARD", "UPI S + CARD", ""], default: "" }, // Payment method for supplier transactions
+  warranty: { type: String, enum: ["warranty", "no-warranty", ""], default: "" }, // Warranty status
   created_at: { type: Date, default: Date.now }
 });
 
@@ -246,7 +248,7 @@ const supplierHistorySchema = new mongoose.Schema({
   paidAmount: { type: Number },
   // previous total before this change
   previousAmount: { type: Number },
-  paymentMethod: { type: String, enum: ["cash", "upi", "", null], default: "" }
+  paymentMethod: { type: String, enum: ["cash", "UPI", "card", "UPI-h", "UPI-s", "Cash + Card", "UPI H + CASH", "UPI S + CASH", "UPI H + CARD", "UPI S + CARD", "", null], default: "" }
 });
 
 
