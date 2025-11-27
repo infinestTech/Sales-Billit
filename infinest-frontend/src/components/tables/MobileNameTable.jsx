@@ -375,6 +375,7 @@ const MobileNameTable = ({ mobileData, setMobileData, onRevenueUpdate, hideActio
         { shop_id: shopId, supplierId: selectedSupplierId, totalAmount: newTotal, lastPaymentMethod: paymentMethod || "cash", message: `Added: ${productNameInput} x${sellQty} - ₹${increment}` },
         { headers: { Authorization: `Bearer ${token}` } }
       )
+      
 
       // Save supplier/product details and supplier amount to mobile record
       // This tracks what was used/sold and the cost for this mobile
