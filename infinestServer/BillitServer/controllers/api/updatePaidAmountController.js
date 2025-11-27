@@ -2,7 +2,7 @@ const { Mobile } = require("../../models/mongoModels");
 
 
 const updatePaidAmount = async (req, res) => {
-  const { id, paidAmount, updateDate, payment, supplierId, supplierName, productName, quantity, supplierAmount } = req.body;
+  const { id, paidAmount, updateDate, payment, supplierId, supplierName, productName, quantity, supplierAmount, paymentMethod, warranty } = req.body;
 
 
   if (!id || paidAmount === undefined || !updateDate) {
@@ -35,6 +35,8 @@ const updatePaidAmount = async (req, res) => {
       if (productName !== undefined) updatePayload.productName = productName;
       if (quantity !== undefined) updatePayload.quantity = quantity;
       if (supplierAmount !== undefined) updatePayload.supplier_amount = Number(supplierAmount);
+      if (paymentMethod !== undefined) updatePayload.paymentMethod = paymentMethod;
+      if (warranty !== undefined) updatePayload.warranty = warranty;
 
 
     const updatedMobile = await Mobile.findByIdAndUpdate(

@@ -250,6 +250,14 @@ export default function SupplierList({ shopId }) {
                 >
                   <option value="cash">Cash</option>
                   <option value="upi">UPI</option>
+                  <option value="card">Card</option>
+                  <option value="UPI-h">UPI-H</option>
+                  <option value="UPI-s">UPI-S</option>
+                  <option value="Cash + Card">CASH + CARD</option>
+                  <option value="UPI H + CASH">UPI H + CASH</option>
+                  <option value="UPI S + CASH">UPI S + CASH</option>
+                  <option value="UPI H + CARD">UPI H + CARD</option>
+                  <option value="UPI S + CARD">UPI S + CARD</option>
                 </select>
               </div>
               <div>
