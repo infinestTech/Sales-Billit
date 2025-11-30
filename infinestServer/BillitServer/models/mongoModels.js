@@ -312,8 +312,8 @@ const adminSaleItemSchema = new mongoose.Schema({
 }, { _id: false });
 
 const adminSaleSchema = new mongoose.Schema({
-  shop_id: { type: mongoose.Schema.Types.ObjectId, ref: 'Shop', index: true },
-  branch_id: { type: mongoose.Schema.Types.ObjectId, ref: 'Branch', index: true },
+  shop_id: { type: mongoose.Schema.Types.ObjectId, ref: 'Shop' },
+  branch_id: { type: mongoose.Schema.Types.ObjectId, ref: 'Branch' },
   seller_id: { type: String },
   customerNo: { type: String, default: '' },
   items: { type: [adminSaleItemSchema], default: [] },
@@ -323,11 +323,15 @@ const adminSaleSchema = new mongoose.Schema({
   createdBy: { type: String, default: '' }
 }, { timestamps: true });
 
+// Indexes for queries
+adminSaleSchema.index({ shop_id: 1 });
+adminSaleSchema.index({ branch_id: 1 });
+
 // ==============================
 // 📱 Mobile Brand Schema
 // ==============================
 const mobileBrandSchema = new mongoose.Schema({
-  shop_id: { type: mongoose.Schema.Types.ObjectId, ref: 'Shop', index: true },
+  shop_id: { type: mongoose.Schema.Types.ObjectId, ref: 'Shop' },
   brand_name: { type: String, required: true, trim: true },
   is_custom: { type: Boolean, default: false }, // true if added by user, false if seeded
   is_active: { type: Boolean, default: true },
@@ -342,7 +346,7 @@ mobileBrandSchema.index({ shop_id: 1, brand_name: 1 }, { unique: true });
 // 🔧 Mobile Issue Schema
 // ==============================
 const mobileIssueSchema = new mongoose.Schema({
-  shop_id: { type: mongoose.Schema.Types.ObjectId, ref: 'Shop', index: true },
+  shop_id: { type: mongoose.Schema.Types.ObjectId, ref: 'Shop' },
   issue_name: { type: String, required: true, trim: true },
   issue_category: { type: String, default: 'General' }, // e.g., Hardware, Software, Screen, Battery, etc.
   estimated_repair_time: { type: Number, default: 1 }, // in days
@@ -359,7 +363,7 @@ mobileIssueSchema.index({ shop_id: 1, issue_name: 1 }, { unique: true });
 // 👥 Employee Schema
 // ==============================
 const employeeSchema = new mongoose.Schema({
-  shop_id: { type: mongoose.Schema.Types.ObjectId, ref: 'Shop', required: true, index: true },
+  shop_id: { type: mongoose.Schema.Types.ObjectId, ref: 'Shop', required: true },
   employee_name: { type: String, required: true, trim: true },
   mobile_number: { type: String, required: true, trim: true },
   address: { type: String, default: '' },
@@ -367,6 +371,8 @@ const employeeSchema = new mongoose.Schema({
   created_at: { type: Date, default: Date.now }
 });
 
+// Index for shop queries
+employeeSchema.index({ shop_id: 1 });
 // Optional: ensure one employee mobile per shop
 // employeeSchema.index({ shop_id: 1, mobile_number: 1 }, { unique: true }); // Uncomment if needed later
 
@@ -374,15 +380,38 @@ const employeeSchema = new mongoose.Schema({
 // 🗓️ Attendance Schema (Daily Status)
 // ==============================
 const attendanceSchema = new mongoose.Schema({
-  shop_id: { type: mongoose.Schema.Types.ObjectId, ref: 'Shop', required: true, index: true },
-  employee_id: { type: mongoose.Schema.Types.ObjectId, ref: 'Employee', required: true, index: true },
-  date: { type: String, required: true, index: true }, // Store as YYYY-MM-DD string for simplicity
+  shop_id: { type: mongoose.Schema.Types.ObjectId, ref: 'Shop', required: true },
+  employee_id: { type: mongoose.Schema.Types.ObjectId, ref: 'Employee', required: true },
+  date: { type: String, required: true }, // Store as YYYY-MM-DD string for simplicity
   status: { type: String, enum: ['present', 'absent'], required: true },
   locked: { type: Boolean, default: true }, // once marked true, prevents changes
   created_at: { type: Date, default: Date.now }
 });
 
+// Compound indexes - no duplicate indexes
 attendanceSchema.index({ employee_id: 1, date: 1 }, { unique: true });
+attendanceSchema.index({ shop_id: 1 });
+
+// ==============================
+// 🏪 Shop Admin Schema (Centralized Monitoring)
+// ==============================
+const shopAdminSchema = new mongoose.Schema({
+  username: { type: String, required: true, unique: true, trim: true },
+  password: { type: String, required: true }, // Will be hashed
+  shop_ids: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Shop' }], // Multiple shops
+  email: { type: String, trim: true },
+  phone: { type: String, trim: true },
+  full_name: { type: String, trim: true },
+  is_active: { type: Boolean, default: true },
+  last_login: { type: Date },
+  current_shop_id: { type: mongoose.Schema.Types.ObjectId, ref: 'Shop' }, // Currently selected shop
+  created_by: { type: String }, // infinest admin email who created this
+  created_at: { type: Date, default: Date.now },
+  updated_at: { type: Date, default: Date.now }
+});
+
+// Index for faster lookups
+shopAdminSchema.index({ username: 1, is_active: 1 });
 
 // ==============================
 // ⏱️ Permission Schema
@@ -408,12 +437,10 @@ const MobileIssue = mongoose.model("MobileIssue", mobileIssueSchema);
 const Employee = mongoose.model("Employee", employeeSchema);
 const Attendance = mongoose.model("Attendance", attendanceSchema);
 const Permission = mongoose.model("Permission", permissionSchema);
+const ShopAdmin = mongoose.model("ShopAdmin", shopAdminSchema);
 
 module.exports = {
   Role, User, Manager, Branch, Shop, Dealer, Customer, Notification, Mobile, Technician,
   PlanCategory, Plan, Feature, DailySummary, Expense, ProductHistory, Product,
-  MobileBrand, MobileIssue, AdminSale, SupplierHistory
-  , Employee
-  , Attendance
-  , Permission
+  MobileBrand, MobileIssue, AdminSale, SupplierHistory, Employee, Attendance, ShopAdmin, Permission
 };
