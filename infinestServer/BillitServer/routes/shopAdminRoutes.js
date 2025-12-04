@@ -209,6 +209,71 @@ router.get('/dashboard/overview', shopAdminAuth, async (req, res) => {
 });
 
 // ==============================
+// 📊 Customer Details with Mobile Statistics
+// ==============================
+router.get('/customer-details', shopAdminAuth, async (req, res) => {
+    try {
+        const shopId = req.shopId;
+
+        // Fetch all customers and dealers
+        const [customers, dealers] = await Promise.all([
+            Customer.find({ shop_id: shopId }).lean(),
+            Dealer.find({ shop_id: shopId }).lean()
+        ]);
+
+        // Combine customers and dealers
+        const allClients = [
+            ...customers.map(c => ({ ...c, customer_type: 'Customer' })),
+            ...dealers.map(d => ({ ...d, customer_type: 'Dealer' }))
+        ];
+
+        // Fetch mobile statistics for each client
+        const clientDetails = await Promise.all(
+            allClients.map(async (client) => {
+                const mobiles = await Mobile.find({
+                    shop_id: shopId,
+                    [client.customer_type === 'Customer' ? 'customer_id' : 'dealer_id']: client._id
+                }).lean();
+
+                const totalMobiles = mobiles.length;
+                const readyCount = mobiles.filter(m => m.ready).length;
+                const notReadyCount = mobiles.filter(m => !m.ready).length;
+                const deliveredCount = mobiles.filter(m => m.delivered).length;
+                const totalPaid = mobiles.reduce((sum, m) => sum + (m.paid_amount || 0), 0);
+
+                // Get the latest mobile date
+                const latestMobile = mobiles.sort((a, b) => 
+                    new Date(b.created_at) - new Date(a.created_at)
+                )[0];
+
+                return {
+                    _id: client._id,
+                    client_name: client.client_name,
+                    mobile_number: client.mobile_number,
+                    customer_type: client.customer_type,
+                    total_mobiles: totalMobiles,
+                    ready_count: readyCount,
+                    not_ready_count: notReadyCount,
+                    delivered_count: deliveredCount,
+                    total_paid: totalPaid,
+                    latest_mobile_date: latestMobile?.created_at || client.created_at
+                };
+            })
+        );
+
+        // Filter out clients with no mobiles and sort by latest activity
+        const activeClients = clientDetails
+            .filter(c => c.total_mobiles > 0)
+            .sort((a, b) => new Date(b.latest_mobile_date) - new Date(a.latest_mobile_date));
+
+        res.json({ success: true, customerDetails: activeClients });
+    } catch (error) {
+        console.error('Get customer details error:', error);
+        res.status(500).json({ success: false, message: 'Server error' });
+    }
+});
+
+// ==============================
 // 👥 Employee Management
 // ==============================
 router.get('/employees', shopAdminAuth, async (req, res) => {
@@ -251,6 +316,124 @@ router.get('/employees', shopAdminAuth, async (req, res) => {
         res.json({ success: true, employees: employeesWithStats });
     } catch (error) {
         console.error('Get employees error:', error);
+        res.status(500).json({ success: false, message: 'Server error' });
+    }
+});
+
+// Get employee attendance details with filtering
+router.get('/employee-attendance', shopAdminAuth, async (req, res) => {
+    try {
+        const { employee_id, from_date, to_date } = req.query;
+
+        console.log('📊 Fetching attendance for employee:', employee_id);
+
+        if (!employee_id) {
+            return res.status(400).json({ success: false, message: 'Employee ID is required' });
+        }
+
+        // Convert employee_id to ObjectId for proper MongoDB query
+        const mongoose = require('mongoose');
+        const employeeObjectId = new mongoose.Types.ObjectId(employee_id);
+
+        // Build query - fetch ALL data if no date filters, otherwise apply date range
+        let attendanceQuery = { employee_id: employeeObjectId };
+        let permissionQuery = { employee_id: employeeObjectId };
+        let startDate, endDate;
+
+        if (from_date && to_date) {
+            startDate = from_date;
+            endDate = to_date;
+            attendanceQuery.date = { $gte: startDate, $lte: endDate };
+            permissionQuery.date = { $gte: startDate, $lte: endDate };
+            console.log('📅 Filtering by date range:', { startDate, endDate });
+        } else {
+            console.log('📅 Fetching ALL attendance records (no date filter)');
+        }
+
+        // Fetch attendance records
+        const attendanceRecords = await Attendance.find(attendanceQuery).sort({ date: -1 });
+
+        console.log('✅ Found attendance records:', attendanceRecords.length);
+
+        // Fetch permission records
+        const { Permission } = require('../models/mongoModels');
+        const permissions = await Permission.find(permissionQuery).sort({ date: -1 });
+
+        console.log('✅ Found permission records:', permissions.length);
+
+        // Calculate statistics
+        const totalDays = attendanceRecords.length;
+        const presentDays = attendanceRecords.filter(a => a.status === 'present').length;
+        const absentDays = attendanceRecords.filter(a => a.status === 'absent').length;
+        const attendanceRate = totalDays > 0 ? ((presentDays / totalDays) * 100).toFixed(1) : 0;
+
+        // Calculate total permission hours
+        const totalPermissionSeconds = permissions.reduce((sum, p) => sum + (p.duration_seconds || 0), 0);
+        const totalPermissionHours = (totalPermissionSeconds / 3600).toFixed(1);
+
+        // Format daily records with permission info
+        const dailyRecords = attendanceRecords.map(record => {
+            const dayPermissions = permissions.filter(p => p.date === record.date);
+            const dayPermissionSeconds = dayPermissions.reduce((sum, p) => sum + (p.duration_seconds || 0), 0);
+            const dayPermissionHours = (dayPermissionSeconds / 3600).toFixed(1);
+
+            return {
+                date: record.date,
+                status: record.status,
+                permissionHours: parseFloat(dayPermissionHours)
+            };
+        });
+
+        // Format permission details
+        const permissionDetails = permissions.map(p => ({
+            date: p.date,
+            start_time: p.start_time ? new Date(p.start_time).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' }) : 'N/A',
+            end_time: p.end_time ? new Date(p.end_time).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' }) : null,
+            duration_hours: (p.duration_seconds / 3600).toFixed(1)
+        }));
+
+        res.json({
+            success: true,
+            attendance: {
+                totalDays,
+                presentDays,
+                absentDays,
+                attendanceRate: parseFloat(attendanceRate),
+                totalPermissionHours: parseFloat(totalPermissionHours),
+                permissionCount: permissions.length,
+                dailyRecords,
+                permissions: permissionDetails,
+                dateRange: from_date && to_date ? { from: startDate, to: endDate } : null
+            }
+        });
+    } catch (error) {
+        console.error('Get employee attendance error:', error);
+        res.status(500).json({ success: false, message: 'Server error' });
+    }
+});
+
+// Delete employee
+router.delete('/employees/:employeeId', shopAdminAuth, async (req, res) => {
+    try {
+        const employeeId = req.params.employeeId;
+        const shopId = req.shopId;
+
+        // Check if employee exists and belongs to this shop
+        const employee = await Employee.findOne({ _id: employeeId, shop_id: shopId });
+        if (!employee) {
+            return res.status(404).json({ success: false, message: 'Employee not found' });
+        }
+
+        // Delete employee and all related records
+        await Promise.all([
+            Employee.deleteOne({ _id: employeeId }),
+            Attendance.deleteMany({ employee_id: employeeId }),
+            require('../models/mongoModels').Permission.deleteMany({ employee_id: employeeId })
+        ]);
+
+        res.json({ success: true, message: 'Employee deleted successfully' });
+    } catch (error) {
+        console.error('Delete employee error:', error);
         res.status(500).json({ success: false, message: 'Server error' });
     }
 });
