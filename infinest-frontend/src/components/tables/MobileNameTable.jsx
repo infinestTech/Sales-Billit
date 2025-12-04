@@ -30,14 +30,6 @@ const MobileNameTable = ({ mobileData, setMobileData, onRevenueUpdate, hideActio
   const [paymentMethod, setPaymentMethod] = useState("")
   const [warranty, setWarranty] = useState("")
   const [selling, setSelling] = useState(false)
-  // Keep last used values so new rows default to the last saved values
-  const [lastSupplierId, setLastSupplierId] = useState("")
-  const [lastSupplierQuery, setLastSupplierQuery] = useState("")
-  const [lastProductName, setLastProductName] = useState("")
-  const [lastSellQty, setLastSellQty] = useState(1)
-  const [lastPaidAmount, setLastPaidAmount] = useState(0)
-  const [lastPaymentMethod, setLastPaymentMethod] = useState("")
-  const [lastWarranty, setLastWarranty] = useState("")
 
   // Console log all mobile data with model values
   useEffect(() => {
@@ -59,25 +51,6 @@ const MobileNameTable = ({ mobileData, setMobileData, onRevenueUpdate, hideActio
         if (dec?.shop_id) setShopId(dec.shop_id)
       }
     } catch {}
-    // load last-used values from localStorage
-    try {
-      const lsSupplierId = typeof window !== 'undefined' ? localStorage.getItem('lastSupplierId_MobileSell') : null
-      const lsSupplierQuery = typeof window !== 'undefined' ? localStorage.getItem('lastSupplierQuery_MobileSell') : null
-      const lsProductName = typeof window !== 'undefined' ? localStorage.getItem('lastProductName_MobileSell') : null
-      const lsQty = typeof window !== 'undefined' ? localStorage.getItem('lastSellQty_MobileSell') : null
-      const lsPaid = typeof window !== 'undefined' ? localStorage.getItem('lastPaidAmount_MobileSell') : null
-      const lsPaymentMethod = typeof window !== 'undefined' ? localStorage.getItem('lastPaymentMethod_MobileSell') : null
-      const lsWarranty = typeof window !== 'undefined' ? localStorage.getItem('lastWarranty_MobileSell') : null
-      if (lsSupplierId) setLastSupplierId(lsSupplierId)
-      if (lsSupplierQuery) setLastSupplierQuery(lsSupplierQuery)
-      if (lsProductName) setLastProductName(lsProductName)
-      if (lsQty) setLastSellQty(Number(lsQty))
-      if (lsPaid) setLastPaidAmount(Number(lsPaid))
-      if (lsPaymentMethod) setLastPaymentMethod(lsPaymentMethod)
-      if (lsWarranty) setLastWarranty(lsWarranty)
-    } catch (e) {
-      // ignore
-    }
   }, [])
   const itemsPerPage = 5
 
@@ -233,16 +206,15 @@ const MobileNameTable = ({ mobileData, setMobileData, onRevenueUpdate, hideActio
     setActiveMobileIndex(globalIndex)
     setActiveMobileId(mobile?._id || null)
     setSellOpen(true)
-    // start with empty defaults; we'll override with saved values from the mobile if present
-    // Use last-used values as defaults; mobile-specific values (if any) will override below
+    // Reset all fields to empty/default values
     setSelectedProductId("")
-    setProductNameInput(lastProductName || "")
-    setSelectedSupplierId(lastSupplierId || "")
-    setSupplierQuery(lastSupplierQuery || "")
-    setPaidAmount(lastPaidAmount || 0)
-    setSellQty(lastSellQty || 1)
-    setPaymentMethod(lastPaymentMethod || "")
-    setWarranty(lastWarranty || "")
+    setProductNameInput("")
+    setSelectedSupplierId("")
+    setSupplierQuery("")
+    setPaidAmount(0)
+    setSellQty(1)
+    setPaymentMethod("")
+    setWarranty("")
     try {
       const token = localStorage.getItem("token")
       if (!token || !shopId) return
@@ -252,7 +224,6 @@ const MobileNameTable = ({ mobileData, setMobileData, onRevenueUpdate, hideActio
         { headers: { Authorization: `Bearer ${token}` } }
       )
       setProducts(res?.data?.products || [])
-      // Do not pre-select product; leave product input empty per request
       // fetch suppliers for dropdown
       try {
         const sres = await api.post(
@@ -262,56 +233,7 @@ const MobileNameTable = ({ mobileData, setMobileData, onRevenueUpdate, hideActio
         )
         const fetchedSuppliers = sres?.data?.suppliers || []
         setSuppliers(fetchedSuppliers)
-        // If opening for an existing mobile that already has values, prefill them
-          if (mobile) {
-          // Prefill supplier amount (NOT the customer paid amount)
-          if (mobile.supplier_amount !== undefined && mobile.supplier_amount !== null) {
-            setPaidAmount(mobile.supplier_amount)
-          }
-          // Prefill product name if available on mobile record
-          const possibleProductName = mobile.productName || mobile.product || mobile.itemName || ""
-          if (possibleProductName) setProductNameInput(possibleProductName)
-          if (mobile.quantity) setSellQty(mobile.quantity)
-          // Prefill payment method and warranty if available
-          if (mobile.paymentMethod) setPaymentMethod(mobile.paymentMethod)
-          if (mobile.warranty) setWarranty(mobile.warranty)
-
-          // Determine supplier id/name from multiple possible fields
-          const mobileSupplierId = mobile.supplierId || (mobile.supplier && (mobile.supplier._id || mobile.supplier.id)) || mobile.supplier_id || mobile.supplier
-          const mobileSupplierName = mobile.supplierName || mobile.supplier_name || (mobile.supplier && (mobile.supplier.supplierName || mobile.supplier.name)) || (typeof mobile.supplier === 'string' ? mobile.supplier : undefined)
-
-          // Try to match supplier by id first
-          if (mobileSupplierId) {
-            const match = fetchedSuppliers.find(s => String(s._id) === String(mobileSupplierId))
-            if (match) {
-              setSelectedSupplierId(match._id)
-              setSupplierQuery(match.supplierName || "")
-            } else if (mobileSupplierName) {
-              // fallback to name if id didn't match
-              setSupplierQuery(mobileSupplierName)
-            }
-          } else if (mobileSupplierName) {
-            const match = fetchedSuppliers.find(s => (s.supplierName || "").toLowerCase() === String(mobileSupplierName).toLowerCase())
-            if (match) {
-              setSelectedSupplierId(match._id)
-              setSupplierQuery(match.supplierName || "")
-            } else {
-              // if supplierName exists but not in list, just show the name
-              setSupplierQuery(mobileSupplierName)
-            }
-          }
-        } else {
-          // if no mobile-specific data, ensure we show last-used values
-          if (!mobile) {
-            if (lastProductName) setProductNameInput(lastProductName)
-            if (lastSellQty) setSellQty(lastSellQty)
-            if (lastPaidAmount) setPaidAmount(lastPaidAmount)
-            if (lastPaymentMethod) setPaymentMethod(lastPaymentMethod)
-            if (lastWarranty) setWarranty(lastWarranty)
-            if (lastSupplierId) setSelectedSupplierId(lastSupplierId)
-            if (lastSupplierQuery) setSupplierQuery(lastSupplierQuery)
-          }
-        }
+        // Do not prefill any values - always start with empty form
       } catch (e) {
         console.error("Failed to load suppliers", e)
       }
@@ -421,28 +343,6 @@ const MobileNameTable = ({ mobileData, setMobileData, onRevenueUpdate, hideActio
           warranty: warranty,
         }
         setMobileData(updated)
-      }
-
-      // save last-used values (persist to localStorage so they survive refresh)
-      try {
-        setLastSupplierId(selectedSupplierId)
-        setLastSupplierQuery(supplierQuery)
-        setLastProductName(productNameInput)
-        setLastSellQty(sellQty)
-        setLastPaidAmount(paidAmount)
-        setLastPaymentMethod(paymentMethod)
-        setLastWarranty(warranty)
-        if (typeof window !== 'undefined') {
-          localStorage.setItem('lastSupplierId_MobileSell', String(selectedSupplierId || ""))
-          localStorage.setItem('lastSupplierQuery_MobileSell', String(supplierQuery || ""))
-          localStorage.setItem('lastProductName_MobileSell', String(productNameInput || ""))
-          localStorage.setItem('lastSellQty_MobileSell', String(sellQty || 1))
-          localStorage.setItem('lastPaidAmount_MobileSell', String(paidAmount || 0))
-          localStorage.setItem('lastPaymentMethod_MobileSell', String(paymentMethod || ""))
-          localStorage.setItem('lastWarranty_MobileSell', String(warranty || ""))
-        }
-      } catch (e) {
-        // ignore storage errors
       }
 
       if (typeof onRevenueUpdate === "function") onRevenueUpdate()
@@ -606,26 +506,38 @@ const MobileNameTable = ({ mobileData, setMobileData, onRevenueUpdate, hideActio
                   </button>
                 </td>
                 <td className="px-6 py-4 border-b border-gray-200">
-                  <div className="flex flex-col space-y-1">
+                  <div className="flex flex-col space-y-2">
                     {mobile.productName || mobile.product || mobile.itemName ? (
-                      <div className="space-y-1">
-                        <span className="text-sm font-medium text-gray-800">{mobile.productName || mobile.product || mobile.itemName}</span>
-                        {mobile.quantity && (
-                          <span className="text-xs text-gray-500">Qty: {mobile.quantity}</span>
-                        )}
+                      <div className="bg-blue-50 rounded-lg p-3 border border-blue-200">
+                        <div className="flex items-start justify-between mb-2">
+                          <span className="text-sm font-semibold text-gray-900">{mobile.productName || mobile.product || mobile.itemName}</span>
+                          {mobile.quantity && (
+                            <span className="text-xs font-medium bg-blue-100 text-blue-700 px-2 py-1 rounded-full">Qty: {mobile.quantity}</span>
+                          )}
+                        </div>
                         {mobile.supplierName && (
-                          <span className="text-xs text-blue-600">Supplier: {mobile.supplierName}</span>
+                          <div className="flex items-center gap-1.5 mb-2">
+                            <Package className="h-3 w-3 text-blue-600" />
+                            <span className="text-xs font-medium text-blue-700">{mobile.supplierName}</span>
+                          </div>
+                        )}
+                        {mobile.supplier_amount > 0 && (
+                          <div className="text-xs text-gray-600">
+                            <span className="font-medium">Cost: ₹{mobile.supplier_amount}</span>
+                          </div>
                         )}
                       </div>
                     ) : (
-                      <span className="text-xs text-gray-400">No product assigned</span>
+                      <div className="bg-gray-50 rounded-lg p-3 border border-gray-200">
+                        <span className="text-xs text-gray-500 italic">No product assigned</span>
+                      </div>
                     )}
                     <button
                       onClick={() => openSellModal(mobile, index)}
                       disabled={hideActions}
-                      className={`px-2 py-1 text-xs font-semibold rounded-full transition-all duration-200 bg-blue-600 text-white hover:bg-blue-700 ${hideActions ? "cursor-not-allowed opacity-60" : "cursor-pointer"} w-fit`}
+                      className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition-all duration-200 ${mobile.productName || mobile.product || mobile.itemName ? 'bg-blue-600 text-white hover:bg-blue-700' : 'bg-green-600 text-white hover:bg-green-700'} ${hideActions ? "cursor-not-allowed opacity-60" : "cursor-pointer"} w-fit`}
                     >
-                      {mobile.productName || mobile.product || mobile.itemName ? 'Edit' : 'Use'}
+                      {mobile.productName || mobile.product || mobile.itemName ? '✏️ Edit' : '➕ Use'}
                     </button>
                   </div>
                 </td>
