@@ -439,8 +439,11 @@ const Attendance = mongoose.model("Attendance", attendanceSchema);
 const Permission = mongoose.model("Permission", permissionSchema);
 const ShopAdmin = mongoose.model("ShopAdmin", shopAdminSchema);
 
+// Import Supplier model
+const { Supplier } = require('./supplier');
+
 module.exports = {
   Role, User, Manager, Branch, Shop, Dealer, Customer, Notification, Mobile, Technician,
   PlanCategory, Plan, Feature, DailySummary, Expense, ProductHistory, Product,
-  MobileBrand, MobileIssue, AdminSale, SupplierHistory, Employee, Attendance, ShopAdmin, Permission
+  MobileBrand, MobileIssue, AdminSale, SupplierHistory, Employee, Attendance, ShopAdmin, Permission, Supplier
 };
