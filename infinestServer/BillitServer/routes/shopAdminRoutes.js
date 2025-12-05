@@ -15,9 +15,9 @@ const {
     Expense,
     AdminSale,
     User,
-    Role
+    Role,
+    Supplier
 } = require('../models/mongoModels');
-const { Supplier } = require('../models/supplier');
 
 // JWT Secret for shop admins (different from regular users)
 const SHOP_ADMIN_JWT_SECRET = process.env.SHOP_ADMIN_JWT_SECRET || 'shop-admin-secret-key-2024';
