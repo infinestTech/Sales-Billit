@@ -235,6 +235,20 @@ productSchema.pre("save", function (next) {
 });
 
 // ==============================
+// 🧾 Supplier Schema
+// ==============================
+const supplierSchema = new mongoose.Schema({
+  userId: { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true },
+  supplierName: { type: String, required: true, trim: true },
+  agencyName: { type: String, trim: true },
+  phoneNumber: { type: String, trim: true },
+  address: { type: String, trim: true },
+  totalAmount: { type: Number, default: 0 },
+  lastPaymentMethod: { type: String, enum: ["cash", "UPI", "card", "UPI-h", "UPI-s", "Cash + Card", "UPI H + CASH", "UPI S + CASH", "UPI H + CARD", "UPI S + CARD", ""], default: "" },
+  createdAt: { type: Date, default: Date.now }
+});
+
+// ==============================
 // 🧾 Supplier History Schema
 // ==============================
 const supplierHistorySchema = new mongoose.Schema({
@@ -438,9 +452,7 @@ const Employee = mongoose.model("Employee", employeeSchema);
 const Attendance = mongoose.model("Attendance", attendanceSchema);
 const Permission = mongoose.model("Permission", permissionSchema);
 const ShopAdmin = mongoose.model("ShopAdmin", shopAdminSchema);
-
-// Import Supplier model
-const { Supplier } = require('./supplier');
+const Supplier = mongoose.model("Supplier", supplierSchema);
 
 module.exports = {
   Role, User, Manager, Branch, Shop, Dealer, Customer, Notification, Mobile, Technician,
