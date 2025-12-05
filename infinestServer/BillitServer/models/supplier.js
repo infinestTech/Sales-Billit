@@ -16,5 +16,6 @@ const supplierSchema = new mongoose.Schema({
 });
 
 
-const Supplier = mongoose.model("Supplier", supplierSchema);
+// Check if model already exists to prevent OverwriteModelError
+const Supplier = mongoose.models.Supplier || mongoose.model("Supplier", supplierSchema);
 module.exports = { Supplier };
