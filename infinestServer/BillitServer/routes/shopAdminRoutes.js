@@ -40,15 +40,20 @@ const shopAdminAuth = async (req, res, next) => {
         req.shopAdmin = shopAdmin;
         // Use current_shop_id if set, otherwise use first shop or from query param
         const requestedShopId = req.query.shop_id || req.body.shop_id;
+        let shopId;
         if (requestedShopId && shopAdmin.shop_ids.some(shop => shop._id.toString() === requestedShopId)) {
-            req.shopId = requestedShopId;
+            shopId = requestedShopId;
         } else {
-            req.shopId = shopAdmin.current_shop_id?._id || shopAdmin.shop_ids[0]?._id;
+            shopId = shopAdmin.current_shop_id?._id || shopAdmin.shop_ids[0]?._id;
         }
         
-        if (!req.shopId) {
+        if (!shopId) {
             return res.status(400).json({ success: false, message: 'No shop assigned to this admin' });
         }
+        
+        // Convert to ObjectId for MongoDB queries
+        const mongoose = require('mongoose');
+        req.shopId = typeof shopId === 'string' ? new mongoose.Types.ObjectId(shopId) : shopId;
         
         next();
     } catch (error) {
@@ -467,16 +472,30 @@ router.get('/employees/:employeeId', shopAdminAuth, async (req, res) => {
 // ==============================
 router.get('/analytics/revenue', shopAdminAuth, async (req, res) => {
     try {
-        const { period = '30' } = req.query; // days
-        const daysAgo = new Date();
-        daysAgo.setDate(daysAgo.getDate() - parseInt(period));
+        const { period = '30', fromDate, toDate } = req.query; // days or custom date range
+        
+        let startDate, endDate;
+        if (fromDate && toDate) {
+            // Use custom date range
+            startDate = new Date(fromDate);
+            startDate.setHours(0, 0, 0, 0);
+            endDate = new Date(toDate);
+            endDate.setHours(23, 59, 59, 999);
+        } else {
+            // Use period (days)
+            startDate = new Date();
+            startDate.setDate(startDate.getDate() - parseInt(period));
+            startDate.setHours(0, 0, 0, 0);
+            endDate = new Date();
+            endDate.setHours(23, 59, 59, 999);
+        }
 
         // Service revenue (from mobiles)
         const mobileRevenue = await Mobile.aggregate([
             {
                 $match: {
                     shop_id: req.shopId,
-                    created_at: { $gte: daysAgo },
+                    created_at: { $gte: startDate, $lte: endDate },
                     paid_amount: { $gt: 0 }
                 }
             },
@@ -497,7 +516,7 @@ router.get('/analytics/revenue', shopAdminAuth, async (req, res) => {
             {
                 $match: {
                     shop_id: req.shopId,
-                    createdAt: { $gte: daysAgo }
+                    createdAt: { $gte: startDate, $lte: endDate }
                 }
             },
             {
@@ -517,7 +536,7 @@ router.get('/analytics/revenue', shopAdminAuth, async (req, res) => {
             {
                 $match: {
                     shop_id: req.shopId,
-                    createdAt: { $gte: daysAgo }
+                    createdAt: { $gte: startDate, $lte: endDate }
                 }
             },
             {
@@ -544,7 +563,7 @@ router.get('/analytics/revenue', shopAdminAuth, async (req, res) => {
             {
                 $match: {
                     shop_id: req.shopId,
-                    created_at: { $gte: daysAgo },
+                    created_at: { $gte: startDate, $lte: endDate },
                     paid_amount: { $gt: 0 }
                 }
             },
@@ -827,6 +846,206 @@ router.get('/analytics/inventory', shopAdminAuth, async (req, res) => {
         });
     } catch (error) {
         console.error('Inventory analytics error:', error);
+        res.status(500).json({ success: false, message: 'Server error' });
+    }
+});
+
+// ==============================
+// 📊 Financial Report
+// ==============================
+router.get('/reports/financial', shopAdminAuth, async (req, res) => {
+    try {
+        const { period, fromDate, toDate } = req.query;
+        
+        // Calculate date range
+        let startDate, endDate;
+        if (fromDate && toDate) {
+            startDate = new Date(fromDate);
+            startDate.setHours(0, 0, 0, 0);
+            endDate = new Date(toDate);
+            endDate.setHours(23, 59, 59, 999);
+        } else {
+            const days = parseInt(period) || 30;
+            endDate = new Date();
+            endDate.setHours(23, 59, 59, 999);
+            startDate = new Date();
+            startDate.setDate(startDate.getDate() - days);
+            startDate.setHours(0, 0, 0, 0);
+        }
+
+        // Customer Payments - Get all mobiles with payments in the period
+        const customerPayments = await Mobile.aggregate([
+            {
+                $match: {
+                    shop_id: req.shopId,
+                    created_at: { $gte: startDate, $lte: endDate },
+                    paid_amount: { $gt: 0 }
+                }
+            },
+            {
+                $lookup: {
+                    from: 'customers',
+                    localField: 'customer_id',
+                    foreignField: '_id',
+                    as: 'customer'
+                }
+            },
+            { $unwind: { path: '$customer', preserveNullAndEmptyArrays: true } },
+            {
+                $project: {
+                    date: '$created_at',
+                    customerName: { $ifNull: ['$customer.customer_name', 'Walk-in Customer'] },
+                    mobileName: {
+                        $concat: [
+                            { $ifNull: ['$mobile_name', ''] },
+                            ' ',
+                            { $ifNull: ['$model', ''] }
+                        ]
+                    },
+                    paymentMethod: { 
+                        $cond: {
+                            if: { $ne: ['$paymentMethod', null] },
+                            then: '$paymentMethod',
+                            else: { $ifNull: ['$payment', 'Cash'] }
+                        }
+                    },
+                    amount: { $ifNull: ['$paid_amount', 0] }
+                }
+            },
+            { $sort: { date: 1 } }
+        ]);
+
+        // Supplier Payments - Get from mobiles with supplier info
+        const supplierPayments = await Mobile.aggregate([
+            {
+                $match: {
+                    shop_id: req.shopId,
+                    created_at: { $gte: startDate, $lte: endDate },
+                    supplier_amount: { $gt: 0 }
+                }
+            },
+            {
+                $project: {
+                    date: '$created_at',
+                    supplierName: { $ifNull: ['$supplierName', 'Supplier'] },
+                    productName: { $ifNull: ['$productName', 'Product/Part'] },
+                    paymentMethod: { 
+                        $cond: {
+                            if: { $ne: ['$paymentMethod', null] },
+                            then: '$paymentMethod',
+                            else: { $ifNull: ['$payment', 'Cash'] }
+                        }
+                    },
+                    amount: { $ifNull: ['$supplier_amount', 0] }
+                }
+            },
+            { $sort: { date: 1 } }
+        ]);
+
+        // Operating Expenses - Get from expenses collection
+        const operatingExpenses = await Expense.aggregate([
+            {
+                $match: {
+                    shop_id: req.shopId,
+                    createdAt: { $gte: startDate, $lte: endDate }
+                }
+            },
+            {
+                $project: {
+                    date: '$createdAt',
+                    category: { $ifNull: ['$category', 'Operating'] },
+                    description: { $ifNull: ['$description', 'Expense'] },
+                    amount: '$amount'
+                }
+            },
+            { $sort: { date: 1 } }
+        ]);
+
+        // Also get AdminSale revenue
+        const adminSales = await AdminSale.aggregate([
+            {
+                $match: {
+                    shop_id: req.shopId,
+                    createdAt: { $gte: startDate, $lte: endDate }
+                }
+            },
+            {
+                $project: {
+                    date: '$createdAt',
+                    customerName: 'Product Sale',
+                    mobileName: { $ifNull: ['$productName', 'Products'] },
+                    paymentMethod: { $ifNull: ['$paymentMethod', 'Cash'] },
+                    amount: { $ifNull: ['$totalAmount', 0] }
+                }
+            },
+            { $sort: { date: 1 } }
+        ]);
+
+        // Combine customer payments from mobiles and admin sales
+        const allCustomerPayments = [...customerPayments, ...adminSales];
+
+        // Calculate totals
+        const totalRevenue = allCustomerPayments.reduce((sum, p) => sum + (p.amount || 0), 0);
+        const totalSupplierPayments = supplierPayments.reduce((sum, p) => sum + (p.amount || 0), 0);
+        const totalOperatingExpenses = operatingExpenses.reduce((sum, e) => sum + (e.amount || 0), 0);
+        const totalExpenses = totalSupplierPayments + totalOperatingExpenses;
+        const netProfit = totalRevenue - totalExpenses;
+        const profitMargin = totalRevenue > 0 ? (netProfit / totalRevenue) * 100 : 0;
+
+        // Payment Method Breakdown
+        const paymentBreakdown = await Mobile.aggregate([
+            {
+                $match: {
+                    shop_id: req.shopId,
+                    created_at: { $gte: startDate, $lte: endDate },
+                    paid_amount: { $gt: 0 }
+                }
+            },
+            {
+                $group: {
+                    _id: { 
+                        $cond: {
+                            if: { $ne: ['$paymentMethod', null] },
+                            then: '$paymentMethod',
+                            else: { $ifNull: ['$payment', 'Cash'] }
+                        }
+                    },
+                    total: { $sum: { $ifNull: ['$paid_amount', 0] } },
+                    count: { $sum: 1 }
+                }
+            },
+            {
+                $project: {
+                    _id: 0,
+                    method: '$_id',
+                    total: 1,
+                    count: 1
+                }
+            },
+            { $sort: { total: -1 } }
+        ]);
+
+        res.json({
+            success: true,
+            report: {
+                periodStart: startDate.toLocaleDateString('en-IN'),
+                periodEnd: endDate.toLocaleDateString('en-IN'),
+                summary: {
+                    totalRevenue,
+                    totalSupplierPayments,
+                    totalOperatingExpenses,
+                    totalExpenses,
+                    netProfit,
+                    profitMargin
+                },
+                customerPayments: allCustomerPayments,
+                supplierPayments,
+                expenses: operatingExpenses,
+                paymentBreakdown
+            }
+        });
+    } catch (error) {
+        console.error('Financial report error:', error);
         res.status(500).json({ success: false, message: 'Server error' });
     }
 });

@@ -13,7 +13,8 @@ const getFilteredRecords = async (req, res) => {
       fromDate,
       toDate,
       billNo,
-      mobileDate
+      mobileDate,
+      mobileNumber
     } = req.body;
 
 
@@ -50,7 +51,19 @@ if (!shop) {
 
 
 
-    if (fromDate && toDate) {
+    // Handle date filters - mobileDate takes precedence over date range
+    if (mobileDate) {
+      // If specific mobile date is provided, use exact date match
+      const startOfDay = new Date(mobileDate);
+      startOfDay.setHours(0, 0, 0, 0);
+      const endOfDay = new Date(mobileDate);
+      endOfDay.setHours(23, 59, 59, 999);
+      mobileFilters.added_date = {
+        $gte: startOfDay,
+        $lte: endOfDay,
+      };
+    } else if (fromDate && toDate) {
+      // Otherwise use date range if provided
       mobileFilters.added_date = {
         $gte: new Date(fromDate),
         $lte: new Date(toDate),
@@ -60,16 +73,14 @@ if (!shop) {
 
 
 
-    if (mobileDate) {
-      mobileFilters.added_date = new Date(mobileDate);
-    }
-
-
-
-
     if (clientName) {
       customerFilters.client_name = { $regex: clientName, $options: "i" };
       dealerFilters.client_name = { $regex: clientName, $options: "i" };
+    }
+
+    if (mobileNumber) {
+      customerFilters.mobile_number = { $regex: mobileNumber, $options: "i" };
+      dealerFilters.mobile_number = { $regex: mobileNumber, $options: "i" };
     }
 
 
