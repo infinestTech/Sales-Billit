@@ -873,13 +873,14 @@ router.get('/reports/financial', shopAdminAuth, async (req, res) => {
             startDate.setHours(0, 0, 0, 0);
         }
 
-        // Customer Payments - Get all mobiles with payments in the period
+        // Customer Payments - Get all mobiles with payments in the period (excluding dealer mobiles)
         const customerPayments = await Mobile.aggregate([
             {
                 $match: {
                     shop_id: req.shopId,
                     created_at: { $gte: startDate, $lte: endDate },
-                    paid_amount: { $gt: 0 }
+                    paid_amount: { $gt: 0 },
+                    customer_id: { $exists: true, $ne: null }
                 }
             },
             {
@@ -894,7 +895,50 @@ router.get('/reports/financial', shopAdminAuth, async (req, res) => {
             {
                 $project: {
                     date: '$created_at',
-                    customerName: { $ifNull: ['$customer.customer_name', 'Walk-in Customer'] },
+                    customerName: { $ifNull: ['$customer.client_name', 'Walk-in Customer'] },
+                    mobileName: {
+                        $concat: [
+                            { $ifNull: ['$mobile_name', ''] },
+                            ' ',
+                            { $ifNull: ['$model', ''] }
+                        ]
+                    },
+                    paymentMethod: { 
+                        $cond: {
+                            if: { $ne: ['$paymentMethod', null] },
+                            then: '$paymentMethod',
+                            else: { $ifNull: ['$payment', 'Cash'] }
+                        }
+                    },
+                    amount: { $ifNull: ['$paid_amount', 0] }
+                }
+            },
+            { $sort: { date: 1 } }
+        ]);
+
+        // Dealer Payments - Get all mobiles with dealer payments in the period
+        const dealerPayments = await Mobile.aggregate([
+            {
+                $match: {
+                    shop_id: req.shopId,
+                    created_at: { $gte: startDate, $lte: endDate },
+                    paid_amount: { $gt: 0 },
+                    dealer_id: { $exists: true, $ne: null }
+                }
+            },
+            {
+                $lookup: {
+                    from: 'dealers',
+                    localField: 'dealer_id',
+                    foreignField: '_id',
+                    as: 'dealer'
+                }
+            },
+            { $unwind: { path: '$dealer', preserveNullAndEmptyArrays: true } },
+            {
+                $project: {
+                    date: '$created_at',
+                    dealerName: { $ifNull: ['$dealer.client_name', 'Unknown Dealer'] },
                     mobileName: {
                         $concat: [
                             { $ifNull: ['$mobile_name', ''] },
@@ -985,7 +1029,9 @@ router.get('/reports/financial', shopAdminAuth, async (req, res) => {
         const allCustomerPayments = [...customerPayments, ...adminSales];
 
         // Calculate totals
-        const totalRevenue = allCustomerPayments.reduce((sum, p) => sum + (p.amount || 0), 0);
+        const totalCustomerPayments = allCustomerPayments.reduce((sum, p) => sum + (p.amount || 0), 0);
+        const totalDealerPayments = dealerPayments.reduce((sum, p) => sum + (p.amount || 0), 0);
+        const totalRevenue = totalCustomerPayments + totalDealerPayments;
         const totalSupplierPayments = supplierPayments.reduce((sum, p) => sum + (p.amount || 0), 0);
         const totalOperatingExpenses = operatingExpenses.reduce((sum, e) => sum + (e.amount || 0), 0);
         const totalExpenses = totalSupplierPayments + totalOperatingExpenses;
@@ -1032,6 +1078,8 @@ router.get('/reports/financial', shopAdminAuth, async (req, res) => {
                 periodEnd: endDate.toLocaleDateString('en-IN'),
                 summary: {
                     totalRevenue,
+                    totalCustomerPayments,
+                    totalDealerPayments,
                     totalSupplierPayments,
                     totalOperatingExpenses,
                     totalExpenses,
@@ -1039,6 +1087,7 @@ router.get('/reports/financial', shopAdminAuth, async (req, res) => {
                     profitMargin
                 },
                 customerPayments: allCustomerPayments,
+                dealerPayments,
                 supplierPayments,
                 expenses: operatingExpenses,
                 paymentBreakdown
