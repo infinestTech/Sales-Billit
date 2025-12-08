@@ -40,11 +40,11 @@ export function AppSidebar({ sidebarOpen, setSidebarOpen, role }) {
         if (imageUrl && imageUrl.startsWith('http')) {
           // Replace any https://localhost or https://127.0.0.1 with the correct auth API base URL
           correctedImageUrl = imageUrl.replace(/https?:\/\/(localhost|127\.0\.0\.1):\d+/, process.env.NEXT_PUBLIC_API_URL_AUTH)
+          // Only add cache busting to HTTP URLs
+          correctedImageUrl = `${correctedImageUrl}?t=${Date.now()}`
         }
-        
-        const cacheBustedUrl = `${correctedImageUrl}?t=${Date.now()}`
 
-        setProfileImage(cacheBustedUrl)
+        setProfileImage(correctedImageUrl)
         setProfileName(name)
         localStorage.setItem("profileImage", correctedImageUrl)
         localStorage.setItem("profileName", name)
@@ -64,9 +64,11 @@ export function AppSidebar({ sidebarOpen, setSidebarOpen, role }) {
       // Fix imageUrl to use correct protocol/domain if it's an absolute URL  
       if (updatedImage && updatedImage.startsWith('http')) {
         updatedImage = updatedImage.replace(/https?:\/\/(localhost|127\.0\.0\.1):\d+/, process.env.NEXT_PUBLIC_API_URL_AUTH)
+        // Only add cache busting to HTTP URLs
+        updatedImage = `${updatedImage}?t=${Date.now()}`
       }
       
-      setProfileImage(`${updatedImage}?t=${Date.now()}`)
+      setProfileImage(updatedImage)
       setProfileName(updatedName)
     }
 
@@ -247,11 +249,12 @@ export function AppSidebar({ sidebarOpen, setSidebarOpen, role }) {
                   >
                     <div className="relative">
                       <img
-                        src={profileImage || "/default-profile.png"}
+                        src={profileImage || "data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNDAiIGhlaWdodD0iNDAiIHZpZXdCb3g9IjAgMCA0MCA0MCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPGNpcmNsZSBjeD0iMjAiIGN5PSIyMCIgcj0iMjAiIGZpbGw9IiM0Qjc2ODgiLz4KPGNpcmNsZSBjeD0iMjAiIGN5PSIxNiIgcj0iNiIgZmlsbD0iI0Y5RkFGQiIvPgo8cGF0aCBkPSJNMTAgMzJjMC02IDQtMTAgMTAtMTBzMTAgNCAxMCAxMCIgZmlsbD0iI0Y5RkFGQiIvPgo8L3N2Zz4K"}
                         alt="Profile"
                         className="w-12 h-12 rounded-full object-cover border-2 border-slate-500/50 hover:border-blue-400/70 transition-all duration-300 shadow-lg"
                         onError={(e) => {
-                          e.target.src = "/default-profile.png"
+                          e.target.onerror = null; // Prevent infinite loop
+                          e.target.src = "data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNDAiIGhlaWdodD0iNDAiIHZpZXdCb3g9IjAgMCA0MCA0MCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPGNpcmNsZSBjeD0iMjAiIGN5PSIyMCIgcj0iMjAiIGZpbGw9IiM0Qjc2ODgiLz4KPGNpcmNsZSBjeD0iMjAiIGN5PSIxNiIgcj0iNiIgZmlsbD0iI0Y5RkFGQiIvPgo8cGF0aCBkPSJNMTAgMzJjMC02IDQtMTAgMTAtMTBzMTAgNCAxMCAxMCIgZmlsbD0iI0Y5RkFGQiIvPgo8L3N2Zz4K"
                         }}
                       />
                     </div>

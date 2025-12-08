@@ -53,8 +53,10 @@ export default function MobileProfile({ shopId }) {
           if (profileData.imageUrl.startsWith('http')) {
             // Replace any https://localhost or https://127.0.0.1 with the correct auth API base URL
             correctedImageUrl = profileData.imageUrl.replace(/https?:\/\/(localhost|127\.0\.0\.1):\d+/, process.env.NEXT_PUBLIC_API_URL_AUTH)
+            // Only add cache busting to HTTP URLs
+            correctedImageUrl = `${correctedImageUrl}?t=${Date.now()}`
           }
-          profileData.imageUrl = `${correctedImageUrl}?t=${Date.now()}`
+          profileData.imageUrl = correctedImageUrl
         }
         
         setProfile(profileData)
@@ -207,11 +209,12 @@ export default function MobileProfile({ shopId }) {
             <div className="relative">
               <div className="w-20 h-20 rounded-full overflow-hidden border-4 border-gray-200">
                 <img
-                  src={profile.imageUrl || "/default-profile.png"}
+                  src={profile.imageUrl || "data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNDAiIGhlaWdodD0iNDAiIHZpZXdCb3g9IjAgMCA0MCA0MCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPGNpcmNsZSBjeD0iMjAiIGN5PSIyMCIgcj0iMjAiIGZpbGw9IiM0Qjc2ODgiLz4KPGNpcmNsZSBjeD0iMjAiIGN5PSIxNiIgcj0iNiIgZmlsbD0iI0Y5RkFGQiIvPgo8cGF0aCBkPSJNMTAgMzJjMC02IDQtMTAgMTAtMTBzMTAgNCAxMCAxMCIgZmlsbD0iI0Y5RkFGQiIvPgo8L3N2Zz4K"}
                   alt="Profile"
                   className="w-full h-full object-cover"
                   onError={(e) => {
-                    e.target.src = "/default-profile.png"
+                    e.target.onerror = null; // Prevent infinite loop
+                    e.target.src = "data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNDAiIGhlaWdodD0iNDAiIHZpZXdCb3g9IjAgMCA0MCA0MCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPGNpcmNsZSBjeD0iMjAiIGN5PSIyMCIgcj0iMjAiIGZpbGw9IiM0Qjc2ODgiLz4KPGNpcmNsZSBjeD0iMjAiIGN5PSIxNiIgcj0iNiIgZmlsbD0iI0Y5RkFGQiIvPgo8cGF0aCBkPSJNMTAgMzJjMC02IDQtMTAgMTAtMTBzMTAgNCAxMCAxMCIgZmlsbD0iI0Y5RkFGQiIvPgo8L3N2Zz4K"
                   }}
                 />
               </div>
