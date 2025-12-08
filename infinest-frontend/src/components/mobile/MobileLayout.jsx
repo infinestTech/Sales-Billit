@@ -37,11 +37,11 @@ export default function MobileLayout({ shopId, isLimitReached, setIsLimitReached
         if (imageUrl && imageUrl.startsWith('http')) {
           // Replace any https://localhost or https://127.0.0.1 with the correct auth API base URL
           correctedImageUrl = imageUrl.replace(/https?:\/\/(localhost|127\.0\.0\.1):\d+/, process.env.NEXT_PUBLIC_API_URL_AUTH)
+          // Only add cache busting to HTTP URLs
+          correctedImageUrl = `${correctedImageUrl}?t=${Date.now()}`
         }
-        
-        const cacheBustedUrl = `${correctedImageUrl}?t=${Date.now()}`
 
-        setProfileImage(cacheBustedUrl)
+        setProfileImage(correctedImageUrl)
         setProfileName(name)
       } catch (err) {
         console.error("❌ Failed to fetch profile:", err.response?.data || err.message)
