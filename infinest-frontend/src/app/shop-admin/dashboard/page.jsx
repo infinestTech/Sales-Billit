@@ -623,6 +623,16 @@ export default function ShopAdminDashboard() {
               <div class="value" style="color: #7c3aed;">${reportData.summary?.profitMargin?.toFixed(1) || 0}%</div>
             </div>
           </div>
+          <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; margin-top: 15px;">
+            <div class="summary-box" style="background: #f0fdf4;">
+              <div class="label">Customer Payments</div>
+              <div class="value" style="color: #16a34a;">₹${reportData.summary?.totalCustomerPayments?.toLocaleString() || 0}</div>
+            </div>
+            <div class="summary-box" style="background: #eff6ff;">
+              <div class="label">Dealer Payments</div>
+              <div class="value" style="color: #2563eb;">₹${reportData.summary?.totalDealerPayments?.toLocaleString() || 0}</div>
+            </div>
+          </div>
         </div>
 
         ${reportData.customerPayments && reportData.customerPayments.length > 0 ? `
@@ -654,7 +664,43 @@ export default function ShopAdminDashboard() {
             <tfoot>
               <tr>
                 <td colspan="5" class="text-right">TOTAL CUSTOMER PAYMENTS:</td>
-                <td class="text-right">₹${reportData.summary?.totalRevenue?.toLocaleString()}</td>
+                <td class="text-right">₹${reportData.summary?.totalCustomerPayments?.toLocaleString()}</td>
+              </tr>
+            </tfoot>
+          </table>
+        </div>
+        ` : ''}
+
+        ${reportData.dealerPayments && reportData.dealerPayments.length > 0 ? `
+        <div class="section">
+          <div class="section-title">DEALER PAYMENTS</div>
+          <table>
+            <thead>
+              <tr>
+                <th style="width: 40px;">S.No</th>
+                <th style="width: 80px;">Date</th>
+                <th>Dealer Name</th>
+                <th>Mobile/Device</th>
+                <th>Payment Method</th>
+                <th class="text-right" style="width: 100px;">Amount</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${reportData.dealerPayments.map((payment, idx) => `
+                <tr>
+                  <td class="text-center">${idx + 1}</td>
+                  <td>${new Date(payment.date).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}</td>
+                  <td>${payment.dealerName}</td>
+                  <td>${payment.mobileName}</td>
+                  <td>${payment.paymentMethod || 'N/A'}</td>
+                  <td class="text-right">₹${payment.amount?.toLocaleString()}</td>
+                </tr>
+              `).join('')}
+            </tbody>
+            <tfoot>
+              <tr>
+                <td colspan="5" class="text-right">TOTAL DEALER PAYMENTS:</td>
+                <td class="text-right">₹${reportData.summary?.totalDealerPayments?.toLocaleString()}</td>
               </tr>
             </tfoot>
           </table>
@@ -1106,7 +1152,7 @@ export default function ShopAdminDashboard() {
                       placeholder="Search by name..."
                       value={customerFilters.name}
                       onChange={(e) => setCustomerFilters({...customerFilters, name: e.target.value})}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-900 placeholder-gray-500 bg-white"
                     />
                   </div>
                   <div>
@@ -1119,7 +1165,7 @@ export default function ShopAdminDashboard() {
                       placeholder="Search by mobile..."
                       value={customerFilters.mobileNumber}
                       onChange={(e) => setCustomerFilters({...customerFilters, mobileNumber: e.target.value})}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-900 placeholder-gray-500 bg-white"
                     />
                   </div>
                   <div>
@@ -1132,7 +1178,7 @@ export default function ShopAdminDashboard() {
                         type="date"
                         value={customerFilters.fromDate}
                         onChange={(e) => setCustomerFilters({...customerFilters, fromDate: e.target.value})}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer"
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer text-gray-900 bg-white"
                         style={{ colorScheme: 'light' }}
                       />
                       <Calendar className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400 pointer-events-none" />
@@ -1148,7 +1194,7 @@ export default function ShopAdminDashboard() {
                         type="date"
                         value={customerFilters.toDate}
                         onChange={(e) => setCustomerFilters({...customerFilters, toDate: e.target.value})}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer"
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer text-gray-900 bg-white"
                         style={{ colorScheme: 'light' }}
                       />
                       <Calendar className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400 pointer-events-none" />
@@ -1482,7 +1528,7 @@ export default function ShopAdminDashboard() {
                               type="date"
                               value={attendanceFilters.fromDate}
                               onChange={(e) => setAttendanceFilters({...attendanceFilters, fromDate: e.target.value})}
-                              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer"
+                              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer text-gray-900 bg-white"
                               style={{ colorScheme: 'light' }}
                             />
                             <Calendar className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400 pointer-events-none" />
@@ -1495,7 +1541,7 @@ export default function ShopAdminDashboard() {
                               type="date"
                               value={attendanceFilters.toDate}
                               onChange={(e) => setAttendanceFilters({...attendanceFilters, toDate: e.target.value})}
-                              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer"
+                              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer text-gray-900 bg-white"
                               style={{ colorScheme: 'light' }}
                             />
                             <Calendar className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400 pointer-events-none" />
@@ -1701,14 +1747,14 @@ export default function ShopAdminDashboard() {
                       onChange={(e) => {
                         setRevenueFilters({ period: e.target.value, fromDate: '', toDate: '' });
                       }}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white text-gray-900"
                     >
-                      <option value="7">Last 7 Days</option>
-                      <option value="30">Last 30 Days</option>
-                      <option value="60">Last 60 Days</option>
-                      <option value="90">Last 90 Days</option>
-                      <option value="180">Last 6 Months</option>
-                      <option value="365">Last Year</option>
+                      <option value="7" className="text-gray-900">Last 7 Days</option>
+                      <option value="30" className="text-gray-900">Last 30 Days</option>
+                      <option value="60" className="text-gray-900">Last 60 Days</option>
+                      <option value="90" className="text-gray-900">Last 90 Days</option>
+                      <option value="180" className="text-gray-900">Last 6 Months</option>
+                      <option value="365" className="text-gray-900">Last Year</option>
                     </select>
                   </div>
                   <div>
@@ -1720,7 +1766,7 @@ export default function ShopAdminDashboard() {
                       type="date"
                       value={revenueFilters.fromDate}
                       onChange={(e) => setRevenueFilters({ ...revenueFilters, fromDate: e.target.value, period: '' })}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer"
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer text-gray-900 bg-white"
                       style={{ colorScheme: 'light' }}
                     />
                   </div>
@@ -1733,7 +1779,7 @@ export default function ShopAdminDashboard() {
                       type="date"
                       value={revenueFilters.toDate}
                       onChange={(e) => setRevenueFilters({ ...revenueFilters, toDate: e.target.value, period: '' })}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer"
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer text-gray-900 bg-white"
                       style={{ colorScheme: 'light' }}
                     />
                   </div>
@@ -2000,14 +2046,14 @@ export default function ShopAdminDashboard() {
                     <select
                       value={reportFilters.period}
                       onChange={(e) => setReportFilters({ period: e.target.value, fromDate: '', toDate: '' })}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white text-gray-900"
                     >
-                      <option value="7">Last 7 Days</option>
-                      <option value="30">Last 30 Days</option>
-                      <option value="60">Last 60 Days</option>
-                      <option value="90">Last 90 Days</option>
-                      <option value="180">Last 6 Months</option>
-                      <option value="365">Last Year</option>
+                      <option value="7" className="text-gray-900">Last 7 Days</option>
+                      <option value="30" className="text-gray-900">Last 30 Days</option>
+                      <option value="60" className="text-gray-900">Last 60 Days</option>
+                      <option value="90" className="text-gray-900">Last 90 Days</option>
+                      <option value="180" className="text-gray-900">Last 6 Months</option>
+                      <option value="365" className="text-gray-900">Last Year</option>
                     </select>
                   </div>
                   <div>
@@ -2019,7 +2065,7 @@ export default function ShopAdminDashboard() {
                       type="date"
                       value={reportFilters.fromDate}
                       onChange={(e) => setReportFilters({ ...reportFilters, fromDate: e.target.value, period: '' })}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-900 bg-white"
                       style={{ colorScheme: 'light' }}
                     />
                   </div>
@@ -2032,7 +2078,7 @@ export default function ShopAdminDashboard() {
                       type="date"
                       value={reportFilters.toDate}
                       onChange={(e) => setReportFilters({ ...reportFilters, toDate: e.target.value, period: '' })}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-900 bg-white"
                       style={{ colorScheme: 'light' }}
                     />
                   </div>
@@ -2077,7 +2123,7 @@ export default function ShopAdminDashboard() {
                 {/* Financial Summary */}
                 <div className="p-8 border-b border-gray-200">
                   <h3 className="text-xl font-bold text-gray-900 mb-4">FINANCIAL SUMMARY</h3>
-                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
                     <div className="p-4 bg-green-50 rounded-lg border border-green-200">
                       <div className="text-sm text-green-700 font-medium">Total Revenue</div>
                       <div className="text-2xl font-bold text-green-900 mt-1">₹{reportData.summary?.totalRevenue?.toLocaleString() || 0}</div>
@@ -2095,48 +2141,103 @@ export default function ShopAdminDashboard() {
                       <div className="text-2xl font-bold text-purple-900 mt-1">{reportData.summary?.profitMargin?.toFixed(1) || 0}%</div>
                     </div>
                   </div>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="p-4 bg-emerald-50 rounded-lg border border-emerald-200">
+                      <div className="text-sm text-emerald-700 font-medium">Customer Payments</div>
+                      <div className="text-xl font-bold text-emerald-900 mt-1">₹{reportData.summary?.totalCustomerPayments?.toLocaleString() || 0}</div>
+                    </div>
+                    <div className="p-4 bg-blue-50 rounded-lg border border-blue-200">
+                      <div className="text-sm text-blue-700 font-medium">Dealer Payments</div>
+                      <div className="text-xl font-bold text-blue-900 mt-1">₹{reportData.summary?.totalDealerPayments?.toLocaleString() || 0}</div>
+                    </div>
+                  </div>
                 </div>
 
                 {/* Customer Payments */}
-                <div className="p-8 border-b border-gray-200">
-                  <h3 className="text-xl font-bold text-gray-900 mb-4">CUSTOMER PAYMENTS</h3>
-                  <div className="overflow-x-auto">
-                    <table className="w-full text-sm">
-                      <thead>
-                        <tr className="bg-gray-100 border-b border-gray-300">
-                          <th className="px-4 py-3 text-left font-semibold text-gray-700">S.No</th>
-                          <th className="px-4 py-3 text-left font-semibold text-gray-700">Date</th>
-                          <th className="px-4 py-3 text-left font-semibold text-gray-700">Customer Name</th>
-                          <th className="px-4 py-3 text-left font-semibold text-gray-700">Mobile/Device</th>
-                          <th className="px-4 py-3 text-left font-semibold text-gray-700">Payment Method</th>
-                          <th className="px-4 py-3 text-right font-semibold text-gray-700">Amount</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {reportData.customerPayments?.map((payment, idx) => (
-                          <tr key={idx} className="border-b border-gray-200 hover:bg-gray-50">
-                            <td className="px-4 py-3">{idx + 1}</td>
-                            <td className="px-4 py-3">{new Date(payment.date).toLocaleDateString('en-IN')}</td>
-                            <td className="px-4 py-3 font-medium">{payment.customerName}</td>
-                            <td className="px-4 py-3">{payment.mobileName}</td>
-                            <td className="px-4 py-3">
-                              <span className="px-2 py-1 bg-green-100 text-green-800 rounded text-xs">
-                                {payment.paymentMethod || 'N/A'}
-                              </span>
-                            </td>
-                            <td className="px-4 py-3 text-right font-semibold text-green-700">₹{payment.amount?.toLocaleString()}</td>
+                {reportData.customerPayments && reportData.customerPayments.length > 0 && (
+                  <div className="p-8 border-b border-gray-200">
+                    <h3 className="text-xl font-bold text-gray-900 mb-4">CUSTOMER PAYMENTS</h3>
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-sm">
+                        <thead>
+                          <tr className="bg-gray-100 border-b border-gray-300">
+                            <th className="px-4 py-3 text-left font-semibold text-gray-700">S.No</th>
+                            <th className="px-4 py-3 text-left font-semibold text-gray-700">Date</th>
+                            <th className="px-4 py-3 text-left font-semibold text-gray-700">Customer Name</th>
+                            <th className="px-4 py-3 text-left font-semibold text-gray-700">Mobile/Device</th>
+                            <th className="px-4 py-3 text-left font-semibold text-gray-700">Payment Method</th>
+                            <th className="px-4 py-3 text-right font-semibold text-gray-700">Amount</th>
                           </tr>
-                        ))}
-                      </tbody>
-                      <tfoot>
-                        <tr className="bg-gray-100 font-bold">
-                          <td colSpan="5" className="px-4 py-3 text-right">TOTAL CUSTOMER PAYMENTS:</td>
-                          <td className="px-4 py-3 text-right text-green-700">₹{reportData.summary?.totalRevenue?.toLocaleString()}</td>
-                        </tr>
-                      </tfoot>
-                    </table>
+                        </thead>
+                        <tbody>
+                          {reportData.customerPayments.map((payment, idx) => (
+                            <tr key={idx} className="border-b border-gray-200 hover:bg-gray-50">
+                              <td className="px-4 py-3 text-gray-900">{idx + 1}</td>
+                              <td className="px-4 py-3 text-gray-900">{new Date(payment.date).toLocaleDateString('en-IN')}</td>
+                              <td className="px-4 py-3 font-medium text-gray-900">{payment.customerName}</td>
+                              <td className="px-4 py-3 text-gray-900">{payment.mobileName}</td>
+                              <td className="px-4 py-3">
+                                <span className="px-2 py-1 bg-green-100 text-green-800 rounded text-xs">
+                                  {payment.paymentMethod || 'N/A'}
+                                </span>
+                              </td>
+                              <td className="px-4 py-3 text-right font-semibold text-green-700">₹{payment.amount?.toLocaleString()}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                        <tfoot>
+                          <tr className="bg-gray-100 font-bold">
+                            <td colSpan="5" className="px-4 py-3 text-right text-gray-900">TOTAL CUSTOMER PAYMENTS:</td>
+                            <td className="px-4 py-3 text-right text-green-700">₹{reportData.summary?.totalCustomerPayments?.toLocaleString()}</td>
+                          </tr>
+                        </tfoot>
+                      </table>
+                    </div>
                   </div>
-                </div>
+                )}
+
+                {/* Dealer Payments */}
+                {reportData.dealerPayments && reportData.dealerPayments.length > 0 && (
+                  <div className="p-8 border-b border-gray-200">
+                    <h3 className="text-xl font-bold text-gray-900 mb-4">DEALER PAYMENTS</h3>
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-sm">
+                        <thead>
+                          <tr className="bg-gray-100 border-b border-gray-300">
+                            <th className="px-4 py-3 text-left font-semibold text-gray-700">S.No</th>
+                            <th className="px-4 py-3 text-left font-semibold text-gray-700">Date</th>
+                            <th className="px-4 py-3 text-left font-semibold text-gray-700">Dealer Name</th>
+                            <th className="px-4 py-3 text-left font-semibold text-gray-700">Mobile/Device</th>
+                            <th className="px-4 py-3 text-left font-semibold text-gray-700">Payment Method</th>
+                            <th className="px-4 py-3 text-right font-semibold text-gray-700">Amount</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {reportData.dealerPayments.map((payment, idx) => (
+                            <tr key={idx} className="border-b border-gray-200 hover:bg-gray-50">
+                              <td className="px-4 py-3 text-gray-900">{idx + 1}</td>
+                              <td className="px-4 py-3 text-gray-900">{new Date(payment.date).toLocaleDateString('en-IN')}</td>
+                              <td className="px-4 py-3 font-medium text-gray-900">{payment.dealerName}</td>
+                              <td className="px-4 py-3 text-gray-900">{payment.mobileName}</td>
+                              <td className="px-4 py-3">
+                                <span className="px-2 py-1 bg-blue-100 text-blue-800 rounded text-xs">
+                                  {payment.paymentMethod || 'N/A'}
+                                </span>
+                              </td>
+                              <td className="px-4 py-3 text-right font-semibold text-blue-700">₹{payment.amount?.toLocaleString()}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                        <tfoot>
+                          <tr className="bg-gray-100 font-bold">
+                            <td colSpan="5" className="px-4 py-3 text-right text-gray-900">TOTAL DEALER PAYMENTS:</td>
+                            <td className="px-4 py-3 text-right text-blue-700">₹{reportData.summary?.totalDealerPayments?.toLocaleString()}</td>
+                          </tr>
+                        </tfoot>
+                      </table>
+                    </div>
+                  </div>
+                )}
 
                 {/* Supplier Payments */}
                 {reportData.supplierPayments && reportData.supplierPayments.length > 0 && (
@@ -2157,10 +2258,10 @@ export default function ShopAdminDashboard() {
                         <tbody>
                           {reportData.supplierPayments.map((payment, idx) => (
                             <tr key={idx} className="border-b border-gray-200 hover:bg-gray-50">
-                              <td className="px-4 py-3">{idx + 1}</td>
-                              <td className="px-4 py-3">{new Date(payment.date).toLocaleDateString('en-IN')}</td>
-                              <td className="px-4 py-3 font-medium">{payment.supplierName}</td>
-                              <td className="px-4 py-3">{payment.productName}</td>
+                              <td className="px-4 py-3 text-gray-900">{idx + 1}</td>
+                              <td className="px-4 py-3 text-gray-900">{new Date(payment.date).toLocaleDateString('en-IN')}</td>
+                              <td className="px-4 py-3 font-medium text-gray-900">{payment.supplierName}</td>
+                              <td className="px-4 py-3 text-gray-900">{payment.productName}</td>
                               <td className="px-4 py-3">
                                 <span className="px-2 py-1 bg-orange-100 text-orange-800 rounded text-xs">
                                   {payment.paymentMethod || 'N/A'}
@@ -2172,7 +2273,7 @@ export default function ShopAdminDashboard() {
                         </tbody>
                         <tfoot>
                           <tr className="bg-gray-100 font-bold">
-                            <td colSpan="5" className="px-4 py-3 text-right">TOTAL SUPPLIER PAYMENTS:</td>
+                            <td colSpan="5" className="px-4 py-3 text-right text-gray-900">TOTAL SUPPLIER PAYMENTS:</td>
                             <td className="px-4 py-3 text-right text-red-700">₹{reportData.summary?.totalSupplierPayments?.toLocaleString()}</td>
                           </tr>
                         </tfoot>
@@ -2199,17 +2300,17 @@ export default function ShopAdminDashboard() {
                         <tbody>
                           {reportData.expenses.map((expense, idx) => (
                             <tr key={idx} className="border-b border-gray-200 hover:bg-gray-50">
-                              <td className="px-4 py-3">{idx + 1}</td>
-                              <td className="px-4 py-3">{new Date(expense.date).toLocaleDateString('en-IN')}</td>
-                              <td className="px-4 py-3 font-medium">{expense.category}</td>
-                              <td className="px-4 py-3">{expense.description}</td>
+                              <td className="px-4 py-3 text-gray-900">{idx + 1}</td>
+                              <td className="px-4 py-3 text-gray-900">{new Date(expense.date).toLocaleDateString('en-IN')}</td>
+                              <td className="px-4 py-3 font-medium text-gray-900">{expense.category}</td>
+                              <td className="px-4 py-3 text-gray-900">{expense.description}</td>
                               <td className="px-4 py-3 text-right font-semibold text-red-700">₹{expense.amount?.toLocaleString()}</td>
                             </tr>
                           ))}
                         </tbody>
                         <tfoot>
                           <tr className="bg-gray-100 font-bold">
-                            <td colSpan="4" className="px-4 py-3 text-right">TOTAL OPERATING EXPENSES:</td>
+                            <td colSpan="4" className="px-4 py-3 text-right text-gray-900">TOTAL OPERATING EXPENSES:</td>
                             <td className="px-4 py-3 text-right text-red-700">₹{reportData.summary?.totalOperatingExpenses?.toLocaleString()}</td>
                           </tr>
                         </tfoot>
