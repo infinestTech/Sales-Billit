@@ -207,6 +207,9 @@ const RecordTable = ({ shop_id, setIsLimitReached }) => {
                   Mobiles
                 </th>
                 <th className="px-6 py-3 text-left text-sm font-medium text-gray-700 border-b border-gray-200">
+                  Payment Breakdown
+                </th>
+                <th className="px-6 py-3 text-left text-sm font-medium text-gray-700 border-b border-gray-200">
                   Balance Amount
                 </th>
               </tr>
@@ -234,6 +237,32 @@ const RecordTable = ({ shop_id, setIsLimitReached }) => {
                       <span className="text-sm text-gray-900">{record.mobiles.length}</span>
                     </td>
                     <td className="px-6 py-4 border-b border-gray-200">
+                      <div className="text-sm text-gray-700">
+                        {(() => {
+                          const allPayments = record.mobiles.flatMap(m => m.payments || [])
+                          const paymentsByMethod = {}
+                          allPayments.forEach(p => {
+                            const method = p.method || 'N/A'
+                            paymentsByMethod[method] = (paymentsByMethod[method] || 0) + (p.amount || 0)
+                          })
+                          const methods = Object.entries(paymentsByMethod)
+                          if (methods.length > 0) {
+                            return (
+                              <div className="space-y-0.5">
+                                {methods.map(([method, amount], idx) => (
+                                  <div key={idx} className="flex items-center gap-2">
+                                    <span className="text-gray-600">{method}</span>
+                                    <span className="font-medium">₹{amount.toLocaleString("en-IN")}</span>
+                                  </div>
+                                ))}
+                              </div>
+                            )
+                          }
+                          return <span className="text-gray-400">-</span>
+                        })()}
+                      </div>
+                    </td>
+                    <td className="px-6 py-4 border-b border-gray-200">
                       <input
                         type="number"
                         className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
@@ -252,7 +281,7 @@ const RecordTable = ({ shop_id, setIsLimitReached }) => {
                   </tr>
                   {expandedRow === index && (
                     <tr>
-                      <td colSpan="6" className="border-b border-gray-200 bg-gray-50 px-6 py-4">
+                      <td colSpan="7" className="border-b border-gray-200 bg-gray-50 px-6 py-4">
                         <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
                           <div className="bg-gray-50 px-4 py-3 border-b border-gray-200">
                             <h5 className="text-sm font-medium text-gray-800">Mobile Device Details</h5>

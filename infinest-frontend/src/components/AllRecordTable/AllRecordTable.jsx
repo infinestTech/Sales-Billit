@@ -350,6 +350,11 @@ const [shopAddressState, setShopAddressState] = useState("")
                     </th>
                     <th className="px-6 py-4 text-left text-sm font-bold text-gray-700 border-b border-gray-300">
                       <div className="flex items-center">
+                        Payment Breakdown
+                      </div>
+                    </th>
+                    <th className="px-6 py-4 text-left text-sm font-bold text-gray-700 border-b border-gray-300">
+                      <div className="flex items-center">
                         <DollarSign className="h-4 w-4 mr-2 text-red-600" />
                         Balance Amount
                       </div>
@@ -386,6 +391,32 @@ const [shopAddressState, setShopAddressState] = useState("")
                         </td>
                         <td className="px-6 py-4 border-b border-gray-200">
                           <span className="font-medium text-gray-700">{invoice.bill_no || "N/A"}</span>
+                        </td>
+                        <td className="px-6 py-4 border-b border-gray-200" onClick={(e) => e.stopPropagation()}>
+                          <div className="text-sm text-gray-700">
+                            {(() => {
+                              const allPayments = invoice.MobileName.flatMap(m => m.payments || [])
+                              const paymentsByMethod = {}
+                              allPayments.forEach(p => {
+                                const method = p.method || 'N/A'
+                                paymentsByMethod[method] = (paymentsByMethod[method] || 0) + (p.amount || 0)
+                              })
+                              const methods = Object.entries(paymentsByMethod)
+                              if (methods.length > 0) {
+                                return (
+                                  <div className="space-y-0.5">
+                                    {methods.map(([method, amount], idx) => (
+                                      <div key={idx} className="flex items-center gap-2">
+                                        <span className="text-gray-600">{method}</span>
+                                        <span className="font-medium">₹{amount.toLocaleString("en-IN")}</span>
+                                      </div>
+                                    ))}
+                                  </div>
+                                )
+                              }
+                              return <span className="text-gray-400">-</span>
+                            })()}
+                          </div>
                         </td>
                         <td className="px-6 py-4 border-b border-gray-200">
                           <input
@@ -425,7 +456,7 @@ const [shopAddressState, setShopAddressState] = useState("")
                       </tr>
                       {expandedRow === index && (
                         <tr>
-                          <td colSpan="7" className="px-6 py-4 bg-gray-50/30">
+                          <td colSpan="8" className="px-6 py-4 bg-gray-50/30">
                             <div className="bg-white rounded-lg border border-gray-200 p-4">
                               <MobileNameTable
                                 mobileData={invoice.MobileName}

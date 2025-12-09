@@ -31,6 +31,16 @@ const MobileNameTable = ({ mobileData, setMobileData, onRevenueUpdate, hideActio
   const [warranty, setWarranty] = useState("")
   const [selling, setSelling] = useState(false)
 
+  // Split Payment Modal States
+  const [paymentModalOpen, setPaymentModalOpen] = useState(false)
+  const [activePaymentMobileId, setActivePaymentMobileId] = useState(null)
+  const [activePaymentMobileIndex, setActivePaymentMobileIndex] = useState(null)
+  const [newPaymentAmount, setNewPaymentAmount] = useState("")
+  const [newPaymentMethod, setNewPaymentMethod] = useState("")
+  const [addingPayment, setAddingPayment] = useState(false)
+  const [popupPosition, setPopupPosition] = useState({ top: 0, left: 0 })
+  const [viewPopupPosition, setViewPopupPosition] = useState({ top: 0, left: 0 })
+
   // Console log all mobile data with model values
   useEffect(() => {
     console.log("Mobile Data with Models:", validMobileData.map(m => ({
@@ -199,6 +209,28 @@ const MobileNameTable = ({ mobileData, setMobileData, onRevenueUpdate, hideActio
 
 
 
+  const openPaymentModal = async (mobile, localIndex) => {
+    if (hideActions) return
+    const globalIndex = indexOfFirstItem + localIndex
+    setActivePaymentMobileId(mobile?._id || null)
+    setActivePaymentMobileIndex(globalIndex)
+    setPaymentModalOpen(true)
+    setNewPaymentAmount("")
+    setNewPaymentMethod("")
+    
+    // Position popup near the button
+    setTimeout(() => {
+      const button = document.getElementById(`add-payment-btn-${globalIndex}`)
+      if (button) {
+        const rect = button.getBoundingClientRect()
+        setPopupPosition({
+          top: rect.bottom + window.scrollY + 8,
+          left: rect.left + window.scrollX
+        })
+      }
+    }, 0)
+  }
+
   const openSellModal = async (mobile, localIndex) => {
     if (hideActions) return
     // compute global index for updating mobileData later
@@ -261,6 +293,125 @@ const MobileNameTable = ({ mobileData, setMobileData, onRevenueUpdate, hideActio
 
 
 
+
+  const closePaymentModal = () => {
+    setPaymentModalOpen(false)
+    setActivePaymentMobileId(null)
+    setActivePaymentMobileIndex(null)
+    setNewPaymentAmount("")
+    setNewPaymentMethod("")
+    setPopupPosition({ top: 0, left: 0 })
+  }
+
+  // Update view popup position when toggled
+  useEffect(() => {
+    if (activePaymentMobileIndex !== null && !paymentModalOpen) {
+      const button = document.getElementById(`view-payment-btn-${activePaymentMobileIndex}`)
+      if (button) {
+        const rect = button.getBoundingClientRect()
+        setViewPopupPosition({
+          top: rect.bottom + window.scrollY + 8,
+          left: rect.right + window.scrollX - 320 // 320px is popup width
+        })
+      }
+    }
+  }, [activePaymentMobileIndex, paymentModalOpen])
+
+  const addPaymentEntry = async () => {
+    if (!newPaymentAmount || !newPaymentMethod) {
+      alert("Please enter amount and select payment method")
+      return
+    }
+    
+    const amount = Number.parseFloat(newPaymentAmount)
+    if (isNaN(amount) || amount <= 0) {
+      alert("Please enter a valid amount")
+      return
+    }
+
+    setAddingPayment(true)
+    try {
+      const token = localStorage.getItem("token")
+      const response = await api.post(
+        "/api/add-payment-entry",
+        {
+          id: activePaymentMobileId,
+          amount: amount,
+          method: newPaymentMethod,
+          date: new Date().toISOString()
+        },
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        },
+      )
+
+      const updated = response.data.updatedMobile
+      const updatedData = [...mobileData]
+      const localRecord = updatedData[activePaymentMobileIndex] || {}
+      const merged = {
+        ...localRecord,
+        ...updated,
+        payments: updated.payments || [],
+        total_paid: updated.total_paid || 0,
+      }
+      updatedData[activePaymentMobileIndex] = merged
+
+      setMobileData(updatedData)
+      setNewPaymentAmount("")
+      setNewPaymentMethod("")
+
+      if (typeof onRevenueUpdate === "function") {
+        onRevenueUpdate()
+      }
+    } catch (error) {
+      console.error("Failed to add payment entry:", error.message)
+      alert("Failed to add payment. Please try again.")
+    } finally {
+      setAddingPayment(false)
+    }
+  }
+
+  const deletePaymentEntry = async (paymentId) => {
+    if (!confirm("Are you sure you want to delete this payment entry?")) return
+
+    try {
+      const token = localStorage.getItem("token")
+      const response = await api.post(
+        "/api/delete-payment-entry",
+        {
+          id: activePaymentMobileId,
+          paymentId: paymentId
+        },
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        },
+      )
+
+      const updated = response.data.updatedMobile
+      const updatedData = [...mobileData]
+      const localRecord = updatedData[activePaymentMobileIndex] || {}
+      const merged = {
+        ...localRecord,
+        ...updated,
+        payments: updated.payments || [],
+        total_paid: updated.total_paid || 0,
+      }
+      updatedData[activePaymentMobileIndex] = merged
+
+      setMobileData(updatedData)
+
+      if (typeof onRevenueUpdate === "function") {
+        onRevenueUpdate()
+      }
+    } catch (error) {
+      console.error("Failed to delete payment entry:", error.message)
+      alert("Failed to delete payment. Please try again.")
+    }
+  }
 
   const submitSell = async () => {
     if (!sellQty) return
@@ -434,11 +585,6 @@ const MobileNameTable = ({ mobileData, setMobileData, onRevenueUpdate, hideActio
                   Paid Amount
                 </div>
               </th>
-              <th className="px-6 py-4 text-left text-sm font-bold text-gray-700 border-b border-gray-300">
-                <div className="flex items-center">
-                  Payment
-                </div>
-              </th>
             </tr>
           </thead>
           <tbody>
@@ -506,87 +652,55 @@ const MobileNameTable = ({ mobileData, setMobileData, onRevenueUpdate, hideActio
                   </button>
                 </td>
                 <td className="px-6 py-4 border-b border-gray-200">
-                  <div className="flex flex-col space-y-2">
-                    {mobile.productName || mobile.product || mobile.itemName ? (
-                      <div className="bg-blue-50 rounded-lg p-3 border border-blue-200">
-                        <div className="flex items-start justify-between mb-2">
-                          <span className="text-sm font-semibold text-gray-900">{mobile.productName || mobile.product || mobile.itemName}</span>
-                          {mobile.quantity && (
-                            <span className="text-xs font-medium bg-blue-100 text-blue-700 px-2 py-1 rounded-full">Qty: {mobile.quantity}</span>
-                          )}
-                        </div>
-                        {mobile.supplierName && (
-                          <div className="flex items-center gap-1.5 mb-2">
-                            <Package className="h-3 w-3 text-blue-600" />
-                            <span className="text-xs font-medium text-blue-700">{mobile.supplierName}</span>
-                          </div>
-                        )}
-                        {mobile.supplier_amount > 0 && (
-                          <div className="text-xs text-gray-600">
-                            <span className="font-medium">Cost: ₹{mobile.supplier_amount}</span>
-                          </div>
-                        )}
-                      </div>
-                    ) : (
-                      <div className="bg-gray-50 rounded-lg p-3 border border-gray-200">
-                        <span className="text-xs text-gray-500 italic">No product assigned</span>
-                      </div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm font-medium text-gray-900">
+                      {mobile.productName || mobile.product || mobile.itemName || "-"}
+                    </span>
+                    {(mobile.productName || mobile.product || mobile.itemName) && (
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          if (activeMobileIndex === (indexOfFirstItem + index)) {
+                            setActiveMobileIndex(null)
+                          } else {
+                            setActiveMobileIndex(indexOfFirstItem + index)
+                          }
+                        }}
+                        className="px-2 py-0.5 text-xs text-blue-600 hover:text-blue-700 font-medium"
+                        id={`view-product-btn-${indexOfFirstItem + index}`}
+                      >
+                        {activeMobileIndex === (indexOfFirstItem + index) ? 'Hide' : 'View'}
+                      </button>
                     )}
                     <button
                       onClick={() => openSellModal(mobile, index)}
                       disabled={hideActions}
-                      className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition-all duration-200 ${mobile.productName || mobile.product || mobile.itemName ? 'bg-blue-600 text-white hover:bg-blue-700' : 'bg-green-600 text-white hover:bg-green-700'} ${hideActions ? "cursor-not-allowed opacity-60" : "cursor-pointer"} w-fit`}
+                      className={`px-2 py-1 text-xs font-medium rounded transition-colors ${
+                        hideActions ? "cursor-not-allowed opacity-60 bg-gray-300" : "bg-blue-600 text-white hover:bg-blue-700"
+                      }`}
                     >
-                      {mobile.productName || mobile.product || mobile.itemName ? '✏️ Edit' : '➕ Use'}
+                      {mobile.productName || mobile.product || mobile.itemName ? 'Edit' : '+ Use'}
                     </button>
                   </div>
                 </td>
                 <td className="px-6 py-4 border-b border-gray-200">
-                  <input
-                    type="number"
-                    placeholder="₹0"
-                    value={mobile.paid_amount || ""}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition-all duration-200"
-                    onChange={(e) => {
-                      if (hideActions) return
-                      const value = e.target.value
-                      if (/^\d{0,8}$/.test(value)) {
-                        const updated = [...mobileData]
-                        updated[indexOfFirstItem + index].paid_amount = value
-                        setMobileData(updated)
-                      }
-                    }}
-                    onBlur={(e) => updatePaidAmount(index, e.target.value || 0, (currentMobileData[index]?.payment))}
-                    disabled={hideActions}
-                  />
-                </td>
-                <td className="px-6 py-4 border-b border-gray-200">
-                  <select
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200"
-                    value={mobile.payment || ""}
-                    onChange={(e) => {
-                      if (hideActions) return
-                      const val = e.target.value
-                      const updated = [...mobileData]
-                      updated[indexOfFirstItem + index].payment = val
-                      setMobileData(updated)
-                      const currentAmount = currentMobileData[index]?.paid_amount || 0
-                      updatePaidAmount(index, currentAmount, val)
-                    }}
-                    disabled={hideActions}
-                  >
-                    <option value="">Select</option>
-                    <option value="cash">Cash</option>
-                    <option value="UPI">UPI</option>
-                    <option value="card">Card</option>
-                    <option value="UPI-h">UPI-H</option>
-                    <option value="UPI-s">UPI-S</option>
-                    <option value="Cash + Card">CASH + CARD</option>
-                    <option value="UPI H + CASH">UPI H + CASH</option>
-                    <option value="UPI S + CASH">UPI S + CASH</option>
-                    <option value="UPI H + CARD">UPI H + CARD</option>
-                    <option value="UPI S + CARD">UPI S + CARD</option>
-                  </select>
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm font-medium text-gray-900">
+                      ₹{(mobile.total_paid || mobile.paid_amount || 0).toLocaleString("en-IN")}
+                    </span>
+                    <button
+                      onClick={(e) => {
+                        openPaymentModal(mobile, index)
+                      }}
+                      disabled={hideActions}
+                      className={`px-2 py-1 text-xs font-medium rounded transition-colors ${
+                        hideActions ? "cursor-not-allowed opacity-60 bg-gray-300" : "bg-blue-600 text-white hover:bg-blue-700"
+                      }`}
+                      id={`add-payment-btn-${indexOfFirstItem + index}`}
+                    >
+                      + Add
+                    </button>
+                  </div>
                 </td>
               </tr>
             ))}
@@ -609,6 +723,192 @@ const MobileNameTable = ({ mobileData, setMobileData, onRevenueUpdate, hideActio
 
 
 
+
+      {/* Add Payment Popup */}
+      {paymentModalOpen && (
+        <>
+          <div className="fixed inset-0 bg-black/30 z-40" onClick={closePaymentModal}></div>
+          <div className="fixed left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 bg-white rounded-lg shadow-xl border border-gray-200 p-5 w-80 z-50">
+            <div className="flex items-center justify-between mb-4">
+              <h4 className="text-base font-semibold text-gray-900">Add Payment</h4>
+              <button
+                onClick={closePaymentModal}
+                className="text-gray-400 hover:text-gray-600"
+              >
+                <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+            <div className="mb-4 pb-4 border-b border-gray-200">
+              <p className="text-xs text-gray-600 mb-1">Current Total</p>
+              <p className="text-xl font-bold text-gray-900">
+                ₹{((mobileData[activePaymentMobileIndex]?.total_paid || mobileData[activePaymentMobileIndex]?.paid_amount || 0)).toLocaleString("en-IN")}
+              </p>
+            </div>
+            <div className="space-y-3">
+              <div>
+                <label className="block text-xs font-medium text-gray-700 mb-1">Amount</label>
+                <input
+                  type="number"
+                  className="w-full border border-gray-300 rounded px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
+                  placeholder="₹0"
+                  value={newPaymentAmount}
+                  onChange={(e) => setNewPaymentAmount(e.target.value)}
+                  min="0"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-700 mb-1">Method</label>
+                <select
+                  className="w-full border border-gray-300 rounded px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
+                  value={newPaymentMethod}
+                  onChange={(e) => setNewPaymentMethod(e.target.value)}
+                >
+                  <option value="">Select</option>
+                  <option value="cash">Cash</option>
+                  <option value="UPI">UPI</option>
+                  <option value="card">Card</option>
+                  <option value="UPI-h">UPI-H</option>
+                  <option value="UPI-s">UPI-S</option>
+                </select>
+              </div>
+              <button
+                onClick={addPaymentEntry}
+                disabled={addingPayment || !newPaymentAmount || !newPaymentMethod}
+                className="w-full bg-blue-600 text-white py-1.5 rounded text-sm font-medium hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              >
+                {addingPayment ? "Adding..." : "Add"}
+              </button>
+            </div>
+          </div>
+        </>
+      )}
+
+      {/* View Payment History Popup */}
+      {activePaymentMobileIndex !== null && !paymentModalOpen && (
+        <>
+          <div className="fixed inset-0 bg-black/30 z-40" onClick={() => setActivePaymentMobileIndex(null)}></div>
+          <div className="fixed left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 bg-white rounded-lg shadow-xl border border-gray-200 p-5 w-96 max-h-[500px] overflow-y-auto z-50">
+            <div className="flex items-center justify-between mb-4">
+              <h4 className="text-base font-semibold text-gray-900">Payment History</h4>
+              <button
+                onClick={() => setActivePaymentMobileIndex(null)}
+                className="text-gray-400 hover:text-gray-600"
+              >
+                <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+            <div className="mb-4 pb-4 border-b border-gray-200">
+              <p className="text-xs text-gray-600 mb-1">Total Amount</p>
+              <p className="text-xl font-bold text-gray-900">
+                ₹{((mobileData[activePaymentMobileIndex]?.total_paid || mobileData[activePaymentMobileIndex]?.paid_amount || 0)).toLocaleString("en-IN")}
+              </p>
+            </div>
+            <div className="space-y-2">
+              {mobileData[activePaymentMobileIndex]?.payments && mobileData[activePaymentMobileIndex].payments.length > 0 ? (
+                mobileData[activePaymentMobileIndex].payments.map((payment, pIdx) => (
+                  <div key={payment._id || pIdx} className="border-b border-gray-100 pb-2 last:border-0">
+                    <div className="flex items-center justify-between mb-1">
+                      <span className="text-xs font-medium text-gray-600 bg-gray-100 px-2 py-0.5 rounded">
+                        {payment.method || 'N/A'}
+                      </span>
+                      <span className="text-sm font-semibold text-gray-900">
+                        ₹{(payment.amount || 0).toLocaleString("en-IN")}
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <p className="text-xs text-gray-500">
+                        {new Date(payment.date).toLocaleDateString("en-IN", {
+                          month: "short",
+                          day: "2-digit",
+                          hour: "2-digit",
+                          minute: "2-digit"
+                        })}
+                      </p>
+                      <button
+                        onClick={() => deletePaymentEntry(payment._id)}
+                        className="text-red-600 hover:bg-red-50 rounded p-0.5 transition-colors"
+                        title="Delete"
+                      >
+                        <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                        </svg>
+                      </button>
+                    </div>
+                  </div>
+                ))
+              ) : (
+                <div className="text-center py-4 text-sm text-gray-500">
+                  No payments yet
+                </div>
+              )}
+            </div>
+          </div>
+        </>
+      )}
+
+      {/* View Product Details Popup */}
+      {activeMobileIndex !== null && !sellOpen && (
+        <>
+          <div className="fixed inset-0 bg-black/30 z-40" onClick={() => setActiveMobileIndex(null)}></div>
+          <div className="fixed left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 bg-white rounded-lg shadow-xl border border-gray-200 p-5 w-96 z-50">
+            <div className="flex items-center justify-between mb-4">
+              <h4 className="text-base font-semibold text-gray-900">Product Details</h4>
+              <button
+                onClick={() => setActiveMobileIndex(null)}
+                className="text-gray-400 hover:text-gray-600"
+              >
+                <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+            <div className="space-y-3">
+              <div className="border-b border-gray-100 pb-3">
+                <p className="text-xs text-gray-600 mb-1">Product Name</p>
+                <p className="text-sm font-semibold text-gray-900">
+                  {mobileData[activeMobileIndex]?.productName || mobileData[activeMobileIndex]?.product || mobileData[activeMobileIndex]?.itemName || "N/A"}
+                </p>
+              </div>
+              {mobileData[activeMobileIndex]?.quantity && (
+                <div className="border-b border-gray-100 pb-3">
+                  <p className="text-xs text-gray-600 mb-1">Quantity</p>
+                  <p className="text-sm font-medium text-gray-900">{mobileData[activeMobileIndex].quantity}</p>
+                </div>
+              )}
+              {mobileData[activeMobileIndex]?.supplierName && (
+                <div className="border-b border-gray-100 pb-3">
+                  <p className="text-xs text-gray-600 mb-1">Supplier</p>
+                  <p className="text-sm font-medium text-gray-900">{mobileData[activeMobileIndex].supplierName}</p>
+                </div>
+              )}
+              {mobileData[activeMobileIndex]?.supplier_amount > 0 && (
+                <div className="border-b border-gray-100 pb-3">
+                  <p className="text-xs text-gray-600 mb-1">Supplier Cost</p>
+                  <p className="text-sm font-semibold text-gray-900">
+                    ₹{(mobileData[activeMobileIndex].supplier_amount || 0).toLocaleString("en-IN")}
+                  </p>
+                </div>
+              )}
+              {mobileData[activeMobileIndex]?.paymentMethod && (
+                <div className="border-b border-gray-100 pb-3">
+                  <p className="text-xs text-gray-600 mb-1">Payment Method</p>
+                  <p className="text-sm font-medium text-gray-900">{mobileData[activeMobileIndex].paymentMethod}</p>
+                </div>
+              )}
+              {mobileData[activeMobileIndex]?.warranty && (
+                <div>
+                  <p className="text-xs text-gray-600 mb-1">Warranty</p>
+                  <p className="text-sm font-medium text-gray-900 capitalize">{mobileData[activeMobileIndex].warranty.replace('-', ' ')}</p>
+                </div>
+              )}
+            </div>
+          </div>
+        </>
+      )}
 
       {/* Sell Product Modal */}
       {sellOpen && (

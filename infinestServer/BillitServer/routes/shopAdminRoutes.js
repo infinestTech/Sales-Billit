@@ -184,7 +184,7 @@ router.get('/dashboard/overview', shopAdminAuth, async (req, res) => {
             paid_amount: { $gt: 0 }
         });
 
-        const todayRevenue = todayMobilesWithRevenue.reduce((sum, mobile) => sum + (mobile.paid_amount || 0), 0);
+        const todayRevenue = todayMobilesWithRevenue.reduce((sum, mobile) => sum + (mobile.total_paid || mobile.paid_amount || 0), 0);
 
         // Get recent activities
         const recentMobiles = await Mobile.find({ shop_id: shopId })
