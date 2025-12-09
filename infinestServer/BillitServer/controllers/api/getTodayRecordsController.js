@@ -46,7 +46,8 @@ const getTodayRecords = async (req, res) => {
 
 
     // Calculate revenue from mobiles created today
-    const mobileRevenue = mobiles.reduce((sum, m) => sum + (m.paid_amount || 0), 0);
+    // Support both old (paid_amount) and new (total_paid) payment structure
+    const mobileRevenue = mobiles.reduce((sum, m) => sum + (m.total_paid || m.paid_amount || 0), 0);
 
 
     // ✅ Fetch mobiles updated today (to capture payments updated today)
@@ -59,7 +60,7 @@ const getTodayRecords = async (req, res) => {
     // ✅ Exclude mobiles already created today to prevent double-counting
     const updatedMobileRevenue = updatedTodayMobiles
       .filter(m => !(m.added_date >= startOfDay && m.added_date <= endOfDay))
-      .reduce((sum, m) => sum + (m.paid_amount || 0), 0);
+      .reduce((sum, m) => sum + (m.total_paid || m.paid_amount || 0), 0);
 
 
     // Product sales revenue for today

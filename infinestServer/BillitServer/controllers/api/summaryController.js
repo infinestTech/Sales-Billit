@@ -21,7 +21,7 @@ exports.getDashboardSummary = async (req, res) => {
 
 
     const todayMobiles = mobiles.filter(m => new Date(m.added_date) >= today);
-    const todayRevenue = todayMobiles.reduce((sum, m) => sum + (m.paid_amount || 0), 0);
+    const todayRevenue = todayMobiles.reduce((sum, m) => sum + (m.total_paid || m.paid_amount || 0), 0);
     const todayExpenses = expenses.filter(e => new Date(e.date) >= today);
     const todayExpenseAmount = todayExpenses.reduce((sum, e) => sum + (e.amount || 0), 0);
 
@@ -62,7 +62,7 @@ exports.getDashboardSummaryPublic = async (req, res) => {
 
 
     const todayMobiles = mobiles.filter(m => new Date(m.added_date) >= today);
-    const todayRevenue = todayMobiles.reduce((sum, m) => sum + (m.paid_amount || 0), 0);
+    const todayRevenue = todayMobiles.reduce((sum, m) => sum + (m.total_paid || m.paid_amount || 0), 0);
     const todayExpenses = expenses.filter(e => new Date(e.date) >= today);
     const todayExpenseAmount = todayExpenses.reduce((sum, e) => sum + (e.amount || 0), 0);
 

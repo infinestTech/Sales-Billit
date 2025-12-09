@@ -116,8 +116,15 @@ const mobileSchema = new mongoose.Schema({
   ready: { type: Boolean, default: false },
   delivered: { type: Boolean, default: false },
   returned: { type: Boolean, default: false },
-  paid_amount: { type: Number, default: 0 }, // Customer payment amount
+  paid_amount: { type: Number, default: 0 }, // Customer payment amount (legacy, kept for backward compatibility)
   payment: { type: String, enum: ["cash", "UPI", "card", "UPI-h", "UPI-s", "Cash + Card", "UPI H + CASH", "UPI S + CASH", "UPI H + CARD", "UPI S + CARD", ""], default: "" },
+  // Split payment tracking
+  payments: [{
+    amount: { type: Number, required: true },
+    method: { type: String, required: true },
+    date: { type: Date, default: Date.now }
+  }],
+  total_paid: { type: Number, default: 0 }, // Sum of all payment entries
   delivery_date: { type: Date },
   // Supplier-related fields for tracking product/supplier usage
   supplierId: { type: mongoose.Schema.Types.ObjectId, ref: "Supplier" },

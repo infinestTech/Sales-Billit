@@ -60,6 +60,11 @@ const { updatePaidAmount } = require("../controllers/api/updatePaidAmountControl
 router.post("/update-paid-amount",authenticateToken, updatePaidAmount);
 
 
+const { addPaymentEntry } = require("../controllers/api/addPaymentEntryController");
+router.post("/add-payment-entry", authenticateToken, addPaymentEntry);
+
+const { deletePaymentEntry } = require("../controllers/api/deletePaymentEntryController");
+router.post("/delete-payment-entry", authenticateToken, deletePaymentEntry);
 
 
 const { getFilteredRecords } = require("../controllers/api/getFilteredRecordsController");
