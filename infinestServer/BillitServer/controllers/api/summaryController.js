@@ -18,10 +18,26 @@ exports.getDashboardSummary = async (req, res) => {
 
     const today = new Date();
     today.setHours(0, 0, 0, 0);
+    const endOfDay = new Date(today);
+    endOfDay.setHours(23, 59, 59, 999);
 
+    // Calculate revenue from payments made TODAY only
+    let todayRevenue = 0;
+    mobiles.forEach((m) => {
+      if (m.payments && m.payments.length > 0) {
+        const todaysPayments = m.payments.filter(p => {
+          const paymentDate = new Date(p.date);
+          return paymentDate >= today && paymentDate <= endOfDay;
+        });
+        todayRevenue += todaysPayments.reduce((sum, p) => sum + (p.amount || 0), 0);
+      } else {
+        // Fallback for legacy data: if mobile was created today and has no payments array
+        if (new Date(m.added_date) >= today) {
+          todayRevenue += (m.total_paid || m.paid_amount || 0);
+        }
+      }
+    });
 
-    const todayMobiles = mobiles.filter(m => new Date(m.added_date) >= today);
-    const todayRevenue = todayMobiles.reduce((sum, m) => sum + (m.total_paid || m.paid_amount || 0), 0);
     const todayExpenses = expenses.filter(e => new Date(e.date) >= today);
     const todayExpenseAmount = todayExpenses.reduce((sum, e) => sum + (e.amount || 0), 0);
 
@@ -59,10 +75,26 @@ exports.getDashboardSummaryPublic = async (req, res) => {
 
     const today = new Date();
     today.setHours(0, 0, 0, 0);
+    const endOfDay = new Date(today);
+    endOfDay.setHours(23, 59, 59, 999);
 
+    // Calculate revenue from payments made TODAY only
+    let todayRevenue = 0;
+    mobiles.forEach((m) => {
+      if (m.payments && m.payments.length > 0) {
+        const todaysPayments = m.payments.filter(p => {
+          const paymentDate = new Date(p.date);
+          return paymentDate >= today && paymentDate <= endOfDay;
+        });
+        todayRevenue += todaysPayments.reduce((sum, p) => sum + (p.amount || 0), 0);
+      } else {
+        // Fallback for legacy data: if mobile was created today and has no payments array
+        if (new Date(m.added_date) >= today) {
+          todayRevenue += (m.total_paid || m.paid_amount || 0);
+        }
+      }
+    });
 
-    const todayMobiles = mobiles.filter(m => new Date(m.added_date) >= today);
-    const todayRevenue = todayMobiles.reduce((sum, m) => sum + (m.total_paid || m.paid_amount || 0), 0);
     const todayExpenses = expenses.filter(e => new Date(e.date) >= today);
     const todayExpenseAmount = todayExpenses.reduce((sum, e) => sum + (e.amount || 0), 0);
 
