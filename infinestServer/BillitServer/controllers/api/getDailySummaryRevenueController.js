@@ -15,34 +15,30 @@ const getDailySummaryRevenue = async (req, res) => {
     const customers = await Customer.find({ shop_id }).lean();
     const dealers = await Dealer.find({ shop_id }).lean();
 
-    // 2️⃣ Get mobile records created today
-    const mobilesCreatedToday = await Mobile.find({
-      shop_id,
-      added_date: { $gte: start, $lte: end },
+    // 2️⃣ Get ALL mobile records to check payments made on this specific date
+    const allMobiles = await Mobile.find({
+      shop_id
     }).lean();
 
-    // Calculate mobile revenue for mobiles created today
-    const mobileRevenueCreatedToday = mobilesCreatedToday.reduce((total, mobile) => {
-      return total + (mobile.paid_amount || 0);
-    }, 0);
-
-    // 3️⃣ Get mobile records updated today
-    const mobilesUpdatedToday = await Mobile.find({
-      shop_id,
-      update_date: { $gte: start, $lte: end },
-    }).lean();
-
-    // Exclude mobiles already created today to prevent double-counting
-    const mobilesUpdatedTodayFiltered = mobilesUpdatedToday.filter(m => {
-      return !(m.added_date >= start && m.added_date <= end);
+    // Calculate mobile revenue by checking ONLY payments made on the specified date
+    let serviceRevenue = 0;
+    
+    allMobiles.forEach((mobile) => {
+      if (mobile.payments && mobile.payments.length > 0) {
+        // Filter payments made on this specific date
+        const paymentsOnDate = mobile.payments.filter(p => {
+          const paymentDate = new Date(p.date);
+          return paymentDate >= start && paymentDate <= end;
+        });
+        // Sum up only the payments made on this date
+        serviceRevenue += paymentsOnDate.reduce((sum, p) => sum + (p.amount || 0), 0);
+      } else {
+        // Fallback for legacy data: if mobile was created on this date and has no payments array
+        if (mobile.added_date >= start && mobile.added_date <= end) {
+          serviceRevenue += (mobile.total_paid || mobile.paid_amount || 0);
+        }
+      }
     });
-
-    const mobileRevenueUpdatedToday = mobilesUpdatedTodayFiltered.reduce((total, mobile) => {
-      return total + (mobile.paid_amount || 0);
-    }, 0);
-
-    // 4️⃣ Calculate SERVICE REVENUE (mobile/service payments)
-    const serviceRevenue = mobileRevenueCreatedToday + mobileRevenueUpdatedToday;
 
     // 5️⃣ Get STOCK REVENUE (product sales)
     const products = await Product.find({ userId: shop_id }).select("_id").lean();

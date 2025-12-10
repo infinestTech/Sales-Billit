@@ -38,6 +38,9 @@ const addPaymentEntry = async (req, res) => {
     const totalPaid = existingMobile.payments.reduce((sum, payment) => sum + Number(payment.amount || 0), 0);
     existingMobile.total_paid = totalPaid;
 
+    // Update the update_date to track when payment was added
+    existingMobile.update_date = new Date();
+
     // Update the document
     await existingMobile.save();
 

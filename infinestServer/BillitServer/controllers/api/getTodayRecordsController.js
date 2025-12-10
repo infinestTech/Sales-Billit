@@ -45,22 +45,48 @@ const getTodayRecords = async (req, res) => {
     });
 
 
-    // Calculate revenue from mobiles created today
-    // Support both old (paid_amount) and new (total_paid) payment structure
-    const mobileRevenue = mobiles.reduce((sum, m) => sum + (m.total_paid || m.paid_amount || 0), 0);
+    // Calculate revenue from mobiles created today based on TODAY'S PAYMENTS ONLY
+    let mobileRevenue = 0;
+    
+    mobiles.forEach((m) => {
+      // For mobiles created today, sum up payments made today
+      if (m.payments && m.payments.length > 0) {
+        const todaysPayments = m.payments.filter(p => {
+          const paymentDate = new Date(p.date);
+          return paymentDate >= startOfDay && paymentDate <= endOfDay;
+        });
+        mobileRevenue += todaysPayments.reduce((sum, p) => sum + (p.amount || 0), 0);
+      } else {
+        // Fallback for legacy data without payments array
+        mobileRevenue += (m.total_paid || m.paid_amount || 0);
+      }
+    });
 
 
-    // ✅ Fetch mobiles updated today (to capture payments updated today)
-    const updatedTodayMobiles = await Mobile.find({
-      shop_id: actualUserId,
-      update_date: { $gte: startOfDay, $lte: endOfDay }
+    // ✅ Fetch ALL mobiles (to capture payments made today on older mobiles)
+    const allMobiles = await Mobile.find({
+      shop_id: actualUserId
     }).lean();
 
 
-    // ✅ Exclude mobiles already created today to prevent double-counting
-    const updatedMobileRevenue = updatedTodayMobiles
-      .filter(m => !(m.added_date >= startOfDay && m.added_date <= endOfDay))
-      .reduce((sum, m) => sum + (m.total_paid || m.paid_amount || 0), 0);
+    // ✅ Calculate revenue from payments made TODAY on mobiles NOT created today
+    let updatedMobileRevenue = 0;
+    
+    allMobiles.forEach((m) => {
+      // Skip mobiles created today (already counted above)
+      if (m.added_date >= startOfDay && m.added_date <= endOfDay) {
+        return;
+      }
+      
+      // Count only payments made TODAY on older mobiles
+      if (m.payments && m.payments.length > 0) {
+        const todaysPayments = m.payments.filter(p => {
+          const paymentDate = new Date(p.date);
+          return paymentDate >= startOfDay && paymentDate <= endOfDay;
+        });
+        updatedMobileRevenue += todaysPayments.reduce((sum, p) => sum + (p.amount || 0), 0);
+      }
+    });
 
 
     // Product sales revenue for today
