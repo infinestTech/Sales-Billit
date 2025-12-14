@@ -33,6 +33,7 @@ export default function ShopAdminDashboard() {
   const [customerFilters, setCustomerFilters] = useState({
     name: '',
     mobileNumber: '',
+    billNumber: '',
     fromDate: '',
     toDate: ''
   });
@@ -51,14 +52,14 @@ export default function ShopAdminDashboard() {
 
   // Revenue filter state
   const [revenueFilters, setRevenueFilters] = useState({
-    period: '30', // default 30 days
+    period: '1', // default to today
     fromDate: '',
     toDate: ''
   });
 
   // Report state
   const [reportFilters, setReportFilters] = useState({
-    period: '30',
+    period: '1', // default to today
     fromDate: '',
     toDate: ''
   });
@@ -175,47 +176,103 @@ export default function ShopAdminDashboard() {
     }
   };
 
-  const handleCustomerFilter = () => {
-    let filtered = [...customerDetails];
+  const handleCustomerFilter = async () => {
+    try {
+      const token = localStorage.getItem('shopAdminToken');
+      const authConfig = {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        },
+        params: {
+          shop_id: currentShopId
+        }
+      };
 
-    if (customerFilters.name) {
-      filtered = filtered.filter(c =>
-        c.client_name.toLowerCase().includes(customerFilters.name.toLowerCase())
+      // Add bill number to params if provided
+      if (customerFilters.billNumber) {
+        authConfig.params.billNumber = customerFilters.billNumber;
+      }
+
+      // Fetch from API with bill number filter if applicable
+      const customerDetailsRes = await axios.get(
+        `${API_URL}/api/shop-admin/customer-details`, 
+        authConfig
       );
-    }
 
-    if (customerFilters.mobileNumber) {
-      filtered = filtered.filter(c =>
-        c.mobile_number.includes(customerFilters.mobileNumber)
-      );
-    }
+      if (customerDetailsRes.data.success) {
+        let filtered = customerDetailsRes.data.customerDetails || [];
 
-    if (customerFilters.fromDate) {
-      filtered = filtered.filter(c => {
-        const date = new Date(c.latest_mobile_date);
-        return date >= new Date(customerFilters.fromDate);
-      });
-    }
+        // Apply additional frontend filters
+        if (customerFilters.name) {
+          filtered = filtered.filter(c =>
+            c.client_name.toLowerCase().includes(customerFilters.name.toLowerCase())
+          );
+        }
 
-    if (customerFilters.toDate) {
-      filtered = filtered.filter(c => {
-        const date = new Date(c.latest_mobile_date);
-        return date <= new Date(customerFilters.toDate);
-      });
-    }
+        if (customerFilters.mobileNumber) {
+          filtered = filtered.filter(c =>
+            c.mobile_number.includes(customerFilters.mobileNumber)
+          );
+        }
 
-    setFilteredCustomers(filtered);
-    setCurrentPage(1);
+        if (customerFilters.fromDate) {
+          filtered = filtered.filter(c => {
+            const date = new Date(c.latest_mobile_date);
+            return date >= new Date(customerFilters.fromDate);
+          });
+        }
+
+        if (customerFilters.toDate) {
+          filtered = filtered.filter(c => {
+            const date = new Date(c.latest_mobile_date);
+            return date <= new Date(customerFilters.toDate);
+          });
+        }
+
+        setFilteredCustomers(filtered);
+        setCurrentPage(1);
+      }
+    } catch (error) {
+      console.error('Error filtering customers:', error);
+    }
   };
 
-  const handleClearFilters = () => {
+  const handleClearFilters = async () => {
     setCustomerFilters({
       name: '',
       mobileNumber: '',
+      billNumber: '',
       fromDate: '',
       toDate: ''
     });
-    setFilteredCustomers(customerDetails);
+    
+    // Fetch fresh data without any filters
+    try {
+      const token = localStorage.getItem('shopAdminToken');
+      const authConfig = {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        },
+        params: {
+          shop_id: currentShopId
+        }
+      };
+
+      const customerDetailsRes = await axios.get(
+        `${API_URL}/api/shop-admin/customer-details`, 
+        authConfig
+      );
+
+      if (customerDetailsRes.data.success) {
+        setCustomerDetails(customerDetailsRes.data.customerDetails || []);
+        setFilteredCustomers(customerDetailsRes.data.customerDetails || []);
+      }
+    } catch (error) {
+      console.error('Error clearing filters:', error);
+      // Fallback to existing data
+      setFilteredCustomers(customerDetails);
+    }
+    
     setCurrentPage(1);
   };
 
@@ -344,14 +401,21 @@ export default function ShopAdminDashboard() {
       const customersData = customersRes.data.customerAnalytics || {};
       const inventoryData = inventoryRes.data.inventoryAnalytics || {};
 
+      console.log('Revenue API Response:', JSON.stringify(revenueData, null, 2));
+      console.log('Mobile Revenue Data:', JSON.stringify(revenueData.mobileRevenue, null, 2));
+      console.log('Current Period:', revenueFilters.period);
+
       // Calculate today/week/month from the analytics data
       const today = new Date().toISOString().split('T')[0];
+      console.log('Today date:', today);
       const weekAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
       const monthAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
 
       // Combine mobile and sales revenue by date
       const revenueByDate = {};
       const countByDate = {};
+      const supplierPaymentsByDate = {};
+      const operatingExpensesByDate = {};
       
       (revenueData.mobileRevenue || []).forEach(item => {
         const date = item._id?.date || item.date;
@@ -367,6 +431,21 @@ export default function ShopAdminDashboard() {
           countByDate[date] = (countByDate[date] || 0) + (item.count || 1);
         }
       });
+      
+      // Separate supplier payments and operating expenses by date
+      (revenueData.supplierPayments || []).forEach(item => {
+        const date = item._id?.date || item.date;
+        if (date) {
+          supplierPaymentsByDate[date] = (supplierPaymentsByDate[date] || 0) + (item.amount || 0);
+        }
+      });
+      
+      (revenueData.operatingExpenses || []).forEach(item => {
+        const date = item._id?.date || item.date;
+        if (date) {
+          operatingExpensesByDate[date] = (operatingExpensesByDate[date] || 0) + (item.amount || 0);
+        }
+      });
 
       const todayRevenue = revenueByDate[today] || 0;
       const weekRevenue = Object.entries(revenueByDate)
@@ -376,14 +455,71 @@ export default function ShopAdminDashboard() {
         .filter(([date]) => date >= monthAgo)
         .reduce((sum, [, amount]) => sum + amount, 0);
 
-      const dailyData = Object.entries(revenueByDate)
-        .map(([date, revenue]) => ({ 
-          date, 
-          revenue: Math.round(revenue),
-          count: countByDate[date] || 0
-        }))
-        .sort((a, b) => a.date.localeCompare(b.date))
-        .slice(-30);
+      // Generate all dates in the range to show 0 values for missing dates
+      let startDateForChart, endDateForChart;
+      
+      if (revenueFilters.fromDate && revenueFilters.toDate) {
+        // Custom date range - use local dates
+        const [startY, startM, startD] = revenueFilters.fromDate.split('-').map(Number);
+        const [endY, endM, endD] = revenueFilters.toDate.split('-').map(Number);
+        startDateForChart = new Date(startY, startM - 1, startD, 0, 0, 0);
+        endDateForChart = new Date(endY, endM - 1, endD, 23, 59, 59);
+      } else {
+        // Period-based range - use local dates to avoid timezone issues
+        const now = new Date();
+        const period = parseInt(revenueFilters.period || 1);
+        
+        // Create dates using local date components
+        endDateForChart = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59);
+        startDateForChart = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0);
+        
+        // For period > 1, go back (period - 1) days
+        if (period > 1) {
+          startDateForChart.setDate(startDateForChart.getDate() - (period - 1));
+        }
+      }
+      
+      // Format dates for logging (using local date components)
+      const formatLocalDate = (d) => {
+        const year = d.getFullYear();
+        const month = String(d.getMonth() + 1).padStart(2, '0');
+        const day = String(d.getDate()).padStart(2, '0');
+        return `${year}-${month}-${day}`;
+      };
+      
+      console.log('Chart Date Range:', {
+        start: formatLocalDate(startDateForChart),
+        end: formatLocalDate(endDateForChart),
+        period: revenueFilters.period
+      });
+      console.log('Revenue By Date:', JSON.stringify(revenueByDate, null, 2));
+      
+      const dailyData = [];
+      const currentDate = new Date(startDateForChart);
+      
+      while (currentDate <= endDateForChart) {
+        // Use local date components to avoid timezone issues
+        const year = currentDate.getFullYear();
+        const month = String(currentDate.getMonth() + 1).padStart(2, '0');
+        const day = String(currentDate.getDate()).padStart(2, '0');
+        const dateStr = `${year}-${month}-${day}`;
+        
+        const revenue = Math.round(revenueByDate[dateStr] || 0);
+        const supplierPayments = Math.round(supplierPaymentsByDate[dateStr] || 0);
+        const operatingExpenses = Math.round(operatingExpensesByDate[dateStr] || 0);
+        const totalExpenses = supplierPayments + operatingExpenses;
+        const netProfit = revenue - totalExpenses;
+        
+        dailyData.push({
+          date: dateStr,
+          revenue,
+          supplierPayments,
+          operatingExpenses,
+          netProfit,
+          count: countByDate[dateStr] || 0
+        });
+        currentDate.setDate(currentDate.getDate() + 1);
+      }
 
       setAnalytics({
         revenue: {
@@ -391,7 +527,11 @@ export default function ShopAdminDashboard() {
           thisWeek: weekRevenue,
           thisMonth: monthRevenue,
           dailyData,
-          total: revenueData.totalRevenue || 0
+          total: revenueData.totalRevenue || 0,
+          totalExpenses: revenueData.totalExpenses || 0,
+          totalSupplierPayments: revenueData.totalSupplierPayments || 0,
+          totalOperatingExpenses: revenueData.totalOperatingExpenses || 0,
+          netProfit: revenueData.netProfit || 0
         },
         service: {
           totalRepairs: serviceData.statusBreakdown?.reduce((sum, item) => sum + (item.count || 0), 0) || 0,
@@ -1141,7 +1281,7 @@ export default function ShopAdminDashboard() {
 
               {/* Filters */}
               <div className="bg-gray-50 p-6 border-b border-gray-200">
-                <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1 flex items-center">
                       <Users className="h-4 w-4 mr-1 text-gray-500" />
@@ -1165,6 +1305,22 @@ export default function ShopAdminDashboard() {
                       placeholder="Search by mobile..."
                       value={customerFilters.mobileNumber}
                       onChange={(e) => setCustomerFilters({...customerFilters, mobileNumber: e.target.value})}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-900 placeholder-gray-500 bg-white"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1 flex items-center">
+                      <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-1 text-gray-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <rect x="2" y="5" width="20" height="14" rx="2"/>
+                        <line x1="2" y1="10" x2="22" y2="10"/>
+                      </svg>
+                      Bill Number
+                    </label>
+                    <input
+                      type="text"
+                      placeholder="Search by bill no..."
+                      value={customerFilters.billNumber}
+                      onChange={(e) => setCustomerFilters({...customerFilters, billNumber: e.target.value})}
                       className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-900 placeholder-gray-500 bg-white"
                     />
                   </div>
@@ -1749,12 +1905,9 @@ export default function ShopAdminDashboard() {
                       }}
                       className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white text-gray-900"
                     >
+                      <option value="1" className="text-gray-900">Today</option>
                       <option value="7" className="text-gray-900">Last 7 Days</option>
                       <option value="30" className="text-gray-900">Last 30 Days</option>
-                      <option value="60" className="text-gray-900">Last 60 Days</option>
-                      <option value="90" className="text-gray-900">Last 90 Days</option>
-                      <option value="180" className="text-gray-900">Last 6 Months</option>
-                      <option value="365" className="text-gray-900">Last Year</option>
                     </select>
                   </div>
                   <div>
@@ -1793,7 +1946,7 @@ export default function ShopAdminDashboard() {
                     </button>
                     <button
                       onClick={() => {
-                        setRevenueFilters({ period: '30', fromDate: '', toDate: '' });
+                        setRevenueFilters({ period: '1', fromDate: '', toDate: '' });
                         setTimeout(() => fetchAnalytics('revenue'), 100);
                       }}
                       className="px-4 py-2 bg-gray-200 hover:bg-gray-300 text-gray-700 rounded-lg font-medium transition"
@@ -1838,7 +1991,7 @@ export default function ShopAdminDashboard() {
                   </div>
                 </div>
                 <div className="text-gray-900 text-3xl font-bold group-hover:scale-105 transition">
-                  ₹{((analytics?.revenue?.thisMonth || 0) * 0.6).toLocaleString()}
+                  ₹{(analytics?.revenue?.totalExpenses || 0).toLocaleString()}
                 </div>
                 <div className="mt-2 flex items-center text-sm">
                   <span className="text-red-600 text-xs">Supplier Payments & Expenses</span>
@@ -1853,11 +2006,11 @@ export default function ShopAdminDashboard() {
                   </div>
                 </div>
                 <div className="text-gray-900 text-3xl font-bold group-hover:scale-105 transition">
-                  ₹{((analytics?.revenue?.thisMonth || 0) * 0.4).toLocaleString()}
+                  ₹{(analytics?.revenue?.netProfit || 0).toLocaleString()}
                 </div>
                 <div className="mt-2 flex items-center text-sm">
                   <TrendingUp className="h-4 w-4 text-green-500 mr-1" />
-                  <span className="text-green-600 font-semibold">40% Margin</span>
+                  <span className="text-green-600 font-semibold">{analytics?.revenue?.thisMonth > 0 ? Math.round((analytics.revenue.netProfit / analytics.revenue.thisMonth) * 100) : 0}% Margin</span>
                 </div>
               </div>
 
@@ -1892,13 +2045,7 @@ export default function ShopAdminDashboard() {
               {analytics?.revenue?.dailyData && analytics.revenue.dailyData.length > 0 ? (
                 <ResponsiveContainer width="100%" height={500}>
                   <BarChart 
-                    data={analytics.revenue.dailyData.map(day => ({
-                      date: day.date,
-                      'Customer Payments': day.revenue || 0,
-                      'Supplier Payments': ((day.revenue || 0) * 0.35),
-                      'Operating Expenses': ((day.revenue || 0) * 0.25),
-                      'Net Profit': ((day.revenue || 0) * 0.4)
-                    }))}
+                    data={analytics.revenue.dailyData}
                     margin={{ top: 20, right: 30, left: 20, bottom: 80 }}
                   >
                     <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
@@ -1933,25 +2080,25 @@ export default function ShopAdminDashboard() {
                       iconType="rect"
                     />
                     <Bar 
-                      dataKey="Customer Payments" 
+                      dataKey="revenue" 
                       fill="#10B981" 
                       name="Revenue (Customer/Dealer Payments)" 
                       radius={[4, 4, 0, 0]}
                     />
                     <Bar 
-                      dataKey="Supplier Payments" 
+                      dataKey="supplierPayments" 
                       fill="#EF4444" 
                       name="Expenses (Supplier Payments)" 
                       radius={[4, 4, 0, 0]}
                     />
                     <Bar 
-                      dataKey="Operating Expenses" 
+                      dataKey="operatingExpenses" 
                       fill="#F59E0B" 
                       name="Expenses (Operating Costs)" 
                       radius={[4, 4, 0, 0]}
                     />
                     <Bar 
-                      dataKey="Net Profit" 
+                      dataKey="netProfit" 
                       fill="#3B82F6" 
                       name="Net Profit" 
                       radius={[4, 4, 0, 0]}
@@ -2048,12 +2195,9 @@ export default function ShopAdminDashboard() {
                       onChange={(e) => setReportFilters({ period: e.target.value, fromDate: '', toDate: '' })}
                       className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white text-gray-900"
                     >
+                      <option value="1" className="text-gray-900">Today</option>
                       <option value="7" className="text-gray-900">Last 7 Days</option>
                       <option value="30" className="text-gray-900">Last 30 Days</option>
-                      <option value="60" className="text-gray-900">Last 60 Days</option>
-                      <option value="90" className="text-gray-900">Last 90 Days</option>
-                      <option value="180" className="text-gray-900">Last 6 Months</option>
-                      <option value="365" className="text-gray-900">Last Year</option>
                     </select>
                   </div>
                   <div>
@@ -2092,7 +2236,7 @@ export default function ShopAdminDashboard() {
                     </button>
                     <button
                       onClick={() => {
-                        setReportFilters({ period: '30', fromDate: '', toDate: '' });
+                        setReportFilters({ period: '1', fromDate: '', toDate: '' });
                         setReportData(null);
                       }}
                       className="px-4 py-2 bg-gray-200 hover:bg-gray-300 text-gray-700 rounded-lg font-medium transition"

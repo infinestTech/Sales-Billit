@@ -177,14 +177,28 @@ router.get('/dashboard/overview', shopAdminAuth, async (req, res) => {
             Technician.countDocuments({ shop_id: shopId })
         ]);
 
-        // Calculate today's revenue
-        const todayMobilesWithRevenue = await Mobile.find({
-            shop_id: shopId,
-            created_at: { $gte: today },
-            paid_amount: { $gt: 0 }
+        // Calculate today's revenue from payments made TODAY (not mobiles created today)
+        const endOfDay = new Date(today);
+        endOfDay.setHours(23, 59, 59, 999);
+        
+        const allMobiles = await Mobile.find({ shop_id: shopId }).lean();
+        
+        let todayRevenue = 0;
+        allMobiles.forEach((m) => {
+            if (m.payments && m.payments.length > 0) {
+                // Sum up all payments made today
+                const todaysPayments = m.payments.filter(p => {
+                    const paymentDate = new Date(p.date);
+                    return paymentDate >= today && paymentDate <= endOfDay;
+                });
+                todayRevenue += todaysPayments.reduce((sum, p) => sum + (p.amount || 0), 0);
+            } else {
+                // Fallback for legacy data: if mobile was created today and has no payments array
+                if (new Date(m.added_date || m.created_at) >= today && new Date(m.added_date || m.created_at) <= endOfDay) {
+                    todayRevenue += (m.total_paid || m.paid_amount || 0);
+                }
+            }
         });
-
-        const todayRevenue = todayMobilesWithRevenue.reduce((sum, mobile) => sum + (mobile.total_paid || mobile.paid_amount || 0), 0);
 
         // Get recent activities
         const recentMobiles = await Mobile.find({ shop_id: shopId })
@@ -219,11 +233,24 @@ router.get('/dashboard/overview', shopAdminAuth, async (req, res) => {
 router.get('/customer-details', shopAdminAuth, async (req, res) => {
     try {
         const shopId = req.shopId;
+        const { billNumber } = req.query; // Get bill number filter from query params
+
+        console.log('Customer details request - shopId:', shopId, 'billNumber:', billNumber); // Debug log
 
         // Fetch all customers and dealers
+        let customerQuery = { shop_id: shopId };
+        let dealerQuery = { shop_id: shopId };
+        
+        // If bill number filter is provided, filter customers/dealers by bill_no
+        if (billNumber && billNumber.trim()) {
+            const billRegex = { $regex: billNumber.trim(), $options: 'i' };
+            customerQuery.bill_no = billRegex;
+            dealerQuery.bill_no = billRegex;
+        }
+
         const [customers, dealers] = await Promise.all([
-            Customer.find({ shop_id: shopId }).lean(),
-            Dealer.find({ shop_id: shopId }).lean()
+            Customer.find(customerQuery).lean(),
+            Dealer.find(dealerQuery).lean()
         ]);
 
         // Combine customers and dealers
@@ -235,18 +262,32 @@ router.get('/customer-details', shopAdminAuth, async (req, res) => {
         // Fetch mobile statistics for each client
         const clientDetails = await Promise.all(
             allClients.map(async (client) => {
-                const mobiles = await Mobile.find({
+                // Build the query for mobiles
+                const mobileQuery = {
                     shop_id: shopId,
                     [client.customer_type === 'Customer' ? 'customer_id' : 'dealer_id']: client._id
-                }).lean();
+                };
+
+                const mobiles = await Mobile.find(mobileQuery).lean();
 
                 const totalMobiles = mobiles.length;
                 const readyCount = mobiles.filter(m => m.ready).length;
                 const notReadyCount = mobiles.filter(m => !m.ready).length;
                 const deliveredCount = mobiles.filter(m => m.delivered).length;
-                const totalPaid = mobiles.reduce((sum, m) => sum + (m.paid_amount || 0), 0);
+                
+                // Calculate total paid from payments array (not just paid_amount field)
+                let totalPaid = 0;
+                mobiles.forEach(m => {
+                    if (m.payments && m.payments.length > 0) {
+                        // Sum all payments in the payments array
+                        totalPaid += m.payments.reduce((sum, p) => sum + (p.amount || 0), 0);
+                    } else {
+                        // Fallback to paid_amount for legacy data without payments array
+                        totalPaid += (m.paid_amount || 0);
+                    }
+                });
 
-                // Get the latest mobile date
+                // Get the latest mobile date and bill number
                 const latestMobile = mobiles.sort((a, b) => 
                     new Date(b.created_at) - new Date(a.created_at)
                 )[0];
@@ -261,12 +302,13 @@ router.get('/customer-details', shopAdminAuth, async (req, res) => {
                     not_ready_count: notReadyCount,
                     delivered_count: deliveredCount,
                     total_paid: totalPaid,
-                    latest_mobile_date: latestMobile?.created_at || client.created_at
+                    latest_mobile_date: latestMobile?.created_at || client.created_at,
+                    latest_bill_no: latestMobile?.bill_no || 'N/A'
                 };
             })
         );
 
-        // Filter out clients with no mobiles and sort by latest activity
+        // Filter out clients with no mobiles and sort by latest activity (latest first)
         const activeClients = clientDetails
             .filter(c => c.total_mobiles > 0)
             .sort((a, b) => new Date(b.latest_mobile_date) - new Date(a.latest_mobile_date));
@@ -482,21 +524,56 @@ router.get('/analytics/revenue', shopAdminAuth, async (req, res) => {
             endDate = new Date(toDate);
             endDate.setHours(23, 59, 59, 999);
         } else {
-            // Use period (days)
-            startDate = new Date();
-            startDate.setDate(startDate.getDate() - parseInt(period));
-            startDate.setHours(0, 0, 0, 0);
+            // Use period (days) - inclusive calculation
             endDate = new Date();
             endDate.setHours(23, 59, 59, 999);
+            
+            startDate = new Date();
+            // Subtract (period - 1) days to make it inclusive
+            // e.g., period=1 (today) means 0 days back, period=7 means 6 days back + today
+            startDate.setDate(startDate.getDate() - (parseInt(period) - 1));
+            startDate.setHours(0, 0, 0, 0);
         }
 
-        // Service revenue (from mobiles)
+        // Service revenue (from mobiles) - using payments array with actual payment dates
         const mobileRevenue = await Mobile.aggregate([
             {
                 $match: {
                     shop_id: req.shopId,
+                    payments: { $exists: true, $ne: [] }
+                }
+            },
+            {
+                $unwind: "$payments"
+            },
+            {
+                $match: {
+                    "payments.date": { $gte: startDate, $lte: endDate }
+                }
+            },
+            {
+                $group: {
+                    _id: {
+                        date: { $dateToString: { format: "%Y-%m-%d", date: "$payments.date" } }
+                    },
+                    revenue: { $sum: "$payments.amount" },
+                    count: { $sum: 1 }
+                }
+            },
+            { $sort: { "_id.date": 1 } }
+        ]);
+        
+        // Also get mobiles with legacy data (no payments array but has paid_amount)
+        const legacyMobileRevenue = await Mobile.aggregate([
+            {
+                $match: {
+                    shop_id: req.shopId,
                     created_at: { $gte: startDate, $lte: endDate },
-                    paid_amount: { $gt: 0 }
+                    paid_amount: { $gt: 0 },
+                    $or: [
+                        { payments: { $exists: false } },
+                        { payments: { $size: 0 } }
+                    ]
                 }
             },
             {
@@ -510,6 +587,27 @@ router.get('/analytics/revenue', shopAdminAuth, async (req, res) => {
             },
             { $sort: { "_id.date": 1 } }
         ]);
+        
+        // Combine modern and legacy revenue data
+        const combinedMobileRevenue = {};
+        mobileRevenue.forEach(item => {
+            const date = item._id.date;
+            combinedMobileRevenue[date] = {
+                _id: item._id,
+                revenue: (combinedMobileRevenue[date]?.revenue || 0) + item.revenue,
+                count: (combinedMobileRevenue[date]?.count || 0) + item.count
+            };
+        });
+        legacyMobileRevenue.forEach(item => {
+            const date = item._id.date;
+            combinedMobileRevenue[date] = {
+                _id: item._id,
+                revenue: (combinedMobileRevenue[date]?.revenue || 0) + item.revenue,
+                count: (combinedMobileRevenue[date]?.count || 0) + item.count
+            };
+        });
+        
+        const finalMobileRevenue = Object.values(combinedMobileRevenue);
 
         // Sales revenue (from products)
         const salesRevenue = await AdminSale.aggregate([
@@ -531,8 +629,29 @@ router.get('/analytics/revenue', shopAdminAuth, async (req, res) => {
             { $sort: { "_id.date": 1 } }
         ]);
 
-        // Expenses
-        const expenses = await Expense.aggregate([
+        // Supplier Payments (from mobiles with supplier info) - grouped by date
+        const supplierPayments = await Mobile.aggregate([
+            {
+                $match: {
+                    shop_id: req.shopId,
+                    created_at: { $gte: startDate, $lte: endDate },
+                    supplier_amount: { $gt: 0 }
+                }
+            },
+            {
+                $group: {
+                    _id: {
+                        date: { $dateToString: { format: "%Y-%m-%d", date: "$created_at" } }
+                    },
+                    amount: { $sum: "$supplier_amount" },
+                    count: { $sum: 1 }
+                }
+            },
+            { $sort: { "_id.date": 1 } }
+        ]);
+
+        // Operating Expenses (from Expense collection)
+        const operatingExpenses = await Expense.aggregate([
             {
                 $match: {
                     shop_id: req.shopId,
@@ -550,11 +669,34 @@ router.get('/analytics/revenue', shopAdminAuth, async (req, res) => {
             },
             { $sort: { "_id.date": 1 } }
         ]);
+        
+        // Combine supplier payments and operating expenses by date
+        const expensesByDate = {};
+        supplierPayments.forEach(item => {
+            const date = item._id.date;
+            expensesByDate[date] = {
+                _id: item._id,
+                amount: (expensesByDate[date]?.amount || 0) + item.amount,
+                count: (expensesByDate[date]?.count || 0) + item.count
+            };
+        });
+        operatingExpenses.forEach(item => {
+            const date = item._id.date;
+            expensesByDate[date] = {
+                _id: item._id,
+                amount: (expensesByDate[date]?.amount || 0) + item.amount,
+                count: (expensesByDate[date]?.count || 0) + item.count
+            };
+        });
+        
+        const expenses = Object.values(expensesByDate);
 
         // Total calculations
-        const totalServiceRevenue = mobileRevenue.reduce((sum, item) => sum + item.revenue, 0);
+        const totalServiceRevenue = finalMobileRevenue.reduce((sum, item) => sum + item.revenue, 0);
         const totalSalesRevenue = salesRevenue.reduce((sum, item) => sum + item.revenue, 0);
-        const totalExpenses = expenses.reduce((sum, item) => sum + item.amount, 0);
+        const totalSupplierPayments = supplierPayments.reduce((sum, item) => sum + item.amount, 0);
+        const totalOperatingExpenses = operatingExpenses.reduce((sum, item) => sum + item.amount, 0);
+        const totalExpenses = totalSupplierPayments + totalOperatingExpenses;
         const totalRevenue = totalServiceRevenue + totalSalesRevenue;
         const netProfit = totalRevenue - totalExpenses;
 
@@ -583,9 +725,13 @@ router.get('/analytics/revenue', shopAdminAuth, async (req, res) => {
                 totalServiceRevenue,
                 totalSalesRevenue,
                 totalExpenses,
+                totalSupplierPayments,
+                totalOperatingExpenses,
                 netProfit,
-                mobileRevenue,
+                mobileRevenue: finalMobileRevenue,
                 salesRevenue,
+                supplierPayments,
+                operatingExpenses,
                 expenses,
                 paymentBreakdown
             }
@@ -865,22 +1011,71 @@ router.get('/reports/financial', shopAdminAuth, async (req, res) => {
             endDate = new Date(toDate);
             endDate.setHours(23, 59, 59, 999);
         } else {
+            // Use period (days) - inclusive calculation
             const days = parseInt(period) || 30;
             endDate = new Date();
             endDate.setHours(23, 59, 59, 999);
             startDate = new Date();
-            startDate.setDate(startDate.getDate() - days);
+            // Subtract (period - 1) days to make it inclusive
+            // e.g., period=1 (today) means 0 days back, period=7 means 6 days back + today
+            startDate.setDate(startDate.getDate() - (days - 1));
             startDate.setHours(0, 0, 0, 0);
         }
 
-        // Customer Payments - Get all mobiles with payments in the period (excluding dealer mobiles)
+        // Customer Payments - Get all payments made in the period (using payments array)
         const customerPayments = await Mobile.aggregate([
+            {
+                $match: {
+                    shop_id: req.shopId,
+                    customer_id: { $exists: true, $ne: null },
+                    payments: { $exists: true, $ne: [] }
+                }
+            },
+            { $unwind: '$payments' },
+            {
+                $match: {
+                    'payments.date': { $gte: startDate, $lte: endDate }
+                }
+            },
+            {
+                $lookup: {
+                    from: 'customers',
+                    localField: 'customer_id',
+                    foreignField: '_id',
+                    as: 'customer'
+                }
+            },
+            { $unwind: { path: '$customer', preserveNullAndEmptyArrays: true } },
+            {
+                $project: {
+                    date: '$payments.date',
+                    customerName: { $ifNull: ['$customer.client_name', 'Walk-in Customer'] },
+                    mobileName: {
+                        $concat: [
+                            { $ifNull: ['$mobile_name', ''] },
+                            ' ',
+                            { $ifNull: ['$model', ''] }
+                        ]
+                    },
+                    paymentMethod: { $ifNull: ['$payments.method', 'Cash'] },
+                    amount: { $ifNull: ['$payments.amount', 0] }
+                }
+            },
+            { $sort: { date: 1 } }
+        ]);
+        
+        // Add legacy customer payments (mobiles without payments array but created in period)
+        const legacyCustomerPayments = await Mobile.aggregate([
             {
                 $match: {
                     shop_id: req.shopId,
                     created_at: { $gte: startDate, $lte: endDate },
                     paid_amount: { $gt: 0 },
-                    customer_id: { $exists: true, $ne: null }
+                    customer_id: { $exists: true, $ne: null },
+                    $or: [
+                        { payments: { $exists: false } },
+                        { payments: { $size: 0 } }
+                    ]
                 }
             },
             {
@@ -915,15 +1110,64 @@ router.get('/reports/financial', shopAdminAuth, async (req, res) => {
             },
             { $sort: { date: 1 } }
         ]);
+        
+        // Combine modern and legacy customer payments
+        const allCustomerPayments = [...customerPayments, ...legacyCustomerPayments];
 
-        // Dealer Payments - Get all mobiles with dealer payments in the period
+        // Dealer Payments - Get all payments made in the period (using payments array)
         const dealerPayments = await Mobile.aggregate([
+            {
+                $match: {
+                    shop_id: req.shopId,
+                    dealer_id: { $exists: true, $ne: null },
+                    payments: { $exists: true, $ne: [] }
+                }
+            },
+            { $unwind: '$payments' },
+            {
+                $match: {
+                    'payments.date': { $gte: startDate, $lte: endDate }
+                }
+            },
+            {
+                $lookup: {
+                    from: 'dealers',
+                    localField: 'dealer_id',
+                    foreignField: '_id',
+                    as: 'dealer'
+                }
+            },
+            { $unwind: { path: '$dealer', preserveNullAndEmptyArrays: true } },
+            {
+                $project: {
+                    date: '$payments.date',
+                    dealerName: { $ifNull: ['$dealer.client_name', 'Unknown Dealer'] },
+                    mobileName: {
+                        $concat: [
+                            { $ifNull: ['$mobile_name', ''] },
+                            ' ',
+                            { $ifNull: ['$model', ''] }
+                        ]
+                    },
+                    paymentMethod: { $ifNull: ['$payments.method', 'Cash'] },
+                    amount: { $ifNull: ['$payments.amount', 0] }
+                }
+            },
+            { $sort: { date: 1 } }
+        ]);
+        
+        // Add legacy dealer payments (mobiles without payments array but created in period)
+        const legacyDealerPayments = await Mobile.aggregate([
             {
                 $match: {
                     shop_id: req.shopId,
                     created_at: { $gte: startDate, $lte: endDate },
                     paid_amount: { $gt: 0 },
-                    dealer_id: { $exists: true, $ne: null }
+                    dealer_id: { $exists: true, $ne: null },
+                    $or: [
+                        { payments: { $exists: false } },
+                        { payments: { $size: 0 } }
+                    ]
                 }
             },
             {
@@ -958,6 +1202,9 @@ router.get('/reports/financial', shopAdminAuth, async (req, res) => {
             },
             { $sort: { date: 1 } }
         ]);
+        
+        // Combine modern and legacy dealer payments
+        const allDealerPayments = [...dealerPayments, ...legacyDealerPayments];
 
         // Supplier Payments - Get from mobiles with supplier info
         const supplierPayments = await Mobile.aggregate([
@@ -1025,12 +1272,12 @@ router.get('/reports/financial', shopAdminAuth, async (req, res) => {
             { $sort: { date: 1 } }
         ]);
 
-        // Combine customer payments from mobiles and admin sales
-        const allCustomerPayments = [...customerPayments, ...adminSales];
+        // Combine all customer payments (modern + legacy + admin sales)
+        const finalCustomerPayments = [...allCustomerPayments, ...adminSales];
 
         // Calculate totals
-        const totalCustomerPayments = allCustomerPayments.reduce((sum, p) => sum + (p.amount || 0), 0);
-        const totalDealerPayments = dealerPayments.reduce((sum, p) => sum + (p.amount || 0), 0);
+        const totalCustomerPayments = finalCustomerPayments.reduce((sum, p) => sum + (p.amount || 0), 0);
+        const totalDealerPayments = allDealerPayments.reduce((sum, p) => sum + (p.amount || 0), 0);
         const totalRevenue = totalCustomerPayments + totalDealerPayments;
         const totalSupplierPayments = supplierPayments.reduce((sum, p) => sum + (p.amount || 0), 0);
         const totalOperatingExpenses = operatingExpenses.reduce((sum, e) => sum + (e.amount || 0), 0);
@@ -1086,8 +1333,8 @@ router.get('/reports/financial', shopAdminAuth, async (req, res) => {
                     netProfit,
                     profitMargin
                 },
-                customerPayments: allCustomerPayments,
-                dealerPayments,
+                customerPayments: finalCustomerPayments,
+                dealerPayments: allDealerPayments,
                 supplierPayments,
                 expenses: operatingExpenses,
                 paymentBreakdown
