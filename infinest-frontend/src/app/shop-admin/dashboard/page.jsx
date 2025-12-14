@@ -382,8 +382,7 @@ export default function ShopAdminDashboard() {
           revenue: Math.round(revenue),
           count: countByDate[date] || 0
         }))
-        .sort((a, b) => a.date.localeCompare(b.date))
-        .slice(-30);
+        .sort((a, b) => a.date.localeCompare(b.date));
 
       setAnalytics({
         revenue: {

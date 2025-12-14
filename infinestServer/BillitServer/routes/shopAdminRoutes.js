@@ -483,8 +483,9 @@ router.get('/analytics/revenue', shopAdminAuth, async (req, res) => {
             endDate.setHours(23, 59, 59, 999);
         } else {
             // Use period (days)
+            const days = parseInt(period);
             startDate = new Date();
-            startDate.setDate(startDate.getDate() - parseInt(period));
+            startDate.setDate(startDate.getDate() - (days - 1));
             startDate.setHours(0, 0, 0, 0);
             endDate = new Date();
             endDate.setHours(23, 59, 59, 999);
@@ -869,7 +870,7 @@ router.get('/reports/financial', shopAdminAuth, async (req, res) => {
             endDate = new Date();
             endDate.setHours(23, 59, 59, 999);
             startDate = new Date();
-            startDate.setDate(startDate.getDate() - days);
+            startDate.setDate(startDate.getDate() - (days - 1));
             startDate.setHours(0, 0, 0, 0);
         }
 
