@@ -3,6 +3,7 @@ const jwt = require('jsonwebtoken');
 const axios = require('../utils/axiosConfig'); // Use IPv4-specific axios
 const passport = require('passport');
 const { User, Role, Shop } = require('../models/mongoModels');
+const SessionManager = require('../utils/sessionManager'); // ✅ Import session manager
 const router = express.Router();
 
 require('dotenv').config(); // ✅ Load environment variables
@@ -88,6 +89,14 @@ router.post('/billit-login', async (req, res) => {
 
     const token = jwt.sign(payload, process.env.JWT_SECRET, { expiresIn: '7d' });
 
+    // 6️⃣ Create session (invalidates any existing session for this user)
+    const sessionMetadata = {
+      ip: req.ip || req.connection.remoteAddress,
+      userAgent: req.headers['user-agent']
+    };
+    
+    await SessionManager.createSession(mysqlUserId, token, sessionMetadata);
+
     return res.json({
       token,
       message: "Login successful!"
@@ -96,6 +105,37 @@ router.post('/billit-login', async (req, res) => {
   } catch (err) {
     console.error('Billit Login Error:', err?.response?.data || err);
     return res.status(500).json({ message: "Internal server error" });
+  }
+});
+
+// ✅ Logout endpoint - invalidates user's session
+router.post('/logout', async (req, res) => {
+  try {
+    const authHeader = req.headers.authorization;
+    
+    if (!authHeader || !authHeader.startsWith("Bearer ")) {
+      return res.status(400).json({ message: "No token provided" });
+    }
+
+    const token = authHeader.split(" ")[1];
+    
+    // Verify and decode token
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    
+    // Invalidate session
+    await SessionManager.invalidateSession(decoded.userId);
+    
+    return res.json({
+      success: true,
+      message: "Logged out successfully"
+    });
+  } catch (err) {
+    console.error('Logout Error:', err);
+    // Even if there's an error, return success (user intent is to logout)
+    return res.json({
+      success: true,
+      message: "Logged out"
+    });
   }
 });
 

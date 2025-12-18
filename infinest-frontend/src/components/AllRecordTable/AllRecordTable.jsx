@@ -120,6 +120,12 @@ const [shopAddressState, setShopAddressState] = useState("")
         setFilteredInvoices(data)
         calculateTotals(data)
       } catch (error) {
+        // ✅ Silently handle session expiry errors (user will be redirected)
+        if (error.message === 'Session expired' || error.response?.data?.sessionExpired) {
+          // Session expired, user will be redirected by interceptor
+          return;
+        }
+        // Log other errors
         console.error("Error fetching invoices:", error)
       }
     },

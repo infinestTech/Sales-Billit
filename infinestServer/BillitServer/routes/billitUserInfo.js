@@ -1,31 +1,14 @@
 const express = require("express");
 const jwt = require("jsonwebtoken");
 const { User, Role, Feature } = require("../models/mongoModels");
+const authenticateToken = require("../utils/authMiddleware"); // ✅ Use shared middleware
 
 const router = express.Router();
 
-// 🔐 Token authentication middleware
-const authenticate = async (req, res, next) => {
-  const authHeader = req.headers.authorization;
-  if (!authHeader?.startsWith("Bearer ")) {
-    return res.status(401).json({ success: false, message: "Missing token" });
-  }
-
+// ✅ GET /api/billit-user-info (now uses shared middleware)
+router.get("/billit-user-info", authenticateToken, async (req, res) => {
   try {
-    const token = authHeader.split(" ")[1];
-    const decoded = jwt.verify(token, process.env.JWT_SECRET);
-    req.userId = decoded.userId;
-    req.mongoPlanId = decoded.mongoPlanId;
-    next();
-  } catch (err) {
-    return res.status(403).json({ success: false, message: "Invalid token" });
-  }
-};
-
-// ✅ GET /api/billit-user-info
-router.get("/billit-user-info", authenticate, async (req, res) => {
-  try {
-    const user = await User.findById(req.userId).populate({
+    const user = await User.findById(req.user.userId).populate({
       path: "role_id",
       populate: { path: "mongoPlanId mongoCategoryId" }
     });
