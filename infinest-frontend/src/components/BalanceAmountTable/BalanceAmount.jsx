@@ -81,6 +81,7 @@ const BalanceAmount = ({ shopId }) => {
       setOriginalData(sortedData)
       setMobileData(sortedData)
     } catch (error) {
+      if (error.message === 'Session expired' || error.response?.data?.sessionExpired) return;
       console.error("Error fetching balance data:", error)
     }
   }

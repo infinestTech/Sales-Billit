@@ -47,6 +47,7 @@ export default function MobileDashboard({ shopId }) {
       // Reset stock alert pagination to first page when new data is loaded
       setStockAlertCurrentPage(1)
     } catch (error) {
+      if (error.message === 'Session expired' || error.response?.data?.sessionExpired) return;
       console.error("Failed to fetch dashboard data:", error)
       setError(error.message)
 

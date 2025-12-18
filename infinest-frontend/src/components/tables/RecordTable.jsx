@@ -54,6 +54,7 @@ const RecordTable = ({ shop_id, setIsLimitReached }) => {
       setFilteredData(records)
       setTodayRevenue(todayRevenue || 0)
     } catch (error) {
+      if (error.message === 'Session expired' || error.response?.data?.sessionExpired) return;
       console.error("Error fetching records:", error)
       setData([])
       setFilteredData([])
@@ -75,6 +76,7 @@ const RecordTable = ({ shop_id, setIsLimitReached }) => {
       const { todayRevenue } = res.data
       setTodayRevenue(todayRevenue || 0)
     } catch (error) {
+      if (error.message === 'Session expired' || error.response?.data?.sessionExpired) return;
       console.error("Error fetching today's revenue:", error.message)
       setTodayRevenue(0)
     }

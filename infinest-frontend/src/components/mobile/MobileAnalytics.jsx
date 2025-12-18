@@ -53,6 +53,7 @@ export default function MobileAnalytics({ shopId }) {
       await new Promise(resolve => setTimeout(resolve, 1000))
       setAnalyticsData(mockData)
     } catch (error) {
+      if (error.message === 'Session expired' || error.response?.data?.sessionExpired) return;
       console.error("Error fetching analytics:", error)
     } finally {
       setIsLoading(false)

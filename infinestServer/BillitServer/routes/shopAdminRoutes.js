@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
+const SessionManager = require('../utils/sessionManager'); // ✅ Import session manager
 const {
     Shop,
     ShopAdmin,
@@ -22,19 +23,40 @@ const {
 // JWT Secret for shop admins (different from regular users)
 const SHOP_ADMIN_JWT_SECRET = process.env.SHOP_ADMIN_JWT_SECRET || 'shop-admin-secret-key-2024';
 
-// Middleware to verify shop admin token
+// Middleware to verify shop admin token with session validation
 const shopAdminAuth = async (req, res, next) => {
     try {
         const token = req.headers.authorization?.replace('Bearer ', '');
         if (!token) {
-            return res.status(401).json({ success: false, message: 'Authentication required' });
+            return res.status(401).json({ 
+                success: false, 
+                message: 'Authentication required',
+                sessionExpired: true
+            });
         }
 
         const decoded = jwt.verify(token, SHOP_ADMIN_JWT_SECRET);
+        
+        // ✅ Validate session (enforce single-device login for shop admins)
+        const isSessionValid = await SessionManager.validateSession(decoded.adminId.toString(), token);
+        
+        if (!isSessionValid) {
+            return res.status(401).json({ 
+                success: false, 
+                message: 'Your session has expired or you have logged in from another device. Please login again.',
+                sessionExpired: true,
+                loggedOutFromAnotherDevice: true
+            });
+        }
+        
         const shopAdmin = await ShopAdmin.findById(decoded.adminId).populate('shop_ids').populate('current_shop_id');
 
         if (!shopAdmin || !shopAdmin.is_active) {
-            return res.status(401).json({ success: false, message: 'Invalid or inactive admin' });
+            return res.status(401).json({ 
+                success: false, 
+                message: 'Invalid or inactive admin',
+                sessionExpired: true
+            });
         }
 
         req.shopAdmin = shopAdmin;
@@ -57,7 +79,11 @@ const shopAdminAuth = async (req, res, next) => {
         
         next();
     } catch (error) {
-        return res.status(401).json({ success: false, message: 'Invalid token' });
+        return res.status(401).json({ 
+            success: false, 
+            message: 'Invalid token',
+            sessionExpired: true
+        });
     }
 };
 
@@ -120,6 +146,15 @@ router.post('/login', async (req, res) => {
             SHOP_ADMIN_JWT_SECRET,
             { expiresIn: '7d' }
         );
+
+        // ✅ Create session (invalidates any existing session for this shop admin)
+        const sessionMetadata = {
+            ip: req.ip || req.connection.remoteAddress,
+            userAgent: req.headers['user-agent'],
+            userType: 'shop_admin'
+        };
+        
+        await SessionManager.createSession(shopAdmin._id.toString(), token, sessionMetadata);
 
         const responseData = {
             success: true,
@@ -1773,6 +1808,35 @@ router.get('/my-shops', shopAdminAuth, async (req, res) => {
     } catch (error) {
         console.error('Get my shops error:', error);
         res.status(500).json({ success: false, message: 'Server error' });
+    }
+});
+
+// ✅ Shop Admin Logout endpoint - invalidates shop admin's session
+router.post('/logout', async (req, res) => {
+    try {
+        const token = req.headers.authorization?.replace('Bearer ', '');
+        
+        if (!token) {
+            return res.status(400).json({ success: false, message: 'No token provided' });
+        }
+
+        // Verify and decode token
+        const decoded = jwt.verify(token, SHOP_ADMIN_JWT_SECRET);
+        
+        // Invalidate session
+        await SessionManager.invalidateSession(decoded.adminId.toString());
+        
+        return res.json({
+            success: true,
+            message: 'Logged out successfully'
+        });
+    } catch (err) {
+        console.error('Shop admin logout error:', err);
+        // Even if there's an error, return success (user intent is to logout)
+        return res.json({
+            success: true,
+            message: 'Logged out'
+        });
     }
 });
 

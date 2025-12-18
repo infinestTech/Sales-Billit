@@ -76,18 +76,36 @@ export function AppSidebar({ sidebarOpen, setSidebarOpen, role }) {
     return () => window.removeEventListener("storage", handleStorageChange)
   }, [])
 
-  const handleSignOut = (e) => {
+  const handleSignOut = async (e) => {
     e.stopPropagation()
 
     if (window.confirm("Are you sure you want to sign out?")) {
-      localStorage.removeItem("token")
-      localStorage.removeItem("authToken")
-      localStorage.removeItem("userRole")
-      localStorage.removeItem("profileImage")
-      localStorage.removeItem("profileName")
+      try {
+        // ✅ Call logout endpoint to invalidate session
+        const token = localStorage.getItem("token")
+        if (token) {
+          await fetch(`${process.env.NEXT_PUBLIC_API_URL_BILLIT}/api/logout`, {
+            method: "POST",
+            headers: {
+              "Authorization": `Bearer ${token}`,
+              "Content-Type": "application/json"
+            }
+          })
+        }
+      } catch (error) {
+        console.error("Logout error:", error)
+        // Continue with logout even if API call fails
+      } finally {
+        // Clear local storage
+        localStorage.removeItem("token")
+        localStorage.removeItem("authToken")
+        localStorage.removeItem("userRole")
+        localStorage.removeItem("profileImage")
+        localStorage.removeItem("profileName")
 
-      window.location.href = "/billit-login"
-      window.history.replaceState(null, "", "/billit-login")
+        window.location.href = "/billit-login"
+        window.history.replaceState(null, "", "/billit-login")
+      }
     }
   }
 
