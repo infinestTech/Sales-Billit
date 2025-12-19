@@ -46,8 +46,6 @@ const sessionSchema = new mongoose.Schema({
 });
 
 // ✅ Index for efficient session lookup
-sessionSchema.index({ user_identifier: 1 });
-sessionSchema.index({ session_token: 1 });
 sessionSchema.index({ jwt_token_signature: 1 });
 sessionSchema.index({ user_type: 1 });
 

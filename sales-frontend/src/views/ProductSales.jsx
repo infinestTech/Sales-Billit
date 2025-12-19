@@ -3,6 +3,7 @@ function ProductSales({ salesUrl, token }) {
 	const [sellerProducts, setSellerProducts] = React.useState([]);
 	const [productNo, setProductNo] = React.useState('');
 	const [customerNo, setCustomerNo] = React.useState('');
+	const [customerName, setCustomerName] = React.useState('');
 	const [error, setError] = React.useState('');
 	const [showAlert, setShowAlert] = React.useState(false);
 	const [loadingLoad, setLoadingLoad] = React.useState(false);
@@ -117,6 +118,7 @@ function ProductSales({ salesUrl, token }) {
 			const payload = {
 				items: sellerProducts.map(it => ({ productId: it.productId || it._id || '', productNo: it.productNo || '', productName: it.productName || '', qty: Number(it.sellingQty ?? it.qty ?? 0), sellingPrice: Number(it.sellingPrice || 0), lineTotal: Number(lineTotal(it),), imes: Array.isArray(it.selectedImes) && it.selectedImes.length ? it.selectedImes : (Array.isArray(it.imes) ? it.imes : []) })),
 				customerNo,
+				customerName: customerName || 'Walk-in Customer',
 				subTotal,
 				cgst: Number(cgst),
 				sgst: Number(sgst),
@@ -169,6 +171,7 @@ function ProductSales({ salesUrl, token }) {
 			// clear sellerProducts (cart)
 			setSellerProducts([]);
 			setCustomerNo('');
+			setCustomerName('');
 			setSelectedBank('');
 			setCgst(0);
 			setSgst(0);
@@ -228,12 +231,422 @@ function ProductSales({ salesUrl, token }) {
 				const sdata = await sres.json();
 				if (sres.ok && Array.isArray(sdata.rows)) stock = sdata.rows;
 			} catch (e) { /* ignore */ }
+			
+			// GST details - declare before items mapping
+			const cgstPercent = sale.cgst || cgst;
+			const sgstPercent = sale.sgst || sgst;
+			const igstPercent = sale.igst || igst;
+			const cgstAmt = sale.cgstAmount ?? cgstAmount;
+			const sgstAmt = sale.sgstAmount ?? sgstAmount;
+			const igstAmt = sale.igstAmount ?? igstAmount;
+			
+			const items = (sale.items || []).map((i, idx) => {
+				const found = (stock || []).find(p => (String(p._id) && String(p._id) === String(i.productId || i._id)) || (p.productId && String(p.productId) === String(i.productId)) || (p.productNo && i.productNo && String(p.productNo) === String(i.productNo)));
+				const name = found?.productName || found?.name || i.productName || i.productNo || '';
+				const brand = found?.brand || '';
+				const model = found?.model || '';
+				
+				// Extract IMEI numbers from the item - prioritize selectedImes (actually sold)
+				const imes = Array.isArray(i.selectedImes) && i.selectedImes.length > 0 ? i.selectedImes : (Array.isArray(i.imes) ? i.imes : []);
+				const imeiText = imes.length > 0 ? imes.map(imei => `IMEI: ${imei}`).join(', ') : '';
+				
+				// Build product description with brand/model
+				let productDescription = `<span class="product-name">${name}</span>`;
+				if (brand || model) {
+					productDescription += `<br><span style="font-size:9px;color:#333;">${brand} ${model}`.trim() + `</span>`;
+				}
+				if (imeiText) {
+					productDescription += `<br><span class="imei-info">${imeiText}</span>`;
+				}
+				
+				const qty = Number(i.qty || i.sellingQty || 0);
+				const unit = Number(found?.sellingPrice ?? found?.unitSellingPrice ?? i.sellingPrice ?? 0);
+				
+				// Calculate tax per unit (GST percentage from sale data)
+				const taxPercent = (Number(cgstPercent) + Number(sgstPercent) + Number(igstPercent)) || 0;
+				const taxPerUnit = ((taxPercent / 100) * unit).toFixed(2);
+				
+				const line = (qty * unit).toFixed(2);
+				
+				return `<tr>
+					<td class="center">${idx + 1}</td>
+					<td>${productDescription}</td>
+					<td class="center">${qty}</td>
+					<td class="right">Rs. ${unit.toFixed(2)}</td>
+					<td class="right">Rs. ${taxPerUnit} (${taxPercent.toFixed(0)}%)</td>
+					<td class="right">Rs. ${line}</td>
+				</tr>`;
+			}).join('');
+			const total = Number(sale.totalAmount || 0).toFixed(2);
+			const date = new Date(sale.createdAt || Date.now()).toLocaleString();
+
+			// Build professional A4 TAX INVOICE HTML
+			const outSubTotal = Number((sale.subTotal ?? subTotal) || 0);
+			const outDiscount = Number((sale.discountAmount ?? discountAmount) || 0);
+			const outTaxable = Number((sale.taxableAmount ?? Math.max(0, outSubTotal - outDiscount)) || 0);
+			const outTotal = Number(sale.totalAmount ?? total).toFixed(2);
+			
+			// Format invoice number with date
+			const invoiceNo = sale.invoiceNo || sale._id?.slice(-6)?.toUpperCase() || 'INV' + Date.now().toString().slice(-6);
+			const invoiceDate = new Date(sale.createdAt || Date.now()).toLocaleDateString('en-IN', { day: '2-digit', month: 'long', year: 'numeric' });
+
+			const invoiceHtml = `<!doctype html><html><head><meta charset="utf-8"><title>TAX INVOICE</title><style>
+				@page { size: A4; margin: 10mm; }
+				* { margin: 0; padding: 0; box-sizing: border-box; }
+				body {
+					font-family: 'Arial', 'Helvetica', sans-serif;
+					padding: 15px;
+					color: #000;
+					background: #fff;
+					font-size: 11px;
+					line-height: 1.4;
+				}
+				.invoice-container {
+					border: 2px solid #000;
+					padding: 0;
+				}
+				.header {
+					text-align: center;
+					border-bottom: 2px solid #000;
+					padding: 8px 15px;
+				}
+				.header h1 {
+					font-size: 20px;
+					font-weight: bold;
+					margin-bottom: 2px;
+					letter-spacing: 2px;
+				}
+				.company-name {
+					font-size: 24px;
+					font-weight: bold;
+					color: #00b894;
+					margin: 8px 0;
+					letter-spacing: 1px;
+				}
+				.company-details {
+					font-size: 10px;
+					margin-top: 4px;
+				}
+				.info-row {
+					display: flex;
+					border-bottom: 1px solid #000;
+				}
+				.info-left, .info-right {
+					padding: 8px 15px;
+					flex: 1;
+				}
+				.info-left {
+					border-right: 1px solid #000;
+				}
+				.info-label {
+					font-weight: bold;
+					font-size: 10px;
+				}
+				.bill-to-section {
+					display: flex;
+					border-bottom: 1px solid #000;
+				}
+				.bill-to {
+					padding: 10px 15px;
+					flex: 1;
+					border-right: 1px solid #000;
+				}
+				.invoice-details {
+					padding: 10px 15px;
+					flex: 1;
+					text-align: right;
+				}
+				.bill-to h3, .invoice-details h3 {
+					font-size: 11px;
+					font-weight: bold;
+					margin-bottom: 8px;
+					text-transform: uppercase;
+				}
+				table.items-table {
+					width: 100%;
+					border-collapse: collapse;
+				}
+				table.items-table thead {
+					background-color: #00b894;
+					color: white;
+				}
+				table.items-table th {
+					padding: 8px 6px;
+					text-align: left;
+					font-size: 10px;
+					font-weight: bold;
+					border-right: 1px solid #fff;
+				}
+				table.items-table th:last-child {
+					border-right: none;
+				}
+				table.items-table th.center {
+					text-align: center;
+				}
+				table.items-table th.right {
+					text-align: right;
+				}
+				table.items-table td {
+					padding: 8px 6px;
+					border-bottom: 1px solid #ddd;
+					font-size: 10px;
+					vertical-align: top;
+				}
+				table.items-table td.center {
+					text-align: center;
+				}
+				table.items-table td.right {
+					text-align: right;
+					font-family: 'Courier New', monospace;
+				}
+				table.items-table tbody tr:nth-child(even) {
+					background-color: #f9f9f9;
+				}
+				.product-name {
+					font-weight: 600;
+					color: #000;
+				}
+				.imei-info {
+					font-size: 8px;
+					color: #666;
+					margin-top: 2px;
+					font-style: italic;
+				}
+				.totals-section {
+					display: flex;
+					border-top: 2px solid #000;
+				}
+				.totals-left {
+					flex: 1;
+					padding: 12px 15px;
+					border-right: 1px solid #000;
+				}
+				.totals-right {
+					width: 40%;
+					padding: 0;
+				}
+				.total-row {
+					display: flex;
+					padding: 6px 15px;
+					border-bottom: 1px solid #ddd;
+					font-size: 10px;
+				}
+				.total-row.discount {
+					background-color: #fff3cd;
+				}
+				.total-row.grand-total {
+					background-color: #00b894;
+					color: white;
+					font-weight: bold;
+					font-size: 12px;
+					border-bottom: none;
+				}
+				.total-label {
+					flex: 1;
+				}
+				.total-value {
+					text-align: right;
+					font-family: 'Courier New', monospace;
+					min-width: 100px;
+				}
+				.footer {
+					padding: 12px 15px;
+					border-top: 2px solid #000;
+				}
+				.notes-terms {
+					display: flex;
+				}
+				.notes, .terms {
+					flex: 1;
+					padding-right: 15px;
+				}
+				.notes h4, .terms h4 {
+					font-size: 10px;
+					font-weight: bold;
+					margin-bottom: 6px;
+					text-transform: uppercase;
+				}
+				.notes ul, .terms ul {
+					list-style-position: inside;
+					font-size: 9px;
+					line-height: 1.6;
+				}
+				.signature-box {
+					text-align: right;
+					margin-top: 30px;
+					padding-right: 15px;
+				}
+				.signature-line {
+					border-top: 1px solid #000;
+					display: inline-block;
+					min-width: 200px;
+					margin-top: 40px;
+					padding-top: 5px;
+					font-size: 10px;
+					font-weight: bold;
+				}
+				@media print {
+					body { padding: 0; }
+					.invoice-container { border: 2px solid #000; }
+				}
+			</style></head><body>
+			<div class="invoice-container">
+				<div class="header">
+					<h1>TAX INVOICE</h1>
+					<div class="company-name">${shopName || 'Your Shop Name'}</div>
+					<div class="company-details">
+						${shopAddress || 'Shop Address'}<br>
+						<strong>Phone:</strong> ${shopContact || 'Contact Number'} | 
+						<strong>GSTIN:</strong> ${shopGst || 'N/A'}
+					</div>
+				</div>
+				
+				<div class="bill-to-section">
+					<div class="bill-to">
+						<h3>Bill To</h3>
+						<strong>${sale.customerName || customerName || 'Walk-in Customer'}</strong><br>
+						Phone: ${sale.customerNo || customerNo || 'N/A'}
+					</div>
+					<div class="invoice-details">
+						<h3>Invoice Details</h3>
+						<strong>Invoice No:</strong> ${invoiceNo}<br>
+						<strong>Invoice Date:</strong> ${invoiceDate}
+					</div>
+				</div>
+				
+				<table class="items-table">
+					<thead>
+						<tr>
+							<th style="width:5%;" class="center">Sr. No.</th>
+							<th style="width:45%;">Items</th>
+							<th style="width:12%;" class="center">Quantity</th>
+							<th style="width:13%;" class="right">Price / Unit</th>
+							<th style="width:12%;" class="right">Tax / Unit</th>
+							<th style="width:13%;" class="right">Amount</th>
+						</tr>
+					</thead>
+					<tbody>${items}</tbody>
+				</table>
+				
+				<div class="totals-section">
+					<div class="totals-left">
+						<div class="notes-terms">
+							<div class="notes">
+								<h4>Notes</h4>
+								<ul>
+									<li>No return deal</li>
+									<li>Warranty as per manufacturer terms</li>
+								</ul>
+							</div>
+							<div class="terms">
+								<h4>Terms & Conditions</h4>
+								<ul>
+									<li>Customer will pay the GST</li>
+									<li>Payment due within 15 days</li>
+								</ul>
+							</div>
+						</div>
+						<div class="signature-box">
+							<div>Authorised Signatory For</div>
+							<div style="font-weight:bold;margin-top:5px;">${shopName || 'Shop Name'}</div>
+							<div class="signature-line">Signature</div>
+						</div>
+					</div>
+					<div class="totals-right">
+						<div class="total-row">
+							<div class="total-label">Total</div>
+							<div class="total-value">Rs. ${outSubTotal.toFixed(2)}</div>
+						</div>
+						${sale.discount > 0 ? `<div class="total-row discount">
+							<div class="total-label">Discount (${sale.discount}%)</div>
+							<div class="total-value">Rs. ${outDiscount.toFixed(2)}</div>
+						</div>` : ''}
+						${cgstPercent > 0 ? `<div class="total-row">
+							<div class="total-label">CGST (${cgstPercent}%)</div>
+							<div class="total-value">Rs. ${Number(cgstAmt).toFixed(2)}</div>
+						</div>` : ''}
+						${sgstPercent > 0 ? `<div class="total-row">
+							<div class="total-label">SGST (${sgstPercent}%)</div>
+							<div class="total-value">Rs. ${Number(sgstAmt).toFixed(2)}</div>
+						</div>` : ''}
+						${igstPercent > 0 ? `<div class="total-row">
+							<div class="total-label">IGST (${igstPercent}%)</div>
+							<div class="total-value">Rs. ${Number(igstAmt).toFixed(2)}</div>
+						</div>` : ''}
+						<div class="total-row grand-total">
+							<div class="total-label">GRAND TOTAL</div>
+							<div class="total-value">Rs. ${outTotal}</div>
+						</div>
+					</div>
+				</div>
+			</div>
+			</body></html>`;
+
+			const w = window.open('', '_blank');
+			if (!w) {
+				setPreviewHtml(invoiceHtml);
+				setShowPreview(true);
+				setError('Popup blocked: showing preview. Allow popups to print directly.');
+				return;
+			}
+			w.document.open(); w.document.write(invoiceHtml); w.document.close(); w.focus();
+			setTimeout(() => { try { w.print(); } catch (e) { /* ignore */ } }, 300);
+		} catch (e) { setError('Failed to open printer: ' + (e.message || e)); }
+	}
+
+	// Small receipt format print function
+	async function printSmallReceipt() {
+		try {
+			const sale = lastSale || { items: sellerProducts, totalAmount, customerNo, customerName, createdAt: new Date().toISOString() };
+			// fetch branch info
+			let shopName = '';
+			let shopContact = '';
+			let shopGst = '';
+			let shopAddress = '';
+			try {
+				const res = await fetch(new URL(salesUrl + '/api/branches'), { headers: { Authorization: 'Bearer ' + token } });
+				const data = await res.json();
+				if (res.ok && Array.isArray(data.branches) && data.branches.length > 0) {
+					const payload = decodeJwt();
+					const branchId = payload?.branch_id || payload?._id || '';
+					let found = null;
+					if (branchId) found = data.branches.find(b => String(b._id) === String(branchId));
+					if (!found) found = data.branches[0];
+					shopName = found?.name || '';
+					shopContact = found?.phoneNumber || found?.phone || '';
+					shopGst = found?.gstNo || found?.gst || '';
+					shopAddress = found?.address || found?.branchAddress || '';
+				}
+			} catch (e) { /* ignore */ }
+			if (!shopName || !shopContact) {
+				const payload = decodeJwt();
+				shopName = shopName || payload.shopName || payload.name || payload.branchName || '';
+				shopContact = shopContact || payload.phone || payload.phoneNumber || payload.branchPhone || '';
+				shopGst = shopGst || payload.gstNo || payload.gst || '';
+				shopAddress = shopAddress || payload.address || payload.branchAddress || '';
+			}
+			// fetch branch stock to resolve prices
+			let stock = [];
+			try {
+				const sres = await fetch(new URL(salesUrl + '/api/branch-stock?only_branch=1'), { headers: { Authorization: 'Bearer ' + token } });
+				const sdata = await sres.json();
+				if (sres.ok && Array.isArray(sdata.rows)) stock = sdata.rows;
+			} catch (e) { /* ignore */ }
+			
+			// GST details
+			const cgstPercent = sale.cgst || cgst;
+			const sgstPercent = sale.sgst || sgst;
+			const igstPercent = sale.igst || igst;
+			const cgstAmt = sale.cgstAmount ?? cgstAmount;
+			const sgstAmt = sale.sgstAmount ?? sgstAmount;
+			const igstAmt = sale.igstAmount ?? igstAmount;
+			
 			const items = (sale.items || []).map((i, idx) => {
 				const found = (stock || []).find(p => (String(p._id) && String(p._id) === String(i.productId || i._id)) || (p.productId && String(p.productId) === String(i.productId)) || (p.productNo && i.productNo && String(p.productNo) === String(i.productNo)));
 				const name = found?.productName || found?.name || i.productName || i.productNo || '';
 				
-				// Extract IMEI numbers from the item
-				const imes = Array.isArray(i.imes) ? i.imes : (Array.isArray(i.selectedImes) ? i.selectedImes : []);
+				// Extract IMEI numbers from the item - prioritize selectedImes (actually sold)
+				const imes = Array.isArray(i.selectedImes) && i.selectedImes.length > 0 ? i.selectedImes : (Array.isArray(i.imes) ? i.imes : []);
 				const imeiText = imes.length > 0 ? imes.map(imei => `IMEI: ${imei}`).join(', ') : '';
 				
 				// Combine product name with IMEI information
@@ -255,27 +668,14 @@ function ProductSales({ salesUrl, token }) {
 			}).join('');
 			const total = Number(sale.totalAmount || 0).toFixed(2);
 			const date = new Date(sale.createdAt || Date.now()).toLocaleString();
-			// GST details
-			const cgstPercent = sale.cgst || cgst;
-			const sgstPercent = sale.sgst || sgst;
-			const igstPercent = sale.igst || igst;
-			const cgstAmt = sale.cgstAmount ?? cgstAmount;
-			const sgstAmt = sale.sgstAmount ?? sgstAmount;
-			const igstAmt = sale.igstAmount ?? igstAmount;
-			const printedSubTotal = sale.subTotal ?? subTotal;
-			let gstLines = '';
-			if (cgstPercent > 0) gstLines += `<div>CGST ${cgstPercent}%: <span style="float:right;">${cgstAmt.toFixed(2)}</span></div>`;
-			if (sgstPercent > 0) gstLines += `<div>SGST ${sgstPercent}%: <span style="float:right;">${sgstAmt.toFixed(2)}</span></div>`;
-			if (igstPercent > 0) gstLines += `<div>IGST ${igstPercent}%: <span style="float:right;">${igstAmt.toFixed(2)}</span></div>`;
-			if (gstLines) gstLines += `<div style="margin:6px 0;"></div>`;
 
-			// Build the bordered invoice HTML per requested layout
+			// Build the small receipt HTML
 			const outSubTotal = Number((sale.subTotal ?? subTotal) || 0);
 			const outDiscount = Number((sale.discountAmount ?? discountAmount) || 0);
 			const outTaxable = Number((sale.taxableAmount ?? Math.max(0, outSubTotal - outDiscount)) || 0);
 			const outTotal = Number(sale.totalAmount ?? total).toFixed(2);
 
-			const invoiceHtml = `<!doctype html><html><head><meta charset="utf-8"><title>Invoice</title><style>
+			const receiptHtml = `<!doctype html><html><head><meta charset="utf-8"><title>Receipt</title><style>
 				@page { size: 80mm auto; margin: 6mm; }
 				body {
 					font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
@@ -401,7 +801,7 @@ function ProductSales({ salesUrl, token }) {
 				`<div class="branch-name">${shopName || 'Branch Name'}</div>` +
 				`<div class="address">📍 ${shopAddress || 'Branch Address'}</div>` +
 				`<div class="cust-line cust-dotted">
-					<strong>👤 Customer:</strong> ${sale.customerName || 'Walk-in Customer'}
+					<strong>👤 Customer:</strong> ${sale.customerName || customerName || 'Walk-in Customer'}
 				</div>` +
 				`<div class="cust-line">
 					<strong>📱 Phone:</strong> ${sale.customerNo || customerNo || 'N/A'} &nbsp;&nbsp;&nbsp;
@@ -432,18 +832,18 @@ function ProductSales({ salesUrl, token }) {
 				`<div style="clear:both;margin-top:20px;text-align:center;font-size:11px;color:#6c757d;border-top:1px solid #dee2e6;padding-top:10px;">
 					🙏 Thank you for your business! 🙏<br>
 					<span style="font-size:10px;font-style:italic;">Visit again soon!</span>
-				</div>`;
+				</div></body></html>`;
 
 			const w = window.open('', '_blank');
 			if (!w) {
-				setPreviewHtml(invoiceHtml);
+				setPreviewHtml(receiptHtml);
 				setShowPreview(true);
 				setError('Popup blocked: showing preview. Allow popups to print directly.');
 				return;
 			}
-			w.document.open(); w.document.write(invoiceHtml); w.document.close(); w.focus();
+			w.document.open(); w.document.write(receiptHtml); w.document.close(); w.focus();
 			setTimeout(() => { try { w.print(); } catch (e) { /* ignore */ } }, 300);
-		} catch (e) { setError('Failed to open printer: ' + (e.message || e)); }
+		} catch (e) { setError('Failed to open small receipt printer: ' + (e.message || e)); }
 	}
 
 	// preview modal markup will be rendered below; Print fallback opens this modal
@@ -497,6 +897,10 @@ function ProductSales({ salesUrl, token }) {
 							setProductNo('');
 						}}>Add</button>
 					</div>
+				</div>
+				<div>
+					<label>Customer Name</label><br />
+					<input value={customerName} onChange={e => setCustomerName(e.target.value)} placeholder="Enter customer name" />
 				</div>
 				<div>
 					<label>Mobile Number <span style={{color:'red'}}>*</span></label><br />
@@ -658,7 +1062,8 @@ function ProductSales({ salesUrl, token }) {
 			</div>
 							<div style={{marginTop:12}}>
 								<button className="btn" onClick={doSell} disabled={sellingBusy}>{sellingBusy ? 'Processing...' : 'Sell'}</button>
-								<button className="btn secondary" style={{marginLeft:8}} onClick={printSale}>Printer</button>
+								<button className="btn secondary" style={{marginLeft:8}} onClick={printSale}>Print A4 Invoice</button>
+								<button className="btn secondary" style={{marginLeft:8}} onClick={printSmallReceipt}>Print Receipt</button>
 								<button className="btn secondary" style={{marginLeft:8}} onClick={() => {
 									(async () => {
 										const sale = lastSale || { items: sellerProducts, customerNo };
