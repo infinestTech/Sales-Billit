@@ -510,6 +510,17 @@ function CreateBranch({ salesUrl, token, planId, branchLimit = 0 }) {
     setError('');
     if (form.password !== form.confirmPassword) return setError('Passwords do not match');
     if (rows.length >= branchLimit) return setError('Branch limit reached for your plan');
+    
+    // Check if email already exists in the current branches list
+    const normalizedEmail = (form.email || '').toLowerCase().trim();
+    const emailExists = rows.some(branch => 
+      (branch.email || '').toLowerCase().trim() === normalizedEmail
+    );
+    
+    if (emailExists) {
+      return setError('A branch with this email already exists. Please use a different email address.');
+    }
+    
     setSaving(true);
     try {
       const res = await fetch(salesUrl + '/api/branches', {
@@ -710,7 +721,7 @@ function CreateBranch({ salesUrl, token, planId, branchLimit = 0 }) {
       </div>
 
       {/* Branches Table */}
-      <div className="table-card">
+      <div className="table-card branch-section">
         <div className="table-header">
           <div>
             <h3 className="table-title">Branch Locations</h3>

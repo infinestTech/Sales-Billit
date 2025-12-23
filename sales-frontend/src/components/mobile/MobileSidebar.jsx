@@ -79,41 +79,79 @@ function MobileSidebar({ active = 'bank', onSelect, planId, branchLimit, branchU
         </div>
         
         <nav className="mobile-nav">
-          <div className="mobile-nav-section">
-            <div className="mobile-nav-section-title">
-              {isBranch ? 'Branch Operations' : 'Business Management'}
-            </div>
-            
-            {isBranch ? (
-              // Branch users see a minimal branch nav
-              <>
+          {isBranch ? (
+            // Branch users see a minimal branch nav
+            <>
+              <div className="mobile-nav-section">
+                <div className="mobile-nav-section-title">
+                  <span className="section-icon">💰</span>
+                  Financial
+                </div>
                 <MobileNavItem 
                   id="bank" 
-                  label="Payment Methods" 
+                  label="Bank Accounts" 
                   icon="💳" 
-                  description="Manage payment options"
+                  description="Manage payment methods"
                   activeId={active} 
                   onClick={onSelect} 
                 />
                 <MobileNavItem 
                   id="bank-history" 
-                  label="Payment History" 
+                  label="Transaction History" 
                   icon="📊" 
-                  description="View transaction history"
+                  description="View transaction records"
+                  activeId={active} 
+                  onClick={onSelect} 
+                />
+                <MobileNavItem 
+                  id="branch-expense" 
+                  label="Expenses" 
+                  icon="💸" 
+                  description="Record branch expenses"
+                  activeId={active} 
+                  onClick={onSelect} 
+                />
+              </div>
+
+              <div className="mobile-nav-section">
+                <div className="mobile-nav-section-title">
+                  <span className="section-icon">📦</span>
+                  Inventory
+                </div>
+                <MobileNavItem 
+                  id="supplier" 
+                  label="Dealers" 
+                  icon="🏢" 
+                  description="Manage suppliers"
                   activeId={active} 
                   onClick={onSelect} 
                 />
                 <MobileNavItem 
                   id="instock" 
-                  label="Inventory" 
+                  label="Product Inventory" 
                   icon="📦" 
                   description="Track stock levels"
                   activeId={active} 
                   onClick={onSelect} 
                 />
                 <MobileNavItem 
+                  id="stock-history" 
+                  label="Stock History" 
+                  icon="📚" 
+                  description="View stock movements"
+                  activeId={active} 
+                  onClick={onSelect} 
+                />
+              </div>
+
+              <div className="mobile-nav-section">
+                <div className="mobile-nav-section-title">
+                  <span className="section-icon">📈</span>
+                  Sales
+                </div>
+                <MobileNavItem 
                   id="product-sales" 
-                  label="Point of Sale" 
+                  label="Product Sales" 
                   icon="🛒" 
                   description="Process customer sales"
                   activeId={active} 
@@ -121,7 +159,7 @@ function MobileSidebar({ active = 'bank', onSelect, planId, branchLimit, branchU
                 />
                 <MobileNavItem 
                   id="seconds-sales" 
-                  label="Quick Sales" 
+                  label="Seconds Mobile Sales" 
                   icon="⚡" 
                   description="Fast checkout process"
                   activeId={active} 
@@ -135,21 +173,19 @@ function MobileSidebar({ active = 'bank', onSelect, planId, branchLimit, branchU
                   activeId={active} 
                   onClick={onSelect} 
                 />
-                <MobileNavItem 
-                  id="branch-expense" 
-                  label="Expenses" 
-                  icon="💸" 
-                  description="Record branch costs"
-                  activeId={active} 
-                  onClick={onSelect} 
-                />
-              </>
-            ) : (
-              // Admin / seller view
-              <>
+              </div>
+            </>
+          ) : (
+            // Admin / seller view
+            <>
+              <div className="mobile-nav-section">
+                <div className="mobile-nav-section-title">
+                  <span className="section-icon">💰</span>
+                  Financial Management
+                </div>
                 <MobileNavItem 
                   id="bank" 
-                  label="Payment Methods" 
+                  label="Bank Accounts" 
                   icon="💳" 
                   description="Set up payment options"
                   activeId={active} 
@@ -157,15 +193,38 @@ function MobileSidebar({ active = 'bank', onSelect, planId, branchLimit, branchU
                 />
                 <MobileNavItem 
                   id="bank-history" 
-                  label="Payment History" 
+                  label="Transaction History" 
                   icon="📊" 
                   description="View all transactions"
                   activeId={active} 
                   onClick={onSelect} 
                 />
                 <MobileNavItem 
+                  id="branch-expense" 
+                  label="Expenses" 
+                  icon="💸" 
+                  description="Track all expenses"
+                  activeId={active} 
+                  onClick={onSelect} 
+                />
+                <MobileNavItem 
+                  id="gst-calculator" 
+                  label="GST Calculator" 
+                  icon="🧮" 
+                  description="Calculate GST amounts"
+                  activeId={active} 
+                  onClick={onSelect} 
+                />
+              </div>
+
+              <div className="mobile-nav-section">
+                <div className="mobile-nav-section-title">
+                  <span className="section-icon">📦</span>
+                  Inventory Management
+                </div>
+                <MobileNavItem 
                   id="supplier" 
-                  label="Suppliers" 
+                  label="Dealers" 
                   icon="🏢" 
                   description="Manage vendors"
                   activeId={active} 
@@ -173,12 +232,27 @@ function MobileSidebar({ active = 'bank', onSelect, planId, branchLimit, branchU
                 />
                 <MobileNavItem 
                   id="instock" 
-                  label="Master Inventory" 
+                  label="Product Inventory" 
                   icon="📦" 
                   description="Central stock management"
                   activeId={active} 
                   onClick={onSelect} 
                 />
+                <MobileNavItem 
+                  id="stock-history" 
+                  label="Stock History" 
+                  icon="📚" 
+                  description="View stock records"
+                  activeId={active} 
+                  onClick={onSelect} 
+                />
+              </div>
+
+              <div className="mobile-nav-section">
+                <div className="mobile-nav-section-title">
+                  <span className="section-icon">🏪</span>
+                  Branch Operations
+                </div>
                 <MobileNavItem
                   id="branch"
                   label="Branch Management"
@@ -206,38 +280,8 @@ function MobileSidebar({ active = 'bank', onSelect, planId, branchLimit, branchU
                   onClick={onSelect} 
                   locked={!canUseBranch} 
                 />
-              </>
-            )}
-          </div>
-          
-          {!isBranch && (
-            <div className="mobile-nav-section">
-              <div className="mobile-nav-section-title">Communication & Marketing</div>
-              <MobileNavItem 
-                id="whatsapp-contact" 
-                label="WhatsApp Contacts" 
-                icon="💬" 
-                description="Manage customer contacts"
-                activeId={active} 
-                onClick={onSelect} 
-              />
-              <MobileNavItem 
-                id="offer" 
-                label="Promotions" 
-                icon="🎯" 
-                description="Create special offers"
-                activeId={active} 
-                onClick={onSelect} 
-              />
-              <MobileNavItem 
-                id="whatsapp-stock" 
-                label="WhatsApp Inventory" 
-                icon="📱" 
-                description="WhatsApp-specific stock"
-                activeId={active} 
-                onClick={onSelect} 
-              />
-            </div>
+              </div>
+            </>
           )}
           
           <div className="mobile-nav-footer">
