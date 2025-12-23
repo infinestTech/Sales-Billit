@@ -57,6 +57,15 @@ const createBranch = async (req, res) => {
     res.status(201).json({ success: true, branch: doc });
   } catch (err) {
     console.error('Create branch error:', err.message);
+    
+    // Handle MongoDB duplicate key error
+    if (err.code === 11000 || err.name === 'MongoServerError') {
+      return res.status(400).json({ 
+        success: false, 
+        message: 'A branch with this email already exists in your shop' 
+      });
+    }
+    
     res.status(500).json({ success: false, message: err.message });
   }
 };
