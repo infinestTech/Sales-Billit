@@ -19,8 +19,8 @@ function MobileHeader({ title, subtitle, user, onLogout, onMenuToggle, isMenuOpe
       
       <div className="mobile-header-right">
         {user && (
-          <div className="mobile-user-menu">
-            <div className="mobile-user-avatar">
+          <React.Fragment>
+            <div className="mobile-user-avatar" title={user.name || user.email}>
               {user.name ? user.name.charAt(0).toUpperCase() : user.email ? user.email.charAt(0).toUpperCase() : 'U'}
             </div>
             {onLogout && (
@@ -30,10 +30,14 @@ function MobileHeader({ title, subtitle, user, onLogout, onMenuToggle, isMenuOpe
                 title="Logout"
                 aria-label="Logout"
               >
-                <span>🚪</span>
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path>
+                  <polyline points="16 17 21 12 16 7"></polyline>
+                  <line x1="21" y1="12" x2="9" y2="12"></line>
+                </svg>
               </button>
             )}
-          </div>
+          </React.Fragment>
         )}
       </div>
     </header>
