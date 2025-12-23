@@ -1,9 +1,3 @@
-/* Force Payment Methods header and subtitle to white */
-.table-header h3.table-title,
-.table-header .table-subtitle {
-  color: #fff !important;
-  text-shadow: 0 1px 4px rgba(44,51,73,0.18);
-}
 /* Modern Professional UI Theme */
 :root {
   --primary: #6366f1; /* Indigo */
