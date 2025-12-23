@@ -8,6 +8,36 @@ function StockHistory({ salesUrl, token, branchUser }) {
   const [endDate, setEndDate] = React.useState('');
   const [selected, setSelected] = React.useState(null);
 
+  const [isMobile, setIsMobile] = React.useState(() => {
+    try {
+      return window.matchMedia && window.matchMedia('(max-width: 768px)').matches;
+    } catch (_e) {
+      return false;
+    }
+  });
+
+  React.useEffect(() => {
+    try {
+      if (!window.matchMedia) return;
+      const mql = window.matchMedia('(max-width: 768px)');
+      const apply = () => setIsMobile(!!mql.matches);
+      apply();
+
+      if (typeof mql.addEventListener === 'function') {
+        mql.addEventListener('change', apply);
+        return () => mql.removeEventListener('change', apply);
+      }
+
+      // Safari fallback
+      if (typeof mql.addListener === 'function') {
+        mql.addListener(apply);
+        return () => mql.removeListener(apply);
+      }
+    } catch (_e) {
+      // ignore
+    }
+  }, []);
+
   const getEffectiveToken = () => {
     const storedBranchToken = typeof window !== 'undefined' ? (localStorage.getItem('branch_token') || '') : '';
     return token || storedBranchToken || '';
@@ -85,9 +115,9 @@ function StockHistory({ salesUrl, token, branchUser }) {
   }, [supplies, startDate, endDate]);
 
   return (
-    <div style={{ padding: '24px', backgroundColor: '#f8fafc', minHeight: '100vh' }}>
+    <div style={{ padding: isMobile ? '12px' : '24px', backgroundColor: '#f8fafc', minHeight: '100vh' }}>
       {/* Page Header */}
-      <div style={{ marginBottom: '32px' }}>
+      <div style={{ marginBottom: isMobile ? '18px' : '32px' }}>
         <h1 style={{ 
           fontSize: '32px', 
           fontWeight: '700', 
@@ -107,14 +137,14 @@ function StockHistory({ salesUrl, token, branchUser }) {
       {/* Statistics Cards */}
       <div style={{ 
         display: 'grid', 
-        gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', 
-        gap: '24px', 
-        marginBottom: '32px' 
+        gridTemplateColumns: isMobile ? '1fr' : 'repeat(auto-fit, minmax(250px, 1fr))', 
+        gap: isMobile ? '12px' : '24px', 
+        marginBottom: isMobile ? '18px' : '32px' 
       }}>
         <div style={{
           background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-          borderRadius: '16px',
-          padding: '24px',
+          borderRadius: isMobile ? '12px' : '16px',
+          padding: isMobile ? '16px' : '24px',
           color: 'white',
           boxShadow: '0 10px 25px rgba(102, 126, 234, 0.15)',
           border: '1px solid rgba(255, 255, 255, 0.1)'
@@ -206,199 +236,71 @@ function StockHistory({ salesUrl, token, branchUser }) {
       </div>
 
       {/* Filters and Actions Section */}
-      <div style={{
-        background: 'white',
-        borderRadius: '16px',
-        padding: '24px',
-        marginBottom: '32px',
-        boxShadow: '0 4px 6px rgba(0, 0, 0, 0.05)',
-        border: '1px solid #e2e8f0'
-      }}>
-        <div style={{ 
-          display: 'flex', 
-          justifyContent: 'space-between', 
-          alignItems: 'flex-start',
-          flexWrap: 'wrap',
-          gap: '20px'
-        }}>
-          {/* Filters Section */}
-          <div style={{ flex: '1', minWidth: '300px' }}>
-            <h3 style={{ 
-              fontSize: '18px', 
-              fontWeight: '600', 
-              color: '#1e293b',
-              marginBottom: '16px',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '8px'
-            }}>
-              🔍 Filters & Search
-            </h3>
-            
-            <div style={{ 
-              display: 'grid', 
-              gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', 
-              gap: '16px',
-              alignItems: 'end'
-            }}>
-              {!branchUser && (
-                <div>
-                  <label style={{ 
-                    display: 'block', 
-                    fontSize: '14px', 
-                    fontWeight: '500', 
-                    color: '#374151',
-                    marginBottom: '6px'
-                  }}>Branch</label>
-                  <select 
-                    value={selectedBranch} 
-                    onChange={(e)=>{ setSelectedBranch(e.target.value); loadSupplies(e.target.value); }}
-                    style={{
-                      width: '100%',
-                      padding: '10px 12px',
-                      border: '2px solid #e5e7eb',
-                      borderRadius: '8px',
-                      fontSize: '14px',
-                      backgroundColor: 'white',
-                      cursor: 'pointer',
-                      outline: 'none'
-                    }}
-                  >
-                    <option value="">All branches</option>
-                    {branches.map(b => (
-                      <option key={b._id} value={b._id}>{b.name || b._id}</option>
-                    ))}
-                  </select>
-                </div>
-              )}
-
-              <div>
-                <label style={{ 
-                  display: 'block', 
-                  fontSize: '14px', 
-                  fontWeight: '500', 
-                  color: '#374151',
-                  marginBottom: '6px'
-                }}>From Date</label>
-                <input 
-                  type="date" 
-                  value={startDate} 
-                  onChange={e => setStartDate(e.target.value)}
-                  style={{
-                    width: '100%',
-                    padding: '10px 12px',
-                    border: '2px solid #e5e7eb',
-                    borderRadius: '8px',
-                    fontSize: '14px',
-                    outline: 'none'
-                  }}
-                />
-              </div>
-
-              <div>
-                <label style={{ 
-                  display: 'block', 
-                  fontSize: '14px', 
-                  fontWeight: '500', 
-                  color: '#374151',
-                  marginBottom: '6px'
-                }}>To Date</label>
-                <input 
-                  type="date" 
-                  value={endDate} 
-                  onChange={e => setEndDate(e.target.value)}
-                  style={{
-                    width: '100%',
-                    padding: '10px 12px',
-                    border: '2px solid #e5e7eb',
-                    borderRadius: '8px',
-                    fontSize: '14px',
-                    outline: 'none'
-                  }}
-                />
-              </div>
-
-              <div>
-                <button 
-                  style={{
-                    background: '#f1f5f9',
-                    color: '#475569',
-                    border: '2px solid #e5e7eb',
-                    borderRadius: '8px',
-                    padding: '10px 16px',
-                    fontSize: '14px',
-                    fontWeight: '500',
-                    cursor: 'pointer',
-                    width: '100%'
-                  }}
-                  onClick={() => { setStartDate(''); setEndDate(''); }}
-                >
-                  🗑️ Clear Dates
-                </button>
-              </div>
-            </div>
-          </div>
-
-          {/* Action Buttons */}
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', minWidth: '200px' }}>
-            <h3 style={{ 
-              fontSize: '18px', 
-              fontWeight: '600', 
-              color: '#1e293b',
-              marginBottom: '4px',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '8px'
-            }}>
-              ⚡ Quick Actions
-            </h3>
-            
-            <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
-              <button 
-                style={{
-                  background: 'linear-gradient(135deg, #4facfe 0%, #00f2fe 100%)',
-                  color: 'white',
-                  border: 'none',
-                  borderRadius: '8px',
-                  padding: '10px 16px',
-                  fontSize: '14px',
-                  fontWeight: '600',
-                  cursor: 'pointer',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '6px',
-                  boxShadow: '0 4px 12px rgba(79, 172, 254, 0.3)'
-                }}
-                onClick={()=>loadSupplies(selectedBranch)}
-              >
-                🔄 Refresh
-              </button>
-
-              {!branchUser && (
-                <button 
-                  style={{
-                    background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-                    color: 'white',
-                    border: 'none',
-                    borderRadius: '8px',
-                    padding: '10px 16px',
-                    fontSize: '14px',
-                    fontWeight: '600',
-                    cursor: 'pointer',
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '6px',
-                    boxShadow: '0 4px 12px rgba(102, 126, 234, 0.3)'
-                  }}
-                  onClick={()=>{ try{ location.hash = '#branch-supply'; }catch{} }}
-                >
-                  ➕ Add Supply
-                </button>
-              )}
-            </div>
+      <div className="card" style={{ marginBottom: isMobile ? 18 : 32 }}>
+        <div className="card-header">
+          <div>
+            <h3 className="card-title">Filters & Actions</h3>
+            <p className="card-description">Filter supply records by branch and date range</p>
           </div>
         </div>
+
+        <div className="form-grid form-grid-3" style={{ marginBottom: 16 }}>
+          {!branchUser && (
+            <div className="form-group">
+              <label className="form-label">Branch</label>
+              <select
+                className="form-select"
+                value={selectedBranch}
+                onChange={(e) => { setSelectedBranch(e.target.value); loadSupplies(e.target.value); }}
+              >
+                <option value="">All branches</option>
+                {branches.map((b) => (
+                  <option key={b._id} value={b._id}>{b.name || b._id}</option>
+                ))}
+              </select>
+            </div>
+          )}
+
+          <div className="form-group">
+            <label className="form-label">From Date</label>
+            <input
+              className="form-input"
+              type="date"
+              value={startDate}
+              onChange={(e) => setStartDate(e.target.value)}
+            />
+          </div>
+
+          <div className="form-group">
+            <label className="form-label">To Date</label>
+            <input
+              className="form-input"
+              type="date"
+              value={endDate}
+              onChange={(e) => setEndDate(e.target.value)}
+            />
+          </div>
+        </div>
+
+        <div className="btn-group" style={{ flexWrap: 'wrap' }}>
+          <button type="button" className="btn" onClick={() => loadSupplies(selectedBranch)}>
+            🔄 Refresh
+          </button>
+          {!branchUser ? (
+            <button type="button" className="btn secondary" onClick={() => { try { location.hash = '#branch-supply'; } catch {} }}>
+              ➕ Add Supply
+            </button>
+          ) : null}
+          <button type="button" className="btn secondary" onClick={() => { setStartDate(''); setEndDate(''); }}>
+            🗑️ Clear Dates
+          </button>
+        </div>
       </div>
+
+
+
+
+      
       {/* Main Table Section */}
       <div style={{
         background: 'white',

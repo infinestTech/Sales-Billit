@@ -448,7 +448,14 @@ function App() {
         branchLimit={branchLimit}
         branchUser={branchUser}
       >
-        <MainContent />
+        {React.createElement(window.MobileViewRenderer, {
+          view: view,
+          salesUrl: SALES_URL,
+          token: effectiveToken,
+          branchUser: branchUser,
+          planId: planId,
+          branchLimit: branchLimit
+        })}
       </MobileLayout>
     );
   }

@@ -174,44 +174,47 @@ function GstCalculator(props) {
               marginTop: 8,
             }}
           >
-            <table
-              className="gst-table"
-              style={{
-                width: '100%',
-                borderCollapse: 'separate',
-                borderSpacing: 0,
-                fontSize: 16,
-              }}
-            >
-              <thead>
-                <tr style={{ background: '#f3f6fa' }}>
-                  <th style={{ fontWeight: 700, padding: '14px 10px', borderBottom: '1px solid #e5e7eb', textAlign: 'left' }}>Supplier</th>
-                  <th style={{ fontWeight: 700, padding: '14px 10px', borderBottom: '1px solid #e5e7eb', textAlign: 'left' }}>Bank</th>
-                      <th style={{ fontWeight: 700, padding: '14px 10px', borderBottom: '1px solid #e5e7eb', textAlign: 'left' }}>Branch</th>
-                  <th style={{ fontWeight: 700, padding: '14px 10px', borderBottom: '1px solid #e5e7eb', textAlign: 'right' }}>Supplier Amount</th>
-                  <th style={{ fontWeight: 700, padding: '14px 10px', borderBottom: '1px solid #e5e7eb', textAlign: 'right' }}>GST Amount</th>
-                  <th style={{ fontWeight: 700, padding: '14px 10px', borderBottom: '1px solid #e5e7eb', textAlign: 'left' }}>Date</th>
-                </tr>
-              </thead>
-              <tbody>
-                {displayedTransactions.map((t, idx) => (
-                  <tr
-                    key={idx}
-                    style={{
-                      background: idx % 2 === 0 ? '#fff' : '#f9fafb',
-                      borderBottom: '1px solid #e5e7eb',
-                    }}
-                  >
-                        <td style={{ padding: '12px 10px' }}>{t.supplierName || '-'}</td>
-                        <td style={{ padding: '12px 10px' }}>{t.bankName || '-'}</td>
-                        <td style={{ padding: '12px 10px' }}>{t.branchName || '-'}</td>
-                    <td style={{ padding: '12px 10px', textAlign: 'right' }}>{t.supplierAmount}</td>
-                    <td style={{ padding: '12px 10px', textAlign: 'right' }}>{t.gstAmount}</td>
-                    <td style={{ padding: '12px 10px' }}>{t.createdAt ? new Date(t.createdAt).toLocaleString() : '-'}</td>
+            <div className="mobile-overflow-x-auto" style={{ overflowX: 'auto', WebkitOverflowScrolling: 'touch' }}>
+              <table
+                className="gst-table"
+                style={{
+                  width: '100%',
+                  minWidth: 720,
+                  borderCollapse: 'separate',
+                  borderSpacing: 0,
+                  fontSize: 16,
+                }}
+              >
+                <thead>
+                  <tr style={{ background: '#f3f6fa' }}>
+                    <th style={{ fontWeight: 700, padding: '14px 10px', borderBottom: '1px solid #e5e7eb', textAlign: 'left' }}>Supplier</th>
+                    <th style={{ fontWeight: 700, padding: '14px 10px', borderBottom: '1px solid #e5e7eb', textAlign: 'left' }}>Bank</th>
+                    <th style={{ fontWeight: 700, padding: '14px 10px', borderBottom: '1px solid #e5e7eb', textAlign: 'left' }}>Branch</th>
+                    <th style={{ fontWeight: 700, padding: '14px 10px', borderBottom: '1px solid #e5e7eb', textAlign: 'right' }}>Supplier Amount</th>
+                    <th style={{ fontWeight: 700, padding: '14px 10px', borderBottom: '1px solid #e5e7eb', textAlign: 'right' }}>GST Amount</th>
+                    <th style={{ fontWeight: 700, padding: '14px 10px', borderBottom: '1px solid #e5e7eb', textAlign: 'left' }}>Date</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody>
+                  {displayedTransactions.map((t, idx) => (
+                    <tr
+                      key={idx}
+                      style={{
+                        background: idx % 2 === 0 ? '#fff' : '#f9fafb',
+                        borderBottom: '1px solid #e5e7eb',
+                      }}
+                    >
+                      <td style={{ padding: '12px 10px' }}>{t.supplierName || '-'}</td>
+                      <td style={{ padding: '12px 10px' }}>{t.bankName || '-'}</td>
+                      <td style={{ padding: '12px 10px' }}>{t.branchName || '-'}</td>
+                      <td style={{ padding: '12px 10px', textAlign: 'right' }}>{t.supplierAmount}</td>
+                      <td style={{ padding: '12px 10px', textAlign: 'right' }}>{t.gstAmount}</td>
+                      <td style={{ padding: '12px 10px' }}>{t.createdAt ? new Date(t.createdAt).toLocaleString() : '-'}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           </div>
         </>
       ) : (
@@ -254,50 +257,53 @@ function GstCalculator(props) {
                   marginTop: 8,
                 }}
               >
-                <table
-                  className="gst-table"
-                  style={{
-                    width: '100%',
-                    borderCollapse: 'separate',
-                    borderSpacing: 0,
-                    fontSize: 16,
-                  }}
-                >
-                  <thead>
-                    <tr style={{ background: '#f3f6fa' }}>
-                      <th style={{ fontWeight: 700, padding: '14px 10px', borderBottom: '1px solid #e5e7eb', textAlign: 'left' }}>Product No</th>
-                      <th style={{ fontWeight: 700, padding: '14px 10px', borderBottom: '1px solid #e5e7eb', textAlign: 'right' }}>Qty</th>
-                      <th style={{ fontWeight: 700, padding: '14px 10px', borderBottom: '1px solid #e5e7eb', textAlign: 'right' }}>Sub Total</th>
-                      <th style={{ fontWeight: 700, padding: '14px 10px', borderBottom: '1px solid #e5e7eb', textAlign: 'right' }}>CGST</th>
-                      <th style={{ fontWeight: 700, padding: '14px 10px', borderBottom: '1px solid #e5e7eb', textAlign: 'right' }}>SGST</th>
-                      <th style={{ fontWeight: 700, padding: '14px 10px', borderBottom: '1px solid #e5e7eb', textAlign: 'right' }}>IGST</th>
-                      <th style={{ fontWeight: 700, padding: '14px 10px', borderBottom: '1px solid #e5e7eb', textAlign: 'left' }}>Payment Method</th>
-                       <th style={{ fontWeight: 700, padding: '14px 10px', borderBottom: '1px solid #e5e7eb', textAlign: 'right' }}>GST (%)</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {salesData.map((s, idx) => (
-                      <tr
-                        key={idx}
-                        style={{
-                          background: idx % 2 === 0 ? '#fff' : '#f9fafb',
-                          borderBottom: '1px solid #e5e7eb',
-                        }}
-                      >
-                        <td style={{ padding: '12px 10px' }}>{s.productNo || '-'}</td>
-                        <td style={{ padding: '12px 10px', textAlign: 'right' }}>{s.qty || '-'}</td>
-                        <td style={{ padding: '12px 10px', textAlign: 'right' }}>{s.subTotal || '-'}</td>
-                        <td style={{ padding: '12px 10px', textAlign: 'right' }}>{s.cgstAmount || '-'}</td>
-                        <td style={{ padding: '12px 10px', textAlign: 'right' }}>{s.sgstAmount || '-'}</td>
-                        <td style={{ padding: '12px 10px', textAlign: 'right' }}>{s.igstAmount || '-'}</td>
-                        <td style={{ padding: '12px 10px' }}>{s.paymentMethod || '-'}</td>
-                         <td style={{ padding: '12px 10px', textAlign: 'right' }}>
-                           {`CGST: ${s.cgst}% | SGST: ${s.sgst}% | IGST: ${s.igst}%`}
-                         </td>
+                <div className="mobile-overflow-x-auto" style={{ overflowX: 'auto', WebkitOverflowScrolling: 'touch' }}>
+                  <table
+                    className="gst-table"
+                    style={{
+                      width: '100%',
+                      minWidth: 820,
+                      borderCollapse: 'separate',
+                      borderSpacing: 0,
+                      fontSize: 16,
+                    }}
+                  >
+                    <thead>
+                      <tr style={{ background: '#f3f6fa' }}>
+                        <th style={{ fontWeight: 700, padding: '14px 10px', borderBottom: '1px solid #e5e7eb', textAlign: 'left' }}>Product No</th>
+                        <th style={{ fontWeight: 700, padding: '14px 10px', borderBottom: '1px solid #e5e7eb', textAlign: 'right' }}>Qty</th>
+                        <th style={{ fontWeight: 700, padding: '14px 10px', borderBottom: '1px solid #e5e7eb', textAlign: 'right' }}>Sub Total</th>
+                        <th style={{ fontWeight: 700, padding: '14px 10px', borderBottom: '1px solid #e5e7eb', textAlign: 'right' }}>CGST</th>
+                        <th style={{ fontWeight: 700, padding: '14px 10px', borderBottom: '1px solid #e5e7eb', textAlign: 'right' }}>SGST</th>
+                        <th style={{ fontWeight: 700, padding: '14px 10px', borderBottom: '1px solid #e5e7eb', textAlign: 'right' }}>IGST</th>
+                        <th style={{ fontWeight: 700, padding: '14px 10px', borderBottom: '1px solid #e5e7eb', textAlign: 'left' }}>Payment Method</th>
+                        <th style={{ fontWeight: 700, padding: '14px 10px', borderBottom: '1px solid #e5e7eb', textAlign: 'right' }}>GST (%)</th>
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
+                    </thead>
+                    <tbody>
+                      {salesData.map((s, idx) => (
+                        <tr
+                          key={idx}
+                          style={{
+                            background: idx % 2 === 0 ? '#fff' : '#f9fafb',
+                            borderBottom: '1px solid #e5e7eb',
+                          }}
+                        >
+                          <td style={{ padding: '12px 10px' }}>{s.productNo || '-'}</td>
+                          <td style={{ padding: '12px 10px', textAlign: 'right' }}>{s.qty || '-'}</td>
+                          <td style={{ padding: '12px 10px', textAlign: 'right' }}>{s.subTotal || '-'}</td>
+                          <td style={{ padding: '12px 10px', textAlign: 'right' }}>{s.cgstAmount || '-'}</td>
+                          <td style={{ padding: '12px 10px', textAlign: 'right' }}>{s.sgstAmount || '-'}</td>
+                          <td style={{ padding: '12px 10px', textAlign: 'right' }}>{s.igstAmount || '-'}</td>
+                          <td style={{ padding: '12px 10px' }}>{s.paymentMethod || '-'}</td>
+                          <td style={{ padding: '12px 10px', textAlign: 'right' }}>
+                            {`CGST: ${s.cgst}% | SGST: ${s.sgst}% | IGST: ${s.igst}%`}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
               </div>
             </>
           )}

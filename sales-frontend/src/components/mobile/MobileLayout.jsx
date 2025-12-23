@@ -10,7 +10,7 @@ function MobileLayout({ children, title, subtitle, user, onLogout, active, onSel
   };
 
   return (
-    <div className="mobile-app">
+    <div className={`mobile-app ${isSidebarOpen ? 'sidebar-open' : ''}`}>
       <MobileHeader 
         title={title}
         subtitle={subtitle}
