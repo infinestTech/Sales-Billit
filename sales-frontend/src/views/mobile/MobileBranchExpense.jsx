@@ -1,6 +1,7 @@
 function MobileBranchExpense({ salesUrl, token, adminUrl, branchUser }) {
-  const [form, setForm] = React.useState({ title: '', amount: '', date: '', bank_id: '' });
+  const [form, setForm] = React.useState({ title: '', amount: '', date: '', bank_id: '', branch_id: '' });
   const [banks, setBanks] = React.useState([]);
+  const [branches, setBranches] = React.useState([]);
   const [selectedBank, setSelectedBank] = React.useState(null);
   const [loading, setLoading] = React.useState(false);
   const [error, setError] = React.useState('');
@@ -24,6 +25,7 @@ function MobileBranchExpense({ salesUrl, token, adminUrl, branchUser }) {
     try {
       setError('');
       const url = new URL(salesUrl + '/api/branch-expenses');
+      if (form.branch_id) url.searchParams.set('branch_id', form.branch_id);
       const res = await fetch(url, { headers: { Authorization: 'Bearer ' + token } });
       const data = await res.json();
       if (!res.ok) throw new Error(data.message || 'Failed to load expenses');
@@ -31,7 +33,7 @@ function MobileBranchExpense({ salesUrl, token, adminUrl, branchUser }) {
     } catch (e) {
       setError(e.message || 'Failed to load expenses');
     }
-  }, [salesUrl, token]);
+  }, [salesUrl, token, form.branch_id]);
 
   React.useEffect(() => {
     load();
@@ -53,6 +55,22 @@ function MobileBranchExpense({ salesUrl, token, adminUrl, branchUser }) {
   }, [salesUrl, token]);
 
   React.useEffect(() => {
+    const fetchBranches = async () => {
+      try {
+        const url = new URL(salesUrl + '/api/branches');
+        const res = await fetch(url, { headers: { Authorization: 'Bearer ' + token } });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.message || 'Failed to load branches');
+        setBranches(Array.isArray(data.branches) ? data.branches : []);
+      } catch (_e) {
+        setBranches([]);
+      }
+    };
+    // Desktop loads branches for admins; branch users don't need selector
+    if (!branchUser) fetchBranches();
+  }, [salesUrl, token, branchUser]);
+
+  React.useEffect(() => {
     if (!form.bank_id) {
       setSelectedBank(null);
       return;
@@ -66,6 +84,7 @@ function MobileBranchExpense({ salesUrl, token, adminUrl, branchUser }) {
       try {
         const url = new URL(salesUrl + '/api/sales');
         url.searchParams.set('pageSize', '200');
+        if (form.branch_id) url.searchParams.set('branch_id', form.branch_id);
         const res = await fetch(url, { headers: { Authorization: 'Bearer ' + token } });
         const data = await res.json();
         if (res.ok) setSales(Array.isArray(data.sales) ? data.sales : []);
@@ -74,7 +93,7 @@ function MobileBranchExpense({ salesUrl, token, adminUrl, branchUser }) {
       }
     };
     loadSales();
-  }, [salesUrl, token]);
+  }, [salesUrl, token, form.branch_id]);
 
   const getRangeForDay = (day) => {
     if (!day) return null;
@@ -147,11 +166,12 @@ function MobileBranchExpense({ salesUrl, token, adminUrl, branchUser }) {
     try {
       const postTitle = form.title;
       const postDate = form.date || new Date().toISOString();
+      const postBranchId = form.branch_id || undefined;
 
       const res = await fetch(salesUrl + '/api/branch-expenses', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token },
-        body: JSON.stringify({ title: postTitle, amount: amt, date: postDate, bank_id: form.bank_id })
+        body: JSON.stringify({ title: postTitle, amount: amt, date: postDate, bank_id: form.bank_id, branch_id: postBranchId })
       });
 
       const data = await res.json();
@@ -228,6 +248,23 @@ function MobileBranchExpense({ salesUrl, token, adminUrl, branchUser }) {
             </button>
           </div>
         </div>
+
+        {!branchUser ? (
+          <div className="form-group" style={{ marginBottom: 12 }}>
+            <label className="form-label">Filter by branch</label>
+            <select
+              className="form-input"
+              name="branch_id"
+              value={form.branch_id || ''}
+              onChange={onChange}
+            >
+              <option value="">All branches</option>
+              {branches.map((b) => (
+                <option key={b._id} value={b._id}>{b.name || b._id}</option>
+              ))}
+            </select>
+          </div>
+        ) : null}
 
         <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: 10 }}>
           {branchUser ? (

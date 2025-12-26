@@ -39,7 +39,7 @@ function Sidebar({ active = 'bank', onSelect, planId, branchLimit, branchUser })
   const isGstEnabled = isFeatureEnabled('gst_calculator_enabled') || (planId === 'sales-gold' || planId === 'sales-premium');
   const isPaymentHistoryEnabled = isFeatureEnabled('payment_history_enabled') || (planId === 'sales-gold' || planId === 'sales-premium');
   const isSupplyHistoryEnabled = isFeatureEnabled('supply_history_enabled') || (planId === 'sales-premium');
-  const isBranchEnabled = isFeatureEnabled('branch_management_enabled') || (planId === 'sales-basic' || planId === 'sales-gold' || planId === 'sales-premium');
+  const isBranchEnabled = isFeatureEnabled('branch_management_enabled') || (planId === 'sales-gold' || planId === 'sales-premium');
   // Legacy fallback for existing planId checks
   const canUseBranch = isBranchEnabled || planId === 'sales-gold' || planId === 'sales-premium';
   return (

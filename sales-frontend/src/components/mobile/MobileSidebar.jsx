@@ -44,7 +44,7 @@ function MobileSidebar({ active = 'bank', onSelect, planId, branchLimit, branchU
   const isGstEnabled = isFeatureEnabled('gst_calculator_enabled') || (planId === 'sales-gold' || planId === 'sales-premium');
   const isPaymentHistoryEnabled = isFeatureEnabled('payment_history_enabled') || (planId === 'sales-gold' || planId === 'sales-premium');
   const isSupplyHistoryEnabled = isFeatureEnabled('supply_history_enabled') || (planId === 'sales-premium');
-  const isBranchEnabled = isFeatureEnabled('branch_management_enabled') || (planId === 'sales-basic' || planId === 'sales-gold' || planId === 'sales-premium');
+  const isBranchEnabled = isFeatureEnabled('branch_management_enabled') || (planId === 'sales-gold' || planId === 'sales-premium');
   const canUseBranch = isBranchEnabled || planId === 'sales-gold' || planId === 'sales-premium';
 
   // Handle backdrop click
