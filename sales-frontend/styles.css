@@ -2121,11 +2121,17 @@ button.btn.secondary {
   box-shadow: 0 2px 12px rgba(99, 102, 241, 0.25);
 }
 
+/* Reserve space so header content doesn't sit under the close (X) button */
+.mobile-sidebar-header .mobile-nav-header {
+  padding-right: 64px;
+}
+
 .mobile-sidebar-close {
   position: absolute;
   top: 16px;
   right: 16px;
-  background: rgba(255, 255, 255, 0.15);
+  /* Opaque background so nothing shows through */
+  background: rgba(26, 29, 46, 0.95);
   border: 1px solid rgba(255, 255, 255, 0.2);
   cursor: pointer;
   padding: 8px;
@@ -2138,8 +2144,8 @@ button.btn.secondary {
   align-items: center;
   justify-content: center;
   transition: all 0.25s ease;
-  z-index: 10;
-  backdrop-filter: blur(10px);
+  z-index: 20;
+  backdrop-filter: none;
 }
 
 .mobile-sidebar-close:hover {

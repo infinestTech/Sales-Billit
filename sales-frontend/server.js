@@ -20,6 +20,14 @@ const mime = {
 
 const server = http.createServer((req, res) => {
   const urlPath = decodeURIComponent(new URL(req.url, `http://localhost:${PORT}`).pathname);
+
+  // Dev-friendly: never cache static assets so UI/routing changes reflect immediately
+  const noCacheHeaders = {
+    'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate',
+    Pragma: 'no-cache',
+    Expires: '0',
+    'Surrogate-Control': 'no-store'
+  };
   
   // Handle dynamic environment config
   if (urlPath === '/src/config/env.js') {
@@ -37,7 +45,7 @@ window.SALES_URL = window.ENV_CONFIG.SALES_API_URL;
 
 console.log('🔧 Environment config loaded:', window.ENV_CONFIG);`;
 
-    res.writeHead(200, { 'Content-Type': 'application/javascript; charset=utf-8' });
+    res.writeHead(200, { 'Content-Type': 'application/javascript; charset=utf-8', ...noCacheHeaders });
     return res.end(configContent);
   }
   
@@ -51,7 +59,7 @@ console.log('🔧 Environment config loaded:', window.ENV_CONFIG);`;
 
   fs.stat(filePath, (err, stats) => {
     if (err) {
-      res.writeHead(404);
+      res.writeHead(404, noCacheHeaders);
       return res.end('Not found');
     }
 
@@ -61,11 +69,11 @@ console.log('🔧 Environment config loaded:', window.ENV_CONFIG);`;
 
     fs.readFile(filePath, (readErr, data) => {
       if (readErr) {
-        res.writeHead(500);
+        res.writeHead(500, noCacheHeaders);
         return res.end('Server error');
       }
       const ext = path.extname(filePath).toLowerCase();
-      res.writeHead(200, { 'Content-Type': mime[ext] || 'application/octet-stream' });
+      res.writeHead(200, { 'Content-Type': mime[ext] || 'application/octet-stream', ...noCacheHeaders });
       res.end(data);
     });
   });

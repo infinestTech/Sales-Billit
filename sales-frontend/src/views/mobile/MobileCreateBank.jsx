@@ -76,7 +76,8 @@ function MobileCreateBank({ salesUrl, token }) {
           holderName: form.holderName,
           address: form.address,
           phoneNumber: form.phoneNumber,
-          accountBalance: form.accountBalance !== '' ? Number(form.accountBalance) : undefined
+          accountBalance: form.accountBalance !== '' ? Number(form.accountBalance) : undefined,
+          branchName: localStorage.getItem('branch_token') ? (function(){ try{ const p = JSON.parse(atob(localStorage.getItem('branch_token').split('.')[1].replace(/-/g,'+').replace(/_/g,'/'))); return p.name || ''; }catch(e){return '';} })() : undefined
         })
       });
       const data = await res.json();

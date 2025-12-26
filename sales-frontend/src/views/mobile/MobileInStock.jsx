@@ -69,23 +69,41 @@ function MobileInStock({ salesUrl, token }) {
 
   const removeRow = (idx) => setItems(list => list.filter((_, i) => i !== idx));
 
+  // Helper to generate random alphanumeric string (2-9 chars) like desktop `InStockView`
+  function randomProductNo() {
+    const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+    const len = Math.floor(Math.random() * 3) + 2; // 2 to 9
+    let str = '';
+    for (let i = 0; i < len; i++) {
+      str += chars.charAt(Math.floor(Math.random() * chars.length));
+    }
+    return str;
+  }
+
   const submit = async () => {
     setSaving(true);
     setError('');
     try {
+      const storedBranchToken = typeof window !== 'undefined' ? (localStorage.getItem('branch_token') || '') : '';
+      const effectiveToken = token || storedBranchToken || '';
       const res = await fetch(salesUrl + '/api/in-stock', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token },
+        headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + effectiveToken },
         body: JSON.stringify({
-          supplierId,
-          bankId,
+          supplier_id: supplierId,
+          bank_id: bankId,
           supplierAmount: Number(supplierAmount) || 0,
           gstAmount: Number(gstAmount) || 0,
           category,
           items: items.map(it => ({
-            ...it,
+            productNo: it.productNo && String(it.productNo).trim() ? it.productNo : randomProductNo(),
+            productName: it.productName,
+            brand: it.brand,
+            model: it.model,
             quantity: Number(it.quantity) || 1,
-            costPrice: Number(it.costPrice) || 0
+            costPrice: Number(it.costPrice) || 0,
+            validity: it.validity,
+            imes: Array.isArray(it.imes) ? it.imes.filter(x => x && String(x).trim()) : []
           }))
         })
       });

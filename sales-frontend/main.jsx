@@ -137,23 +137,9 @@ function App() {
     // Allow visiting public branch-login route even without sales token
     if ((location.hash || '#bank').slice(1) === 'branch-login') {
       if (isMobile) {
-        return (
-          <MobileLayout
-            title="Branch Dashboard"
-            subtitle=""
-            user={null}
-            onLogout={() => {}}
-            active="branch-login"
-            onSelect={() => {}}
-            planId=""
-            branchLimit={0}
-            branchUser={null}
-          >
-            <BranchLogin salesUrl={SALES_URL} />
-          </MobileLayout>
-        );
+        return window.MobileBranchLogin ? React.createElement(window.MobileBranchLogin, { salesUrl: SALES_URL }) : null;
       }
-      return <div className="app"><HeaderBar title="Branch Dashboard" subtitle="" /><div className="content"><BranchLogin salesUrl={SALES_URL} /></div></div>;
+      return <BranchLogin salesUrl={SALES_URL} />;
     }
 
     // No sales token and not a branch user -> show sales login
@@ -429,6 +415,15 @@ function App() {
       </>
     );
   };
+
+  // Render branch login as a standalone page even when already logged in,
+  // to match the main login page behavior and avoid embedding it inside the app layout.
+  if (view === 'branch-login') {
+    if (isMobile) {
+      return window.MobileBranchLogin ? React.createElement(window.MobileBranchLogin, { salesUrl: SALES_URL }) : null;
+    }
+    return <BranchLogin salesUrl={SALES_URL} />;
+  }
 
   // Render mobile or desktop layout based on device detection
   if (isMobile) {

@@ -1,5 +1,72 @@
 // Mobile view wrapper - renders appropriate mobile component based on view
 function MobileViewRenderer({ view, salesUrl, token, branchUser, ...props }) {
+  const renderCardMessage = (icon, title, subtitle) => (
+    <div className="card">
+      <div className="empty-state">
+        <div className="empty-icon">{icon}</div>
+        <div className="empty-title">{title}</div>
+        {subtitle ? <div className="empty-sub">{subtitle}</div> : null}
+      </div>
+    </div>
+  );
+
+  // Mirror key desktop conditional rendering from `MainContent` in `main.jsx`
+  // so feature/plan restrictions are consistent on mobile too.
+  const planId = props?.planId || '';
+
+  // Admin-only views (desktop blocks these when `branchUser` is truthy)
+  const adminOnlyViews = new Set(['gst-calculator', 'whatsapp-stock', 'whatsapp-contact']);
+  if (branchUser && adminOnlyViews.has(view)) {
+    return (
+      <div className="mobile-content mobile-overflow-y-auto">
+        {renderCardMessage('🔒', 'Admin Only', 'This section is available only for the admin account.')}
+      </div>
+    );
+  }
+
+  // Branch Management: desktop allows only admin + Gold/Premium plans
+  if (view === 'branch') {
+    if (branchUser) {
+      return (
+        <div className="mobile-content mobile-overflow-y-auto">
+          <div className="card">
+            <h3>Welcome</h3>
+            <p>Welcome, {branchUser.name || 'Branch User'}!</p>
+          </div>
+        </div>
+      );
+    }
+
+    if (!(planId === 'sales-gold' || planId === 'sales-premium')) {
+      return (
+        <div className="mobile-content mobile-overflow-y-auto">
+          {renderCardMessage('🔒', 'Upgrade Required', 'Branch management is available on Sales Gold and Premium plans.')}
+        </div>
+      );
+    }
+  }
+
+  // Seconds Sales detail view: desktop uses dynamic hash `seconds-sales-view-<id>`
+  if ((view || '').startsWith('seconds-sales-view-')) {
+    const id = (view || '').replace('seconds-sales-view-', '');
+    const Comp = window.MobileSecondsSalesView || window.SecondsSalesView;
+    return (
+      <div className="mobile-content mobile-overflow-y-auto">
+        {Comp ? React.createElement(Comp, { salesUrl, token, id, ...props }) : renderCardMessage('📱', 'Loading…', 'SecondsSalesView component not loaded yet.')}
+      </div>
+    );
+  }
+
+  // InStock: desktop shows BranchInStock for branch users (different API than InStockView)
+  if (view === 'instock' && branchUser) {
+    const Comp = window.BranchInStock;
+    return (
+      <div className="mobile-content mobile-overflow-y-auto">
+        {Comp ? React.createElement(Comp, { salesUrl, token, ...props }) : renderCardMessage('📦', 'Loading…', 'BranchInStock component not loaded yet.')}
+      </div>
+    );
+  }
+
   // Map views to mobile components
   const viewComponents = {
     'bank': window.MobileCreateBank,
@@ -7,6 +74,10 @@ function MobileViewRenderer({ view, salesUrl, token, branchUser, ...props }) {
     'instock': window.MobileInStock,
     'branch-expense': window.MobileBranchExpense,
     'supplier': window.MobileCreateSupplier,
+    'branch': window.MobileCreateBranch,
+    'branch-supply-history': window.MobileBranchSupplyHistory,
+    'product-sales': window.MobileProductSales,
+    'seconds-sales': window.MobileSecondsSales,
     // Add more as they're created
   };
 
