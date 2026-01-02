@@ -28,8 +28,8 @@ function MobileBranchLogin({ salesUrl }) {
       // Notify the app in the same tab that a branch login happened
       try { window.dispatchEvent(new Event('branch-login')); } catch (__) {}
 
-      // Navigate to branch dashboard
-      try { location.hash = '#branch'; } catch (__) {}
+      // Navigate to product sales (Point of Sale)
+      try { location.hash = '#product-sales'; } catch (__) {}
     } catch (err) {
       setMessage(err.message || 'Login failed');
     } finally {

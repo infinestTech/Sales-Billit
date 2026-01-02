@@ -849,7 +849,7 @@ function ProductSales({ salesUrl, token }) {
 	// preview modal markup will be rendered below; Print fallback opens this modal
 
 	return (
-		<div>
+		<div style={{backgroundColor: '#f0f4f8', minHeight: '100vh', padding: '20px'}}>
 			{showPreview ? (
 				<div style={{position:'fixed',left:0,top:0,right:0,bottom:0,background:'rgba(0,0,0,0.5)',display:'flex',alignItems:'center',justifyContent:'center',zIndex:9999}} onClick={() => setShowPreview(false)}>
 					<div style={{width:'90%',height:'90%',background:'#fff',borderRadius:6,overflow:'hidden',position:'relative'}} onClick={e => e.stopPropagation()}>
@@ -866,246 +866,705 @@ function ProductSales({ salesUrl, token }) {
 			) : null}
 			{showAlert ? (
 				<div style={{position:'fixed', right:16, bottom:16, zIndex:9999}}>
-					<div style={{background:'#ffe6e6', color:'#900', padding:12, borderRadius:6, boxShadow:'0 2px 8px rgba(0,0,0,0.15)', minWidth:280}}>
+					<div style={{background: error.toLowerCase().includes('success') || error.toLowerCase().includes('saved') ? '#d4edda' : '#ffe6e6', color: error.toLowerCase().includes('success') || error.toLowerCase().includes('saved') ? '#155724' : '#900', padding:16, borderRadius:12, boxShadow:'0 4px 16px rgba(0,0,0,0.15)', minWidth:320, maxWidth: 400}}>
 						<div style={{display:'flex', justifyContent:'space-between', alignItems:'center', gap:12}}>
-							<div style={{fontWeight:600}}>Message</div>
-							<button className="btn secondary" onClick={() => setShowAlert(false)}>Close</button>
+							<div style={{fontWeight:600, fontSize: '15px'}}>{error.toLowerCase().includes('success') || error.toLowerCase().includes('saved') ? '✅ Success' : '⚠️ Notice'}</div>
+							<button style={{background: 'transparent', border: 'none', fontSize: '18px', cursor: 'pointer', padding: '4px 8px'}} onClick={() => setShowAlert(false)}>✕</button>
 						</div>
-						<div style={{marginTop:8}}>{error}</div>
+						<div style={{marginTop:8, fontSize: '14px'}}>{error}</div>
 					</div>
 				</div>
 			) : null}
-			<div className="row" style={{ gap: 16, marginBottom: 16 }}>
-				<div>
-					<label>Product No</label><br />
-					<div style={{display:'flex', gap:8}}>
-						<input value={productNo} onChange={e => setProductNo(e.target.value)} placeholder="Enter product no to filter" />
-						<button className="btn" type="button" onClick={() => {
-							const needle = (productNo || '').toString().trim().toLowerCase();
-							if (!needle) return;
-							const found = products.find(p => String(p.productNo || '').toLowerCase() === needle);
-							if (!found) { setError('Product not found'); return; }
-							if (Number(found.qty) === 0) {
-								setError('This product has zero quantity and cannot be added to sales.');
-								return;
-							}
-							setError('');
-							setSellerProducts(sp => {
-								if (sp.some(x => (x.productId || x._id) === (found.productId || found._id))) return sp;
-								return [...sp, found];
-							});
-							setProductNo('');
-						}}>Add</button>
-					</div>
-				</div>
-				<div>
-					<label>Customer Name</label><br />
-					<input value={customerName} onChange={e => setCustomerName(e.target.value)} placeholder="Enter customer name" />
-				</div>
-				<div>
-					<label>Mobile Number <span style={{color:'red'}}>*</span></label><br />
-					<input value={customerNo} onChange={e => setCustomerNo(e.target.value)} placeholder="Enter mobile number" />
-				</div>
-				<div>
-					<label>Payment <span style={{color:'red'}}>*</span></label><br />
-					<select value={selectedBank} onChange={e => setSelectedBank(e.target.value)}>
-						<option value="select">Select</option>
-						{banks.map(b => <option key={b._id} value={b._id}>{b.bankName}</option>)}
-					</select>
-				</div>
+
+			{/* Page Header */}
+			<div style={{marginBottom: '24px'}}>
+				<h1 style={{fontSize: '32px', fontWeight: '700', color: '#1e293b', marginBottom: '8px', display: 'flex', alignItems: 'center', gap: '12px'}}>
+					🛒 Point of Sale
+				</h1>
+				<p style={{color: '#64748b', fontSize: '16px', margin: 0}}>
+					Scan barcode or enter product details to process customer sales
+				</p>
 			</div>
 
-			{/* Payment section */}
-			
-			
-			
-			
-			<div className="card mt-3 table-card">
-				<div className="table-title">Branch Product Sell</div>
-				{sellerProducts.length === 0 ? (
-					<div className="empty-state" style={{padding:24}}>
-						<div className="empty-icon">🧾</div>
-						<div className="empty-title">No Products Added</div>
-						<div className="empty-sub">Enter a product no and click Add to populate your list.</div>
-					</div>
-				) : (
-					<div className="table-scroll">
-						<table className="modern-table">
-							<thead>
-								<tr>
-									 <th>Product No</th>
-									
-									<th>Product Name</th>
-									<th>Brand</th>
-									<th>Model</th>
-									<th>Qty</th>
-                                    	
-									<th>Selling Price</th>
-									<th>Selling Qty</th>
-								
-									<th>Line Total</th>
-									<th>Validity</th>
-									 <th style={{textAlign:'center'}}>IMEs</th>
-		                                    <th>Action</th>
-								</tr>
-							</thead>
-							<tbody>
-								{sellerProducts.filter(p => Number(p.qty) > 0).map((p, i) => (
-									<tr key={p._id || p.productId || i}>
-								
-										<td>{p.productNo || '-'}</td>
-										<td>{p.productName || '-'}</td>
-										<td>{p.brand || '-'}</td>
-										<td>{p.model || '-'}</td>
-										<td>{p.qty ?? '-'}</td>
-                                        	
-										<td>{p.sellingPrice ?? '-'}</td>
-										<td>
-											<input style={{width:64}} value={p.sellingQty ?? p.qty ?? 1} onChange={e => {
-												const inputVal = Number(e.target.value) || 0;
-												const available = Number(p.qty ?? 0);
-												let v = inputVal;
-												if (inputVal > available) {
-													// Prevent setting selling quantity more than available
-													setError('Your qty is low');
-													v = available;
+			{/* Main Layout - Split Screen */}
+			<div style={{display: 'grid', gridTemplateColumns: '1fr 420px', gap: '20px', alignItems: 'start'}}>
+				
+				{/* LEFT SIDE - Sales Cart */}
+				<div style={{background: '#fff', borderRadius: '16px', padding: '24px', boxShadow: '0 2px 8px rgba(0,0,0,0.08)'}}>
+					
+					{/* Barcode Scanner Input - Prominent */}
+					<div style={{marginBottom: '24px'}}>
+						<div style={{display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '12px'}}>
+							<div style={{fontSize: '24px'}}>📷</div>
+							<h2 style={{fontSize: '20px', fontWeight: '600', color: '#1e293b', margin: 0}}>Scan Product</h2>
+						</div>
+						<div style={{display:'flex', gap:'12px', alignItems: 'center'}}>
+							<input 
+								autoFocus
+								value={productNo} 
+								onChange={e => setProductNo(e.target.value)}
+								onKeyPress={e => {
+									if (e.key === 'Enter') {
+										const needle = (productNo || '').toString().trim().toLowerCase();
+										if (!needle) return;
+										// Try to find by product number or IMEI
+										let found = products.find(p => String(p.productNo || '').toLowerCase() === needle);
+										if (!found) {
+											// Try to find by IMEI
+											found = products.find(p => {
+												const imes = Array.isArray(p.imes) ? p.imes : [];
+												return imes.some(imei => String(imei || '').toLowerCase() === needle);
+											});
+											if (found) {
+												// Auto-select this IMEI
+												const matchedImei = (Array.isArray(found.imes) ? found.imes : []).find(imei => String(imei || '').toLowerCase() === needle);
+												found = { ...found, selectedImes: [matchedImei] };
+											}
+										}
+										if (!found) { setError('Product not found'); return; }
+										if (Number(found.qty) === 0) {
+											setError('This product has zero quantity and cannot be added to sales.');
+											return;
+										}
+										setError('');
+										setSellerProducts(sp => {
+											const existing = sp.find(x => (x.productId || x._id) === (found.productId || found._id));
+											if (existing) {
+												// If IMEI scanned and product exists, add IMEI to selected
+												if (found.selectedImes && found.selectedImes.length) {
+													return sp.map(x => (x.productId || x._id) === (found.productId || found._id) 
+														? { ...x, selectedImes: [...new Set([...(x.selectedImes || []), ...found.selectedImes])] }
+														: x
+													);
 												}
-												setSellerProducts(sp => sp.map((s, idx) => idx === i ? { ...s, sellingQty: v } : s));
-											}} />
-										</td>
+												return sp;
+											}
+											return [...sp, found];
+										});
+										setProductNo('');
+									}
+								}}
+								placeholder="Scan barcode or enter Product No / IMEI..." 
+								style={{
+									flex: 1,
+									padding: '16px 20px',
+									fontSize: '18px',
+									border: '3px solid #3b82f6',
+									borderRadius: '12px',
+									outline: 'none',
+									fontWeight: '500',
+									backgroundColor: '#f8fafc'
+								}}
+							/>
+							<button 
+								style={{
+									background: 'linear-gradient(135deg, #3b82f6 0%, #2563eb 100%)',
+									color: 'white',
+									border: 'none',
+									borderRadius: '12px',
+									padding: '16px 32px',
+									fontSize: '16px',
+									fontWeight: '600',
+									cursor: 'pointer',
+									boxShadow: '0 4px 12px rgba(59, 130, 246, 0.3)',
+									transition: 'all 0.2s ease'
+								}}
+								type="button" 
+								onClick={() => {
+									const needle = (productNo || '').toString().trim().toLowerCase();
+									if (!needle) return;
+									let found = products.find(p => String(p.productNo || '').toLowerCase() === needle);
+									if (!found) {
+										found = products.find(p => {
+											const imes = Array.isArray(p.imes) ? p.imes : [];
+											return imes.some(imei => String(imei || '').toLowerCase() === needle);
+										});
+										if (found) {
+											const matchedImei = (Array.isArray(found.imes) ? found.imes : []).find(imei => String(imei || '').toLowerCase() === needle);
+											found = { ...found, selectedImes: [matchedImei] };
+										}
+									}
+									if (!found) { setError('Product not found'); return; }
+									if (Number(found.qty) === 0) {
+										setError('This product has zero quantity and cannot be added to sales.');
+										return;
+									}
+									setError('');
+									setSellerProducts(sp => {
+										const existing = sp.find(x => (x.productId || x._id) === (found.productId || found._id));
+										if (existing) {
+											if (found.selectedImes && found.selectedImes.length) {
+												return sp.map(x => (x.productId || x._id) === (found.productId || found._id) 
+													? { ...x, selectedImes: [...new Set([...(x.selectedImes || []), ...found.selectedImes])] }
+													: x
+												);
+											}
+											return sp;
+										}
+										return [...sp, found];
+									});
+									setProductNo('');
+								}}
+								onMouseOver={(e) => {
+									e.target.style.transform = 'translateY(-2px)';
+									e.target.style.boxShadow = '0 6px 16px rgba(59, 130, 246, 0.4)';
+								}}
+								onMouseOut={(e) => {
+									e.target.style.transform = 'translateY(0px)';
+									e.target.style.boxShadow = '0 4px 12px rgba(59, 130, 246, 0.3)';
+								}}
+							>
+								Add ➜
+							</button>
+						</div>
+						<div style={{marginTop: '8px', fontSize: '13px', color: '#64748b', display: 'flex', alignItems: 'center', gap: '6px'}}>
+							<span>💡</span>
+							<span>Scan with barcode scanner or type manually. Press Enter to add.</span>
+						</div>
+					</div>
+
+					{/* Shopping Cart */}
+					<div>
+						<div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px'}}>
+							<h3 style={{fontSize: '18px', fontWeight: '600', color: '#1e293b', margin: 0}}>
+								🛍️ Cart Items ({sellerProducts.length})
+							</h3>
+							{sellerProducts.length > 0 && (
+								<button 
+									onClick={() => setSellerProducts([])}
+									style={{
+										background: '#fee2e2',
+										color: '#991b1b',
+										border: 'none',
+										borderRadius: '8px',
+										padding: '8px 16px',
+										fontSize: '13px',
+										fontWeight: '500',
+										cursor: 'pointer'
+									}}
+								>
+									Clear All
+								</button>
+							)}
+						</div>
+
+						{sellerProducts.length === 0 ? (
+							<div style={{textAlign: 'center', padding: '60px 24px', backgroundColor: '#f8fafc', borderRadius: '12px', border: '2px dashed #cbd5e1'}}>
+								<div style={{fontSize: '64px', marginBottom: '16px', opacity: 0.5}}>🛒</div>
+								<div style={{fontSize: '18px', fontWeight: '600', color: '#64748b', marginBottom: '8px'}}>Cart is Empty</div>
+								<div style={{fontSize: '14px', color: '#94a3b8'}}>Scan a product barcode to add items</div>
+							</div>
+						) : (
+							<div style={{maxHeight: '500px', overflowY: 'auto'}}>
+								{sellerProducts.filter(p => Number(p.qty) > 0).map((p, i) => {
+									const availableImes = (Array.isArray(p.centralOnlyImes) && p.centralOnlyImes.length) ? p.centralOnlyImes : (Array.isArray(p.centralImes) && p.centralImes.length) ? p.centralImes : (Array.isArray(p.imes) ? p.imes : []);
+									const hasImes = availableImes.length > 0;
+									const selectedCount = Array.isArray(p.selectedImes) ? p.selectedImes.length : 0;
 									
-										<td>{lineTotal(p).toFixed(2)}</td>
-										<td>{p.validity ? new Date(p.validity).toLocaleDateString() : '-'}</td>
-										<td style={{textAlign:'center', position: 'relative'}}>
-											<div style={{display:'inline-block', textAlign:'left'}}>
-												<button className="btn tiny" style={{padding:'6px 10px', borderRadius:6, border:'1px solid #ddd'}} onClick={() => setShowImes(s => ({ ...s, [i]: !s[i] }))}>
-													{(Array.isArray(p.centralOnlyImes) ? p.centralOnlyImes.length : (Array.isArray(p.centralImes) ? p.centralImes.length : (Array.isArray(p.imes) ? p.imes.length : 0))) || 0} IMEs available <span style={{marginLeft:8}}>▾</span>
+									return (
+										<div 
+											key={p._id || p.productId || i}
+											style={{
+												backgroundColor: '#f8fafc',
+												borderRadius: '12px',
+												padding: '16px',
+												marginBottom: '12px',
+												border: '2px solid #e2e8f0',
+												position: 'relative'
+											}}
+										>
+											{/* Product Info */}
+											<div style={{display: 'flex', justifyContent: 'space-between', marginBottom: '12px'}}>
+												<div style={{flex: 1}}>
+													<div style={{fontSize: '16px', fontWeight: '600', color: '#1e293b', marginBottom: '4px'}}>
+														{p.productName || 'Unnamed Product'}
+													</div>
+													<div style={{fontSize: '13px', color: '#64748b'}}>
+														{p.brand || '-'} {p.model || '-'} • #{p.productNo || '-'}
+													</div>
+													{hasImes && (
+														<div style={{marginTop: '8px', fontSize: '12px', color: '#f59e0b', fontWeight: '500'}}>
+															📱 IMEI Required: {selectedCount}/{Number(p.sellingQty ?? p.qty ?? 1)}
+														</div>
+													)}
+												</div>
+												<button 
+													onClick={() => setSellerProducts(sp => sp.filter(x => (x.productId || x._id) !== (p.productId || p._id)))}
+													style={{
+														background: 'transparent',
+														border: 'none',
+														fontSize: '20px',
+														cursor: 'pointer',
+														color: '#ef4444',
+														padding: '4px',
+														lineHeight: 1
+													}}
+												>
+													🗑️
 												</button>
 											</div>
-											{showImes[i] ? (
-												<div style={{position:'absolute', zIndex:999, top:36, left:0, background:'#fff', border:'1px solid #ddd', padding:8, minWidth:260, maxHeight:260, overflowY:'auto', boxShadow:'0 6px 18px rgba(0,0,0,0.08)'}}>
-													<div style={{fontSize:13, marginBottom:6, color:'#333', fontWeight:600}}>Select IMEs</div>
-													{(((Array.isArray(p.centralOnlyImes) && p.centralOnlyImes.length) ? p.centralOnlyImes : (Array.isArray(p.centralImes) && p.centralImes.length) ? p.centralImes : (Array.isArray(p.imes) ? p.imes : [])) || []).map((val, idx2) => {
-														const checked = Array.isArray(p.selectedImes) && p.selectedImes.includes(val);
-														const isCentral = Array.isArray(p.centralOnlyImes) && p.centralOnlyImes.includes(val);
-														return (
-															<div key={idx2} style={{display:'flex', alignItems:'center', justifyContent:'space-between', padding:'6px 6px', borderBottom:'1px solid #f3f3f3'}}>
-															<div style={{display:'flex', alignItems:'center', gap:8}}>
-																<div style={{width:8}}></div>
-																<div style={{fontSize:13}}>{val}</div>
-																{isCentral ? <div style={{fontSize:11, color:'#666', marginLeft:8}}>(central)</div> : null}
-															</div>
-															<div>
-																<input type="checkbox" checked={checked} onChange={() => {
-																	setSellerProducts(sp => sp.map((s, idxS) => idxS === i ? { ...s, selectedImes: checked ? (s.selectedImes || []).filter(x => x !== val) : ((s.selectedImes || []).concat([val])) } : s));
-																}} />
-															</div>
-															</div>
-														);
-													})}
-													<div style={{paddingTop:8, borderTop:'1px solid #eee', marginTop:8, fontSize:13, color:'#333'}}>
-														{Array.isArray(p.selectedImes) && p.selectedImes.length ? `${p.selectedImes.length} selected` : '0 selected'}
+
+											{/* Quantity and Price Row */}
+											<div style={{display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '12px', marginBottom: hasImes ? '12px' : '0'}}>
+												<div>
+													<label style={{display: 'block', fontSize: '12px', color: '#64748b', marginBottom: '4px', fontWeight: '500'}}>
+														Quantity
+													</label>
+													<input 
+														style={{
+															width: '100%',
+															padding: '10px',
+															fontSize: '15px',
+															border: '2px solid #cbd5e1',
+															borderRadius: '8px',
+															fontWeight: '600',
+															textAlign: 'center'
+														}}
+														type="number"
+														min="1"
+														max={p.qty}
+														value={p.sellingQty ?? p.qty ?? 1} 
+														onChange={e => {
+															const inputVal = Number(e.target.value) || 0;
+															const available = Number(p.qty ?? 0);
+															let v = inputVal;
+															if (inputVal > available) {
+																setError('Your qty is low');
+																v = available;
+															}
+															setSellerProducts(sp => sp.map((s, idx) => idx === i ? { ...s, sellingQty: v } : s));
+														}} 
+													/>
+												</div>
+												<div>
+													<label style={{display: 'block', fontSize: '12px', color: '#64748b', marginBottom: '4px', fontWeight: '500'}}>
+														Unit Price
+													</label>
+													<div style={{
+														padding: '10px',
+														fontSize: '15px',
+														fontWeight: '600',
+														backgroundColor: '#e0f2fe',
+														borderRadius: '8px',
+														textAlign: 'center',
+														color: '#0284c7'
+													}}>
+														₹{Number(p.sellingPrice ?? 0).toFixed(2)}
 													</div>
 												</div>
-											) : null}
-										</td>
-										<td><button className="btn secondary" onClick={() => setSellerProducts(sp => sp.filter(x => (x.productId || x._id) !== (p.productId || p._id)))}>Remove</button></td>
-									</tr>
-								))}
-										<tr>
-											<td colSpan={4} style={{textAlign:'right', fontWeight:600}}>Sub Total:</td>
-											<td style={{fontWeight:600}}>{totalCount}</td>
-											<td></td>
-											<td style={{fontWeight:600}}>{subTotal.toFixed(2)}</td>
-											</tr>
-											<tr>
-											<td colSpan={4} style={{textAlign:'right'}}>Discount (%)</td>
-											<td colSpan={2}></td>
-											<td><input style={{width:64}} type="number" min="0" value={discount} onChange={e => setDiscount(e.target.value)} /></td>
-											<td>₹ {discountAmount.toFixed(2)}</td>
-											<td colSpan={1}></td>
-											</tr>
-											{/* GST Inputs */}
-										<tr>
-											<td colSpan={4} style={{textAlign:'right'}}>CGST (%)</td>
-											<td colSpan={2}></td>
-											<td><input style={{width:64}} type="number" min="0" value={cgst} onChange={e => setCgst(e.target.value)} /></td>
-											<td>₹ {cgstAmount.toFixed(1)}</td>
-											<td colSpan={1}></td>
-										</tr>
-										<tr>
-											<td colSpan={4} style={{textAlign:'right'}}>SGST (%)</td>
-											<td colSpan={2}></td>
-											<td><input style={{width:64}} type="number" min="0" value={sgst} onChange={e => setSgst(e.target.value)} /></td>
-											<td>₹ {sgstAmount.toFixed(1)}</td>
-											<td colSpan={1}></td>
-										</tr>
-										<tr>
-											<td colSpan={4} style={{textAlign:'right'}}>IGST (%)</td>
-											<td colSpan={2}></td>
-											<td><input style={{width:64}} type="number" min="0" value={igst} onChange={e => setIgst(e.target.value)} /></td>
-											<td>₹ {igstAmount.toFixed(1)}</td>
-											<td colSpan={1}></td>
-										</tr>
-										{/* Total Amount */}
-										<tr>
-											<td colSpan={4} style={{textAlign:'right', fontWeight:600}}>Total Amount:</td>
-											<td></td>
-											<td></td>
-											<td style={{fontWeight:600}}>{totalAmount.toFixed(1)}</td>
-											<td colSpan={2}></td>
-										</tr>
-										</tbody>
-									</table>
-					</div>
-				)}
-			</div>
-							<div style={{marginTop:12}}>
-								<button className="btn" onClick={doSell} disabled={sellingBusy}>{sellingBusy ? 'Processing...' : 'Sell'}</button>
-								<button className="btn secondary" style={{marginLeft:8}} onClick={printSale}>Print A4 Invoice</button>
-								<button className="btn secondary" style={{marginLeft:8}} onClick={printSmallReceipt}>Print Receipt</button>
-								<button className="btn secondary" style={{marginLeft:8}} onClick={() => {
-									(async () => {
-										const sale = lastSale || { items: sellerProducts, customerNo };
-										// normalize customer number
-										let digits = (sale.customerNo || '').toString().replace(/[^0-9]/g, '');
-										if (digits.length === 11 && digits.startsWith('0')) digits = digits.slice(1);
-										if (digits.length === 10) digits = '91' + digits;
-										const cust = digits;
-										// attempt to fetch authoritative branch info
-										let shopName = '';
-										let shopContact = '';
-										try {
-											const url = new URL(salesUrl + '/api/branches');
-											const res = await fetch(url, { headers: { Authorization: 'Bearer ' + token } });
-											const data = await res.json();
-											if (res.ok && Array.isArray(data.branches) && data.branches.length > 0) {
-												const payload = decodeJwt();
-												const branchId = payload?.branch_id || payload?._id || '';
-												let foundBranch = null;
-												if (branchId) foundBranch = data.branches.find(b => String(b._id) === String(branchId));
-												if (!foundBranch) foundBranch = data.branches[0];
-												shopName = foundBranch?.name || '';
-												shopContact = foundBranch?.phoneNumber || foundBranch?.phone || '';
-											}
-										} catch (e) { /* ignore */ }
-										if (!shopName || !shopContact) {
-											const payload = decodeJwt();
-											shopName = shopName || payload.shopName || payload.name || payload.branchName || '';
-											shopContact = shopContact || payload.phone || payload.phoneNumber || payload.branchPhone || '';
-										}
-										const itemsText = (sale.items || []).map(i => {
-											const qty = i.qty || i.sellingQty || 0;
-											const unit = Number(i.sellingPrice || i.unitSellingPrice || 0).toFixed(2);
-											return `${i.productName || i.productNo || 'item'} x${qty} @ ${unit}`;
-										}).join('\n\n');
-										const message = `Shop: ${shopName}\nContact: ${shopContact}\n\nItems:\n${itemsText}\n\nTotal: ${Number(sale.totalAmount || totalAmount || 0).toFixed(2)}`;
-										console.log('WhatsApp send to (from sale):', cust);
-										const whatsappUrl = window.ENV_CONFIG?.WHATSAPP_WEB_URL || 'https://web.whatsapp.com';
-										window.open(`${whatsappUrl}/send?phone=${cust}&text=${encodeURIComponent(message)}`, '_blank');
-									})();
-								}}>WhatsApp</button>
+												<div>
+													<label style={{display: 'block', fontSize: '12px', color: '#64748b', marginBottom: '4px', fontWeight: '500'}}>
+														Total
+													</label>
+													<div style={{
+														padding: '10px',
+														fontSize: '15px',
+														fontWeight: '700',
+														backgroundColor: '#dcfce7',
+														borderRadius: '8px',
+														textAlign: 'center',
+														color: '#16a34a'
+													}}>
+														₹{lineTotal(p).toFixed(2)}
+													</div>
+												</div>
+											</div>
+
+											{/* IMEI Selection */}
+											{hasImes && (
+												<div>
+													<button 
+														onClick={() => setShowImes(s => ({ ...s, [i]: !s[i] }))}
+														style={{
+															width: '100%',
+															background: selectedCount === Number(p.sellingQty ?? p.qty ?? 1) ? '#dcfce7' : '#fef3c7',
+															color: selectedCount === Number(p.sellingQty ?? p.qty ?? 1) ? '#16a34a' : '#d97706',
+															border: 'none',
+															borderRadius: '8px',
+															padding: '12px',
+															fontSize: '14px',
+															fontWeight: '600',
+															cursor: 'pointer',
+															display: 'flex',
+															justifyContent: 'space-between',
+															alignItems: 'center'
+														}}
+													>
+														<span>
+															{selectedCount === Number(p.sellingQty ?? p.qty ?? 1) 
+																? `✅ ${selectedCount} IMEI Selected` 
+																: `⚠️ Select ${Number(p.sellingQty ?? p.qty ?? 1)} IMEI`
+															}
+														</span>
+														<span>{showImes[i] ? '▲' : '▼'}</span>
+													</button>
+													
+													{showImes[i] && (
+														<div style={{
+															marginTop: '12px',
+															maxHeight: '200px',
+															overflowY: 'auto',
+															backgroundColor: '#fff',
+															border: '2px solid #e2e8f0',
+															borderRadius: '8px',
+															padding: '8px'
+														}}>
+															{availableImes.map((val, idx2) => {
+																const checked = Array.isArray(p.selectedImes) && p.selectedImes.includes(val);
+																const isCentral = Array.isArray(p.centralOnlyImes) && p.centralOnlyImes.includes(val);
+																return (
+																	<label 
+																		key={idx2}
+																		style={{
+																			display: 'flex',
+																			alignItems: 'center',
+																			padding: '10px',
+																			marginBottom: '4px',
+																			backgroundColor: checked ? '#dbeafe' : '#f8fafc',
+																			borderRadius: '6px',
+																			cursor: 'pointer',
+																			border: checked ? '2px solid #3b82f6' : '2px solid transparent'
+																		}}
+																	>
+																		<input 
+																			type="checkbox" 
+																			checked={checked}
+																			style={{marginRight: '12px', width: '18px', height: '18px', cursor: 'pointer'}}
+																			onChange={() => {
+																				setSellerProducts(sp => sp.map((s, idxS) => idxS === i ? { ...s, selectedImes: checked ? (s.selectedImes || []).filter(x => x !== val) : ((s.selectedImes || []).concat([val])) } : s));
+																			}} 
+																		/>
+																		<div style={{flex: 1}}>
+																			<div style={{fontSize: '14px', fontWeight: '600', fontFamily: 'monospace'}}>{val}</div>
+																			{isCentral && <div style={{fontSize: '11px', color: '#64748b', marginTop: '2px'}}>📍 Central Stock</div>}
+																		</div>
+																	</label>
+																);
+															})}
+														</div>
+													)}
+												</div>
+											)}
+										</div>
+									);
+								})}
 							</div>
+						)}
+					</div>
+				</div>
+
+				{/* RIGHT SIDE - Customer Info & Checkout */}
+				<div>
+					{/* Customer Information Card */}
+					<div style={{background: '#fff', borderRadius: '16px', padding: '24px', boxShadow: '0 2px 8px rgba(0,0,0,0.08)', marginBottom: '20px'}}>
+						<h3 style={{fontSize: '18px', fontWeight: '600', color: '#1e293b', marginBottom: '16px', display: 'flex', alignItems: 'center', gap: '8px'}}>
+							👤 Customer Details
+						</h3>
+						
+						<div style={{marginBottom: '16px'}}>
+							<label style={{display: 'block', fontSize: '13px', fontWeight: '600', color: '#475569', marginBottom: '6px'}}>
+								Customer Name
+							</label>
+							<input 
+								value={customerName} 
+								onChange={e => setCustomerName(e.target.value)} 
+								placeholder="Enter customer name" 
+								style={{
+									width: '100%',
+									padding: '12px 16px',
+									fontSize: '15px',
+									border: '2px solid #e2e8f0',
+									borderRadius: '10px',
+									outline: 'none',
+									transition: 'border-color 0.2s'
+								}}
+								onFocus={e => e.target.style.borderColor = '#3b82f6'}
+								onBlur={e => e.target.style.borderColor = '#e2e8f0'}
+							/>
+						</div>
+
+						<div style={{marginBottom: '16px'}}>
+							<label style={{display: 'block', fontSize: '13px', fontWeight: '600', color: '#475569', marginBottom: '6px'}}>
+								Mobile Number <span style={{color:'#ef4444'}}>*</span>
+							</label>
+							<input 
+								value={customerNo} 
+								onChange={e => setCustomerNo(e.target.value)} 
+								placeholder="Enter mobile number" 
+								style={{
+									width: '100%',
+									padding: '12px 16px',
+									fontSize: '15px',
+									border: '2px solid #e2e8f0',
+									borderRadius: '10px',
+									outline: 'none',
+									transition: 'border-color 0.2s'
+								}}
+								onFocus={e => e.target.style.borderColor = '#3b82f6'}
+								onBlur={e => e.target.style.borderColor = '#e2e8f0'}
+							/>
+						</div>
+
+						<div>
+							<label style={{display: 'block', fontSize: '13px', fontWeight: '600', color: '#475569', marginBottom: '6px'}}>
+								Payment Method <span style={{color:'#ef4444'}}>*</span>
+							</label>
+							<select 
+								value={selectedBank} 
+								onChange={e => setSelectedBank(e.target.value)}
+								style={{
+									width: '100%',
+									padding: '12px 16px',
+									fontSize: '15px',
+									border: '2px solid #e2e8f0',
+									borderRadius: '10px',
+									outline: 'none',
+									backgroundColor: '#fff',
+									cursor: 'pointer'
+								}}
+							>
+								<option value="select">Select Payment Method</option>
+								{banks.map(b => <option key={b._id} value={b._id}>{b.bankName}</option>)}
+							</select>
+						</div>
+					</div>
+
+					{/* Billing Summary Card */}
+					<div style={{background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)', borderRadius: '16px', padding: '24px', boxShadow: '0 4px 16px rgba(102, 126, 234, 0.3)', color: '#fff'}}>
+						<h3 style={{fontSize: '18px', fontWeight: '600', marginBottom: '20px', display: 'flex', alignItems: 'center', gap: '8px'}}>
+							💰 Bill Summary
+						</h3>
+
+						<div style={{marginBottom: '12px', paddingBottom: '12px', borderBottom: '1px solid rgba(255,255,255,0.2)'}}>
+							<div style={{display: 'flex', justifyContent: 'space-between', marginBottom: '8px'}}>
+								<span style={{fontSize: '14px', opacity: 0.9}}>Items ({totalCount})</span>
+								<span style={{fontSize: '16px', fontWeight: '600'}}>₹{subTotal.toFixed(2)}</span>
+							</div>
+						</div>
+
+						{/* Discount */}
+						<div style={{marginBottom: '12px', paddingBottom: '12px', borderBottom: '1px solid rgba(255,255,255,0.2)'}}>
+							<div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px'}}>
+								<span style={{fontSize: '14px', opacity: 0.9}}>Discount (%)</span>
+								<input 
+									type="number" 
+									min="0" 
+									max="100"
+									value={discount} 
+									onChange={e => setDiscount(e.target.value)}
+									style={{
+										width: '80px',
+										padding: '6px 10px',
+										fontSize: '14px',
+										border: '2px solid rgba(255,255,255,0.3)',
+										borderRadius: '8px',
+										backgroundColor: 'rgba(255,255,255,0.15)',
+										color: '#fff',
+										fontWeight: '600',
+										textAlign: 'center'
+									}}
+								/>
+							</div>
+							{discountAmount > 0 && (
+								<div style={{textAlign: 'right', fontSize: '13px', opacity: 0.8}}>
+									- ₹{discountAmount.toFixed(2)}
+								</div>
+							)}
+						</div>
+
+						{/* GST */}
+						<div style={{marginBottom: '16px', paddingBottom: '16px', borderBottom: '1px solid rgba(255,255,255,0.2)'}}>
+							<div style={{display: 'grid', gridTemplateColumns: '1fr 80px 80px', gap: '8px', alignItems: 'center', marginBottom: '8px'}}>
+								<span style={{fontSize: '13px', opacity: 0.9}}>CGST (%)</span>
+								<input 
+									type="number" 
+									min="0" 
+									value={cgst} 
+									onChange={e => setCgst(e.target.value)}
+									style={{
+										padding: '6px 8px',
+										fontSize: '13px',
+										border: '2px solid rgba(255,255,255,0.3)',
+										borderRadius: '6px',
+										backgroundColor: 'rgba(255,255,255,0.15)',
+										color: '#fff',
+										fontWeight: '600',
+										textAlign: 'center'
+									}}
+								/>
+								<span style={{fontSize: '13px', textAlign: 'right'}}>₹{cgstAmount.toFixed(2)}</span>
+							</div>
+							<div style={{display: 'grid', gridTemplateColumns: '1fr 80px 80px', gap: '8px', alignItems: 'center', marginBottom: '8px'}}>
+								<span style={{fontSize: '13px', opacity: 0.9}}>SGST (%)</span>
+								<input 
+									type="number" 
+									min="0" 
+									value={sgst} 
+									onChange={e => setSgst(e.target.value)}
+									style={{
+										padding: '6px 8px',
+										fontSize: '13px',
+										border: '2px solid rgba(255,255,255,0.3)',
+										borderRadius: '6px',
+										backgroundColor: 'rgba(255,255,255,0.15)',
+										color: '#fff',
+										fontWeight: '600',
+										textAlign: 'center'
+									}}
+								/>
+								<span style={{fontSize: '13px', textAlign: 'right'}}>₹{sgstAmount.toFixed(2)}</span>
+							</div>
+							<div style={{display: 'grid', gridTemplateColumns: '1fr 80px 80px', gap: '8px', alignItems: 'center'}}>
+								<span style={{fontSize: '13px', opacity: 0.9}}>IGST (%)</span>
+								<input 
+									type="number" 
+									min="0" 
+									value={igst} 
+									onChange={e => setIgst(e.target.value)}
+									style={{
+										padding: '6px 8px',
+										fontSize: '13px',
+										border: '2px solid rgba(255,255,255,0.3)',
+										borderRadius: '6px',
+										backgroundColor: 'rgba(255,255,255,0.15)',
+										color: '#fff',
+										fontWeight: '600',
+										textAlign: 'center'
+									}}
+								/>
+								<span style={{fontSize: '13px', textAlign: 'right'}}>₹{igstAmount.toFixed(2)}</span>
+							</div>
+						</div>
+
+						{/* Total */}
+						<div style={{backgroundColor: 'rgba(255,255,255,0.2)', borderRadius: '12px', padding: '16px', marginBottom: '20px'}}>
+							<div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center'}}>
+								<span style={{fontSize: '16px', fontWeight: '600'}}>TOTAL AMOUNT</span>
+								<span style={{fontSize: '28px', fontWeight: '700'}}>₹{totalAmount.toFixed(2)}</span>
+							</div>
+						</div>
+
+						{/* Action Buttons */}
+						<button 
+							onClick={doSell} 
+							disabled={sellingBusy || sellerProducts.length === 0}
+							style={{
+								width: '100%',
+								background: sellerProducts.length === 0 ? 'rgba(255,255,255,0.3)' : '#fff',
+								color: sellerProducts.length === 0 ? 'rgba(255,255,255,0.6)' : '#667eea',
+								border: 'none',
+								borderRadius: '12px',
+								padding: '16px',
+								fontSize: '18px',
+								fontWeight: '700',
+								cursor: sellerProducts.length === 0 ? 'not-allowed' : 'pointer',
+								marginBottom: '12px',
+								boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
+								transition: 'all 0.2s ease'
+							}}
+							onMouseOver={(e) => {
+								if (sellerProducts.length > 0 && !sellingBusy) {
+									e.target.style.transform = 'translateY(-2px)';
+									e.target.style.boxShadow = '0 6px 16px rgba(0,0,0,0.2)';
+								}
+							}}
+							onMouseOut={(e) => {
+								e.target.style.transform = 'translateY(0px)';
+								e.target.style.boxShadow = '0 4px 12px rgba(0,0,0,0.15)';
+							}}
+						>
+							{sellingBusy ? '⏳ Processing...' : '✅ Complete Sale'}
+						</button>
+
+						{lastSale && (
+							<div style={{display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '8px'}}>
+								<button 
+									onClick={printSale}
+									style={{
+										background: 'rgba(255,255,255,0.2)',
+										color: '#fff',
+										border: '1px solid rgba(255,255,255,0.3)',
+										borderRadius: '8px',
+										padding: '10px',
+										fontSize: '12px',
+										fontWeight: '600',
+										cursor: 'pointer'
+									}}
+								>
+									🖨️ A4
+								</button>
+								<button 
+									onClick={printSmallReceipt}
+									style={{
+										background: 'rgba(255,255,255,0.2)',
+										color: '#fff',
+										border: '1px solid rgba(255,255,255,0.3)',
+										borderRadius: '8px',
+										padding: '10px',
+										fontSize: '12px',
+										fontWeight: '600',
+										cursor: 'pointer'
+									}}
+								>
+									🧾 Receipt
+								</button>
+								<button 
+									onClick={() => {
+										(async () => {
+											const sale = lastSale || { items: sellerProducts, customerNo };
+											let digits = (sale.customerNo || '').toString().replace(/[^0-9]/g, '');
+											if (digits.length === 11 && digits.startsWith('0')) digits = digits.slice(1);
+											if (digits.length === 10) digits = '91' + digits;
+											const cust = digits;
+											let shopName = '';
+											let shopContact = '';
+											try {
+												const url = new URL(salesUrl + '/api/branches');
+												const res = await fetch(url, { headers: { Authorization: 'Bearer ' + token } });
+												const data = await res.json();
+												if (res.ok && Array.isArray(data.branches) && data.branches.length > 0) {
+													const payload = decodeJwt();
+													const branchId = payload?.branch_id || payload?._id || '';
+													let foundBranch = null;
+													if (branchId) foundBranch = data.branches.find(b => String(b._id) === String(branchId));
+													if (!foundBranch) foundBranch = data.branches[0];
+													shopName = foundBranch?.name || '';
+													shopContact = foundBranch?.phoneNumber || foundBranch?.phone || '';
+												}
+											} catch (e) { /* ignore */ }
+											if (!shopName || !shopContact) {
+												const payload = decodeJwt();
+												shopName = shopName || payload.shopName || payload.name || payload.branchName || '';
+												shopContact = shopContact || payload.phone || payload.phoneNumber || payload.branchPhone || '';
+											}
+											const itemsText = (sale.items || []).map(i => {
+												const qty = i.qty || i.sellingQty || 0;
+												const unit = Number(i.sellingPrice || i.unitSellingPrice || 0).toFixed(2);
+												return `${i.productName || i.productNo || 'item'} x${qty} @ ${unit}`;
+											}).join('\n\n');
+											const message = `Shop: ${shopName}\nContact: ${shopContact}\n\nItems:\n${itemsText}\n\nTotal: ${Number(sale.totalAmount || totalAmount || 0).toFixed(2)}`;
+											const whatsappUrl = window.ENV_CONFIG?.WHATSAPP_WEB_URL || 'https://web.whatsapp.com';
+											window.open(`${whatsappUrl}/send?phone=${cust}&text=${encodeURIComponent(message)}`, '_blank');
+										})();
+									}}
+									style={{
+										background: 'rgba(37, 211, 102, 0.9)',
+										color: '#fff',
+										border: '1px solid rgba(255,255,255,0.3)',
+										borderRadius: '8px',
+										padding: '10px',
+										fontSize: '12px',
+										fontWeight: '600',
+										cursor: 'pointer'
+									}}
+								>
+									💬 WhatsApp
+								</button>
+							</div>
+						)}
+					</div>
+				</div>
+			</div>
 		</div>
 	);
 }

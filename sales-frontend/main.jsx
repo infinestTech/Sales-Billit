@@ -402,9 +402,16 @@ function App() {
             <div className="card"><div className="empty-state"><div className="empty-icon">📊</div><div className="empty-title">Loading…</div></div></div>
           ))
         ) : view === 'product-sales' ? (
-          (window.ProductSales ? React.createElement(window.ProductSales, { salesUrl: SALES_URL, token: effectiveToken }) : (
-            <div className="card"><div className="empty-state"><div className="empty-icon">🛍️</div><div className="empty-title">Loading…</div></div></div>
-          ))
+          // Product Sales is only for branch users
+          branchUser ? (
+            (window.ProductSales ? React.createElement(window.ProductSales, { salesUrl: SALES_URL, token: effectiveToken }) : (
+              <div className="card"><div className="empty-state"><div className="empty-icon">🛍️</div><div className="empty-title">Loading…</div></div></div>
+            ))
+          ) : (
+            // Redirect admin to bank view if they somehow access product-sales
+            React.useEffect(() => { location.hash = '#bank'; }, []),
+            <div className="card"><div className="empty-state"><div className="empty-icon">🔒</div><div className="empty-title">Redirecting…</div></div></div>
+          )
         ) : (
           view === 'instock' && branchUser ? (
             <BranchInStock salesUrl={SALES_URL} token={effectiveToken} />

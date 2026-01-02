@@ -16,6 +16,10 @@
     <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
     <!-- Babel Standalone to compile JSX in the browser -->
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <!-- JsBarcode for barcode generation -->
+    <script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.5/dist/JsBarcode.all.min.js"></script>
+    <!-- jsPDF for PDF generation -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
   
   <!-- Load environment configuration first -->
   <script src="/src/config/env.js"></script>
@@ -75,11 +79,10 @@
   <script type="text/babel" data-presets="react" src="/src/components/GstCalculator.jsx"></script>
   <script type="text/babel" data-presets="react" src="/src/views/GstCalculatorView.jsx"></script>
   <script type="text/babel" data-presets="react" src="/src/views/StockHistory.jsx"></script>
+  <script type="text/babel" data-presets="react" src="/src/components/BarcodeSheet.jsx"></script>
     
 
 
   <script type="text/babel" data-presets="react" src="/main.jsx"></script>
   </body>
   </html>
-
-<script src='test-integration.js'></script>

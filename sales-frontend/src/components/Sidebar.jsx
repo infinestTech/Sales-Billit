@@ -55,6 +55,11 @@ function Sidebar({ active = 'bank', onSelect, planId, branchLimit, branchUser })
         {isBranch ? (
           // Branch users see a minimal branch nav
           <>
+            <SectionTitle title="Point of Sale" icon="🛒" />
+            <Item id="product-sales" label="Product Sales" icon={"💳"} activeId={active} onClick={onSelect} />
+
+            <div style={{borderTop: '2px solid var(--border)', margin: '16px 0'}}></div>
+
             <SectionTitle title="Financial" icon="💰" />
             <Item id="bank" label="Bank Accounts" icon={"💳"} activeId={active} onClick={onSelect} />
             <Item id="bank-history" label="Transaction History" icon={"📊"} activeId={active} onClick={onSelect} />
@@ -73,10 +78,9 @@ function Sidebar({ active = 'bank', onSelect, planId, branchLimit, branchUser })
             <Item id="instock" label="Product Inventory" icon={"📦"} activeId={active} onClick={onSelect} />
             <Item id="stock-history" label="Stock History" icon={"📚"} activeId={active} onClick={onSelect} />
 
-            <SectionTitle title="Sales" icon="📈" />
-            <Item id="product-sales" label="Product Sales" icon={"🛒"} activeId={active} onClick={onSelect} />
+            <SectionTitle title="Other Sales" icon="📈" />
             <Item id="seconds-sales" label="Seconds Mobile Sales" icon={"⚡"} activeId={active} onClick={onSelect} />
-            <Item id="sales-track" label="Sales Analytics" icon={"📈"} activeId={active} onClick={onSelect} />
+            <Item id="sales-track" label="Sales Analytics" icon={"📊"} activeId={active} onClick={onSelect} />
           </>
         ) : (
           // Admin / seller view

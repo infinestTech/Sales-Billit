@@ -861,7 +861,7 @@ body {
 
 .cell-strong {
   font-weight: 600;
-  color: #fff;
+  color: var(--text);
 }
 
 /* Enhanced Table Cell Styles */

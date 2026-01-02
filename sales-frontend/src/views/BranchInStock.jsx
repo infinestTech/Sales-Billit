@@ -9,6 +9,7 @@ function BranchInStock({ salesUrl, token }) {
   const [qtyFilter, setQtyFilter] = React.useState('');
   const [imesFilter, setImesFilter] = React.useState('');
   const [showBreakdown, setShowBreakdown] = React.useState(false);
+  const [showBarcodeSheet, setShowBarcodeSheet] = React.useState(false);
 
   const loadEntries = async () => {
     try {
@@ -308,6 +309,34 @@ function BranchInStock({ salesUrl, token }) {
     return { items, total };
   }, [filteredEntries]);
 
+  // Transform branch entries for BarcodeSheet component
+  const barcodeEntries = React.useMemo(() => {
+    // Transform branch entries (flat array) to InStock entries format (array of entries with items)
+    // Group products by category for better organization
+    const grouped = {};
+    
+    entries.forEach(row => {
+      const category = row.category || 'Uncategorized';
+      if (!grouped[category]) {
+        grouped[category] = {
+          category: category,
+          items: []
+        };
+      }
+      
+      grouped[category].items.push({
+        productNo: row.productNo || row.productId || '',
+        productName: row.productName || '',
+        brand: row.brand || '',
+        model: row.model || '',
+        quantity: row.branchQty ?? row.qty ?? 0,
+        imes: Array.isArray(row.imes) ? row.imes : (row.imei ? [row.imei] : [])
+      });
+    });
+    
+    return Object.values(grouped);
+  }, [entries]);
+
   return (
     <div style={{ padding: '24px', backgroundColor: '#f8fafc', minHeight: '100vh' }}>
       {/* Page Header */}
@@ -586,6 +615,40 @@ function BranchInStock({ salesUrl, token }) {
             }}
           >
             📦 Add New Stock
+          </button>
+
+          <button 
+            style={{
+              background: 'linear-gradient(135deg, #fa709a 0%, #fee140 100%)',
+              color: 'white',
+              border: 'none',
+              borderRadius: '12px',
+              padding: '12px 24px',
+              fontSize: '14px',
+              fontWeight: '600',
+              cursor: entries.length === 0 ? 'not-allowed' : 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '8px',
+              boxShadow: '0 4px 12px rgba(250, 112, 154, 0.3)',
+              transition: 'all 0.2s ease',
+              opacity: entries.length === 0 ? 0.6 : 1
+            }}
+            type="button" 
+            onClick={() => entries.length > 0 && setShowBarcodeSheet(true)}
+            disabled={entries.length === 0}
+            onMouseOver={(e) => {
+              if (entries.length > 0) {
+                e.target.style.transform = 'translateY(-2px)';
+                e.target.style.boxShadow = '0 6px 16px rgba(250, 112, 154, 0.4)';
+              }
+            }}
+            onMouseOut={(e) => {
+              e.target.style.transform = 'translateY(0px)';
+              e.target.style.boxShadow = '0 4px 12px rgba(250, 112, 154, 0.3)';
+            }}
+          >
+            📊 Generate Barcode Labels
           </button>
         </div>
 
@@ -1687,6 +1750,14 @@ function BranchInStock({ salesUrl, token }) {
             </div>
           </div>
         </div>
+      )}
+
+      {/* Barcode Sheet Modal */}
+      {showBarcodeSheet && window.BarcodeSheet && (
+        <window.BarcodeSheet 
+          entries={barcodeEntries}
+          onClose={() => setShowBarcodeSheet(false)}
+        />
       )}
     </div>
   );
