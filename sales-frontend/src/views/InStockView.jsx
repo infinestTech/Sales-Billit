@@ -24,6 +24,7 @@ function InStockView({ salesUrl, token }) {
   const [validityPopup, setValidityPopup] = React.useState(false);
   const [validityData, setValidityData] = React.useState([]);
   const [showRedDot, setShowRedDot] = React.useState(false);
+  const [showBarcodeSheet, setShowBarcodeSheet] = React.useState(false);
 
 
   const loadSuppliers = async () => {
@@ -156,15 +157,24 @@ function InStockView({ salesUrl, token }) {
   }, [category]);
 
 
-  // Helper to generate random alphanumeric string (2-9 chars)
-  function randomProductNo() {
-    const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
-    const len = Math.floor(Math.random() * 3) + 2; // 2 to 9
-    let str = '';
-    for (let i = 0; i < len; i++) {
-      str += chars.charAt(Math.floor(Math.random() * chars.length));
+  // Helper to generate 16-digit alphanumeric product number
+  function generateProductNo() {
+    // Generate exactly 16 random alphanumeric characters
+    const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+    let productNo = '';
+    for (let i = 0; i < 16; i++) {
+      productNo += chars.charAt(Math.floor(Math.random() * chars.length));
     }
-    return str;
+    return productNo;
+  }
+  
+  // Validate product number - should be 16 alphanumeric characters
+  function isValidProductNo(productNo) {
+    if (!productNo || productNo.trim() === '') return false;
+    // Must be exactly 16 characters, alphanumeric only
+    const cleaned = productNo.trim();
+    const pattern = /^[A-Z0-9]{16}$/i;
+    return pattern.test(cleaned);
   }
 
 
@@ -181,16 +191,26 @@ function InStockView({ salesUrl, token }) {
               supplierAmount: Number(supplierAmount) || 0,
               gstAmount: Number(gstAmount) || 0,
               category: category || null,
-              items: items.map(it => ({
-                productNo: it.productNo && it.productNo.trim() ? it.productNo : randomProductNo(),
-                productName: it.productName,
-                brand: it.brand,
-                model: it.model,
-                quantity: Number(it.quantity) || 1,
-                costPrice: Number(it.costPrice) || 0,
-                validity: it.validity,
-                imes: Array.isArray(it.imes) ? it.imes.filter(x => x && x.trim()) : []
-              }))
+              items: items.map(it => {
+                // Generate or validate product number
+                let finalProductNo = it.productNo && it.productNo.trim();
+                
+                // If empty or invalid, generate a 16-digit alphanumeric product number
+                if (!isValidProductNo(finalProductNo)) {
+                  finalProductNo = generateProductNo();
+                }
+                
+                return {
+                  productNo: finalProductNo,
+                  productName: it.productName,
+                  brand: it.brand,
+                  model: it.model,
+                  quantity: Number(it.quantity) || 1,
+                  costPrice: Number(it.costPrice) || 0,
+                  validity: it.validity,
+                  imes: Array.isArray(it.imes) ? it.imes.filter(x => x && x.trim()) : []
+                };
+              })
             })
       });
       const data = await res.json();
@@ -418,6 +438,40 @@ function InStockView({ salesUrl, token }) {
                   animation: 'pulse 2s infinite'
                 }}></span>
               )}
+            </button>
+
+            <button 
+              style={{
+                background: 'linear-gradient(135deg, #fa709a 0%, #fee140 100%)',
+                color: 'white',
+                border: 'none',
+                borderRadius: '12px',
+                padding: '12px 24px',
+                fontSize: '14px',
+                fontWeight: '600',
+                cursor: entries.length === 0 ? 'not-allowed' : 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px',
+                boxShadow: '0 4px 12px rgba(250, 112, 154, 0.3)',
+                transition: 'all 0.2s ease',
+                opacity: entries.length === 0 ? 0.6 : 1
+              }}
+              type="button" 
+              onClick={() => entries.length > 0 && setShowBarcodeSheet(true)}
+              disabled={entries.length === 0}
+              onMouseOver={(e) => {
+                if (entries.length > 0) {
+                  e.target.style.transform = 'translateY(-2px)';
+                  e.target.style.boxShadow = '0 6px 16px rgba(250, 112, 154, 0.4)';
+                }
+              }}
+              onMouseOut={(e) => {
+                e.target.style.transform = 'translateY(0px)';
+                e.target.style.boxShadow = '0 4px 12px rgba(250, 112, 154, 0.3)';
+              }}
+            >
+              📊 Generate Barcode Labels
             </button>
           </div>
         </div>
@@ -1695,6 +1749,14 @@ function InStockView({ salesUrl, token }) {
             </div>
           </div>
         </div>
+      )}
+
+      {/* Barcode Sheet Modal */}
+      {showBarcodeSheet && window.BarcodeSheet && (
+        <window.BarcodeSheet 
+          entries={entries}
+          onClose={() => setShowBarcodeSheet(false)}
+        />
       )}
     </div>
   );
