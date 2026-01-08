@@ -12,10 +12,9 @@ const runPatch = require('./utils/patchMobileIds');
 // MongoDB Connection
 mongoose.connect(process.env.BILLIT_MONGO_URI)
   .then(async () => {
-    console.log('✅ MongoDB Connected Successfully!');
     await runPatch(); // 🧠 Auto-patch MobileName _id values
   })
-  .catch(err => console.error('❌ MongoDB connection error:', err));
+  .catch(err => {});
 
 const app = express(); // ✅ MOVE THIS TO THE TOP
 app.use(express.json());
@@ -143,7 +142,6 @@ const authenticateBillitToken = (req, res, next) => {
 
       next();
     } catch (error) {
-      console.error("Token verification error:", error);
       return res.status(500).json({ message: "Internal server error during token verification." });
     }
   });
@@ -170,6 +168,7 @@ const authRoutes = require('./routes/authRoutes');
 const dashboardRoutes = require('./routes/dashboard');
 const mobileDashboardFullRoutes = require('./routes/mobile-dashboard-full');
 const paymentRoutes = require('./routes/payment');
+const salaryRoutes = require('./routes/salaryRoutes');
 
 // ✅ Mount Routes After `app` is declared
 app.use('/api/dashboard', dashboardRoutes);
@@ -179,14 +178,12 @@ app.use('/api', subscriptionPageRoutes);
 app.use('/api', userSyncRoutes);
 app.use('/api', authRoutes);
 app.use('/api', paymentRoutes);
+app.use('/api/shop-admin/salary', salaryRoutes);
 
 
 // 🏁 Start Server
 
 const PORT = process.env.BILLIT_PORT;
-app.listen(PORT, '0.0.0.0', () => {
-  console.log(`🚀 Billit Service Running on Port ${PORT}`);
-  console.log(`🌐 Server accessible at http://0.0.0.0:${PORT}`);
-});
+app.listen(PORT, '0.0.0.0', () => {});
 
 module.exports = { app, authenticateBillitToken };

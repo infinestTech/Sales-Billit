@@ -13,6 +13,8 @@ import {
   PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid,
   Tooltip, Legend, ResponsiveContainer, ComposedChart
 } from 'recharts';
+import MobileDashboard from '@/components/shop-admin/MobileDashboard';
+import SalaryManagement from '@/components/shop-admin/SalaryManagement';
 
 export default function ShopAdminDashboard() {
   const router = useRouter();
@@ -26,6 +28,7 @@ export default function ShopAdminDashboard() {
   const [loading, setLoading] = useState(true);
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [showShopSelector, setShowShopSelector] = useState(false);
+  const [isMobile, setIsMobile] = useState(false);
   
   // Customer details state
   const [customerDetails, setCustomerDetails] = useState([]);
@@ -67,6 +70,17 @@ export default function ShopAdminDashboard() {
   const [loadingReport, setLoadingReport] = useState(false);
 
   const API_URL = process.env.NEXT_PUBLIC_API_URL_BILLIT || 'http://localhost:8000';
+
+  // Check if mobile on mount and window resize
+  useEffect(() => {
+    const checkMobile = () => {
+      setIsMobile(window.innerWidth < 1024);
+    };
+    
+    checkMobile();
+    window.addEventListener('resize', checkMobile);
+    return () => window.removeEventListener('resize', checkMobile);
+  }, []);
 
   useEffect(() => {
     // Check shop admin authentication
@@ -416,6 +430,7 @@ export default function ShopAdminDashboard() {
       const countByDate = {};
       const supplierPaymentsByDate = {};
       const operatingExpensesByDate = {};
+      const dailyWageExpensesByDate = {};
       
       (revenueData.mobileRevenue || []).forEach(item => {
         const date = item._id?.date || item.date;
@@ -444,6 +459,13 @@ export default function ShopAdminDashboard() {
         const date = item._id?.date || item.date;
         if (date) {
           operatingExpensesByDate[date] = (operatingExpensesByDate[date] || 0) + (item.amount || 0);
+        }
+      });
+      
+      (revenueData.dailyWageExpenses || []).forEach(item => {
+        const date = item._id?.date || item.date;
+        if (date) {
+          dailyWageExpensesByDate[date] = (dailyWageExpensesByDate[date] || 0) + (item.amount || 0);
         }
       });
 
@@ -507,7 +529,8 @@ export default function ShopAdminDashboard() {
         const revenue = Math.round(revenueByDate[dateStr] || 0);
         const supplierPayments = Math.round(supplierPaymentsByDate[dateStr] || 0);
         const operatingExpenses = Math.round(operatingExpensesByDate[dateStr] || 0);
-        const totalExpenses = supplierPayments + operatingExpenses;
+        const dailyWageExpenses = Math.round(dailyWageExpensesByDate[dateStr] || 0);
+        const totalExpenses = supplierPayments + operatingExpenses + dailyWageExpenses;
         const netProfit = revenue - totalExpenses;
         
         dailyData.push({
@@ -515,6 +538,7 @@ export default function ShopAdminDashboard() {
           revenue,
           supplierPayments,
           operatingExpenses,
+          dailyWageExpenses,
           netProfit,
           count: countByDate[dateStr] || 0
         });
@@ -531,6 +555,7 @@ export default function ShopAdminDashboard() {
           totalExpenses: revenueData.totalExpenses || 0,
           totalSupplierPayments: revenueData.totalSupplierPayments || 0,
           totalOperatingExpenses: revenueData.totalOperatingExpenses || 0,
+          totalDailyWageExpenses: revenueData.totalDailyWageExpenses || 0,
           netProfit: revenueData.netProfit || 0
         },
         service: {
@@ -1022,6 +1047,34 @@ export default function ShopAdminDashboard() {
 
   const currentShop = getCurrentShop();
 
+  // Render mobile dashboard for small screens
+  if (isMobile) {
+    return (
+      <MobileDashboard
+        shopAdmin={shopAdmin}
+        shops={shops}
+        currentShopId={currentShopId}
+        setCurrentShopId={setCurrentShopId}
+        overview={overview}
+        employees={employees}
+        analytics={analytics}
+        customerDetails={customerDetails}
+        filteredCustomers={filteredCustomers}
+        setFilteredCustomers={setFilteredCustomers}
+        selectedEmployee={selectedEmployee}
+        setSelectedEmployee={setSelectedEmployee}
+        employeeAttendance={employeeAttendance}
+        reportData={reportData}
+        loading={loading}
+        fetchDashboardData={fetchDashboardData}
+        fetchEmployeeAttendance={fetchEmployeeAttendance}
+        fetchFinancialReport={fetchFinancialReport}
+        handleLogout={handleLogout}
+        handleSwitchShop={handleSwitchShop}
+      />
+    );
+  }
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 flex">
       {/* Sidebar - Fixed */}
@@ -1119,6 +1172,7 @@ export default function ShopAdminDashboard() {
               {[
                 { id: 'overview', label: 'Overview', icon: TrendingUp },
                 { id: 'employees', label: 'Employees', icon: Users },
+                { id: 'salary', label: 'Salary Management', icon: DollarSign },
                 { id: 'revenue', label: 'Revenue', icon: DollarSign },
                 { id: 'report', label: 'Financial Report', icon: AlertCircle }
               ].map((tab) => {
@@ -1161,6 +1215,7 @@ export default function ShopAdminDashboard() {
             {[
               { id: 'overview', icon: TrendingUp },
               { id: 'employees', icon: Users },
+              { id: 'salary', icon: DollarSign },
               { id: 'revenue', icon: DollarSign },
               { id: 'report', icon: AlertCircle }
             ].map((tab) => {
@@ -1871,6 +1926,10 @@ export default function ShopAdminDashboard() {
           </div>
         )}
 
+        {activeTab === 'salary' && (
+          <SalaryManagement shopId={currentShopId} />
+        )}
+
         {activeTab === 'revenue' && (
           <div className="space-y-6">
             <div className="bg-white p-6 rounded-xl shadow-lg border border-gray-200">
@@ -2086,21 +2145,30 @@ export default function ShopAdminDashboard() {
                       radius={[4, 4, 0, 0]}
                     />
                     <Bar 
+                      dataKey="netProfit" 
+                      fill="#3B82F6" 
+                      name="Net Profit" 
+                      radius={[4, 4, 0, 0]}
+                    />
+                    <Bar 
                       dataKey="supplierPayments" 
                       fill="#EF4444" 
-                      name="Expenses (Supplier Payments)" 
-                      radius={[4, 4, 0, 0]}
+                      name="Supplier Payments" 
+                      stackId="expenses"
+                      radius={[0, 0, 0, 0]}
                     />
                     <Bar 
                       dataKey="operatingExpenses" 
                       fill="#F59E0B" 
-                      name="Expenses (Operating Costs)" 
-                      radius={[4, 4, 0, 0]}
+                      name="Operating Costs" 
+                      stackId="expenses"
+                      radius={[0, 0, 0, 0]}
                     />
                     <Bar 
-                      dataKey="netProfit" 
-                      fill="#3B82F6" 
-                      name="Net Profit" 
+                      dataKey="dailyWageExpenses" 
+                      fill="#8B5CF6" 
+                      name="Paid Salary" 
+                      stackId="expenses"
                       radius={[4, 4, 0, 0]}
                     />
                   </BarChart>
@@ -2141,11 +2209,18 @@ export default function ShopAdminDashboard() {
                     <div className="w-4 h-4 bg-orange-500 rounded mr-2"></div>
                     <span className="font-semibold text-gray-800">Operating Expenses</span>
                   </div>
-                  <p className="text-gray-600 text-sm">Daily operational costs including rent, utilities, salaries, and other business expenses</p>
+                  <p className="text-gray-600 text-sm">Daily operational costs including rent, utilities, and other business expenses</p>
                 </div>
-                <div className="bg-white rounded-lg p-4 border-l-4 border-green-500">
+                <div className="bg-white rounded-lg p-4 border-l-4 border-purple-500">
                   <div className="flex items-center mb-2">
-                    <div className="w-4 h-4 bg-green-500 rounded mr-2"></div>
+                    <div className="w-4 h-4 bg-purple-500 rounded mr-2"></div>
+                    <span className="font-semibold text-gray-800">Paid Salary Expenses</span>
+                  </div>
+                  <p className="text-gray-600 text-sm">Employee salary payments (only includes salaries that have been paid)</p>
+                </div>
+                <div className="bg-white rounded-lg p-4 border-l-4 border-blue-500">
+                  <div className="flex items-center mb-2">
+                    <div className="w-4 h-4 bg-blue-500 rounded mr-2"></div>
                     <span className="font-semibold text-gray-800">Net Profit</span>
                   </div>
                   <p className="text-gray-600 text-sm">Final profit after deducting all expenses from total revenue</p>

@@ -67,30 +67,52 @@ router.get("/mobile-summary", authenticateToken, async (req, res) => {
         },
       ])
 
-      // Get today's mobile revenue
+      // Get today's mobile revenue - FIXED: Only count payments made TODAY
+      // Modern approach: Use payments array with actual payment dates
       const todayMobileRevenue = await Mobile.aggregate([
         {
           $match: {
             shop_id: shopObjectId,
+            payments: { $exists: true, $ne: [] }
+          }
+        },
+        {
+          $unwind: "$payments"
+        },
+        {
+          $match: {
+            "payments.date": { $gte: startOfDay, $lt: endOfDay }
+          }
+        },
+        {
+          $group: {
+            _id: null,
+            totalRevenue: { $sum: "$payments.amount" },
+            count: { $sum: 1 }
+          }
+        }
+      ])
+      
+      // Legacy approach: For mobiles without payments array (old data)
+      const legacyMobileRevenue = await Mobile.aggregate([
+        {
+          $match: {
+            shop_id: shopObjectId,
+            created_at: { $gte: startOfDay, $lt: endOfDay },
+            paid_amount: { $gt: 0 },
             $or: [
-              {
-                delivered: true,
-                delivery_date: { $gte: startOfDay, $lt: endOfDay },
-              },
-              {
-                paid_amount: { $gt: 0 },
-                update_date: { $gte: startOfDay, $lt: endOfDay },
-              },
-            ],
-          },
+              { payments: { $exists: false } },
+              { payments: { $size: 0 } }
+            ]
+          }
         },
         {
           $group: {
             _id: null,
             totalRevenue: { $sum: "$paid_amount" },
-            count: { $sum: 1 },
-          },
-        },
+            count: { $sum: 1 }
+          }
+        }
       ])
 
       // Get today's product sales revenue from ProductHistory
@@ -111,15 +133,15 @@ router.get("/mobile-summary", authenticateToken, async (req, res) => {
         },
       ])
 
-      // Calculate totals
-      const mobileRevenue = todayMobileRevenue[0]?.totalRevenue || 0
+      // Calculate totals - combine modern and legacy mobile revenue
+      const mobileRevenue = (todayMobileRevenue[0]?.totalRevenue || 0) + (legacyMobileRevenue[0]?.totalRevenue || 0)
       const productRevenue = todayProductSales[0]?.totalRevenue || 0
       const totalRevenue = mobileRevenue + productRevenue
       const totalExpenses = todayExpenses[0]?.totalExpenses || 0
       const netProfit = totalRevenue - totalExpenses
 
-      // Calculate transaction count
-      const mobileTransactions = todayMobileRevenue[0]?.count || 0
+      // Calculate transaction count - combine modern and legacy counts
+      const mobileTransactions = (todayMobileRevenue[0]?.count || 0) + (legacyMobileRevenue[0]?.count || 0)
       const productTransactions = todayProductSales[0]?.count || 0
       const totalTransactions = mobileTransactions + productTransactions
 
