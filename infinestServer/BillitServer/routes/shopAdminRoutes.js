@@ -704,8 +704,57 @@ router.get('/analytics/revenue', shopAdminAuth, async (req, res) => {
             },
             { $sort: { "_id.date": 1 } }
         ]);
+
+        // Daily Wage Expenses (only include PAID salaries from SalaryRecord)
+        const { SalaryRecord } = require('../models/mongoModels');
         
-        // Combine supplier payments and operating expenses by date
+        // Get paid salary records for the date range
+        const startMonth = `${startDate.getFullYear()}-${String(startDate.getMonth() + 1).padStart(2, '0')}`;
+        const endMonth = `${endDate.getFullYear()}-${String(endDate.getMonth() + 1).padStart(2, '0')}`;
+        
+        const paidSalaryRecords = await SalaryRecord.find({
+            shop_id: req.shopId,
+            payment_status: 'paid',
+            payment_date: { $exists: true, $ne: null },
+            $or: [
+                { payment_date: { $gte: startDate, $lte: endDate } },
+                { month: { $gte: startMonth, $lte: endMonth } }
+            ]
+        });
+
+        // Calculate daily wage expenses by payment date
+        const dailyWageExpensesByDate = {};
+        
+        paidSalaryRecords.forEach(record => {
+            // Use payment_date for expense tracking (when the salary was actually paid)
+            if (record.payment_date) {
+                const paymentDate = new Date(record.payment_date);
+                const year = paymentDate.getFullYear();
+                const month = String(paymentDate.getMonth() + 1).padStart(2, '0');
+                const day = String(paymentDate.getDate()).padStart(2, '0');
+                const dateStr = `${year}-${month}-${day}`;
+                
+                // Only include if within our date range
+                if (dateStr >= startDate.toISOString().split('T')[0] && 
+                    dateStr <= endDate.toISOString().split('T')[0]) {
+                    if (!dailyWageExpensesByDate[dateStr]) {
+                        dailyWageExpensesByDate[dateStr] = {
+                            _id: { date: dateStr },
+                            amount: 0,
+                            count: 0
+                        };
+                    }
+                    dailyWageExpensesByDate[dateStr].amount += record.paid_amount || 0;
+                    dailyWageExpensesByDate[dateStr].count += 1;
+                }
+            }
+        });
+
+        const dailyWageExpenses = Object.values(dailyWageExpensesByDate).sort((a, b) => 
+            a._id.date.localeCompare(b._id.date)
+        );
+        
+        // Combine supplier payments, operating expenses, and daily wage expenses by date
         const expensesByDate = {};
         supplierPayments.forEach(item => {
             const date = item._id.date;
@@ -723,6 +772,14 @@ router.get('/analytics/revenue', shopAdminAuth, async (req, res) => {
                 count: (expensesByDate[date]?.count || 0) + item.count
             };
         });
+        dailyWageExpenses.forEach(item => {
+            const date = item._id.date;
+            expensesByDate[date] = {
+                _id: item._id,
+                amount: (expensesByDate[date]?.amount || 0) + item.amount,
+                count: (expensesByDate[date]?.count || 0) + item.count
+            };
+        });
         
         const expenses = Object.values(expensesByDate);
 
@@ -731,7 +788,8 @@ router.get('/analytics/revenue', shopAdminAuth, async (req, res) => {
         const totalSalesRevenue = salesRevenue.reduce((sum, item) => sum + item.revenue, 0);
         const totalSupplierPayments = supplierPayments.reduce((sum, item) => sum + item.amount, 0);
         const totalOperatingExpenses = operatingExpenses.reduce((sum, item) => sum + item.amount, 0);
-        const totalExpenses = totalSupplierPayments + totalOperatingExpenses;
+        const totalDailyWageExpenses = dailyWageExpenses.reduce((sum, item) => sum + item.amount, 0);
+        const totalExpenses = totalSupplierPayments + totalOperatingExpenses + totalDailyWageExpenses;
         const totalRevenue = totalServiceRevenue + totalSalesRevenue;
         const netProfit = totalRevenue - totalExpenses;
 
@@ -762,11 +820,13 @@ router.get('/analytics/revenue', shopAdminAuth, async (req, res) => {
                 totalExpenses,
                 totalSupplierPayments,
                 totalOperatingExpenses,
+                totalDailyWageExpenses,
                 netProfit,
                 mobileRevenue: finalMobileRevenue,
                 salesRevenue,
                 supplierPayments,
                 operatingExpenses,
+                dailyWageExpenses,
                 expenses,
                 paymentBreakdown
             }

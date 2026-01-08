@@ -389,6 +389,7 @@ const employeeSchema = new mongoose.Schema({
   mobile_number: { type: String, required: true, trim: true },
   address: { type: String, default: '' },
   blood_group: { type: String, default: '' },
+  daily_salary: { type: Number, default: 0 }, // Fixed salary per day
   created_at: { type: Date, default: Date.now }
 });
 
@@ -450,6 +451,70 @@ const permissionSchema = new mongoose.Schema({
 
 permissionSchema.index({ employee_id: 1, date: 1 });
 
+// ==============================
+// 💰 Salary Configuration Schema
+// Stores daily wage settings per shop
+// ==============================
+const salaryConfigSchema = new mongoose.Schema({
+  shop_id: { type: mongoose.Schema.Types.ObjectId, ref: 'Shop', required: true, unique: true },
+  permission_deduction_percentage: { type: Number, default: 10, min: 0, max: 100 }, // % deduction per permission hour
+  // Always daily_rate - this is a daily wage system
+  salary_calculation_method: { type: String, enum: ['daily_rate'], default: 'daily_rate' },
+  // Hours per day for hourly rate calculation
+  hours_per_day: { type: Number, default: 8, min: 6, max: 12 },
+  updated_by: { type: String }, // admin username who last updated
+  created_at: { type: Date, default: Date.now },
+  updated_at: { type: Date, default: Date.now }
+});
+
+// Index removed - already unique on shop_id in schema definition
+
+// ==============================
+// 💵 Salary Record Schema
+// Period-based salary records for employees (calculated for a month/period)
+// ==============================
+const salaryRecordSchema = new mongoose.Schema({
+  shop_id: { type: mongoose.Schema.Types.ObjectId, ref: 'Shop', required: true },
+  employee_id: { type: mongoose.Schema.Types.ObjectId, ref: 'Employee', required: true },
+  month: { type: String, required: true }, // Format: YYYY-MM
+  year: { type: Number, required: true },
+  month_number: { type: Number, required: true }, // 1-12
+  
+  // Attendance summary
+  total_days_in_month: { type: Number, required: true },
+  present_days: { type: Number, default: 0 },
+  absent_days: { type: Number, default: 0 },
+  
+  // Permission summary
+  total_permission_hours: { type: Number, default: 0 },
+  permission_deduction_amount: { type: Number, default: 0 },
+  
+  // Salary calculation
+  daily_salary_rate: { type: Number, default: 0 }, // Employee's daily rate at time of calculation
+  base_salary: { type: Number, default: 0 }, // present_days * daily_rate
+  total_deductions: { type: Number, default: 0 }, // permission deductions
+  net_salary: { type: Number, default: 0 }, // base_salary - total_deductions
+  
+  // Payment tracking
+  paid_amount: { type: Number, default: 0 },
+  payment_status: { type: String, enum: ['unpaid', 'partial', 'paid'], default: 'unpaid' },
+  payment_date: { type: Date },
+  payment_method: { type: String },
+  payment_notes: { type: String },
+  
+  // Metadata
+  calculated_at: { type: Date, default: Date.now },
+  calculated_by: { type: String }, // admin username
+  locked: { type: Boolean, default: false }, // Lock after payment
+  created_at: { type: Date, default: Date.now },
+  updated_at: { type: Date, default: Date.now }
+});
+
+// Compound index - one record per employee per month
+salaryRecordSchema.index({ employee_id: 1, month: 1 }, { unique: true });
+salaryRecordSchema.index({ shop_id: 1, month: 1 });
+salaryRecordSchema.index({ shop_id: 1, payment_status: 1 });
+
 const AdminSale = mongoose.model('AdminSale', adminSaleSchema);
 const Expense = mongoose.model("Expense", expenseSchema);
 const DailySummary = mongoose.model("DailySummary", dailySummarySchema);
@@ -460,9 +525,12 @@ const Attendance = mongoose.model("Attendance", attendanceSchema);
 const Permission = mongoose.model("Permission", permissionSchema);
 const ShopAdmin = mongoose.model("ShopAdmin", shopAdminSchema);
 const Supplier = mongoose.model("Supplier", supplierSchema);
+const SalaryConfig = mongoose.model("SalaryConfig", salaryConfigSchema);
+const SalaryRecord = mongoose.model("SalaryRecord", salaryRecordSchema);
 
 module.exports = {
   Role, User, Manager, Branch, Shop, Dealer, Customer, Notification, Mobile, Technician,
   PlanCategory, Plan, Feature, DailySummary, Expense, ProductHistory, Product,
-  MobileBrand, MobileIssue, AdminSale, SupplierHistory, Employee, Attendance, ShopAdmin, Permission, Supplier
+  MobileBrand, MobileIssue, AdminSale, SupplierHistory, Employee, Attendance, ShopAdmin, Permission, Supplier,
+  SalaryConfig, SalaryRecord
 };
