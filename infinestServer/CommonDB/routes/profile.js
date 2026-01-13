@@ -78,5 +78,28 @@ router.patch('/update', authenticateToken, async (req, res) => {
     }
 });
 
+// ✅ GET /profile/session-limit/:userId - Get user's session limit (for auth server)
+router.get('/session-limit/:userId', async (req, res) => {
+    try {
+        const { userId } = req.params;
+
+        const user = await prisma.user.findUnique({
+            where: { id: userId },
+            select: { sessionLimit: true }
+        });
+
+        if (!user) {
+            return res.status(404).json({ success: false, message: 'User not found' });
+        }
+
+        res.json({
+            success: true,
+            sessionLimit: user.sessionLimit || 1
+        });
+    } catch (err) {
+        console.error('❌ Error fetching session limit:', err);
+        res.status(500).json({ success: false, message: 'Failed to fetch session limit' });
+    }
+});
 
 module.exports = router;

@@ -6,8 +6,8 @@ const mongoose = require("mongoose");
 const sessionSchema = new mongoose.Schema({
   user_identifier: { 
     type: String, 
-    required: true, 
-    unique: true // ✅ Only ONE active session per user/admin
+    required: true
+    // ✅ Removed unique constraint to allow multiple sessions per user
   },
   user_type: {
     type: String,
@@ -48,6 +48,7 @@ const sessionSchema = new mongoose.Schema({
 // ✅ Index for efficient session lookup
 sessionSchema.index({ jwt_token_signature: 1 });
 sessionSchema.index({ user_type: 1 });
+sessionSchema.index({ user_identifier: 1 }); // ✅ For finding all sessions of a user
 
 const Session = mongoose.model("Session", sessionSchema);
 

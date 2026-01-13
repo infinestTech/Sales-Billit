@@ -428,6 +428,7 @@ const shopAdminSchema = new mongoose.Schema({
   last_login: { type: Date },
   current_shop_id: { type: mongoose.Schema.Types.ObjectId, ref: 'Shop' }, // Currently selected shop
   created_by: { type: String }, // infinest admin email who created this
+  sessionLimit: { type: Number, default: 1 }, // ✅ Maximum concurrent sessions allowed
   created_at: { type: Date, default: Date.now },
   updated_at: { type: Date, default: Date.now }
 });

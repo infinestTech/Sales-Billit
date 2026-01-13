@@ -698,4 +698,67 @@ router.get('/user/:userId', adminAuth, async (req, res) => {
     }
 });
 
+// ✅ Update user session limit
+router.patch('/users/:userId/session-limit', adminAuth, async (req, res) => {
+    try {
+        const { userId } = req.params;
+        const { sessionLimit } = req.body;
+
+        if (!sessionLimit || sessionLimit < 1 || sessionLimit > 10) {
+            return res.status(400).json({ 
+                success: false, 
+                message: 'Session limit must be between 1 and 10' 
+            });
+        }
+
+        const user = await prisma.user.update({
+            where: { id: userId },
+            data: { sessionLimit: parseInt(sessionLimit) },
+            select: {
+                id: true,
+                email: true,
+                username: true,
+                sessionLimit: true
+            }
+        });
+
+        res.json({
+            success: true,
+            message: 'Session limit updated successfully',
+            user
+        });
+    } catch (error) {
+        console.error('Update session limit error:', error);
+        res.status(500).json({ 
+            success: false, 
+            message: "Failed to update session limit", 
+            error: error.message 
+        });
+    }
+});
+
+// ✅ Get user session limit (for auth server)
+router.get('/get-user-session-limit/:userId', async (req, res) => {
+    try {
+        const { userId } = req.params;
+
+        const user = await prisma.user.findUnique({
+            where: { id: userId },
+            select: { sessionLimit: true }
+        });
+
+        if (!user) {
+            return res.status(404).json({ success: false, message: 'User not found' });
+        }
+
+        res.json({
+            success: true,
+            sessionLimit: user.sessionLimit || 1
+        });
+    } catch (err) {
+        console.error('❌ Error fetching session limit:', err);
+        res.status(500).json({ success: false, message: 'Failed to fetch session limit' });
+    }
+});
+
 module.exports = router;
