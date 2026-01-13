@@ -18,6 +18,7 @@ model User {
   createdAt DateTime @default(now())
   address   String?  // ✅ New: User address
   imageUrl  String?  // ✅ New: User profile image URL
+  sessionLimit Int   @default(1) // ✅ Maximum concurrent sessions allowed
 
   productAccess  ProductAccess[]
   subscription   Subscription?     @relation(fields: [subscriptionId], references: [id])

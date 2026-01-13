@@ -310,6 +310,36 @@ function OverviewTab({ stats, overallAnalytics }) {
 
 // Users Tab Component
 function UsersTab({ users, searchQuery, setSearchQuery, onViewDetails, onDeleteUser, deleteConfirm }) {
+  const [editingSessionLimit, setEditingSessionLimit] = useState(null);
+  const [sessionLimitValue, setSessionLimitValue] = useState('');
+  const API_URL = process.env.NEXT_PUBLIC_API_URL_AUTH || 'http://localhost:7000';
+
+  const handleUpdateSessionLimit = async (userId) => {
+    try {
+      const limit = parseInt(sessionLimitValue);
+      if (isNaN(limit) || limit < 1 || limit > 10) {
+        alert('Session limit must be between 1 and 10');
+        return;
+      }
+
+      const token = localStorage.getItem('adminToken');
+      await fetch(`${API_URL}/admin/users/${userId}/session-limit`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({ sessionLimit: limit })
+      });
+
+      setEditingSessionLimit(null);
+      window.location.reload(); // Refresh to show updated data
+    } catch (error) {
+      console.error('Failed to update session limit:', error);
+      alert('Failed to update session limit');
+    }
+  };
+
   return (
     <div className="space-y-6">
       {/* Search Bar */}
@@ -332,6 +362,7 @@ function UsersTab({ users, searchQuery, setSearchQuery, onViewDetails, onDeleteU
                 <th className="px-6 py-4 text-left text-xs font-medium text-gray-300 uppercase">User</th>
                 <th className="px-6 py-4 text-left text-xs font-medium text-gray-300 uppercase">Contact</th>
                 <th className="px-6 py-4 text-left text-xs font-medium text-gray-300 uppercase">Subscription</th>
+                <th className="px-6 py-4 text-left text-xs font-medium text-gray-300 uppercase">Session Limit</th>
                 <th className="px-6 py-4 text-left text-xs font-medium text-gray-300 uppercase">Created</th>
                 <th className="px-6 py-4 text-left text-xs font-medium text-gray-300 uppercase">Actions</th>
               </tr>
@@ -365,6 +396,42 @@ function UsersTab({ users, searchQuery, setSearchQuery, onViewDetails, onDeleteU
                       </div>
                     ) : (
                       <span className="text-gray-500 text-sm">No subscription</span>
+                    )}
+                  </td>
+                  <td className="px-6 py-4">
+                    {editingSessionLimit === user.id ? (
+                      <div className="flex items-center space-x-2">
+                        <input
+                          type="number"
+                          min="1"
+                          max="10"
+                          value={sessionLimitValue}
+                          onChange={(e) => setSessionLimitValue(e.target.value)}
+                          className="w-16 px-2 py-1 bg-gray-700 text-white rounded border border-gray-600 focus:outline-none focus:ring-2 focus:ring-purple-500"
+                        />
+                        <button
+                          onClick={() => handleUpdateSessionLimit(user.id)}
+                          className="px-2 py-1 bg-green-500 hover:bg-green-600 text-white text-xs rounded"
+                        >
+                          ✓
+                        </button>
+                        <button
+                          onClick={() => setEditingSessionLimit(null)}
+                          className="px-2 py-1 bg-gray-600 hover:bg-gray-700 text-white text-xs rounded"
+                        >
+                          ✕
+                        </button>
+                      </div>
+                    ) : (
+                      <button
+                        onClick={() => {
+                          setEditingSessionLimit(user.id);
+                          setSessionLimitValue(user.sessionLimit || 1);
+                        }}
+                        className="px-3 py-1 bg-purple-500/20 text-purple-400 hover:bg-purple-500/30 rounded text-sm font-medium"
+                      >
+                        {user.sessionLimit || 1} session{(user.sessionLimit || 1) > 1 ? 's' : ''}
+                      </button>
                     )}
                   </td>
                   <td className="px-6 py-4">
@@ -815,6 +882,8 @@ function ShopAdminsTab({ getAuthHeaders, adminEmail }) {
   const [shops, setShops] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showCreateModal, setShowCreateModal] = useState(false);
+  const [editingSessionLimit, setEditingSessionLimit] = useState(null);
+  const [sessionLimitValue, setSessionLimitValue] = useState('');
   const [formData, setFormData] = useState({
     shop_admin_username: '',
     shop_admin_password: '',
@@ -956,6 +1025,34 @@ function ShopAdminsTab({ getAuthHeaders, adminEmail }) {
     }
   };
 
+  const handleUpdateSessionLimit = async (adminId) => {
+    try {
+      const limit = parseInt(sessionLimitValue);
+      if (isNaN(limit) || limit < 1 || limit > 10) {
+        setError('Session limit must be between 1 and 10');
+        return;
+      }
+
+      const headers = {
+        headers: {
+          'x-internal-key': process.env.NEXT_PUBLIC_INTERNAL_API_KEY || 'your-internal-key'
+        }
+      };
+
+      await axios.patch(
+        `${API_URL_BILLIT}/api/shop-admin/${adminId}/session-limit`,
+        { sessionLimit: limit },
+        headers
+      );
+
+      setSuccess('Session limit updated successfully!');
+      setEditingSessionLimit(null);
+      fetchData();
+    } catch (err) {
+      setError('Failed to update session limit');
+    }
+  };
+
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
@@ -1002,6 +1099,7 @@ function ShopAdminsTab({ getAuthHeaders, adminEmail }) {
                 <th className="px-6 py-4 text-left text-sm font-semibold text-gray-300">Full Name</th>
                 <th className="px-6 py-4 text-left text-sm font-semibold text-gray-300">Shop</th>
                 <th className="px-6 py-4 text-left text-sm font-semibold text-gray-300">Contact</th>
+                <th className="px-6 py-4 text-left text-sm font-semibold text-gray-300">Session Limit</th>
                 <th className="px-6 py-4 text-left text-sm font-semibold text-gray-300">Status</th>
                 <th className="px-6 py-4 text-left text-sm font-semibold text-gray-300">Last Login</th>
                 <th className="px-6 py-4 text-left text-sm font-semibold text-gray-300">Actions</th>
@@ -1010,7 +1108,7 @@ function ShopAdminsTab({ getAuthHeaders, adminEmail }) {
             <tbody className="divide-y divide-gray-700">
               {shopAdmins.length === 0 ? (
                 <tr>
-                  <td colSpan="7" className="px-6 py-8 text-center text-gray-400">
+                  <td colSpan="8" className="px-6 py-8 text-center text-gray-400">
                     No shop admins found. Create your first shop admin account.
                   </td>
                 </tr>
@@ -1048,6 +1146,42 @@ function ShopAdminsTab({ getAuthHeaders, adminEmail }) {
                         <p className="text-gray-300">{admin.email || 'N/A'}</p>
                         <p className="text-gray-400">{admin.phone || 'N/A'}</p>
                       </div>
+                    </td>
+                    <td className="px-6 py-4">
+                      {editingSessionLimit === admin._id ? (
+                        <div className="flex items-center space-x-2">
+                          <input
+                            type="number"
+                            min="1"
+                            max="10"
+                            value={sessionLimitValue}
+                            onChange={(e) => setSessionLimitValue(e.target.value)}
+                            className="w-16 px-2 py-1 bg-gray-700 text-white rounded border border-gray-600 focus:outline-none focus:ring-2 focus:ring-purple-500"
+                          />
+                          <button
+                            onClick={() => handleUpdateSessionLimit(admin._id)}
+                            className="px-2 py-1 bg-green-500 hover:bg-green-600 text-white text-xs rounded"
+                          >
+                            ✓
+                          </button>
+                          <button
+                            onClick={() => setEditingSessionLimit(null)}
+                            className="px-2 py-1 bg-gray-600 hover:bg-gray-700 text-white text-xs rounded"
+                          >
+                            ✕
+                          </button>
+                        </div>
+                      ) : (
+                        <button
+                          onClick={() => {
+                            setEditingSessionLimit(admin._id);
+                            setSessionLimitValue(admin.sessionLimit || 1);
+                          }}
+                          className="px-3 py-1 bg-purple-500/20 text-purple-400 hover:bg-purple-500/30 rounded text-sm font-medium"
+                        >
+                          {admin.sessionLimit || 1} session{(admin.sessionLimit || 1) > 1 ? 's' : ''}
+                        </button>
+                      )}
                     </td>
                     <td className="px-6 py-4">
                       <span className={`px-3 py-1 rounded-full text-xs font-semibold ${

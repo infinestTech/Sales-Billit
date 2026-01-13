@@ -147,11 +147,12 @@ router.post('/login', async (req, res) => {
             { expiresIn: '7d' }
         );
 
-        // ✅ Create session (invalidates any existing session for this shop admin)
+        // ✅ Create session (enforces session limit from shopAdmin.sessionLimit)
         const sessionMetadata = {
             ip: req.ip || req.connection.remoteAddress,
             userAgent: req.headers['user-agent'],
-            userType: 'shop_admin'
+            userType: 'shop_admin',
+            sessionLimit: shopAdmin.sessionLimit || 1 // Use shop admin's session limit
         };
         
         await SessionManager.createSession(shopAdmin._id.toString(), token, sessionMetadata);
@@ -1896,6 +1897,47 @@ router.post('/logout', async (req, res) => {
         return res.json({
             success: true,
             message: 'Logged out'
+        });
+    }
+});
+
+// ✅ Update shop admin session limit (from infinest admin portal)
+router.patch('/:adminId/session-limit', internalAuth, async (req, res) => {
+    try {
+        const { adminId } = req.params;
+        const { sessionLimit } = req.body;
+
+        if (!sessionLimit || sessionLimit < 1 || sessionLimit > 10) {
+            return res.status(400).json({ 
+                success: false, 
+                message: 'Session limit must be between 1 and 10' 
+            });
+        }
+
+        const shopAdmin = await ShopAdmin.findByIdAndUpdate(
+            adminId,
+            { sessionLimit: parseInt(sessionLimit), updated_at: new Date() },
+            { new: true }
+        ).select('_id username email sessionLimit');
+
+        if (!shopAdmin) {
+            return res.status(404).json({ 
+                success: false, 
+                message: 'Shop admin not found' 
+            });
+        }
+
+        res.json({
+            success: true,
+            message: 'Session limit updated successfully',
+            shopAdmin
+        });
+    } catch (error) {
+        console.error('Update shop admin session limit error:', error);
+        res.status(500).json({ 
+            success: false, 
+            message: "Failed to update session limit", 
+            error: error.message 
         });
     }
 });

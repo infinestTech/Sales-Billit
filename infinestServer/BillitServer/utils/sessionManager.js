@@ -2,15 +2,15 @@ const crypto = require('crypto');
 const { Session } = require('../models/sessionModels');
 
 /**
- * 🔐 Session Manager for enforcing single-session per user
+ * 🔐 Session Manager for enforcing configurable session limits per user
  */
 class SessionManager {
   
   /**
-   * Create a new session for a user (invalidates any existing sessions)
+   * Create a new session for a user (enforces session limit)
    * @param {String} userIdentifier - User ID (MySQL user ID or Shop Admin MongoDB ID)
    * @param {String} jwtToken - JWT token to associate with session
-   * @param {Object} metadata - Optional metadata (ip, userAgent, userType)
+   * @param {Object} metadata - Optional metadata (ip, userAgent, userType, sessionLimit)
    * @returns {Object} Session data
    */
   static async createSession(userIdentifier, jwtToken, metadata = {}) {
@@ -26,9 +26,25 @@ class SessionManager {
       const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
       
       const userType = metadata.userType || 'regular_user';
+      const sessionLimit = metadata.sessionLimit || 1; // Default to 1 if not specified
       
-      // ✅ Delete any existing session for this user (enforce single session)
-      await Session.deleteMany({ user_identifier: userIdentifier });
+      // ✅ Get existing active sessions for this user
+      const existingSessions = await Session.find({ 
+        user_identifier: userIdentifier,
+        expires_at: { $gt: new Date() }
+      }).sort({ created_at: 1 }); // Sort by oldest first
+      
+      // ✅ If session limit would be exceeded, delete oldest sessions
+      if (existingSessions.length >= sessionLimit) {
+        const sessionsToDelete = existingSessions.length - sessionLimit + 1;
+        const oldestSessions = existingSessions.slice(0, sessionsToDelete);
+        
+        await Session.deleteMany({ 
+          _id: { $in: oldestSessions.map(s => s._id) }
+        });
+        
+        console.log(`🔄 Removed ${sessionsToDelete} old session(s) for ${userType} ${userIdentifier} (limit: ${sessionLimit})`);
+      }
       
       // Create new session
       const session = await Session.create({
@@ -42,7 +58,7 @@ class SessionManager {
         last_activity: new Date()
       });
       
-      console.log(`✅ Session created for ${userType} ${userIdentifier}: ${sessionToken}`);
+      console.log(`✅ Session created for ${userType} ${userIdentifier}: ${sessionToken} (limit: ${sessionLimit})`);
       
       return {
         sessionToken,
@@ -66,7 +82,7 @@ class SessionManager {
       const tokenParts = jwtToken.split('.');
       const jwtSignature = tokenParts[tokenParts.length - 1];
       
-      // Find active session for this user
+      // Find active session for this user with this specific token
       const session = await Session.findOne({ 
         user_identifier: userIdentifier,
         jwt_token_signature: jwtSignature
@@ -110,6 +126,42 @@ class SessionManager {
     } catch (error) {
       console.error('❌ Error invalidating session:', error);
       throw error;
+    }
+  }
+  
+  /**
+   * Get active sessions count for a user
+   * @param {String} userIdentifier - User ID
+   * @returns {Number} Number of active sessions
+   */
+  static async getActiveSessionsCount(userIdentifier) {
+    try {
+      const count = await Session.countDocuments({ 
+        user_identifier: userIdentifier,
+        expires_at: { $gt: new Date() }
+      });
+      return count;
+    } catch (error) {
+      console.error('❌ Error getting active sessions count:', error);
+      return 0;
+    }
+  }
+  
+  /**
+   * Get all active sessions for a user
+   * @param {String} userIdentifier - User ID
+   * @returns {Array} Array of session objects
+   */
+  static async getActiveSessions(userIdentifier) {
+    try {
+      const sessions = await Session.find({ 
+        user_identifier: userIdentifier,
+        expires_at: { $gt: new Date() }
+      }).sort({ last_activity: -1 });
+      return sessions;
+    } catch (error) {
+      console.error('❌ Error getting active sessions:', error);
+      return [];
     }
   }
   

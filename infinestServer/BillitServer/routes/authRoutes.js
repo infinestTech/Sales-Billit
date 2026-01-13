@@ -89,10 +89,22 @@ router.post('/billit-login', async (req, res) => {
 
     const token = jwt.sign(payload, process.env.JWT_SECRET, { expiresIn: '7d' });
 
-    // 6️⃣ Create session (invalidates any existing session for this user)
+    // 6️⃣ Fetch user's session limit from MySQL
+    let sessionLimit = 1; // Default
+    try {
+      const { data: mysqlUserData } = await axios.get(`${process.env.AUTH_SERVER_URL}/get-user-session-limit/${mysqlUserId}`);
+      if (mysqlUserData.success && mysqlUserData.sessionLimit) {
+        sessionLimit = mysqlUserData.sessionLimit;
+      }
+    } catch (err) {
+      console.log('⚠️ Could not fetch session limit, using default:', err.message);
+    }
+
+    // 7️⃣ Create session (enforces session limit)
     const sessionMetadata = {
       ip: req.ip || req.connection.remoteAddress,
-      userAgent: req.headers['user-agent']
+      userAgent: req.headers['user-agent'],
+      sessionLimit
     };
     
     await SessionManager.createSession(mysqlUserId, token, sessionMetadata);
