@@ -4,12 +4,13 @@
 import { useEffect, useState } from "react"
 import api from "../../components/api"
 import { Plus, Calendar, Receipt, TrendingUp, TrendingDown, DollarSign, Clock, Hash, Smartphone, Package, Coins } from "lucide-react"
+import { PAYMENT_METHOD_OPTIONS, DEFAULT_PAYMENT_METHOD } from "@/constants/paymentMethods"
 
 
 const TodayExpenses = ({ shopId }) => {
   const [title, setTitle] = useState("")
   const [amount, setAmount] = useState("")
-  const [paymentMethod, setPaymentMethod] = useState("cash")
+  const [paymentMethod, setPaymentMethod] = useState(DEFAULT_PAYMENT_METHOD)
   const [expenses, setExpenses] = useState([])
   const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split("T")[0])
   const [totalExpense, setTotalExpense] = useState(0)
@@ -91,7 +92,7 @@ const TodayExpenses = ({ shopId }) => {
       )
       setTitle("")
       setAmount("")
-      setPaymentMethod("cash")
+      setPaymentMethod(DEFAULT_PAYMENT_METHOD)
       fetchExpenses()
       fetchDailyRevenue()
     } catch (err) {
@@ -180,8 +181,11 @@ const TodayExpenses = ({ shopId }) => {
                 onChange={(e) => setPaymentMethod(e.target.value)}
                 title="Choose payment method"
               >
-                <option value="cash">Cash</option>
-                <option value="upi">UPI</option>
+                {PAYMENT_METHOD_OPTIONS.map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
               </select>
             </div>
 

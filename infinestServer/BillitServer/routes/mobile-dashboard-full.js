@@ -1,6 +1,7 @@
 const express = require("express")
 const router = express.Router()
 const authenticateToken = require("../utils/authMiddleware")
+const { getISTTodayRange } = require("../utils/dateHelper")
 const { 
   Shop, 
   Customer, 
@@ -23,10 +24,8 @@ router.get("/mobile-summary-detailed", authenticateToken, async (req, res) => {
       return res.status(400).json({ error: "User ID and Shop ID are required" })
     }
 
-    // Get today's date range
-    const today = new Date()
-    const startOfDay = new Date(today.getFullYear(), today.getMonth(), today.getDate())
-    const endOfDay = new Date(today.getFullYear(), today.getMonth(), today.getDate() + 1)
+    // Get today's date range in IST
+    const { startOfDay, endOfDay } = getISTTodayRange();
 
     // Parallel queries for better performance
     const [todaySummary, products, todayProductSales, todayExpenses] = await Promise.all([

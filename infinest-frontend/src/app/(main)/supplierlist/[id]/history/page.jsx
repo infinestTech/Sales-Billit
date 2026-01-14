@@ -6,6 +6,7 @@ import { useParams, useRouter } from "next/navigation"
 import { jwtDecode } from "jwt-decode"
 import api from "@/components/api"
 import { History, ArrowLeft, Package, Calendar, CreditCard, MessageSquare, TrendingUp } from "lucide-react"
+import { PAYMENT_METHOD_OPTIONS } from "@/constants/paymentMethods"
 
 
 export default function SupplierHistoryPage() {
@@ -252,16 +253,11 @@ export default function SupplierHistoryPage() {
                     onChange={e=>setPaymentFilter(e.target.value)}
                   >
                     <option value="all">All</option>
-                    <option value="cash">Cash</option>
-                    <option value="upi">UPI</option>
-                    <option value="card">Card</option>
-                    <option value="upi-h">UPI-H</option>
-                    <option value="upi-s">UPI-S</option>
-                    <option value="cash + card">CASH + CARD</option>
-                    <option value="upi h + cash">UPI H + CASH</option>
-                    <option value="upi s + cash">UPI S + CASH</option>
-                    <option value="upi h + card">UPI H + CARD</option>
-                    <option value="upi s + card">UPI S + CARD</option>
+                    {PAYMENT_METHOD_OPTIONS.map(option => (
+                      <option key={option.value} value={option.value}>
+                        {option.label}
+                      </option>
+                    ))}
                   </select>
                 </div>
                 <div className="flex items-center gap-2">

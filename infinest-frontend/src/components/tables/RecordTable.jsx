@@ -5,9 +5,11 @@ import Pagination from "./Pagination"
 import MobileNameTable from "./MobileNameTable"
 import api from "../api"
 import { usePlanFeatures } from "@/context/PlanFeatureContext"
+import { useRouter } from "next/navigation"
 
 const RecordTable = ({ shop_id, setIsLimitReached }) => {
   const { features } = usePlanFeatures()
+  const router = useRouter()
   const [data, setData] = useState([])
   const [filteredData, setFilteredData] = useState([])
   const [expandedRow, setExpandedRow] = useState(null)
@@ -133,7 +135,7 @@ const RecordTable = ({ shop_id, setIsLimitReached }) => {
           if (m.ready) ready++
           else notReady++
           if (m.delivered) delivered++
-          else pending++
+          else if (m.ready && !m.delivered) pending++ // Only count ready but not delivered
         }
       })
     })
@@ -156,10 +158,7 @@ const RecordTable = ({ shop_id, setIsLimitReached }) => {
           <div className="flex items-center justify-between">
             <span className="text-green-600 font-medium">{totals.ready} Ready</span>
             <button
-              onClick={() => {
-                setFilteredData(isNotReadyFilter ? data : data.filter((r) => r.mobiles?.some((m) => !m.ready)))
-                setIsNotReadyFilter(!isNotReadyFilter)
-              }}
+              onClick={() => router.push('/mobilename?status=notReady')}
               className="bg-red-100 text-red-800 px-2 py-1 rounded text-sm font-medium hover:bg-red-200 transition-colors"
             >
               {totals.notReady} Not Ready
@@ -172,7 +171,12 @@ const RecordTable = ({ shop_id, setIsLimitReached }) => {
           <div className="text-sm text-gray-600 mb-2">Delivery Status</div>
           <div className="flex items-center justify-between">
             <span className="text-green-600 font-medium">{totals.delivered} Delivered</span>
-            <span className="text-red-600 font-medium">{totals.pending} Pending</span>
+            <button
+              onClick={() => router.push('/mobilename?status=pending')}
+              className="bg-orange-100 text-orange-800 px-2 py-1 rounded text-sm font-medium hover:bg-orange-200 transition-colors"
+            >
+              {totals.pending} Pending
+            </button>
           </div>
         </div>
 

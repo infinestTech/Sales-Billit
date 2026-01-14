@@ -3,6 +3,7 @@ const router = express.Router();
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const SessionManager = require('../utils/sessionManager'); // ✅ Import session manager
+const { getISTTodayRange, getISTStartOfDay, getISTEndOfDay, subtractTimeIST } = require('../utils/dateHelper');
 const {
     Shop,
     ShopAdmin,
@@ -188,9 +189,9 @@ router.post('/login', async (req, res) => {
 // ==============================
 router.get('/dashboard/overview', shopAdminAuth, async (req, res) => {
     try {
+        const { getISTTodayRange } = require('../utils/dateHelper');
         const shopId = req.shopId;
-        const today = new Date();
-        today.setHours(0, 0, 0, 0);
+        const { startOfDay: today, endOfDay } = getISTTodayRange();
 
         // Get counts
         const [
@@ -214,8 +215,6 @@ router.get('/dashboard/overview', shopAdminAuth, async (req, res) => {
         ]);
 
         // Calculate today's revenue from payments made TODAY (not mobiles created today)
-        const endOfDay = new Date(today);
-        endOfDay.setHours(23, 59, 59, 999);
         
         const allMobiles = await Mobile.find({ shop_id: shopId }).lean();
         
@@ -554,21 +553,17 @@ router.get('/analytics/revenue', shopAdminAuth, async (req, res) => {
         
         let startDate, endDate;
         if (fromDate && toDate) {
-            // Use custom date range
-            startDate = new Date(fromDate);
-            startDate.setHours(0, 0, 0, 0);
-            endDate = new Date(toDate);
-            endDate.setHours(23, 59, 59, 999);
+            // Use custom date range in IST
+            startDate = getISTStartOfDay(new Date(fromDate));
+            endDate = getISTEndOfDay(new Date(toDate));
         } else {
-            // Use period (days) - inclusive calculation
-            endDate = new Date();
-            endDate.setHours(23, 59, 59, 999);
+            // Use period (days) - inclusive calculation in IST
+            const { endOfDay } = getISTTodayRange();
+            endDate = endOfDay;
             
-            startDate = new Date();
             // Subtract (period - 1) days to make it inclusive
-            // e.g., period=1 (today) means 0 days back, period=7 means 6 days back + today
-            startDate.setDate(startDate.getDate() - (parseInt(period) - 1));
-            startDate.setHours(0, 0, 0, 0);
+            const daysBack = parseInt(period) - 1;
+            startDate = getISTStartOfDay(subtractTimeIST(daysBack, 'days'));
         }
 
         // Service revenue (from mobiles) - using payments array with actual payment dates
@@ -1099,23 +1094,18 @@ router.get('/reports/financial', shopAdminAuth, async (req, res) => {
     try {
         const { period, fromDate, toDate } = req.query;
         
-        // Calculate date range
+        // Calculate date range in IST
         let startDate, endDate;
         if (fromDate && toDate) {
-            startDate = new Date(fromDate);
-            startDate.setHours(0, 0, 0, 0);
-            endDate = new Date(toDate);
-            endDate.setHours(23, 59, 59, 999);
+            startDate = getISTStartOfDay(new Date(fromDate));
+            endDate = getISTEndOfDay(new Date(toDate));
         } else {
-            // Use period (days) - inclusive calculation
+            // Use period (days) - inclusive calculation in IST
             const days = parseInt(period) || 30;
-            endDate = new Date();
-            endDate.setHours(23, 59, 59, 999);
-            startDate = new Date();
-            // Subtract (period - 1) days to make it inclusive
-            // e.g., period=1 (today) means 0 days back, period=7 means 6 days back + today
-            startDate.setDate(startDate.getDate() - (days - 1));
-            startDate.setHours(0, 0, 0, 0);
+            const { endOfDay } = getISTTodayRange();
+            endDate = endOfDay;
+            const daysBack = days - 1;
+            startDate = getISTStartOfDay(subtractTimeIST(daysBack, 'days'));
         }
 
         // Customer Payments - Get all payments made in the period (using payments array)

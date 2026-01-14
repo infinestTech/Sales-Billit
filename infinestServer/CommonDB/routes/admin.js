@@ -5,6 +5,7 @@ const jwt = require('jsonwebtoken');
 const adminAuth = require('../middleware/adminAuth');
 const axios = require('axios');
 const { blacklistUser } = require('../utils/tokenBlacklist');
+const { subtractTimeIST } = require('../utils/dateHelper');
 
 const prisma = new PrismaClient();
 
@@ -43,8 +44,7 @@ router.get('/stats', adminAuth, async (req, res) => {
         const totalUsers = await prisma.user.count();
 
         // Active users (users who created records in last 30 days)
-        const thirtyDaysAgo = new Date();
-        thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+        const thirtyDaysAgo = subtractTimeIST(30, 'days');
 
         // Get active subscriptions
         const activeSubscriptions = await prisma.subscription.count({
@@ -68,8 +68,7 @@ router.get('/stats', adminAuth, async (req, res) => {
         });
 
         // Get recent sign-ups (last 7 days)
-        const sevenDaysAgo = new Date();
-        sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+        const sevenDaysAgo = subtractTimeIST(7, 'days');
         
         const recentSignUps = await prisma.user.count({
             where: {
