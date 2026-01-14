@@ -7,6 +7,7 @@ import Pagination from "./Pagination"
 import api from "../api"
 import { Calendar, Smartphone, AlertCircle, CheckCircle, RotateCcw, DollarSign, Truck, Package } from "lucide-react"
 import { jwtDecode } from "jwt-decode"
+import { PAYMENT_METHOD_OPTIONS } from "@/constants/paymentMethods"
 
 
 
@@ -445,7 +446,7 @@ const MobileNameTable = ({ mobileData, setMobileData, onRevenueUpdate, hideActio
       // call supplier update to record history and update totalAmount
       await api.post(
         "/api/suppliers/update",
-        { shop_id: shopId, supplierId: selectedSupplierId, totalAmount: newTotal, lastPaymentMethod: paymentMethod || "cash", message: `Added: ${productNameInput} x${sellQty} - ₹${increment}` },
+        { shop_id: shopId, supplierId: selectedSupplierId, totalAmount: newTotal, lastPaymentMethod: paymentMethod || DEFAULT_PAYMENT_METHOD, message: `Added: ${productNameInput} x${sellQty} - ₹${increment}` },
         { headers: { Authorization: `Bearer ${token}` } }
       )
       
@@ -765,12 +766,11 @@ const MobileNameTable = ({ mobileData, setMobileData, onRevenueUpdate, hideActio
                   value={newPaymentMethod}
                   onChange={(e) => setNewPaymentMethod(e.target.value)}
                 >
-                  <option value="">Select</option>
-                  <option value="cash">Cash</option>
-                  <option value="UPI">UPI</option>
-                  <option value="card">Card</option>
-                  <option value="UPI-h">UPI-H</option>
-                  <option value="UPI-s">UPI-S</option>
+                  {PAYMENT_METHOD_OPTIONS.map((option) => (
+                    <option key={option.value} value={option.value}>
+                      {option.label}
+                    </option>
+                  ))}
                 </select>
               </div>
               <button
@@ -991,17 +991,11 @@ const MobileNameTable = ({ mobileData, setMobileData, onRevenueUpdate, hideActio
                   value={paymentMethod}
                   onChange={(e) => setPaymentMethod(e.target.value)}
                 >
-                  <option value="">Select</option>
-                  <option value="cash">Cash</option>
-                  <option value="UPI">UPI</option>
-                  <option value="card">Card</option>
-                  <option value="UPI-h">UPI-H</option>
-                  <option value="UPI-s">UPI-S</option>
-                  <option value="Cash + Card">CASH + CARD</option>
-                  <option value="UPI H + CASH">UPI H + CASH</option>
-                  <option value="UPI S + CASH">UPI S + CASH</option>
-                  <option value="UPI H + CARD">UPI H + CARD</option>
-                  <option value="UPI S + CARD">UPI S + CARD</option>
+                  {PAYMENT_METHOD_OPTIONS.map((option) => (
+                    <option key={option.value} value={option.value}>
+                      {option.label}
+                    </option>
+                  ))}
                 </select>
               </div>
               <div>

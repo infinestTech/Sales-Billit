@@ -1,4 +1,5 @@
 const { Mobile } = require("../../models/mongoModels");
+const { DEFAULT_PAYMENT_METHOD } = require("../../constants/paymentMethods");
 
 const addPaymentEntry = async (req, res) => {
   const { id, amount, method, date } = req.body;
@@ -22,7 +23,7 @@ const addPaymentEntry = async (req, res) => {
     if (existingMobile.paid_amount && existingMobile.payments.length === 0) {
       existingMobile.payments.push({
         amount: Number(existingMobile.paid_amount),
-        method: existingMobile.payment || "cash",
+        method: existingMobile.payment || DEFAULT_PAYMENT_METHOD,
         date: existingMobile.update_date || new Date()
       });
     }

@@ -2,6 +2,7 @@ const express = require("express")
 const router = express.Router()
 const authenticateToken = require("../utils/authMiddleware")
 const axios = require("../utils/axiosConfig")
+const { getISTTodayRange } = require("../utils/dateHelper")
 const {
   Shop,
   Customer,
@@ -27,10 +28,8 @@ router.get("/mobile-summary", authenticateToken, async (req, res) => {
     const mongoose = require('mongoose')
     const shopObjectId = mongoose.Types.ObjectId.isValid(shopId) ? new mongoose.Types.ObjectId(shopId) : shopId
 
-    // Get today's date range
-    const today = new Date()
-    const startOfDay = new Date(today.getFullYear(), today.getMonth(), today.getDate())
-    const endOfDay = new Date(today.getFullYear(), today.getMonth(), today.getDate() + 1)
+    // Get today's date range in IST
+    const { startOfDay, endOfDay } = getISTTodayRange()
 
     try {
       // Fetch MySQL user data via auth server

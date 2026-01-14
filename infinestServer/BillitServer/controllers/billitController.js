@@ -1,4 +1,5 @@
 const { Shop, Customer, Dealer, Mobile, ProductHistory, Product, Expense, DailySummary, MobileBrand, MobileIssue } = require("../models/mongoModels");
+const { getISTTodayRange, getISTStartOfDay, getISTEndOfDay } = require("../utils/dateHelper");
 
 // ======================================
 // ✅ Create Customer Controller
@@ -234,9 +235,7 @@ const getTodayRecords = async (req, res) => {
       return res.status(404).json({ error: "Shop not found." });
     }
 
-    const today = new Date();
-    const startOfDay = new Date(today.setHours(0, 0, 0, 0));
-    const endOfDay = new Date(today.setHours(23, 59, 59, 999));
+    const { startOfDay, endOfDay } = getISTTodayRange();
 
     // 1. Fetch customers with today's mobiles
     const customers = await Customer.find({ shop_id: userId }).lean();
@@ -327,9 +326,7 @@ const getTodayRecords = async (req, res) => {
 
 const getTodaySales = async (req, res) => {
   try {
-    const today = new Date();
-    const startOfDay = new Date(today.setHours(0, 0, 0, 0));
-    const endOfDay = new Date(today.setHours(23, 59, 59, 999));
+    const { startOfDay, endOfDay } = getISTTodayRange();
 
     const salesResult = await Mobile.aggregate([
       {
@@ -960,9 +957,7 @@ const sellProduct = async (req, res) => {
 
 const getProductRevenueToday = async (req, res) => {
   try {
-    const currentDate = new Date().toISOString().split("T")[0];
-    const startOfDay = new Date(`${currentDate}T00:00:00.000Z`);
-    const endOfDay = new Date(`${currentDate}T23:59:59.999Z`);
+    const { startOfDay, endOfDay } = getISTTodayRange();
 
     const result = await ProductHistory.aggregate([
       {

@@ -12,6 +12,7 @@ const subscriptionRoutes = require('./routes/subscription');
 const adminRoutes = require('./routes/admin');
 
 const moment = require('moment-timezone');
+const { getISTTodayRange, addTimeIST } = require('./utils/dateHelper');
 const express = require('express');
 const cors = require('cors');
 const bcrypt = require('bcrypt');
@@ -1502,10 +1503,8 @@ app.post("/get-user-dashboard-data", authenticateToken, async (req, res) => {
   }
 
   try {
-    // Get today's date range
-    const today = new Date();
-    const startOfDay = new Date(today.getFullYear(), today.getMonth(), today.getDate());
-    const endOfDay = new Date(today.getFullYear(), today.getMonth(), today.getDate() + 1);
+    // Get today's date range in IST
+    const { startOfDay, endOfDay } = getISTTodayRange();
 
     // Get user basic info
     const user = await prisma.user.findUnique({

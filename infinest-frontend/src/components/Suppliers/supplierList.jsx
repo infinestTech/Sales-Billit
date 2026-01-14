@@ -5,6 +5,7 @@ import { Users, Search } from "lucide-react"
 import api from "@/components/api"
 import AddSupplierModal from "@/components/ProductTable/AddSupplierModal"
 import { useRouter } from "next/navigation"
+import { PAYMENT_METHOD_OPTIONS, DEFAULT_PAYMENT_METHOD } from "@/constants/paymentMethods"
 
 export default function SupplierList({ shopId }) {
   const [suppliers, setSuppliers] = useState([])
@@ -13,7 +14,7 @@ export default function SupplierList({ shopId }) {
   const [showAddSupplierModal, setShowAddSupplierModal] = useState(false)
   const [editId, setEditId] = useState(null)
   const [editAmount, setEditAmount] = useState("")
-  const [editPM, setEditPM] = useState("cash")
+  const [editPM, setEditPM] = useState(DEFAULT_PAYMENT_METHOD)
   const [editMsg, setEditMsg] = useState("")
   const [editCurrentAmount, setEditCurrentAmount] = useState(0)
   const [editPaidAmount, setEditPaidAmount] = useState("")
@@ -248,16 +249,11 @@ export default function SupplierList({ shopId }) {
                   value={editPM}
                   onChange={(e) => setEditPM(e.target.value)}
                 >
-                  <option value="cash">Cash</option>
-                  <option value="upi">UPI</option>
-                  <option value="card">Card</option>
-                  <option value="UPI-h">UPI-H</option>
-                  <option value="UPI-s">UPI-S</option>
-                  <option value="Cash + Card">CASH + CARD</option>
-                  <option value="UPI H + CASH">UPI H + CASH</option>
-                  <option value="UPI S + CASH">UPI S + CASH</option>
-                  <option value="UPI H + CARD">UPI H + CARD</option>
-                  <option value="UPI S + CARD">UPI S + CARD</option>
+                  {PAYMENT_METHOD_OPTIONS.map((option) => (
+                    <option key={option.value} value={option.value}>
+                      {option.label}
+                    </option>
+                  ))}
                 </select>
               </div>
               <div>

@@ -1,11 +1,13 @@
 "use client"
 
 import { useEffect, useState } from "react"
+import { useSearchParams } from "next/navigation"
 import Pagination from "@/components/tables/Pagination"
 import api from "@/components/api"
 import { Smartphone, Filter, Users, Phone, Wrench, User, Hash, AlertCircle, Edit3 } from "lucide-react"
 
 const MobileNamePage = ({ shopId }) => {
+  const searchParams = useSearchParams()
   const [mobileData, setMobileData] = useState([])
   const [selectedCustomerType, setSelectedCustomerType] = useState("")
   const [selectedStatus, setSelectedStatus] = useState("notReady")
@@ -14,6 +16,16 @@ const MobileNamePage = ({ shopId }) => {
   const [loading, setLoading] = useState(true)
   const [editingTechnician, setEditingTechnician] = useState(null)
   const [technicianName, setTechnicianName] = useState("")
+
+  // Set status from URL params on mount
+  useEffect(() => {
+    const statusParam = searchParams.get('status')
+    if (statusParam === 'pending') {
+      setSelectedStatus('readyNotDelivered')
+    } else if (statusParam === 'notReady') {
+      setSelectedStatus('notReady')
+    }
+  }, [searchParams])
 
   const fetchMobileData = async () => {
     try {
@@ -191,7 +203,7 @@ const MobileNamePage = ({ shopId }) => {
               >
                 <option value="notReady">Not Ready</option>
                 <option value="notDelivered">Not Delivered</option>
-                <option value="readyNotDelivered">Ready But Not Delivered</option>
+                <option value="readyNotDelivered">Pending</option>
                 <option value="return">Return</option>
               </select>
             </div>
@@ -259,6 +271,14 @@ const MobileNamePage = ({ shopId }) => {
                         Technician
                       </div>
                     </th>
+                    <th className="px-6 py-4 text-left text-sm font-bold text-gray-700 border-b border-gray-300">
+                      <div className="flex items-center">
+                        <svg className="h-4 w-4 mr-2 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                        </svg>
+                        Date Added
+                      </div>
+                    </th>
                   </tr>
                 </thead>
                 <tbody>
@@ -312,6 +332,15 @@ const MobileNamePage = ({ shopId }) => {
                             <Edit3 className="h-4 w-4 text-gray-400 group-hover:text-purple-600 opacity-0 group-hover:opacity-100 transition-all duration-200" />
                           </div>
                         )}
+                      </td>
+                      <td className="px-6 py-4 border-b border-gray-200">
+                        <span className="text-sm text-gray-600">
+                          {data.addedDate ? new Date(data.addedDate).toLocaleDateString('en-IN', {
+                            day: '2-digit',
+                            month: 'short',
+                            year: 'numeric'
+                          }) : 'N/A'}
+                        </span>
                       </td>
                     </tr>
                   ))}

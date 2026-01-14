@@ -1,4 +1,5 @@
 const mongoose = require("mongoose");
+const { PAYMENT_METHOD_ENUM } = require("../constants/paymentMethods");
 
 // ==============================
 // 📦 Role Schema (Tracks Roles)
@@ -132,7 +133,7 @@ const mobileSchema = new mongoose.Schema({
   productName: { type: String },
   quantity: { type: Number },
   supplier_amount: { type: Number, default: 0 }, // Amount paid to supplier (separate from customer payment)
-  paymentMethod: { type: String, enum: ["cash", "UPI", "card", "UPI-h", "UPI-s", "Cash + Card", "UPI H + CASH", "UPI S + CASH", "UPI H + CARD", "UPI S + CARD", ""], default: "" }, // Payment method for supplier transactions
+  paymentMethod: { type: String, enum: PAYMENT_METHOD_ENUM, default: "" }, // Payment method for supplier transactions
   warranty: { type: String, enum: ["warranty", "no-warranty", ""], default: "" }, // Warranty status
   created_at: { type: Date, default: Date.now }
 });
@@ -231,7 +232,7 @@ const productSchema = new mongoose.Schema({
   quantity: { type: Number, required: true },
   totalCost: { type: Number, required: true }, // should be calculated on save
   supplierId: { type: mongoose.Schema.Types.ObjectId, ref: "Supplier" },
-  paymentMethod: { type: String, enum: ["cash", "upi"], default: "cash" },
+  paymentMethod: { type: String, enum: PAYMENT_METHOD_ENUM, default: "Cash" },
   addedDate: { type: Date, default: Date.now },
   updatedAt: { type: Date, default: Date.now }
 });
@@ -251,7 +252,7 @@ const supplierSchema = new mongoose.Schema({
   phoneNumber: { type: String, trim: true },
   address: { type: String, trim: true },
   totalAmount: { type: Number, default: 0 },
-  lastPaymentMethod: { type: String, enum: ["cash", "UPI", "card", "UPI-h", "UPI-s", "Cash + Card", "UPI H + CASH", "UPI S + CASH", "UPI H + CARD", "UPI S + CARD", ""], default: "" },
+  lastPaymentMethod: { type: String, enum: PAYMENT_METHOD_ENUM, default: "" },
   createdAt: { type: Date, default: Date.now }
 });
 
@@ -269,7 +270,7 @@ const supplierHistorySchema = new mongoose.Schema({
   paidAmount: { type: Number },
   // previous total before this change
   previousAmount: { type: Number },
-  paymentMethod: { type: String, enum: ["cash", "UPI", "card", "UPI-h", "UPI-s", "Cash + Card", "UPI H + CASH", "UPI S + CASH", "UPI H + CARD", "UPI S + CARD", "", null], default: "" }
+  paymentMethod: { type: String, enum: PAYMENT_METHOD_ENUM, default: "" }
 });
 
 
@@ -287,7 +288,7 @@ const expenseSchema = new mongoose.Schema({
   userId: { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true },
   title: { type: String, required: true },
   amount: { type: Number, required: true },
-  paymentMethod: { type: String, enum: ["upi", "cash"], default: "cash" },
+  paymentMethod: { type: String, enum: PAYMENT_METHOD_ENUM, default: "Cash" },
   createdAt: { type: Date, default: Date.now }
 });
 

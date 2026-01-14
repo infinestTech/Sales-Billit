@@ -5,6 +5,7 @@ import { useEffect, useState } from "react"
 import api from "../../components/api"
 import { X, Package, Tag, DollarSign, Hash } from "lucide-react"
 import { logAndNotify, logError, logSystem } from "@/utils/logger"
+import { PAYMENT_METHOD_OPTIONS, DEFAULT_PAYMENT_METHOD } from "@/constants/paymentMethods"
 
 
 
@@ -17,7 +18,7 @@ const AddProductModal = ({ shop_id, onClose, onSuccess }) => {
     sellingPrice: "",
     quantity: "",
     supplierId: "",
-    paymentMethod: "cash",
+    paymentMethod: DEFAULT_PAYMENT_METHOD,
   })
   const [loading, setLoading] = useState(false)
   const [suppliers, setSuppliers] = useState([])
@@ -233,8 +234,11 @@ const AddProductModal = ({ shop_id, onClose, onSuccess }) => {
                 onChange={handleChange}
                 className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all duration-200 bg-gray-50 hover:bg-white"
               >
-                <option value="cash">Cash</option>
-                <option value="upi">UPI</option>
+                {PAYMENT_METHOD_OPTIONS.map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
               </select>
             </div>
           </div>

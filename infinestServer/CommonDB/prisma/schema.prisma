@@ -16,8 +16,8 @@ model User {
   googleId  String?  @unique
   name      String?
   createdAt DateTime @default(now())
-  address   String?  // ✅ New: User address
-  imageUrl  String?  // ✅ New: User profile image URL
+  address   String?  @db.Text  // ✅ New: User address
+  imageUrl  String?  @db.LongText  // ✅ New: User profile image URL (supports base64 images)
   sessionLimit Int   @default(1) // ✅ Maximum concurrent sessions allowed
 
   productAccess  ProductAccess[]

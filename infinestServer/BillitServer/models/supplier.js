@@ -1,4 +1,5 @@
 const mongoose = require("mongoose");
+const { PAYMENT_METHOD_ENUM } = require("../constants/paymentMethods");
 
 
 // Minimal Supplier schema for BillitServer
@@ -11,7 +12,7 @@ const supplierSchema = new mongoose.Schema({
   phoneNumber: { type: String, trim: true },
   address: { type: String, trim: true },
   totalAmount: { type: Number, default: 0 },
-  lastPaymentMethod: { type: String, enum: ["cash", "UPI", "card", "UPI-h", "UPI-s", "Cash + Card", "UPI H + CASH", "UPI S + CASH", "UPI H + CARD", "UPI S + CARD", ""], default: "" },
+  lastPaymentMethod: { type: String, enum: PAYMENT_METHOD_ENUM, default: "" },
   createdAt: { type: Date, default: Date.now }
 });
 
