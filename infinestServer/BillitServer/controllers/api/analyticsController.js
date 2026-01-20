@@ -23,13 +23,16 @@ exports.getAnalyticsData = async (req, res) => {
     const startDate = new Date(now.getTime() - daysAgo * 24 * 60 * 60 * 1000);
 
     // Fetch all relevant data in parallel
-    const [mobiles, expenses, products, customers, dealers, technicians] = await Promise.all([
+    const { SalaryRecord } = require("../../models/mongoModels");
+    
+    const [mobiles, expenses, products, customers, dealers, technicians, salaryRecords] = await Promise.all([
       Mobile.find({ shop_id }).lean(),
-      Expense.find({ userId: shop_id }).lean(),
+      Expense.find({ shop_id }).lean(),
       Product.find({ userId: shop_id }).lean(),
       Customer.find({ shop_id }).lean(),
       Dealer.find({ shop_id }).lean(),
       Technician.find({ shop_id }).lean(),
+      SalaryRecord.find({ shop_id, payment_status: 'paid', payment_date: { $exists: true, $ne: null } }).lean(),
     ]);
 
     // Filter data for the time range
@@ -40,6 +43,10 @@ exports.getAnalyticsData = async (req, res) => {
     const expensesInRange = expenses.filter(expense => 
       new Date(expense.createdAt) >= startDate
     );
+    
+    const salaryRecordsInRange = salaryRecords.filter(salary =>
+      salary.payment_date && new Date(salary.payment_date) >= startDate && new Date(salary.payment_date) <= now
+    );
 
     const customersInRange = customers.filter(customer => 
       new Date(customer.created_at) >= startDate
@@ -49,38 +56,87 @@ exports.getAnalyticsData = async (req, res) => {
     const revenueByDate = {};
     const mobilesByDate = {};
     const expensesByDate = {};
+    const supplierPaymentsByDate = {};
+    const operatingExpensesByDate = {};
+    const dailyWageExpensesByDate = {};
     
     // Create date array for consistent data
     for (let d = new Date(startDate); d <= now; d.setDate(d.getDate() + 1)) {
       const dateKey = d.toISOString().split('T')[0];
-      revenueByDate[dateKey] = { date: dateKey, revenue: 0, count: 0, expenses: 0, profit: 0, avgValue: 0 };
+      revenueByDate[dateKey] = { date: dateKey, revenue: 0, count: 0, expenses: 0, profit: 0, avgValue: 0, supplierPayments: 0, operatingExpenses: 0, dailyWageExpenses: 0 };
       mobilesByDate[dateKey] = { date: dateKey, count: 0 };
       expensesByDate[dateKey] = { date: dateKey, expenses: 0 };
+      supplierPaymentsByDate[dateKey] = 0;
+      operatingExpensesByDate[dateKey] = 0;
+      dailyWageExpensesByDate[dateKey] = 0;
     }
 
-    // Process mobile repairs
+    // Process mobile repairs - revenue from payments array or paid_amount
     mobilesInRange.forEach(mobile => {
-      const dateKey = new Date(mobile.added_date).toISOString().split('T')[0];
-      if (revenueByDate[dateKey]) {
-        revenueByDate[dateKey].revenue += mobile.paid_amount || 0;
-        revenueByDate[dateKey].count += 1;
+      // Revenue from payments array
+      if (mobile.payments && mobile.payments.length > 0) {
+        mobile.payments.forEach(payment => {
+          const paymentDate = new Date(payment.date);
+          if (paymentDate >= startDate && paymentDate <= now) {
+            const dateKey = paymentDate.toISOString().split('T')[0];
+            if (revenueByDate[dateKey]) {
+              revenueByDate[dateKey].revenue += payment.amount || 0;
+              revenueByDate[dateKey].count += 1;
+            }
+          }
+        });
+      } else if (mobile.paid_amount > 0) {
+        // Fallback to created_at date for legacy data
+        const dateKey = new Date(mobile.added_date).toISOString().split('T')[0];
+        if (revenueByDate[dateKey]) {
+          revenueByDate[dateKey].revenue += mobile.paid_amount || 0;
+          revenueByDate[dateKey].count += 1;
+        }
+      }
+      
+      // Supplier payments (costs)
+      if (mobile.supplier_amount > 0) {
+        const dateKey = new Date(mobile.added_date).toISOString().split('T')[0];
+        if (supplierPaymentsByDate[dateKey] !== undefined) {
+          supplierPaymentsByDate[dateKey] += mobile.supplier_amount;
+          if (revenueByDate[dateKey]) {
+            revenueByDate[dateKey].supplierPayments += mobile.supplier_amount;
+          }
+        }
       }
     });
 
-    // Process expenses
+    // Process operating expenses (from Expense collection)
     expensesInRange.forEach(expense => {
       const dateKey = new Date(expense.createdAt).toISOString().split('T')[0];
+      if (operatingExpensesByDate[dateKey] !== undefined) {
+        operatingExpensesByDate[dateKey] += expense.amount || 0;
+        if (revenueByDate[dateKey]) {
+          revenueByDate[dateKey].operatingExpenses += expense.amount || 0;
+        }
+      }
       if (expensesByDate[dateKey]) {
         expensesByDate[dateKey].expenses += expense.amount || 0;
       }
-      if (revenueByDate[dateKey]) {
-        revenueByDate[dateKey].expenses += expense.amount || 0;
+    });
+    
+    // Process daily wage expenses (from paid salary records)
+    salaryRecordsInRange.forEach(salary => {
+      if (salary.payment_date) {
+        const dateKey = new Date(salary.payment_date).toISOString().split('T')[0];
+        if (dailyWageExpensesByDate[dateKey] !== undefined) {
+          dailyWageExpensesByDate[dateKey] += salary.paid_amount || 0;
+          if (revenueByDate[dateKey]) {
+            revenueByDate[dateKey].dailyWageExpenses += salary.paid_amount || 0;
+          }
+        }
       }
     });
 
-    // Calculate profit and average values
+    // Calculate total expenses and profit for each date
     Object.keys(revenueByDate).forEach(dateKey => {
       const data = revenueByDate[dateKey];
+      data.expenses = data.supplierPayments + data.operatingExpenses + data.dailyWageExpenses;
       data.profit = data.revenue - data.expenses;
       data.avgValue = data.count > 0 ? data.revenue / data.count : 0;
     });
@@ -91,6 +147,14 @@ exports.getAnalyticsData = async (req, res) => {
       if (mobilesByDate[dateKey]) {
         mobilesByDate[dateKey].count += 1;
       }
+    });
+    
+    // Update expense data to include all three types
+    Object.keys(expensesByDate).forEach(dateKey => {
+      expensesByDate[dateKey].expenses = 
+        (supplierPaymentsByDate[dateKey] || 0) + 
+        (operatingExpensesByDate[dateKey] || 0) + 
+        (dailyWageExpensesByDate[dateKey] || 0);
     });
 
     // 2. Repair Status Distribution
@@ -124,16 +188,49 @@ exports.getAnalyticsData = async (req, res) => {
       customerGrowthByDate[dateKey].totalCustomers = cumulativeTotal;
     });
 
-    // 5. Expense Analysis
+    // 9. Financial Summary - Calculate totals properly (moved before expense analysis)
+    // Revenue: from payments array or paid_amount
+    let totalRevenue = 0;
+    mobilesInRange.forEach(mobile => {
+      if (mobile.payments && mobile.payments.length > 0) {
+        mobile.payments.forEach(payment => {
+          const paymentDate = new Date(payment.date);
+          if (paymentDate >= startDate && paymentDate <= now) {
+            totalRevenue += payment.amount || 0;
+          }
+        });
+      } else {
+        totalRevenue += mobile.paid_amount || 0;
+      }
+    });
+    
+    // Expenses: supplier payments + operating expenses + daily wage expenses
+    const totalSupplierPayments = mobilesInRange.reduce((sum, m) => sum + (m.supplier_amount || 0), 0);
+    const totalOperatingExpenses = expensesInRange.reduce((sum, e) => sum + (e.amount || 0), 0);
+    const totalDailyWageExpenses = salaryRecordsInRange.reduce((sum, s) => sum + (s.paid_amount || 0), 0);
+    const totalExpenses = totalSupplierPayments + totalOperatingExpenses + totalDailyWageExpenses;
+    
+    const netProfit = totalRevenue - totalExpenses;
+    const avgJobValue = mobilesInRange.length > 0 ? totalRevenue / mobilesInRange.length : 0;
+    const profitMargin = totalRevenue > 0 ? ((netProfit / totalRevenue) * 100) : 0;
+
+    // 5. Expense Analysis - Categorize all three types of expenses
     const expensesByCategory = {};
+    
+    // Add supplier payments as a category
+    if (totalSupplierPayments > 0) {
+      expensesByCategory['Supplier Payments'] = totalSupplierPayments;
+    }
+    
+    // Add daily wage expenses as a category
+    if (totalDailyWageExpenses > 0) {
+      expensesByCategory['Employee Salaries'] = totalDailyWageExpenses;
+    }
 
+    // Group operating expenses by category/title
     expensesInRange.forEach(expense => {
-      const dateKey = new Date(expense.createdAt).toISOString().split('T')[0];
-      // Date-based expenses are already handled in revenue analysis above
-
-      // Group by category/title
-      const category = expense.title || 'Other';
-      expensesByCategory[category] = (expensesByCategory[category] || 0) + expense.amount;
+      const category = expense.title || 'Other Operating Expenses';
+      expensesByCategory[category] = (expensesByCategory[category] || 0) + (expense.amount || 0);
     });
 
     // 6. Device Brand Analysis and Common Issues - REMOVED per user request
@@ -156,12 +253,6 @@ exports.getAnalyticsData = async (req, res) => {
           value: p.totalCost,
         })),
     };
-
-    // 9. Financial Summary
-    const totalRevenue = mobilesInRange.reduce((sum, m) => sum + (m.paid_amount || 0), 0);
-    const totalExpenses = expensesInRange.reduce((sum, e) => sum + e.amount, 0);
-    const netProfit = totalRevenue - totalExpenses;
-    const avgJobValue = mobilesInRange.length > 0 ? totalRevenue / mobilesInRange.length : 0;
 
     // 10. Repair Time Analysis
     const repairTimeDistribution = {
@@ -197,8 +288,11 @@ exports.getAnalyticsData = async (req, res) => {
       summary: {
         totalRevenue,
         totalExpenses,
+        totalSupplierPayments,
+        totalOperatingExpenses,
+        totalDailyWageExpenses,
         netProfit,
-        profitMargin: totalRevenue > 0 ? ((netProfit / totalRevenue) * 100).toFixed(2) : 0,
+        profitMargin: profitMargin.toFixed(2),
         totalMobiles: mobilesInRange.length,
         totalCustomers: customers.length,
         newCustomers: customersInRange.length,

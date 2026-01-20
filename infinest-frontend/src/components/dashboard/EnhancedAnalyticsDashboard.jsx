@@ -458,35 +458,35 @@ export default function EnhancedAnalyticsDashboard({ shopId }) {
             icon: DollarSign,
             gradient: "from-green-400 to-emerald-600",
             bg: "bg-green-50",
-            change: "+12.5%",
-            changeColor: "text-green-600"
+            subtitle: "Customer & Dealer Payments",
+            subtitleColor: "text-green-600"
+          },
+          {
+            title: "Total Expenses",
+            value: `₹${(summary.totalExpenses || 0).toLocaleString()}`,
+            icon: AlertTriangle,
+            gradient: "from-red-400 to-red-600",
+            bg: "bg-red-50",
+            subtitle: "Suppliers, Salaries & Operating",
+            subtitleColor: "text-red-600"
+          },
+          {
+            title: "Net Profit",
+            value: `₹${(summary.netProfit || 0).toLocaleString()}`,
+            icon: Target,
+            gradient: summary.netProfit >= 0 ? "from-blue-400 to-blue-600" : "from-gray-400 to-gray-600",
+            bg: summary.netProfit >= 0 ? "bg-blue-50" : "bg-gray-50",
+            subtitle: `${summary.profitMargin || 0}% Margin`,
+            subtitleColor: summary.netProfit >= 0 ? "text-blue-600" : "text-gray-600"
           },
           {
             title: "Devices Serviced",
             value: summary.totalMobiles || 0,
             icon: Smartphone,
-            gradient: "from-blue-400 to-blue-600",
-            bg: "bg-blue-50",
-            change: "+8.2%",
-            changeColor: "text-blue-600"
-          },
-          {
-            title: "Active Customers",
-            value: summary.totalCustomers || 0,
-            icon: Users,
             gradient: "from-purple-400 to-purple-600",
             bg: "bg-purple-50",
-            change: "+15.3%",
-            changeColor: "text-purple-600"
-          },
-          {
-            title: "Avg Repair Time",
-            value: `${summary.avgRepairTime || 0} days`,
-            icon: Clock,
-            gradient: "from-orange-400 to-red-500",
-            bg: "bg-orange-50",
-            change: "-2.1 days",
-            changeColor: "text-green-600"
+            subtitle: `${summary.totalCustomers || 0} Active Customers`,
+            subtitleColor: "text-purple-600"
           }
         ].map((kpi, index) => (
           <div key={index} className={`${kpi.bg} rounded-2xl shadow-lg p-6 border border-gray-100 hover:shadow-xl transition-all duration-300 group`}>
@@ -500,8 +500,7 @@ export default function EnhancedAnalyticsDashboard({ shopId }) {
               </div>
             </div>
             <div className="mt-4 flex items-center">
-              <TrendingUp className="h-4 w-4 text-green-500 mr-2" />
-              <span className={`text-sm font-semibold ${kpi.changeColor}`}>{kpi.change} from last period</span>
+              <span className={`text-sm font-semibold ${kpi.subtitleColor}`}>{kpi.subtitle}</span>
             </div>
           </div>
         ))}
@@ -514,7 +513,7 @@ export default function EnhancedAnalyticsDashboard({ shopId }) {
             <div className="bg-gradient-to-r from-green-400 to-blue-500 p-2 rounded-lg mr-3">
               <TrendingUp className="h-5 w-5 text-white" />
             </div>
-            Revenue & Profit Analysis
+            Revenue, Expense & Profit Analysis
           </h3>
           <ResponsiveContainer width="100%" height={400}>
             <ComposedChart data={revenueData}>
@@ -531,139 +530,84 @@ export default function EnhancedAnalyticsDashboard({ shopId }) {
                   backgroundColor: '#fff', 
                   border: '1px solid #e5e7eb',
                   borderRadius: '12px',
-                  boxShadow: '0 10px 25px rgba(0,0,0,0.1)'
+                  boxShadow: '0 10px 25px rgba(0,0,0,0.1)',
+                  padding: '12px'
                 }}
+                formatter={(value) => `₹${value?.toLocaleString()}`}
               />
               <Legend />
               <defs>
                 <linearGradient id="revenueGradient" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="5%" stopColor="#3B82F6" stopOpacity={0.8}/>
-                  <stop offset="95%" stopColor="#3B82F6" stopOpacity={0.2}/>
+                  <stop offset="5%" stopColor="#10B981" stopOpacity={0.8}/>
+                  <stop offset="95%" stopColor="#10B981" stopOpacity={0.2}/>
                 </linearGradient>
               </defs>
               <Area
                 type="monotone"
                 dataKey="revenue"
                 fill="url(#revenueGradient)"
-                stroke="#3B82F6"
+                stroke="#10B981"
                 strokeWidth={3}
                 name="Revenue"
               />
-              <Bar dataKey="profit" fill="#10B981" name="Profit" radius={[4, 4, 0, 0]} />
-              <Line type="monotone" dataKey="avgValue" stroke="#F59E0B" strokeWidth={2} name="Avg Value" />
+              <Bar dataKey="expenses" fill="#EF4444" name="Expenses" radius={[4, 4, 0, 0]} />
+              <Bar dataKey="profit" fill="#3B82F6" name="Net Profit" radius={[4, 4, 0, 0]} />
             </ComposedChart>
           </ResponsiveContainer>
         </div>
       </div>
 
-      {/* Repair Status and Time - Second Row */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-8">
-        {/* Repair Status Pie Chart */}
-        <div className="bg-white rounded-2xl shadow-lg p-6 border border-gray-100 hover:shadow-xl transition-shadow">
-          <h3 className="text-xl font-bold text-gray-900 mb-4 flex items-center">
-            <div className="bg-gradient-to-r from-green-400 to-emerald-500 p-2 rounded-lg mr-3">
-              <CheckCircle className="h-5 w-5 text-white" />
-            </div>
-            Repair Status
-          </h3>
-          <ResponsiveContainer width="100%" height={300}>
-            <PieChart>
-              <Pie
-                data={statusPieData}
-                cx="50%"
-                cy="50%"
-                labelLine={false}
-                label={({ name, percent, value }) => `${name}: ${value} (${(percent * 100).toFixed(0)}%)`}
-                outerRadius={80}
-                fill="#8884d8"
-                dataKey="value"
-              >
-                {statusPieData.map((entry, index) => (
-                  <Cell key={`cell-${index}`} fill={entry.color} />
-                ))}
-              </Pie>
-              <Tooltip 
-                formatter={(value, name) => [value, name]}
-                contentStyle={{
-                  backgroundColor: 'rgba(255, 255, 255, 0.95)',
-                  border: 'none',
-                  borderRadius: '8px',
-                  boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)'
-                }}
-              />
-            </PieChart>
-          </ResponsiveContainer>
-        </div>
-
-        {/* Repair Time Distribution */}
-        <div className="bg-white rounded-2xl shadow-lg p-6 border border-gray-100 hover:shadow-xl transition-shadow">
-          <h3 className="text-xl font-bold text-gray-900 mb-4 flex items-center">
-            <div className="bg-gradient-to-r from-blue-400 to-indigo-500 p-2 rounded-lg mr-3">
-              <Clock className="h-5 w-5 text-white" />
-            </div>
-            Repair Time
-          </h3>
-          <ResponsiveContainer width="100%" height={300}>
-            <PieChart>
-              <Pie
-                data={repairTimeData}
-                cx="50%"
-                cy="50%"
-                labelLine={false}
-                label={({ name, percent }) => `${name}\n${typeof percent === 'number' ? (percent * 100).toFixed(0) : '0'}%`}
-                outerRadius={80}
-                fill="#8884d8"
-                dataKey="value"
-              >
-                {repairTimeData.map((entry, index) => (
-                  <Cell key={`cell-${index}`} fill={entry.fill} />
-                ))}
-              </Pie>
-              <Tooltip />
-            </PieChart>
-          </ResponsiveContainer>
-        </div>
-
-      </div>
-
-      {/* Performance Summary Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-        {[
-          {
-            title: "Completion Rate",
-            value: `${typeof summary.completionRate === 'number' ? summary.completionRate.toFixed(1) : '0.0'}%`,
-            icon: Target,
-            color: "from-green-400 to-emerald-500",
-            bg: "bg-green-50"
-          },
-          {
-            title: "Avg Job Value",
-            value: `₹${Math.round(summary.avgJobValue || 0).toLocaleString()}`,
-            icon: DollarSign,
-            color: "from-blue-400 to-blue-500",
-            bg: "bg-blue-50"
-          },
-          {
-            title: "Active Repairs",
-            value: (statusDistribution.pending || 0) + (statusDistribution.ready || 0),
-            icon: Activity,
-            color: "from-purple-400 to-pink-500",
-            bg: "bg-purple-50"
-          }
-        ].map((metric, index) => (
-          <div key={index} className={`${metric.bg} rounded-2xl shadow-lg p-6 border border-gray-100 hover:shadow-xl transition-all duration-300 group cursor-pointer`}>
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-gray-600 mb-2">{metric.title}</p>
-                <p className="text-2xl font-bold text-gray-900 group-hover:scale-105 transition-transform">{metric.value}</p>
+      {/* Expense Breakdown Section */}
+      {summary.totalExpenses > 0 && (
+        <div className="mb-8">
+          <div className="bg-white rounded-2xl shadow-lg p-6 border border-gray-100 hover:shadow-xl transition-shadow">
+            <h3 className="text-xl font-bold text-gray-900 mb-4 flex items-center">
+              <div className="bg-gradient-to-r from-red-400 to-orange-500 p-2 rounded-lg mr-3">
+                <AlertTriangle className="h-5 w-5 text-white" />
               </div>
-              <div className={`bg-gradient-to-r ${metric.color} p-3 rounded-xl shadow-lg group-hover:rotate-12 transition-transform`}>
-                <metric.icon className="h-6 w-6 text-white" />
+              Expense Breakdown
+            </h3>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div className="bg-red-50 rounded-xl p-4 border border-red-200">
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-sm font-medium text-red-700">Supplier Payments</span>
+                  <Package className="h-4 w-4 text-red-600" />
+                </div>
+                <div className="text-2xl font-bold text-red-900">
+                  ₹{(summary.totalSupplierPayments || 0).toLocaleString()}
+                </div>
+                <div className="text-xs text-red-600 mt-1">
+                  {summary.totalExpenses > 0 ? ((summary.totalSupplierPayments / summary.totalExpenses) * 100).toFixed(1) : 0}% of total expenses
+                </div>
+              </div>
+              <div className="bg-orange-50 rounded-xl p-4 border border-orange-200">
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-sm font-medium text-orange-700">Employee Salaries</span>
+                  <Users className="h-4 w-4 text-orange-600" />
+                </div>
+                <div className="text-2xl font-bold text-orange-900">
+                  ₹{(summary.totalDailyWageExpenses || 0).toLocaleString()}
+                </div>
+                <div className="text-xs text-orange-600 mt-1">
+                  {summary.totalExpenses > 0 ? ((summary.totalDailyWageExpenses / summary.totalExpenses) * 100).toFixed(1) : 0}% of total expenses
+                </div>
+              </div>
+              <div className="bg-yellow-50 rounded-xl p-4 border border-yellow-200">
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-sm font-medium text-yellow-700">Operating Expenses</span>
+                  <Wrench className="h-4 w-4 text-yellow-600" />
+                </div>
+                <div className="text-2xl font-bold text-yellow-900">
+                  ₹{(summary.totalOperatingExpenses || 0).toLocaleString()}
+                </div>
+                <div className="text-xs text-yellow-600 mt-1">
+                  {summary.totalExpenses > 0 ? ((summary.totalOperatingExpenses / summary.totalExpenses) * 100).toFixed(1) : 0}% of total expenses
+                </div>
               </div>
             </div>
           </div>
-        ))}
-      </div>
+        </div>
+      )}
     </div>
   );
 }
