@@ -54,7 +54,16 @@ router.post('/billit-login', async (req, res) => {
       { expiresIn: "7d" }
     );
 
-    await syncUserToBillit(mysqlUserId, `Bearer ${jwtToken}`);
+    const syncResult = await syncUserToBillit(mysqlUserId, `Bearer ${jwtToken}`);
+
+    // ✅ Check if sync returned subscription expired
+    if (syncResult && !syncResult.success && syncResult.subscriptionExpired) {
+      return res.status(403).json({ 
+        message: "Your free trial has ended. Please subscribe to a valid plan to continue enjoying Fixel's amazing features!",
+        trialExpired: true,
+        redirectToPricing: true
+      });
+    }
 
     // 3️⃣ Find MongoDB User
     const user = await User.findOne({ mysql_user_id: mysqlUserId }).populate('role_id');
