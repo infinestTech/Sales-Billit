@@ -1,6 +1,6 @@
 const express = require("express");
 const jwt = require("jsonwebtoken");
-const { User, Role, Feature } = require("../models/mongoModels");
+const { User, Role } = require("../models/mongoModels");
 const authenticateToken = require("../utils/authMiddleware"); // ✅ Use shared middleware
 
 const router = express.Router();
@@ -21,7 +21,7 @@ router.get("/billit-user-info", authenticateToken, async (req, res) => {
     const category = user.role_id.mongoCategoryId?.name || "Unknown";
     const plan = user.role_id.mongoPlanId?.name || "Unknown";
 
-    const features = await Feature.find({ plan_id: user.role_id.mongoPlanId._id });
+    // All features enabled during trial - no feature restrictions
 
     res.json({
       success: true,

@@ -1,4 +1,4 @@
-const { Shop, Feature } = require("../../models/mongoModels");
+const { Shop } = require("../../models/mongoModels");
 
 
 const updateShopPlanLimitController = async (req, res) => {
@@ -25,21 +25,8 @@ const updateShopPlanLimitController = async (req, res) => {
         }
 
 
-        // 2️⃣ Fetch entry limit feature for the plan
-        const feature = await Feature.findOne({
-            plan_id: mongoPlanId,
-            feature_key: "entry_limit",
-            type: "limit"
-        });
-
-
-        if (!feature || !feature.config) {
-            return res.status(400).json({ error: "No entry_limit feature found for this plan." });
-        }
-
-
-        const { totalPages = 30, entriesPerPage = 15 } = feature.config;
-        const record_limit = totalPages * entriesPerPage;
+        // No feature limits - all plans have unlimited records during trial
+        const record_limit = 999999; // Unlimited
 
 
         // 3️⃣ Update shop limits

@@ -2,9 +2,8 @@
 import { useState, useEffect, useRef } from "react"
 import { usePathname } from "next/navigation"
 import Link from "next/link"
-import { Plus, Database,User, Smartphone, Wallet, Shield, Package, Receipt, X, Lock, Power, BarChart3, CalendarCheck } from "lucide-react"
+import { Plus, Database,User, Smartphone, Wallet, Shield, Package, Receipt, X, Power, BarChart3, CalendarCheck } from "lucide-react"
 import { usePlanFeatures } from "@/context/PlanFeatureContext"
-import { checkFeatureAccess, FEATURE_CONFIG } from "@/utils/featureAccess"
 import authApi from "../authApi"
 
 export function AppSidebar({ sidebarOpen, setSidebarOpen, role }) {
@@ -120,7 +119,7 @@ export function AppSidebar({ sidebarOpen, setSidebarOpen, role }) {
   }
 
   const navigationItems = [
-    { title: "Create", url: "/", icon: Plus },
+    { title: "Create", url: "/application", icon: Plus },
     { title: "All Records", url: "/allrecord", icon: Database },
         { title: "Supplier", url: "/supplier", icon: User },
     { title: "Mobile Registry", url: "/mobilename", icon: Smartphone },
@@ -187,37 +186,15 @@ export function AppSidebar({ sidebarOpen, setSidebarOpen, role }) {
           <ul className="space-y-2">
             {navigationItems.map((item) => {
               const isActive = item.url === "/" ? pathname === "/" : pathname.startsWith(item.url)
-              const featureEnabled = item.featureKey ? features[item.featureKey]?.enabled : true
-              const showLock = item.featureKey && !featureEnabled
+              // All features are available during 10-day trial
+              const featureEnabled = true
+              const showLock = false
 
               return (
                 <li key={item.title}>
                   <Link
                     href={item.url}
-                    onClick={(e) => {
-                      if (!featureEnabled) {
-                        e.preventDefault()
-                        const shopId = getShopIdForNotifications();
-                        
-                        // Map navigation titles to feature config
-                        let featureName = item.title;
-                        if (item.title === "Service Inventory") {
-                          const config = FEATURE_CONFIG.product_inventory;
-                          checkFeatureAccess(config.key, config.name, features, shopId, config.requiredPlans);
-                        } else if (item.title === "Expenses") {
-                          const config = FEATURE_CONFIG.expense_tracker;
-                          checkFeatureAccess(config.key, config.name, features, shopId, config.requiredPlans);
-                        } else if (item.title === "Dashboard") {
-                          const config = FEATURE_CONFIG.dashboard;
-                          checkFeatureAccess(config.key, config.name, features, shopId, config.requiredPlans);
-                        } else {
-                          // Fallback for other features
-                          checkFeatureAccess(item.featureKey, featureName, features, shopId, "Gold/Premium");
-                        }
-                        return
-                      }
-                      setSidebarOpen(false)
-                    }}
+                    onClick={() => setSidebarOpen(false)}
                     className={`group relative flex items-center space-x-4 rounded-xl px-4 py-3.5 transition-all duration-300 font-medium overflow-hidden ${isActive
                         ? "bg-gradient-to-r from-blue-500/20 to-indigo-500/20 text-white shadow-lg backdrop-blur-sm border border-blue-400/30 transform scale-[1.02]"
                         : "text-gray-300 hover:text-white hover:bg-gray-800/50 hover:backdrop-blur-sm hover:border-gray-600/30 border border-transparent"

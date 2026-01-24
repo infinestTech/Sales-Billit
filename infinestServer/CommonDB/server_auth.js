@@ -371,19 +371,23 @@ app.post("/mysql-subscribe", authenticateToken, async (req, res) => {
 
       if (existingPlan.id === planId) {
         return res.status(400).json({
-          message: "User already subscribed to this plan."
+          message: `You already have an active ${existingPlan.name} subscription.`,
+          currentPlan: existingPlan.name
         });
       }
 
       // ✅ Use the incoming `mongoCategoryId` from request
       if (existingPlan.mongoCategoryId === mongoCategoryId) {
         return res.status(400).json({
-          message: "User already has a subscription in this category."
+          message: `You already have an active ${existingPlan.name} plan in this category. Please upgrade or wait for it to expire.`,
+          currentPlan: existingPlan.name,
+          currentCategory: mongoCategoryId
         });
       }
 
       return res.status(400).json({
-        message: "User already has an active subscription to SERVICE."
+        message: `You already have an active ${existingPlan.name} subscription. Please contact support to manage multiple subscriptions.`,
+        currentPlan: existingPlan.name
       });
     }
 
@@ -399,10 +403,10 @@ app.post("/mysql-subscribe", authenticateToken, async (req, res) => {
     // ✅ Calculate proper end date based on plan type and duration
     let endDate;
     
-    // 🟩 BASIC PLAN → NULL endDate (never expires)
+    // 🟩 BASIC PLAN → 10-day trial period
     if (plan.name === "Basic") {
-      endDate = null;
-      console.log(`✅ Basic plan detected: Setting endDate to NULL for unlimited access`);
+      endDate = moment().tz("Asia/Kolkata").add(10, 'days').toDate();
+      console.log(`✅ Basic plan detected: Setting 10-day free trial period`);
     } else {
       // 🟨 PAID PLAN → Calculate based on duration
       if (plan.duration === "MONTHLY") {
@@ -690,9 +694,9 @@ app.post("/upgrade-subscription", authenticateToken, async (req, res) => {
         
         // ✅ Calculate proper end date based on plan type and duration
         if (plan.name === "Basic") {
-          // 🟩 BASIC PLAN → NULL endDate (never expires)
-          endDate = null;
-          console.log(`✅ Upgrading to Basic plan: Setting endDate to NULL for unlimited access`);
+          // 🟩 BASIC PLAN → 10-day trial period
+          endDate = moment().tz("Asia/Kolkata").add(10, 'days').toDate();
+          console.log(`✅ Upgrading to Basic plan: Setting 10-day free trial period`);
         } else {
           // 🟨 PAID PLAN → Calculate based on duration
           if (plan.duration === "MONTHLY") {
@@ -767,9 +771,9 @@ app.post("/upgrade-subscription", authenticateToken, async (req, res) => {
       
       // ✅ Calculate proper end date based on plan type and duration
       if (plan.name === "Basic") {
-        // 🟩 BASIC PLAN → NULL endDate (never expires)
-        endDate = null;
-        console.log(`✅ First-time Basic plan: Setting endDate to NULL for unlimited access`);
+        // 🟩 BASIC PLAN → 10-day trial period
+        endDate = moment().tz("Asia/Kolkata").add(10, 'days').toDate();
+        console.log(`✅ First-time Basic plan: Setting 10-day free trial period`);
       } else {
         // 🟨 PAID PLAN → Calculate based on duration
         if (plan.duration === "MONTHLY") {
@@ -1058,7 +1062,10 @@ cron.schedule("30 18 * * *", async () => {
 
   try {
     const activeSubs = await prisma.subscription.findMany({
-      where: { status: "ACTIVE" }
+      where: { 
+        status: "ACTIVE",
+        endDate: { not: null } // ✅ Skip Basic plans with NULL endDate (they never expire)
+      }
     });
 
     let expiredCount = 0;
@@ -1135,9 +1142,9 @@ cron.schedule("30 18 * * *", async () => {
           let newEndDate;
           
           if (nextQueued.plan.name === "Basic") {
-            // 🟩 BASIC PLAN → NULL endDate (never expires)
-            newEndDate = null;
-            console.log(`✅ Activating queued Basic plan: Setting endDate to NULL for unlimited access`);
+            // 🟩 BASIC PLAN → 10-day trial period
+            newEndDate = moment().tz("Asia/Kolkata").add(10, 'days').toDate();
+            console.log(`✅ Activating queued Basic plan: Setting 10-day free trial period`);
           } else {
             // 🟨 PAID PLAN → Calculate based on duration
             if (nextQueued.plan.duration === "MONTHLY") {
@@ -1196,45 +1203,20 @@ cron.schedule("30 18 * * *", async () => {
             });
 
             if (basicPlan) {
-              // Create Basic plan subscription with NULL endDate
-              const basicSubscription = await prisma.subscription.create({
-                data: {
-                  userId: sub.userId,
-                  planId: basicPlan.id,
-                  product: sub.product,
-                  status: "ACTIVE",
-                  startDate: new Date(),
-                  endDate: null // ✅ Basic plan never expires
-                }
-              });
-
-              // ✅ Update User's subscriptionId to link the subscription
-              await prisma.user.update({
-                where: { id: sub.userId },
-                data: { subscriptionId: basicSubscription.id }
-              });
-
-              // Ensure product access is restored
-              await prisma.productAccess.create({
-                data: {
-                  userId: sub.userId,
-                  product: sub.product
-                }
-              });
-
-              console.log(`✅ Automatically downgraded user ${sub.userId} to Basic plan (ID: ${basicSubscription.id})`);
-
-              // Log the automatic downgrade
+              // ⚠️ User's trial has ended - DO NOT auto-downgrade to Basic
+              // Instead, expire their subscription and let them choose to subscribe again
+              console.log(`⚠️ User ${sub.userId} subscription expired - not auto-downgrading (trial ended)`);
+              
+              // Log that user needs to re-subscribe
               try {
                 await axios.post(`${process.env.SERVER_URL}/log-subscription-event`, {
                   userId: sub.userId,
-                  subscriptionId: basicSubscription.id,
-                  action: "SUBSCRIPTION_STARTED",
-                  message: "Automatically downgraded to Basic plan after subscription expiry",
+                  subscriptionId: sub.id,
+                  action: "TRIAL_ENDED",
+                  message: "Free trial period ended - user must subscribe to continue",
                   metadata: {
                     previousPlanId: sub.planId,
-                    newPlanId: basicPlan.id,
-                    downgradeReason: "AUTOMATIC_BASIC_FALLBACK"
+                    trialEndReason: "10_DAY_TRIAL_EXPIRED"
                   }
                 },
                   {
@@ -1244,21 +1226,10 @@ cron.schedule("30 18 * * *", async () => {
                   }
                 );
               } catch (logErr) {
-                console.warn("⚠️ Failed to log automatic Basic plan downgrade:", logErr.message);
-              }
-
-              // Notify MongoDB about basic plan activation
-              try {
-                await axios.post(`${process.env.BILLIT_SERVER_URL}/api/activate-user-subscription`, {
-                  userId: sub.userId,
-                  subscriptionId: basicSubscription.id,
-                  planType: "BASIC_DOWNGRADE"
-                });
-              } catch (mongoErr) {
-                console.error("MongoDB basic plan activation failed:", mongoErr?.response?.data || mongoErr.message);
+                console.warn("⚠️ Failed to log trial end:", logErr.message);
               }
             } else {
-              console.error(`❌ Basic plan not found in database for automatic downgrade - user ${sub.userId} left without subscription`);
+              console.error(`❌ Basic plan not found in database - user ${sub.userId} left without subscription`);
             }
           } catch (downgradeErr) {
             console.error(`❌ Failed to create automatic Basic plan for user ${sub.userId}:`, downgradeErr.message);
@@ -1386,7 +1357,28 @@ app.post("/mysql-subscribe-free", authenticateToken, async (req, res) => {
 
     const planId = plan.id;
 
-    // ✅ Step 2: Check if user already has *any* subscription to SERVICE
+    // ✅ Step 2: Check if user has EVER had a subscription (to prevent repeated free trials)
+    const anyPastSubscription = await prisma.subscription.findFirst({
+      where: {
+        userId,
+        product,
+        planId: plan.id // Same Basic plan
+      },
+      orderBy: { createdAt: 'desc' }
+    });
+
+    if (anyPastSubscription) {
+      // Check if it was a free trial that already ended
+      const now = moment().tz("Asia/Kolkata").toDate();
+      if (anyPastSubscription.endDate && now > anyPastSubscription.endDate) {
+        return res.status(400).json({
+          message: "Your free trial has ended. Please subscribe to a premium plan to continue enjoying Fixel's features.",
+          trialEnded: true
+        });
+      }
+    }
+
+    // ✅ Step 3: Check if user already has *any* ACTIVE subscription to SERVICE
   const existingSubscription = await prisma.subscription.findFirst({
       where: {
         userId,
@@ -1400,11 +1392,12 @@ app.post("/mysql-subscribe-free", authenticateToken, async (req, res) => {
 
     if (existingSubscription) {
       return res.status(400).json({
-        message: "User already has an active subscription to SERVICE."
+        message: "You already have an active subscription.",
+        activePlan: existingSubscription.plan.name
       });
     }
 
-    // ✅ Step 3: Create payment record with 0 amount
+    // ✅ Step 4: Create payment record with 0 amount
     const payment = await prisma.payment.create({
       data: {
         userId,
@@ -1413,14 +1406,14 @@ app.post("/mysql-subscribe-free", authenticateToken, async (req, res) => {
       }
     });
 
-    // ✅ Step 4: Create subscription with NULL end date for basic plan
+    // ✅ Step 5: Create subscription with 10 days trial period for free/basic plan
   const subscription = await prisma.subscription.create({
       data: {
         userId,
         planId,
     product,
         status: "ACTIVE",
-        endDate: null // ✅ NULL for basic plan - no expiry
+        endDate: moment().tz("Asia/Kolkata").add(10, 'days').toDate() // ✅ 10 days free trial
       }
     });
 
@@ -1430,7 +1423,7 @@ app.post("/mysql-subscribe-free", authenticateToken, async (req, res) => {
       data: { subscriptionId: subscription.id }
     });
 
-    // ✅ Step 5: Ensure Product Access
+    // ✅ Step 6: Ensure Product Access
   const access = await prisma.productAccess.findFirst({
       where: {
         userId,
@@ -1447,7 +1440,7 @@ app.post("/mysql-subscribe-free", authenticateToken, async (req, res) => {
       });
     }
 
-    // ✅ Step 6: Log subscription event
+    // ✅ Step 7: Log subscription event
     try {
       await prisma.subscriptionLog.create({
         data: {

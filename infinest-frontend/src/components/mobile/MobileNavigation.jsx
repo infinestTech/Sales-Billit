@@ -14,10 +14,8 @@ import {
   Smartphone,
   Receipt,
   DollarSign,
-  Lock,
   Wallet
 } from "lucide-react"
-import { checkFeatureAccess, FEATURE_CONFIG } from "@/utils/featureAccess"
 
 export default function MobileNavigation({ activeView, setActiveView, profileImage, profileName, features, shopId }) {
   const [isMenuOpen, setIsMenuOpen] = useState(false)
@@ -69,29 +67,7 @@ export default function MobileNavigation({ activeView, setActiveView, profileIma
       return
     }
     
-    const item = navigationItems.find(nav => nav.id === viewId)
-    
-    // Check feature access before navigation
-    if (item?.featureKey && features) {
-      const isEnabled = features[item.featureKey]?.enabled
-      if (!isEnabled) {
-        // Map view ID to feature config for better messaging
-        let featureConfig
-        if (viewId === "stock") {
-          featureConfig = FEATURE_CONFIG.product_inventory
-        } else if (viewId === "expenses") {
-          featureConfig = FEATURE_CONFIG.expense_tracker
-        } else if (viewId === "analytics") {
-          featureConfig = FEATURE_CONFIG.dashboard
-        }
-        
-        if (featureConfig) {
-          checkFeatureAccess(featureConfig.key, featureConfig.name, features, shopId, featureConfig.requiredPlans)
-        }
-        return // Don't change view if feature is not enabled
-      }
-    }
-    
+    // All features are available during 10-day trial - no feature checking needed
     setActiveView(viewId)
     setIsMenuOpen(false)
   }
@@ -205,15 +181,10 @@ export default function MobileNavigation({ activeView, setActiveView, profileIma
                     <Icon className={`w-5 h-5 ${
                       isActive 
                         ? 'text-blue-600' 
-                        : isFeatureLocked 
-                          ? 'text-gray-400' 
-                          : 'text-gray-500'
+                        : 'text-gray-500'
                     }`} />
                     <span className="font-medium">{item.label}</span>
                   </div>
-                  {isFeatureLocked && (
-                    <Lock className="w-4 h-4 text-gray-400" />
-                  )}
                 </button>
               )
             })}
@@ -240,7 +211,8 @@ export default function MobileNavigation({ activeView, setActiveView, profileIma
           {navigationItems.map((item) => {
             const Icon = item.icon
             const isActive = activeView === item.id
-            const isFeatureLocked = item.featureKey && features && !features[item.featureKey]?.enabled
+            // All features available during trial
+            const isFeatureLocked = false
             
             return (
               <button
@@ -249,22 +221,15 @@ export default function MobileNavigation({ activeView, setActiveView, profileIma
                 className={`relative flex flex-col items-center justify-center py-2 px-0 transition-colors ${
                   isActive
                     ? 'text-blue-600 bg-blue-50'
-                    : isFeatureLocked
-                      ? 'text-gray-400'
-                      : 'text-gray-500 hover:text-gray-700'
+                    : 'text-gray-500 hover:text-gray-700'
                 }`}
               >
                 <div className="relative">
                   <Icon className={`w-6 h-6 mb-1 ${
                     isActive 
                       ? 'text-blue-600' 
-                      : isFeatureLocked 
-                        ? 'text-gray-400' 
-                        : 'text-gray-500'
+                      : 'text-gray-500'
                   }`} />
-                  {isFeatureLocked && (
-                    <Lock className="absolute -top-1 -right-1 w-3 h-3 text-red-500 bg-white rounded-full" />
-                  )}
                 </div>
                 <span className="text-xs font-medium whitespace-nowrap text-center leading-none">{item.label}</span>
               </button>

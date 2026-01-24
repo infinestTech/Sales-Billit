@@ -9,8 +9,6 @@ import MobileAnalyticsComprehensive from "./MobileAnalyticsComprehensive"
 import MobileBalanceCompact from "./MobileBalanceCompact"
 import MobileProfile from "./MobileProfile"
 import { usePlanFeatures } from "@/context/PlanFeatureContext"
-import { checkFeatureAccess, FEATURE_CONFIG } from "@/utils/featureAccess"
-import { createMobileFeatureLockedComponent } from "./MobileFeatureLocked"
 import authApi from "../authApi"
 
 export default function MobileLayout({ shopId, isLimitReached, setIsLimitReached }) {
@@ -52,22 +50,8 @@ export default function MobileLayout({ shopId, isLimitReached, setIsLimitReached
   }, [])
 
   const renderActiveView = () => {
-    // Check feature access before rendering
-    const checkAndRender = (featureConfig, component) => {
-      if (!featureConfig) return component // No feature check needed
-      
-      const isEnabled = features[featureConfig.key]?.enabled
-      if (!isEnabled) {
-        return createMobileFeatureLockedComponent(
-          featureConfig.name,
-          featureConfig.description,
-          featureConfig.requiredPlans,
-          () => window.location.href = '/pricing'
-        )
-      }
-      return component
-    }
-
+    // All features are now available during 10-day trial - no conditional rendering needed
+    
     switch (activeView) {
       case "records":
         return (
@@ -78,20 +62,11 @@ export default function MobileLayout({ shopId, isLimitReached, setIsLimitReached
           />
         )
       case "stock":
-        return checkAndRender(
-          FEATURE_CONFIG.product_inventory,
-          <MobileStockManager shopId={shopId} />
-        )
+        return <MobileStockManager shopId={shopId} />
       case "expenses":
-        return checkAndRender(
-          FEATURE_CONFIG.expense_tracker,
-          <MobileExpenses shopId={shopId} />
-        )
+        return <MobileExpenses shopId={shopId} />
       case "analytics":
-        return checkAndRender(
-          FEATURE_CONFIG.dashboard,
-          <MobileAnalyticsComprehensive shopId={shopId} />
-        )
+        return <MobileAnalyticsComprehensive shopId={shopId} />
       case "balance":
         return (
           <div className="p-4">

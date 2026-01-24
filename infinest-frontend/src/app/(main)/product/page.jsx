@@ -4,11 +4,10 @@ import { useEffect, useState } from "react"
 import ProductInventoryPage from "@/components/ProductTable/ProductInventoryPage"
 import { jwtDecode } from "jwt-decode"
 import { usePlanFeatures } from "@/context/PlanFeatureContext"
-import { checkFeatureAccess, createFeatureLockedComponent, FEATURE_CONFIG } from "@/utils/featureAccess"
 
 export default function AllRecordPage() {
   const [shopId, setShopId] = useState(null)
-  const { features, loading } = usePlanFeatures()
+  const { loading } = usePlanFeatures()
 
   useEffect(() => {
     const token = localStorage.getItem("token")
@@ -31,34 +30,8 @@ export default function AllRecordPage() {
     }
   }, [])
 
-  useEffect(() => {
-    // Show upgrade notification when user tries to access product inventory
-    if (!loading && shopId && features) {
-      const config = FEATURE_CONFIG.product_inventory;
-      checkFeatureAccess(config.key, config.name, features, shopId, config.requiredPlans);
-    }
-  }, [loading, shopId, features])
-
   if (loading) {
     return <p className="text-center text-gray-500 p-8">Loading...</p>;
-  }
-
-  const isInventoryEnabled = features["product_inventory_enabled"]?.enabled;
-
-  if (!isInventoryEnabled) {
-    const config = FEATURE_CONFIG.product_inventory;
-    return createFeatureLockedComponent(
-      config.name,
-      config.description,
-      config.requiredPlans,
-      () => {
-        // Show additional notification when user clicks upgrade
-        if (shopId) {
-          checkFeatureAccess(config.key, config.name, features, shopId, config.requiredPlans);
-        }
-        window.location.href = '/pricing';
-      }
-    );
   }
 
   return (

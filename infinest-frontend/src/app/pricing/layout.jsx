@@ -1,6 +1,6 @@
 export const metadata = {
-  title: "Pricing Plans - Choose Your Fixel Subscription",
-  description: "Explore Fixel's flexible pricing plans designed for mobile repair shops and service centers. Choose from Basic, Gold, or Premium plans with features like inventory management, expense tracking, and advanced billing.",
+  title: "Pricing Plans - Choose Your Fixel Subscription with 10-Day Free Trial",
+  description: "Explore Fixel's flexible pricing plans with a 10-day premium trial. Choose from Basic (free with trial) or Premium plans with features like inventory management, expense tracking, and advanced billing.",
   keywords: [
     "mobile repair software pricing",
     "service management subscription",
@@ -11,11 +11,12 @@ export const metadata = {
     "mobile service CRM cost",
     "repair tracking software price",
     "workshop management plans",
-    "service center software pricing"
+    "service center software pricing",
+    "free trial software"
   ],
   openGraph: {
-    title: "Fixel Pricing Plans - Affordable Mobile Service Management",
-    description: "Choose the perfect plan for your mobile repair business. Starting from free basic plan to premium features for growing service centers.",
+    title: "Fixel Pricing Plans - 10-Day Free Premium Trial",
+    description: "Start with a 10-day premium trial! Choose the perfect plan for your mobile repair business. Free basic plan or premium features for growing service centers.",
     url: "/pricing",
     images: [
       {

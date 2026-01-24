@@ -39,13 +39,24 @@ function LoginPageContent() {
       const data = await response.json();
 
       if (!response.ok) {
+        // Check for trial expiry
+        if (data.trialExpired && data.redirectToPricing) {
+          setError(data.message || "Your trial has expired. Please upgrade to continue.");
+          setIsLoading(false);
+          // Redirect to pricing after showing error
+          setTimeout(() => {
+            router.push('/pricing');
+          }, 2000);
+          return;
+        }
+        
         // Custom error handling for user not found
         if (data.message && (data.message.toLowerCase().includes("user not found") || data.message.toLowerCase().includes("no user"))) {
           setError("Please sign up first to continue.");
         } else if (data.message && (data.message.toLowerCase().includes("invalid credentials") || data.message.toLowerCase().includes("wrong password"))) {
           setError("Incorrect email or password.");
         } else {
-          setError("Login failed. Please check your credentials or sign up first.");
+          setError(data.message || "Login failed. Please check your credentials or sign up first.");
         }
         setIsLoading(false);
         return;
@@ -87,9 +98,9 @@ function LoginPageContent() {
         }
       }));
 
-      // ✅ Navigate after short delay for consistency
+      // ✅ Navigate to application after login
       setTimeout(() => {
-        router.replace("/");
+        router.replace("/application");
       }, 1000);
     } catch (err) {
       console.error("Login Error:", err);
