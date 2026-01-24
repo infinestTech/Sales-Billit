@@ -37,8 +37,15 @@ const syncUserToBillit = async (userId, authHeader) => {
   }
 
 
+  // ✅ Return subscription status instead of throwing error
+  // Let the calling route handle the expired subscription message
   if (!data.hasAccess) {
-    throw new Error("❌ User does not have active subscription access.");
+    return { 
+      success: false, 
+      hasAccess: false,
+      subscriptionExpired: true,
+      message: "Subscription access denied"
+    };
   }
 
 
@@ -177,7 +184,10 @@ const syncUserToBillit = async (userId, authHeader) => {
   }
 
 
-  return { message: "✅ User synced to MongoDB successfully." };
+  return { 
+    success: true,
+    message: "✅ User synced to MongoDB successfully." 
+  };
 };
 
 
