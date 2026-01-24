@@ -22,6 +22,8 @@ const userSchema = new mongoose.Schema({
   mysql_user_id: { type: String, required: true, unique: true },
   role_id: { type: mongoose.Schema.Types.ObjectId, ref: "Role", required: true },
   isSubscriptionActive: { type: Boolean, default: true }, // ✅ New field
+  trialExpiryDate: { type: Date, default: () => new Date(Date.now() + 10 * 24 * 60 * 60 * 1000) }, // 10 days trial
+  hasUsedTrial: { type: Boolean, default: false }, // Track if user already used free trial
   created_at: { type: Date, default: Date.now }
 });        
 
@@ -198,26 +200,9 @@ const planSchema = new mongoose.Schema({
 
 
 // ==============================
-// ✅ Feature Schema (Dummy Features)
+// ✅ Feature Schema - REMOVED
+// Features are now provided to all users during 10-day trial
 // ==============================
-// ✅ Feature Schema (Dummy Features)
-const featureSchema = new mongoose.Schema({
-  plan_id: { type: String, ref: "Plan", required: true }, // 🔁 FIXED from ObjectId → String
-  feature_key: { type: String, required: true },
-  type: { type: String, enum: ["boolean", "limit"], required: true },
-  enabled: { type: Boolean },
-  config: {
-    totalPages: Number,
-    entriesPerPage: Number,
-    maxPerCreation: Number,
-    // Sales-specific config fields
-    maxBankAccounts: Number,
-    maxSuppliers: Number,
-    maxBranches: Number,
-    maxProducts: Number,
-  },
-  description: { type: String }
-});
 
 
 
@@ -316,7 +301,7 @@ const Mobile = mongoose.model("Mobile", mobileSchema);
 const Technician = mongoose.model("Technician", technicianSchema);
 const PlanCategory = mongoose.model("PlanCategory", planCategorySchema);
 const Plan = mongoose.model("Plan", planSchema);
-const Feature = mongoose.model("Feature", featureSchema);
+// Feature model removed - using 10-day trial instead
 const Product = mongoose.model("Product", productSchema);
 const Notification = mongoose.model("Notification", notificationSchema);
 const ProductHistory = mongoose.model("ProductHistory", productHistorySchema);
@@ -532,7 +517,7 @@ const SalaryRecord = mongoose.model("SalaryRecord", salaryRecordSchema);
 
 module.exports = {
   Role, User, Manager, Branch, Shop, Dealer, Customer, Notification, Mobile, Technician,
-  PlanCategory, Plan, Feature, DailySummary, Expense, ProductHistory, Product,
+  PlanCategory, Plan, DailySummary, Expense, ProductHistory, Product,
   MobileBrand, MobileIssue, AdminSale, SupplierHistory, Employee, Attendance, ShopAdmin, Permission, Supplier,
   SalaryConfig, SalaryRecord
 };

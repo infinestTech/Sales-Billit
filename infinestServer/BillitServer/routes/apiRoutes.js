@@ -4,7 +4,7 @@ const router = express.Router();
 const { downloadFullBackup, viewBackup } = require('../controllers/api/backupDownloadController');
 const authenticateToken = require('../utils/authMiddleware'); // same as records
 const authMySQLToken = require('../utils/authMySQLToken');
-const { Plan, Feature } = require('../models/mongoModels');
+const { Plan } = require('../models/mongoModels');
 const upload = multer(); // buffer upload
 
 
@@ -51,18 +51,7 @@ router.get('/plans/:categoryId', async (req, res) => {
       return res.status(404).json({ message: "No plans found for this category" });
     }
     
-    // Include features for each plan
-    const plansWithFeatures = await Promise.all(
-      plans.map(async (plan) => {
-        const features = await Feature.find({ plan_id: plan._id });
-        return {
-          ...plan.toObject(),
-          features: features || []
-        };
-      })
-    );
-    
-    res.json(plansWithFeatures);
+    res.json(plans);
   } catch (err) {
     console.error("Error fetching plans by category:", err);
     res.status(500).json({ message: "Failed to fetch plans", error: err.message });
@@ -77,19 +66,13 @@ router.get('/plan/:id', async (req, res) => {
       return res.status(400).json({ message: "Plan ID is required" });
     }
 
-    const plan = await Plan.findById(id);
+    const plan = await Plan.findOne({ _id: id });
     
     if (!plan) {
       return res.status(404).json({ message: "Plan not found" });
     }
     
-    // Include features if available
-    const features = await Feature.find({ plan_id: id });
-    
-    res.json({
-      ...plan.toObject(),
-      features: features || []
-    });
+    res.json(plan);
   } catch (err) {
     console.error("Error fetching plan details:", err);
     res.status(500).json({ message: "Failed to fetch plan details", error: err.message });
@@ -98,6 +81,3 @@ router.get('/plan/:id', async (req, res) => {
 
 
 module.exports = router;
-
-
-

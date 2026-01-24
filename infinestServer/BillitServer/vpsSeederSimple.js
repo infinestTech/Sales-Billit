@@ -1,5 +1,5 @@
 const mongoose = require('mongoose');
-const { Plan, Feature, PlanCategory } = require('./models/mongoModels');
+const { Plan, PlanCategory } = require('./models/mongoModels');
 
 
 // MongoDB connection URI for production VPS
@@ -50,32 +50,15 @@ const plans = [
     "branchLimit": 1,
     "category_id": "Sales",
     "created_at": "2025-08-30T18:16:46.235Z",
-    "description": "Perfect for small shops starting their sales journey with essential tools and basic features.",
+    "description": "Try all premium features free - complete sales and inventory management",
     "isPopular": false,
     "name": "Basic",
-    "originalPrice": "199",
+    "originalPrice": "0",
     "price": "0",
-    "renewalPrice": "Always Free",
-    "renewalTerm": "No Expiration",
-    "savePercentage": 100,
-    "term": "Free Forever"
-  },
-  {
-    "_id": "sales-gold",
-    "__v": 0,
-    "bonusOffer": null,
-    "branchLimit": 1,
-    "category_id": "Sales",
-    "created_at": "2025-08-30T18:16:46.243Z",
-    "description": "Advanced sales inventory and billing system for growing retail businesses with smart analytics.",
-    "isPopular": true,
-    "name": "Gold",
-    "originalPrice": "899",
-    "price": "299",
-    "renewalPrice": "299",
-    "renewalTerm": "per month",
-    "savePercentage": 67,
-    "term": "Monthly Plan"
+    "renewalPrice": "Free Trial",
+    "renewalTerm": "No payment required",
+    "savePercentage": 0,
+    "term": "Free Trial"
   },
   {
     "_id": "sales-premium",
@@ -84,14 +67,14 @@ const plans = [
     "branchLimit": 5,
     "category_id": "Sales",
     "created_at": "2025-08-30T18:16:46.251Z",
-    "description": "Complete sales suite for high-volume retailers with advanced analytics, unlimited products and priority support.",
-    "isPopular": false,
+    "description": "Complete sales suite for high-volume retailers",
+    "isPopular": true,
     "name": "Premium",
-    "originalPrice": "1499",
-    "price": "399",
-    "renewalPrice": "399",
+    "originalPrice": "1999",
+    "price": "499",
+    "renewalPrice": "499",
     "renewalTerm": "per month",
-    "savePercentage": 73,
+    "savePercentage": 75,
     "term": "Monthly Plan"
   },
   {
@@ -134,42 +117,25 @@ const plans = [
     "branchLimit": 1,
     "category_id": "Service",
     "created_at": "2025-09-09T05:52:44.564Z",
-    "description": "Ideal for new mobile repair shops starting out with basic restrictions and ads.",
+    "description": "Try all premium features free - full access to professional service management",
     "isPopular": false,
     "name": "Basic",
-    "originalPrice": "199",
+    "originalPrice": "0",
     "price": "0",
-    "renewalPrice": "Free with ads",
-    "renewalTerm": "LifeTime",
-    "savePercentage": 100,
-    "term": "Free Plan"
-  },
-  {
-    "_id": "service-gold",
-    "__v": 0,
-    "bonusOffer": "null",
-    "branchLimit": 1,
-    "category_id": "Service",
-    "created_at": "2025-09-09T05:52:44.639Z",
-    "description": "For growing shops needing smart workflow tools with advanced features.",
-    "isPopular": true,
-    "name": "Gold",
-    "originalPrice": "999",
-    "price": "399",
-    "renewalPrice": "399",
-    "renewalTerm": "per month",
-    "savePercentage": 60,
-    "term": "Monthly Plan"
+    "renewalPrice": "Free Trial",
+    "renewalTerm": "No payment required",
+    "savePercentage": 0,
+    "term": "Free Trial"
   },
   {
     "_id": "service-premium",
     "__v": 0,
-    "bonusOffer": "null",
+    "bonusOffer": null,
     "branchLimit": 1,
     "category_id": "Service",
     "created_at": "2025-09-09T05:52:44.654Z",
-    "description": "Best for high-volume service centers or chains with premium features.",
-    "isPopular": false,
+    "description": "Everything you need to run your business professionally",
+    "isPopular": true,
     "name": "Premium",
     "originalPrice": "1999",
     "price": "499",
@@ -705,7 +671,6 @@ async function seedVPSDatabase() {
 
     // Clean existing data
     console.log('\n🗑️  Cleaning existing data...');
-    await Feature.deleteMany({});
     await Plan.deleteMany({});
     await PlanCategory.deleteMany({});
     console.log('✅ Cleaned existing data');
@@ -736,18 +701,6 @@ async function seedVPSDatabase() {
 
 
     // Seed Features
-    console.log('\n⚡ Seeding Features...');
-    for (const feature of features) {
-      try {
-        const result = await Feature.create(feature);
-        console.log(`✅ Created feature: ${result.plan_id}/${result.feature_key}`);
-      } catch (error) {
-        console.log(`❌ Error creating feature ${feature.feature_key}:`, error.message);
-      }
-    }
-
-
-    console.log('\n🎉 VPS Database seeding completed successfully!');
     console.log(`📊 Summary:`);
     console.log(`   - Categories: ${planCategories.length}`);
     console.log(`   - Plans: ${plans.length}`);

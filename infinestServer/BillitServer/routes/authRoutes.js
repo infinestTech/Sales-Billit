@@ -67,6 +67,22 @@ router.post('/billit-login', async (req, res) => {
       return res.status(403).json({ message: "Subscription expired." });
     }
 
+    // Check if trial has expired
+    const now = new Date();
+    if (user.trialExpiryDate && now > user.trialExpiryDate) {
+      // Check if user has a paid plan
+      const mongoPlanId = user.role_id.mongoPlanId;
+      const isPremiumPlan = mongoPlanId && (mongoPlanId.includes('premium') || mongoPlanId.includes('gold'));
+      
+      if (!isPremiumPlan) {
+        return res.status(403).json({ 
+          message: "Your free trial has ended. Please subscribe to a valid plan to continue enjoying Fixel's amazing features!",
+          trialExpired: true,
+          redirectToPricing: true
+        });
+      }
+    }
+
     // 4️⃣ Find Shop for user
     const shop = await Shop.findOne({ mysql_user_id: mysqlUserId });
 

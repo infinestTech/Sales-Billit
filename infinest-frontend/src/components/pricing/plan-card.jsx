@@ -1,11 +1,10 @@
 "use client"
 
 import { useState } from "react"
-import { Check, Shield, Crown, Sparkles, X } from "lucide-react"
+import { Check, Shield, Sparkles, X } from "lucide-react"
 
 const planIcons = {
   Basic: Shield,
-  Gold: Crown,
   Premium: Sparkles,
 }
 

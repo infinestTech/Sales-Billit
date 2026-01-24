@@ -5,6 +5,7 @@ const crypto = require("crypto");
 
 const { syncUserToBillit } = require("../controllers/userSyncController");
 const authMySQLToken = require("../utils/authMySQLToken");
+const { User } = require("../models/mongoModels");
 
 const router = express.Router();
 
@@ -356,22 +357,6 @@ router.post("/subscribe", authMySQLToken, async (req, res) => {
   // For basic (free) plan, redirect to free subscription flow
   if (!isPaidPlan) {
     try {
-      // Validate this is actually a basic plan
-      try {
-        const response = await axios.get(`${process.env.BILLIT_BACKEND_URL}/api/plan/${planId}`);
-        const plan = response.data;
-        
-        if (!plan || plan.name !== "Basic") {
-          return res.status(400).json({ 
-            success: false, 
-            message: "Free plan flag can only be used with Basic plan." 
-          });
-        }
-      } catch (planErr) {
-        console.warn("⚠️ Could not validate plan type:", planErr.message);
-        // Continue anyway - just a safety check
-      }
-
       // Proceed with free subscription
       // Check if user already has an active subscription
       let hasActive = false;
@@ -462,6 +447,14 @@ router.post("/subscribe", authMySQLToken, async (req, res) => {
       try {
         const authHeader = req.headers.authorization;
         await syncUserToBillit(userId, authHeader);
+        
+        // Mark user as having used their trial
+        const { User } = require('../models/mongoModels');
+        await User.findOneAndUpdate(
+          { mysql_user_id: userId },
+          { hasUsedTrial: true },
+          { new: true }
+        );
       } catch (mongoErr) {
         console.error("❌ MongoDB sync failed:", mongoErr.message);
         return res.status(500).json({
@@ -526,7 +519,9 @@ router.post("/subscribe", authMySQLToken, async (req, res) => {
 
       return res.json({
         success: true,
-        order,
+        orderId: order.id,
+        amount: order.amount,
+        razorpayKeyId: process.env.RAZORPAY_KEY_ID,
         planDetails,
         isPaidPlan: true
       });
@@ -538,6 +533,32 @@ router.post("/subscribe", authMySQLToken, async (req, res) => {
         error: err.message
       });
     }
+  }
+});
+
+// Check if user has used trial
+router.get("/check-trial-status", authMySQLToken, async (req, res) => {
+  try {
+    const userId = req.user.userId;
+    
+    const user = await User.findOne({ mysql_user_id: userId });
+    
+    if (!user) {
+      return res.json({
+        hasUsedTrial: false // New user, hasn't used trial yet
+      });
+    }
+    
+    return res.json({
+      hasUsedTrial: user.hasUsedTrial || false
+    });
+  } catch (error) {
+    console.error("Error checking trial status:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Failed to check trial status",
+      error: error.message
+    });
   }
 });
 
