@@ -355,11 +355,12 @@ app.post("/mysql-subscribe", authenticateToken, async (req, res) => {
 
     const planId = plan.id;
 
-  // ✅ Step 2: Check if user already has *any* subscription to this product
+  // ✅ Step 2: Check if user already has an ACTIVE or QUEUED subscription to this product
     const existingSubscription = await prisma.subscription.findFirst({
       where: {
         userId,
-    product
+        product,
+        status: { in: ["ACTIVE", "QUEUED"] } // 🔧 FIX: Only check active/queued, not EXPIRED
       },
       include: {
         plan: true
