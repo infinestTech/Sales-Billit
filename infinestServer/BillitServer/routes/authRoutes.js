@@ -141,7 +141,43 @@ router.post('/billit-login', async (req, res) => {
 
   } catch (err) {
     console.error('Billit Login Error:', err?.response?.data || err);
-    return res.status(500).json({ message: "Internal server error" });
+    
+    // Handle subscription-related errors
+    if (err.message && err.message.includes('does not have active subscription access')) {
+      return res.status(403).json({ 
+        message: "Your free trial has ended. Please subscribe to a valid plan to continue enjoying Fixel's amazing features!",
+        trialExpired: true,
+        redirectToPricing: true
+      });
+    }
+    
+    // Handle auth server errors
+    if (err.message && err.message.includes('Auth server error')) {
+      return res.status(503).json({ 
+        message: "Authentication service is currently unavailable. Please try again later."
+      });
+    }
+    
+    // Handle specific error responses from auth server
+    if (err?.response?.data?.message) {
+      const errorMessage = err.response.data.message;
+      
+      // Check for subscription errors
+      if (errorMessage.includes('already have an active') || 
+          errorMessage.includes('upgrade') || 
+          errorMessage.includes('expire')) {
+        return res.status(403).json({ 
+          message: errorMessage,
+          subscriptionConflict: true
+        });
+      }
+      
+      return res.status(err.response.status || 500).json({ 
+        message: errorMessage 
+      });
+    }
+    
+    return res.status(500).json({ message: "An unexpected error occurred. Please try again." });
   }
 });
 
