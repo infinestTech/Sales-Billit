@@ -3,6 +3,7 @@ function SalesFeatureProvider({ children }) {
   const [features, setFeatures] = React.useState({});
   const [loading, setLoading] = React.useState(true);
   const [userPlan, setUserPlan] = React.useState('');
+  const [trialInfo, setTrialInfo] = React.useState(null);
 
   const SALES_URL = window.ENV_CONFIG?.SALES_API_URL || 'http://127.0.0.1:9000';
 
@@ -24,6 +25,7 @@ function SalesFeatureProvider({ children }) {
       }
 
       const data = await res.json();
+      console.log('📦 Features API Response:', data);
       const featureMap = {};
 
       // Process features from MongoDB format
@@ -51,7 +53,15 @@ function SalesFeatureProvider({ children }) {
         setUserPlan(data.userPlan);
       }
 
+      // Set trial info if available
+      if (data.trial) {
+        setTrialInfo(data.trial);
+        console.log('✅ Trial info loaded:', data.trial);
+      }
+
       setFeatures(featureMap);
+      console.log('✅ Features loaded:', featureMap);
+      console.log('✅ User plan:', data.userPlan);
     } catch (error) {
       // Set empty features on error
       setFeatures({});
@@ -72,32 +82,51 @@ function SalesFeatureProvider({ children }) {
     return () => window.removeEventListener('sales-login', handleLoginEvent);
   }, []);
 
-  // Utility to check if a feature is enabled safely
+  // ✅ Feature access control:
+  // - During 10-day trial: ALL premium features enabled (Basic plan gets Premium features)
+  // - After trial ends: Login is BLOCKED, user must upgrade to Premium
+  // - Premium plan: Always has full feature access
   const isFeatureEnabled = (featureKey) => {
-    const feature = features[featureKey];
-    
-    if (!feature) {
-      return false;
-    }
-    
-    // For boolean features, check the enabled flag
-    if (feature.type === "boolean") {
-      return feature.enabled === true;
-    }
-    
-    // For limit features, they are considered "enabled" if they exist
-    if (feature.type === "limit") {
+    // During trial or Premium plan, all features are enabled
+    if (trialInfo && trialInfo.isOnTrial) {
+      console.log(`✅ Trial active - enabling ${featureKey}`);
       return true;
     }
-    
-    // Fallback
-    return feature.enabled === true;
+
+    // Premium plan has all features
+    if (userPlan === 'sales-premium') {
+      console.log(`✅ Premium plan - enabling ${featureKey}`);
+      return true;
+    }
+
+    // Trial expired and not Premium = should not reach here (login should be blocked)
+    console.log(`❌ Trial expired and not Premium - ${featureKey} disabled`);
+    return false;
   };
 
   // Utility to get feature limit value
   const getFeatureLimit = (featureKey, limitKey) => {
+    // During trial or for Premium plan, get the actual limit from features
+    // Trial users get the same limits as Premium plan
     const feature = features[featureKey];
-    return feature?.[limitKey] ?? 0;
+    
+    console.log(`🔍 getFeatureLimit(${featureKey}, ${limitKey}):`, feature);
+    
+    // Check direct property on feature first (this is where limit values are after spreading ...f.config)
+    if (feature && typeof feature[limitKey] === 'number') {
+      console.log(`✅ Found limit: ${feature[limitKey]}`);
+      return feature[limitKey];
+    }
+    
+    // Fallback: check nested config object (for backward compatibility)
+    if (feature && feature.config && typeof feature.config[limitKey] === 'number') {
+      console.log(`✅ Found limit in config: ${feature.config[limitKey]}`);
+      return feature.config[limitKey];
+    }
+    
+    console.log(`❌ No limit found, returning 0`);
+    // Default to 0 if no limit found
+    return 0;
   };
 
   // Utility to check if user has reached a limit
@@ -110,6 +139,7 @@ function SalesFeatureProvider({ children }) {
     features,
     loading,
     userPlan,
+    trialInfo,
     isFeatureEnabled,
     getFeatureLimit,
     isLimitReached,

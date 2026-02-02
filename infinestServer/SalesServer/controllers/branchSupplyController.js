@@ -207,20 +207,27 @@ exports.createBranchSupply = async (req, res) => {
       // decrement the central InStock.items[idx].quantity so central and branch stay consistent.
       try {
         const pid = String(it.productId || '');
+        console.log('🔍 Processing supply for productId:', pid, 'qty:', it.qty);
         if (pid.includes('_')) {
           const [docId, idxStr] = pid.split('_');
           const idx = Number(idxStr);
+          console.log('📦 Parsed productId -', { docId, idx, hasImes: Array.isArray(it.imes) });
           if (docId && Number.isInteger(idx)) {
+            // Fetch BEFORE any changes to see current state
+            const centralBefore = await InStock.findById(docId).lean();
+            if (centralBefore && Array.isArray(centralBefore.items) && centralBefore.items[idx]) {
+              const itemBefore = centralBefore.items[idx];
+              console.log('📊 BEFORE supply - quantity:', itemBefore.quantity, 'imes:', itemBefore.imes?.length);
+            }
+
             // If IMEs were supplied, use $pullAll to remove them from the central item's imes array.
             if (Array.isArray(it.imes) && it.imes.length) {
               try {
-                // debug: print current imes before removal
-                try { console.debug('DEBUG before pullAll', { docId, idx, remove: it.imes }); } catch (__) {}
+                console.log('🔄 Removing IMEs from central:', it.imes);
                 await InStock.updateOne({ _id: docId }, { $pullAll: { [`items.${idx}.imes`]: it.imes } });
-                // debug: print a note after pullAll
-                try { console.debug('DEBUG after pullAll executed', { docId, idx }); } catch (__) {}
+                console.log('✅ IMEs removed successfully');
               } catch (e) {
-                console.error('DEBUG pullAll error', e && e.message ? e.message : e);
+                console.error('❌ pullAll error', e && e.message ? e.message : e);
               }
             }
             // Re-fetch central doc to calculate correct quantity and remaining imes
@@ -228,8 +235,7 @@ exports.createBranchSupply = async (req, res) => {
             if (central && Array.isArray(central.items) && central.items[idx]) {
               const currentItem = central.items[idx];
               const currentQty = Number(currentItem.quantity || currentItem.qty || 0);
-              // debug: print remaining imes after pullAll
-              try { console.debug('DEBUG central item after pullAll', { docId, idx, imes: currentItem.imes, quantity: currentItem.quantity || currentItem.qty }); } catch (__) {}
+              console.log('📊 AFTER pullAll - quantity:', currentQty, 'imes:', currentItem.imes?.length);
               // prefer imes length as the source of truth when present
               const remainingImes = Array.isArray(currentItem.imes) ? currentItem.imes : [];
               const newQty = Array.isArray(currentItem.imes) && currentItem.imes.length ? remainingImes.length : Math.max(0, currentQty - Number(it.qty || 0));
@@ -237,8 +243,9 @@ exports.createBranchSupply = async (req, res) => {
               const imesPath = `items.${idx}.imes`;
               const setObj2 = { [qtyPath]: newQty };
               if (Array.isArray(currentItem.imes)) setObj2[imesPath] = remainingImes;
+              console.log('💾 Updating central stock - newQty:', newQty, 'path:', qtyPath);
               await InStock.findByIdAndUpdate(docId, { $set: setObj2 });
-              try { console.debug('DEBUG central item updated', { docId, idx, setObj2 }); } catch (__) {}
+              console.log('✅ Central stock updated successfully');
             }
           }
         }

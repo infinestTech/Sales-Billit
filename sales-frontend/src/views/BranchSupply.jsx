@@ -79,9 +79,9 @@ function BranchSupply({ salesUrl, token }) {
     const cost = Number(row?.costPrice || 0);
     const sellingPrice = pct ? (cost * (1 + pct / 100)) : Number(row?.sellingPrice || 0);
     const value = sellingPrice * q;
-    // ensure selected imes array length does not exceed qty
+    // Preserve previously selected IMEs
     setSelectedRows(prev => {
-      const prevImes = Array.isArray(prev[productId]?.imes) ? prev[productId].imes.slice(0, q) : [];
+      const prevImes = Array.isArray(prev[productId]?.imes) ? prev[productId].imes : [];
       const next = { ...prev, [productId]: { qty: q, value, productId, pct, sellingPrice, imes: prevImes } };
       const total = Object.values(next).reduce((s, it) => s + (Number(it.value) || 0), 0);
       setTotalValue(total);
@@ -276,11 +276,10 @@ function BranchSupply({ salesUrl, token }) {
                   <th>Brand</th>
                   <th>Model</th>
                   <th>Qty</th>
-                 
-                  <th>IME / IME Count</th>
                   <th>Total Cost</th>
                   <th>Selling Price</th>
                   <th>Supply Qty</th>
+                  <th>IME / IME Count</th>
                   <th>Value</th>
                   <th>Validity</th>
                 </tr>
@@ -300,6 +299,17 @@ function BranchSupply({ salesUrl, token }) {
                       <td>{s.brand || '-'}</td>
                       <td>{s.model || '-'}</td>
                       <td>{(s.centralQty != null ? s.centralQty : (s.qty ?? '-'))}</td>
+
+                      <td>{s.totalCostPrice != null ? currency(s.totalCostPrice) : (s.costPrice != null ? currency(s.costPrice) : '-')}</td>
+                      <td>
+                        <div style={{display:'flex',flexDirection:'column'}}>
+                          <div>
+                            <input style={{width:80}} type="number" min={0} value={sel.pct ?? 0} onChange={e => onPctChange(pid, e.target.value)} /> %
+                          </div>
+                          <div style={{fontSize:12,color:'#666'}}>{sel.sellingPrice != null ? currency(sel.sellingPrice) : (s.sellingPrice != null ? currency(s.sellingPrice) : '-')}</div>
+                        </div>
+                      </td>
+                      <td><input style={{width:80}} type="number" min={0} value={sel.qty} onChange={e => onQtyChange(pid, e.target.value)} /></td>
 
                       <td style={{ position: 'relative' }}>
                         {((Array.isArray(s.imes) && s.imes.length) || (Array.isArray(s.centralImes) && s.centralImes.length)) ? (
@@ -373,16 +383,6 @@ function BranchSupply({ salesUrl, token }) {
                         ) : (s.imeNo || s.ime ? (s.imeNo || s.ime) : '-')}
                       </td>
 
-                      <td>{s.totalCostPrice != null ? currency(s.totalCostPrice) : (s.costPrice != null ? currency(s.costPrice) : '-')}</td>
-                      <td>
-                        <div style={{display:'flex',flexDirection:'column'}}>
-                          <div>
-                            <input style={{width:80}} type="number" min={0} value={sel.pct ?? 0} onChange={e => onPctChange(pid, e.target.value)} /> %
-                          </div>
-                          <div style={{fontSize:12,color:'#666'}}>{sel.sellingPrice != null ? currency(sel.sellingPrice) : (s.sellingPrice != null ? currency(s.sellingPrice) : '-')}</div>
-                        </div>
-                      </td>
-                      <td><input style={{width:80}} type="number" min={0} value={sel.qty} onChange={e => onQtyChange(pid, e.target.value)} /></td>
                       <td>{currency(sel.value)}</td>
                       <td>{s.validity ? new Date(s.validity).toLocaleDateString() : '-'}</td>
                     </tr>

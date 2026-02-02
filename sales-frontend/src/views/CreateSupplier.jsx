@@ -16,9 +16,9 @@ function CreateSupplier({ salesUrl, token }) {
   };
 
 
-  const supplierLimit = getFeatureLimit('suppliers_limit', 'maxSuppliers');
+  const supplierLimit = getFeatureLimit('supplier_limit', 'maxSuppliers');
   const currentSupplierCount = rows.length;
-  const isAtLimit = isLimitReached('suppliers_limit', 'maxSuppliers', currentSupplierCount);
+  const isAtLimit = isLimitReached('supplier_limit', 'maxSuppliers', currentSupplierCount);
 
   // Decode JWT helper
   const decodeJwt = (tk) => {
@@ -185,7 +185,7 @@ function CreateSupplier({ salesUrl, token }) {
    
     // Check limit before creating (skip for branch users)
     if (effectiveIsAtLimit) {
-      window.checkSalesFeatureLimit('suppliers_limit', 'maxSuppliers', currentSupplierCount, features, 'Supplier');
+      window.checkSalesFeatureLimit('supplier_limit', 'maxSuppliers', currentSupplierCount, features, 'Supplier');
       return;
     }
    
@@ -221,7 +221,7 @@ function CreateSupplier({ salesUrl, token }) {
     <div>
       {/* Limit Warning (hidden for branch users) */}
       {!branchUserDecoded && React.createElement(window.LimitGuard, {
-        featureKey: 'suppliers_limit',
+        featureKey: 'supplier_limit',
         limitKey: 'maxSuppliers',
         currentCount: currentSupplierCount,
         featureName: 'Supplier',

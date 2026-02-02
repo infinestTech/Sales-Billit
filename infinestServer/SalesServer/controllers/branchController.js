@@ -4,8 +4,27 @@ const Branch = require('../models/branch');
 const PLAN_LIMITS = {
   'sales-basic': 0,
   'sales-gold': 3,
-  'sales-premium': 10
+  'sales-premium': 5
 };
+
+// Helper function to get branch limit
+async function getBranchLimit(userId, mongoPlanId, jwtLimit) {
+  try {
+    const { Feature } = require('../models/feature');
+    const feature = await Feature.findOne({ 
+      plan_id: 'sales-premium',
+      feature_key: 'branch_limit' 
+    });
+    
+    if (feature?.config?.maxBranches) {
+      return feature.config.maxBranches;
+    }
+    return 5; // Fallback
+  } catch (err) {
+    console.error('Error fetching branch limit:', err.message);
+    return 5;
+  }
+}
 
 // POST /api/branches
 const createBranch = async (req, res) => {
@@ -17,19 +36,22 @@ const createBranch = async (req, res) => {
       return res.status(400).json({ success: false, message: 'name, email and password are required' });
     }
 
-    // Prefer branchLimit supplied in Sales JWT (populated from CommonDB MySQL plan table).
-    // Fallback to PLAN_LIMITS map for backward compatibility.
+    // Get trial-aware branch limit
     const jwtLimit = Number.isFinite(Number(req.user?.branchLimit)) ? Number(req.user.branchLimit) : null;
     const planId = req.user?.mongoPlanId || 'sales-basic';
-    const limit = jwtLimit !== null ? jwtLimit : (PLAN_LIMITS[planId] ?? 0);
+    const limit = await getBranchLimit(req.user.userId, planId, jwtLimit);
+
+    console.log(`🏢 Branch creation check: limit=${limit} for user ${req.user.userId}`);
 
     if (limit <= 0) {
       return res.status(403).json({ success: false, message: 'Your plan does not allow branch creation' });
     }
 
     const count = await Branch.countDocuments({ shop_id: req.user.shop_id });
+    console.log(`🏢 Current branches: ${count}/${limit}`);
+    
     if (count >= limit) {
-      return res.status(403).json({ success: false, message: 'Branch limit reached for your plan' });
+      return res.status(403).json({ success: false, message: `Branch limit reached. Your plan allows ${limit} branches.` });
     }
 
   const exists = await Branch.findOne({ shop_id: req.user.shop_id, email });

@@ -24,7 +24,7 @@ function MobileViewRenderer({ view, salesUrl, token, branchUser, ...props }) {
     );
   }
 
-  // Branch Management: desktop allows only admin + Gold/Premium plans
+  // Branch Management: desktop allows only admin
   if (view === 'branch') {
     if (branchUser) {
       return (
@@ -33,14 +33,6 @@ function MobileViewRenderer({ view, salesUrl, token, branchUser, ...props }) {
             <h3>Welcome</h3>
             <p>Welcome, {branchUser.name || 'Branch User'}!</p>
           </div>
-        </div>
-      );
-    }
-
-    if (!(planId === 'sales-gold' || planId === 'sales-premium')) {
-      return (
-        <div className="mobile-content mobile-overflow-y-auto">
-          {renderCardMessage('🔒', 'Upgrade Required', 'Branch management is available on Sales Gold and Premium plans.')}
         </div>
       );
     }

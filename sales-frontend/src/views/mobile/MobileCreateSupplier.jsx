@@ -16,9 +16,9 @@ function MobileCreateSupplier({ salesUrl, token }) {
     isLimitReached: () => false
   };
 
-  const supplierLimit = getFeatureLimit('suppliers_limit', 'maxSuppliers');
+  const supplierLimit = getFeatureLimit('supplier_limit', 'maxSuppliers');
   const currentSupplierCount = rows.length;
-  const isAtLimit = isLimitReached('suppliers_limit', 'maxSuppliers', currentSupplierCount);
+  const isAtLimit = isLimitReached('supplier_limit', 'maxSuppliers', currentSupplierCount);
 
   const decodeJwt = (tk) => {
     try {
@@ -145,7 +145,7 @@ function MobileCreateSupplier({ salesUrl, token }) {
     e.preventDefault();
 
     if (effectiveIsAtLimit) {
-      window.checkSalesFeatureLimit('suppliers_limit', 'maxSuppliers', currentSupplierCount, features, 'Supplier');
+      window.checkSalesFeatureLimit('supplier_limit', 'maxSuppliers', currentSupplierCount, features, 'Supplier');
       return;
     }
 
@@ -218,7 +218,7 @@ function MobileCreateSupplier({ salesUrl, token }) {
   return (
     <div className="mobile-content" style={{ paddingBottom: 80 }}>
       {!branchUserDecoded && React.createElement(window.LimitGuard, {
-        featureKey: 'suppliers_limit',
+        featureKey: 'supplier_limit',
         limitKey: 'maxSuppliers',
         currentCount: currentSupplierCount,
         featureName: 'Supplier',

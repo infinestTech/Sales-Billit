@@ -92,7 +92,8 @@ export default function PricingPage() {
               return;
             } else if (response.data.newSubscriptionCreated || !response.data.alreadySubscribed) {
               logSuccess("Welcome to Fixel! Enjoy your premium trial!");
-              router.replace("/billit-login");
+              const billitUrl = process.env.NEXT_PUBLIC_BILLIT_APP_URL || "http://localhost:3000";
+              window.location.href = `${billitUrl}/#login`;
             }
           }
         } catch (error) {

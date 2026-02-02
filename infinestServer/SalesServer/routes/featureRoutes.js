@@ -2,13 +2,14 @@ const express = require('express');
 const router = express.Router();
 const requireUser = require('../middleware/requireUser');
 const { Feature } = require('../models/feature'); // Use local Feature model
+const axios = require('axios').create({ family: 4, timeout: 10000 });
 
 // Get user features based on their plan
 router.get('/api/user/features', requireUser, async (req, res) => {
   try {
-    const { mongoPlanId } = req.user;
+    const { mongoPlanId, userId } = req.user;
     
-    console.log('🔍 Feature request - User plan:', mongoPlanId);
+    console.log('🔍 Feature request - User plan:', mongoPlanId, 'User ID:', userId);
     
     if (!mongoPlanId) {
       return res.status(400).json({ 
@@ -16,12 +17,119 @@ router.get('/api/user/features', requireUser, async (req, res) => {
       });
     }
 
-    // Test MongoDB connection first
-    console.log('🔍 Testing MongoDB connection...');
-    const testCount = await Feature.countDocuments();
-    console.log('🔍 Total features in DB:', testCount);
+    // Check if user is on Basic plan (10-day trial)
+    const isBasicPlan = mongoPlanId === 'sales-basic';
     
-    // Fetch features for the user's plan with timeout
+    // For Basic plan users, check trial status from CommonDB
+    let trialInfo = null;
+    if (isBasicPlan && userId) {
+      try {
+        const trialRes = await axios.get(
+          `${process.env.AUTH_SERVER_URL}/internal-get-trial-status/${userId}`,
+          {
+            headers: { 'x-internal-key': process.env.INTERNAL_API_KEY }
+          }
+        );
+        if (trialRes.data) {
+          trialInfo = trialRes.data;
+          console.log('🔍 Trial info:', trialInfo);
+        }
+      } catch (trialErr) {
+        console.warn('⚠️ Could not fetch trial status:', trialErr.message);
+      }
+    }
+
+    // During active trial period, return all premium features
+    const isTrialActive = trialInfo && trialInfo.isActive;
+    
+    if (isTrialActive) {
+      console.log('✅ Active trial - returning exact premium plan features');
+      // Return exact same features and limits as Premium plan during trial
+      const allPremiumFeatures = [
+        {
+          feature_key: "suppliers_enabled",
+          type: "boolean",
+          enabled: true,
+          description: "Supplier Management enabled"
+        },
+        {
+          feature_key: "bank_accounts_enabled",
+          type: "boolean",
+          enabled: true,
+          description: "Bank Account Management enabled"
+        },
+        {
+          feature_key: "payment_history_enabled",
+          type: "boolean",
+          enabled: true,
+          description: "Payment History enabled"
+        },
+        {
+          feature_key: "gst_calculator_enabled",
+          type: "boolean",
+          enabled: true,
+          description: "GST Calculator enabled"
+        },
+        {
+          feature_key: "branch_management_enabled",
+          type: "boolean",
+          enabled: true,
+          description: "Branch Management enabled"
+        },
+        {
+          feature_key: "supply_history_enabled",
+          type: "boolean",
+          enabled: true,
+          description: "Supply History enabled"
+        },
+        {
+          feature_key: "sales_analytics_enabled",
+          type: "boolean",
+          enabled: true,
+          description: "Sales Analytics enabled"
+        },
+        {
+          feature_key: "stock_management_enabled",
+          type: "boolean",
+          enabled: true,
+          description: "Stock Management enabled"
+        },
+        {
+          feature_key: "supplier_limit",
+          type: "limit",
+          config: {
+            maxSuppliers: 10  // Same as Premium plan
+          },
+          description: "10 suppliers (same as Premium plan)"
+        },
+        {
+          feature_key: "bank_account_limit",
+          type: "limit",
+          config: {
+            maxBankAccounts: 5  // Same as Premium plan
+          },
+          description: "5 bank accounts (same as Premium plan)"
+        },
+        {
+          feature_key: "product_inventory_limit",
+          type: "limit",
+          config: {
+            maxProducts: 150  // Same as Premium plan
+          },
+          description: "150 products (same as Premium plan)"
+        }
+      ];
+      
+      return res.json({
+        success: true,
+        userPlan: mongoPlanId,
+        features: allPremiumFeatures,
+        totalFeatures: allPremiumFeatures.length,
+        trial: trialInfo
+      });
+    }
+
+    // Otherwise, fetch features from database
     console.log('🔍 Fetching features for plan:', mongoPlanId);
     const features = await Feature.find({ plan_id: mongoPlanId }).lean().maxTimeMS(5000);
     console.log('🔍 Found features:', features.length);
@@ -31,7 +139,8 @@ router.get('/api/user/features', requireUser, async (req, res) => {
       success: true,
       userPlan: mongoPlanId,
       features: features,
-      totalFeatures: features.length
+      totalFeatures: features.length,
+      trial: trialInfo
     });
 
   } catch (error) {
