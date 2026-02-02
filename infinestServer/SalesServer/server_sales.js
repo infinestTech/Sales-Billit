@@ -145,32 +145,27 @@ app.post('/auth/branch-login', async (req, res) => {
   }
 });
 
-// Helper: fetch branchLimit for a mongoPlanId from CommonDB (fallback 0)
+// Helper: fetch branchLimit from MongoDB Feature model
 async function fetchBranchLimitByMongoPlanId(mongoPlanId) {
-  if (!mongoPlanId) return 0;
   try {
-    console.log('🔎 fetchBranchLimitByMongoPlanId: looking up plan', mongoPlanId);
-    // Prefer an internal endpoint; adjust if your CommonDB exposes another route
-    const resp = await axios.post(
-      `${process.env.AUTH_SERVER_URL}/internal-plan-by-mongo-id`,
-      { mongoPlanId },
-      { headers: { 'x-internal-key': process.env.INTERNAL_API_KEY } }
-    );
-    console.log('🔁 internal plan response:', resp.data && typeof resp.data === 'object' ? resp.data.plan : resp.data);
-    return Number(resp.data?.plan?.branchLimit ?? 0);
-  } catch (_) {
-    try {
-      // Fallback attempt (optional alternative route)
-      const resp2 = await axios.get(
-        `${process.env.AUTH_SERVER_URL}/plan/by-mongo/${encodeURIComponent(mongoPlanId)}`,
-        { headers: { 'x-internal-key': process.env.INTERNAL_API_KEY } }
-      );
-      console.log('🔁 fallback plan response:', resp2.data && typeof resp2.data === 'object' ? resp2.data.plan : resp2.data);
-      return Number(resp2.data?.plan?.branchLimit ?? 0);
-    } catch {
-      console.warn('⚠️ fetchBranchLimitByMongoPlanId: failed to fetch plan from auth server for', mongoPlanId);
-      return 0;
+    const { Feature } = require('./models/feature');
+    console.log('🔍 Fetching branch_limit from MongoDB Feature model...');
+    const feature = await Feature.findOne({ 
+      plan_id: 'sales-premium',
+      feature_key: 'branch_limit' 
+    });
+    
+    console.log('📊 Branch limit feature found:', feature);
+    
+    if (feature?.config?.maxBranches) {
+      console.log('✅ Returning branch limit:', feature.config.maxBranches);
+      return feature.config.maxBranches;
     }
+    console.warn('⚠️ No branch limit found in feature, using fallback: 5');
+    return 5; // Fallback
+  } catch (err) {
+    console.error('❌ Error fetching branch limit:', err.message);
+    return 5;
   }
 }
 
@@ -212,6 +207,35 @@ app.post('/auth/login', async (req, res) => {
       });
     }
 
+    // ✅ Check if trial has expired for Basic plan users
+    if (mongoPlanId === 'sales-basic') {
+      try {
+        const trialRes = await axios.get(
+          `${process.env.AUTH_SERVER_URL}/internal-get-trial-status/${userId}`,
+          {
+            headers: { 'x-internal-key': process.env.INTERNAL_API_KEY }
+          }
+        );
+        
+        if (trialRes.data && !trialRes.data.isActive) {
+          console.log('❌ Trial has expired for user:', userId);
+          return res.status(403).json({ 
+            message: "Your free trial has ended. Please subscribe to Premium to continue enjoying Fixel Sales' amazing features!",
+            trialExpired: true,
+            redirectToPricing: true
+          });
+        }
+      } catch (trialErr) {
+        console.warn('⚠️ Could not verify trial status:', trialErr.message);
+        // If we can't verify trial, block access for Basic plan users
+        return res.status(403).json({ 
+          message: "Unable to verify trial status. Please subscribe to Premium to continue.",
+          trialExpired: true,
+          redirectToPricing: true
+        });
+      }
+    }
+
     // Find or create a Shop by mysql_user_id
     let shop = await Shop.findOne({ mysql_user_id: userId });
     if (!shop) {
@@ -250,6 +274,31 @@ app.post('/auth/login', async (req, res) => {
   } catch (err) {
     console.error('Sales /auth/login error:', err.response?.data || err.message);
     res.status(500).json({ message: 'Login failed', error: err.response?.data || err.message });
+  }
+});
+
+// Get current plan limits from Feature model
+app.get('/api/plan-limits', async (req, res) => {
+  try {
+    const { Feature } = require('./models/feature');
+    
+    const features = await Feature.find({
+      plan_id: 'sales-premium',
+      feature_key: { $in: ['branch_limit', 'bank_account_limit', 'supplier_limit', 'product_inventory_limit'] }
+    });
+    
+    const limits = {};
+    features.forEach(f => {
+      if (f.feature_key === 'branch_limit') limits.branches = f.config?.maxBranches || 5;
+      if (f.feature_key === 'bank_account_limit') limits.banks = f.config?.maxBankAccounts || 5;
+      if (f.feature_key === 'supplier_limit') limits.suppliers = f.config?.maxSuppliers || 10;
+      if (f.feature_key === 'product_inventory_limit') limits.products = f.config?.maxProducts || 150;
+    });
+    
+    res.json({ limits });
+  } catch (err) {
+    console.error('Error fetching plan limits:', err.message);
+    res.status(500).json({ message: 'Failed to fetch limits', error: err.message });
   }
 });
 

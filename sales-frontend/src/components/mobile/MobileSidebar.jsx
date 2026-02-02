@@ -1,21 +1,11 @@
 function MobileSidebar({ active = 'bank', onSelect, planId, branchLimit, branchUser, isOpen, onClose }) {
-  // Use sales features context
-  const { features, isFeatureEnabled, getFeatureLimit } = window.useSalesFeatures ? window.useSalesFeatures() : { 
-    features: {}, 
-    isFeatureEnabled: () => true, 
-    getFeatureLimit: () => 999 
-  };
 
-  const MobileNavItem = ({ id, label, icon = '📋', locked = false, activeId, onClick, description, onLockedClick }) => (
+  const MobileNavItem = ({ id, label, icon = '📋', activeId, onClick, description }) => (
     <a
-      className={`mobile-nav-item ${activeId === id ? 'active' : ''} ${locked ? 'locked' : ''}`}
+      className={`mobile-nav-item ${activeId === id ? 'active' : ''}`}
       href={"#" + id}
       onClick={(e) => { 
         e.preventDefault(); 
-        if (locked) {
-          if (onLockedClick) onLockedClick();
-          return;
-        }
         onClick?.(id); 
         onClose?.(); // Close sidebar after navigation
         try { location.hash = '#' + id; } catch {} 
@@ -23,7 +13,6 @@ function MobileSidebar({ active = 'bank', onSelect, planId, branchLimit, branchU
     >
       <div className="mobile-nav-item-icon">
         <span className="mobile-icon">{icon}</span>
-        {locked && <span className="mobile-lock">🔒</span>}
       </div>
       <div className="mobile-nav-item-content">
         <span className="mobile-nav-item-label">{label}</span>
@@ -35,17 +24,8 @@ function MobileSidebar({ active = 'bank', onSelect, planId, branchLimit, branchU
     </a>
   );
 
-  // Determine if this is a branch user early so feature checks can use it
+  // Determine if this is a branch user
   const isBranch = !!branchUser;
-
-  // Feature access checks with better fallback logic
-  const isBankEnabled = isFeatureEnabled('bank_accounts_enabled') || (planId === 'sales-gold' || planId === 'sales-premium' || planId === 'sales-basic');
-  const isSupplierEnabled = isFeatureEnabled('suppliers_enabled') || isBranch || (planId === 'sales-basic' || planId === 'sales-gold' || planId === 'sales-premium');
-  const isGstEnabled = isFeatureEnabled('gst_calculator_enabled') || (planId === 'sales-gold' || planId === 'sales-premium');
-  const isPaymentHistoryEnabled = isFeatureEnabled('payment_history_enabled') || (planId === 'sales-gold' || planId === 'sales-premium');
-  const isSupplyHistoryEnabled = isFeatureEnabled('supply_history_enabled') || (planId === 'sales-premium');
-  const isBranchEnabled = isFeatureEnabled('branch_management_enabled') || (planId === 'sales-gold' || planId === 'sales-premium');
-  const canUseBranch = isBranchEnabled || planId === 'sales-gold' || planId === 'sales-premium';
 
   // Handle backdrop click
   const handleBackdropClick = (e) => {
@@ -113,8 +93,6 @@ function MobileSidebar({ active = 'bank', onSelect, planId, branchLimit, branchU
                   description="Manage payment methods"
                   activeId={active} 
                   onClick={onSelect}
-                  locked={!isBankEnabled}
-                  onLockedClick={() => window.checkSalesFeatureAccess('bank_accounts_enabled', 'Bank Account Management', features, 'Basic/Gold/Premium')}
                 />
                 <MobileNavItem 
                   id="bank-history" 
@@ -123,8 +101,6 @@ function MobileSidebar({ active = 'bank', onSelect, planId, branchLimit, branchU
                   description="View transaction records"
                   activeId={active} 
                   onClick={onSelect}
-                  locked={!isPaymentHistoryEnabled}
-                  onLockedClick={() => window.checkSalesFeatureAccess('payment_history_enabled', 'Payment History', features, 'Gold/Premium')}
                 />
                 <MobileNavItem 
                   id="branch-expense" 
@@ -148,8 +124,6 @@ function MobileSidebar({ active = 'bank', onSelect, planId, branchLimit, branchU
                   description="Manage suppliers"
                   activeId={active} 
                   onClick={onSelect}
-                  locked={!isSupplierEnabled}
-                  onLockedClick={() => window.checkSalesFeatureAccess('suppliers_enabled', 'Supplier Management', features, 'Basic/Gold/Premium')}
                 />
                 <MobileNavItem 
                   id="instock" 
@@ -215,8 +189,6 @@ function MobileSidebar({ active = 'bank', onSelect, planId, branchLimit, branchU
                   description="Set up payment options"
                   activeId={active} 
                   onClick={onSelect}
-                  locked={!isBankEnabled}
-                  onLockedClick={() => window.checkSalesFeatureAccess('bank_accounts_enabled', 'Bank Account Management', features, 'Basic/Gold/Premium')}
                 />
                 <MobileNavItem 
                   id="bank-history" 
@@ -225,8 +197,6 @@ function MobileSidebar({ active = 'bank', onSelect, planId, branchLimit, branchU
                   description="View all transactions"
                   activeId={active} 
                   onClick={onSelect}
-                  locked={!isPaymentHistoryEnabled}
-                  onLockedClick={() => window.checkSalesFeatureAccess('payment_history_enabled', 'Payment History', features, 'Gold/Premium')}
                 />
                 <MobileNavItem 
                   id="branch-expense" 
@@ -243,8 +213,6 @@ function MobileSidebar({ active = 'bank', onSelect, planId, branchLimit, branchU
                   description="Calculate GST amounts"
                   activeId={active} 
                   onClick={onSelect}
-                  locked={!isGstEnabled}
-                  onLockedClick={() => window.checkSalesFeatureAccess('gst_calculator_enabled', 'GST Calculator', features, 'Gold/Premium')}
                 />
               </div>
 
@@ -254,8 +222,6 @@ function MobileSidebar({ active = 'bank', onSelect, planId, branchLimit, branchU
                   Inventory Management
                 </div>
                 <MobileNavItem 
-                  locked={!isSupplierEnabled}
-                  onLockedClick={() => window.checkSalesFeatureAccess('suppliers_enabled', 'Supplier Management', features, 'Basic/Gold/Premium')}
                   id="supplier" 
                   label="Dealers" 
                   icon="🏢" 
@@ -290,31 +256,25 @@ function MobileSidebar({ active = 'bank', onSelect, planId, branchLimit, branchU
                   id="branch"
                   label="Branch Management"
                   icon="🏪"
-                  description={canUseBranch ? "Manage locations" : "Upgrade to unlock"}
-                  locked={!canUseBranch}
-                  onLockedClick={() => window.checkSalesFeatureAccess('branch_management_enabled', 'Branch Management', features, 'Basic/Gold/Premium')}
+                  description="Manage locations"
+                  activeId={active} 
+                  onClick={onSelect}
                 />
                 <MobileNavItem 
                   id="branch-supply" 
                   label="Branch Supply" 
                   icon="🚚" 
-                  description={canUseBranch ? "Supply branches" : "Upgrade required"}
+                  description="Supply branches"
                   activeId={active} 
                   onClick={onSelect} 
-                  locked={!canUseBranch}
-                  onLockedClick={() => window.checkSalesFeatureAccess('branch_management_enabled', 'Branch Supply', features, 'Basic/Gold/Premium')}
                 />
                 <MobileNavItem 
                   id="branch-supply-history" 
                   label="Supply History" 
                   icon="📋" 
-                  description={canUseBranch ? "Track supplies" : "Upgrade required"}
+                  description="Track supplies"
                   activeId={active} 
                   onClick={onSelect} 
-                  locked={!isSupplyHistoryEnabled}
-                  onLockedClick={() => window.checkSalesFeatureAccess('supply_history_enabled', 'Supply History', features, 'Premium')}
-                  onClick={onSelect} 
-                  locked={!canUseBranch} 
                 />
               </div>
             </>
@@ -325,8 +285,7 @@ function MobileSidebar({ active = 'bank', onSelect, planId, branchLimit, branchU
               <div className="mobile-plan-badge">
                 <span className="mobile-plan-icon">⭐</span>
                 <span className="mobile-plan-text">
-                  {planId === 'sales-premium' ? 'Premium Plan' : 
-                   planId === 'sales-gold' ? 'Gold Plan' : 'Basic Plan'}
+                  {planId === 'sales-premium' ? 'Premium Plan' : 'Basic Plan'}
                 </span>
               </div>
               {!isBranch && (

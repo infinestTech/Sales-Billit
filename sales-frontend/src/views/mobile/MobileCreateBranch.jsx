@@ -1,4 +1,4 @@
-function MobileCreateBranch({ salesUrl, token, planId, branchLimit = 0 }) {
+function MobileCreateBranch({ salesUrl, token, planId, branchLimit: propBranchLimit = 0 }) {
   const [form, setForm] = React.useState({
     name: '',
     address: '',
@@ -10,6 +10,7 @@ function MobileCreateBranch({ salesUrl, token, planId, branchLimit = 0 }) {
   });
 
   const [rows, setRows] = React.useState([]);
+  const [branchLimit, setBranchLimit] = React.useState(propBranchLimit);
   const [saving, setSaving] = React.useState(false);
   const [loading, setLoading] = React.useState(false);
   const [error, setError] = React.useState('');
@@ -39,6 +40,18 @@ function MobileCreateBranch({ salesUrl, token, planId, branchLimit = 0 }) {
     setForm((f) => ({ ...f, [name]: value }));
   };
 
+  const loadPlanLimits = React.useCallback(async () => {
+    try {
+      const res = await fetch(salesUrl + '/api/plan-limits');
+      const data = await res.json();
+      if (res.ok && data.limits?.branches) {
+        setBranchLimit(data.limits.branches);
+      }
+    } catch (e) {
+      console.error('Failed to fetch plan limits:', e);
+    }
+  }, [salesUrl]);
+
   const loadBranches = React.useCallback(async () => {
     setLoading(true);
     try {
@@ -66,7 +79,8 @@ function MobileCreateBranch({ salesUrl, token, planId, branchLimit = 0 }) {
 
   React.useEffect(() => {
     loadBranches();
-  }, [loadBranches]);
+    loadPlanLimits();
+  }, [loadBranches, loadPlanLimits]);
 
   const submit = async (e) => {
     e.preventDefault();

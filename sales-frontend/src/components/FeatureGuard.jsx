@@ -1,9 +1,11 @@
 // Feature Guard Component for wrapping views with feature access control
 function FeatureGuard({ featureKey, featureName, requiredPlans, children, fallbackComponent }) {
-  const { features, loading, isFeatureEnabled } = window.useSalesFeatures ? window.useSalesFeatures() : { 
+  const { features, loading, isFeatureEnabled, trialInfo, userPlan } = window.useSalesFeatures ? window.useSalesFeatures() : { 
     features: {}, 
     loading: false, 
-    isFeatureEnabled: () => true 
+    isFeatureEnabled: () => true,
+    trialInfo: null,
+    userPlan: ''
   };
 
   if (loading) {
@@ -19,6 +21,7 @@ function FeatureGuard({ featureKey, featureName, requiredPlans, children, fallba
     }, 'Loading...');
   }
 
+  // ✅ Always allow access during trial period or for premium plans
   const hasAccess = isFeatureEnabled(featureKey);
 
   if (!hasAccess) {

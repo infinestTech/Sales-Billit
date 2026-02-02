@@ -1035,6 +1035,61 @@ app.post('/internal-plan-by-mongo-id', internalAuth, async (req, res) => {
   }
 });
 
+// Internal: Get trial status for a user
+app.get('/internal-get-trial-status/:userId', internalAuth, async (req, res) => {
+  const { userId } = req.params;
+  if (!userId) return res.status(400).json({ message: 'Missing userId' });
+
+  try {
+    // Find user's active subscription
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      include: {
+        subscription: {
+          include: {
+            plan: true
+          }
+        }
+      }
+    });
+
+    if (!user || !user.subscription) {
+      return res.json({ 
+        isActive: false, 
+        message: 'No subscription found' 
+      });
+    }
+
+    const { subscription } = user;
+    const now = new Date();
+
+    // Check if subscription is active and has endDate (trial period)
+    if (subscription.status === 'ACTIVE' && subscription.endDate) {
+      const isTrialActive = now < subscription.endDate;
+      const daysRemaining = isTrialActive 
+        ? Math.ceil((subscription.endDate - now) / (1000 * 60 * 60 * 24)) 
+        : 0;
+
+      return res.json({
+        isActive: isTrialActive,
+        expiryDate: subscription.endDate,
+        daysRemaining,
+        planName: subscription.plan.name,
+        mongoPlanId: subscription.plan.mongoPlanId
+      });
+    }
+
+    return res.json({ 
+      isActive: false, 
+      message: 'Not on trial period' 
+    });
+
+  } catch (err) {
+    console.error('Trial status lookup failed:', err.message || err);
+    return res.status(500).json({ message: 'Server error' });
+  }
+});
+
 // Public fallback: get plan by mongoPlanId (no internal auth). Prefer internal endpoint when possible.
 app.get('/plan/by-mongo/:mongoPlanId', async (req, res) => {
   const mongoPlanId = req.params.mongoPlanId;

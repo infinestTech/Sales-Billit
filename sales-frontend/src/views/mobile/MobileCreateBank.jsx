@@ -14,7 +14,7 @@ function MobileCreateBank({ salesUrl, token }) {
     isLimitReached: () => false 
   };
 
-  const bankLimit = getFeatureLimit('bank_accounts_limit', 'maxBankAccounts');
+  const bankLimit = getFeatureLimit('bank_account_limit', 'maxBankAccounts');
   const [remoteBankLimit, setRemoteBankLimit] = React.useState(null);
   const currentBankCount = rows.length;
   const effectiveBankLimit = (typeof remoteBankLimit === 'number' && remoteBankLimit >= 0) ? remoteBankLimit : bankLimit;
@@ -45,7 +45,7 @@ function MobileCreateBank({ salesUrl, token }) {
     const fetchLimit = async () => {
       try {
         if (!token || (bankLimit && bankLimit > 0)) return;
-        const res = await fetch(salesUrl + '/api/user/features/bank_accounts_limit/limits', { headers: { Authorization: 'Bearer ' + token } });
+        const res = await fetch(salesUrl + '/api/user/features/bank_account_limit/limits', { headers: { Authorization: 'Bearer ' + token } });
         if (!res.ok) return;
         const data = await res.json();
         const val = data?.limits?.maxBankAccounts;
@@ -60,7 +60,7 @@ function MobileCreateBank({ salesUrl, token }) {
     e.preventDefault();
     
     if (isAtLimit) {
-      window.checkSalesFeatureLimit('bank_accounts_limit', 'maxBankAccounts', currentBankCount, features, 'Bank Account');
+      window.checkSalesFeatureLimit('bank_account_limit', 'maxBankAccounts', currentBankCount, features, 'Bank Account');
       return;
     }
     
@@ -100,7 +100,7 @@ function MobileCreateBank({ salesUrl, token }) {
     <div className="mobile-content">
       {/* Limit Warning */}
       {React.createElement(window.LimitGuard, {
-        featureKey: 'bank_accounts_limit',
+        featureKey: 'bank_account_limit',
         limitKey: 'maxBankAccounts',
         currentCount: currentBankCount,
         featureName: 'Bank Account',

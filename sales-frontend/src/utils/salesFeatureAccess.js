@@ -6,9 +6,9 @@
 /**
  * Show upgrade notification when user tries to access a restricted feature
  * @param {string} featureName - Name of the feature being accessed
- * @param {string} requiredPlans - Required subscription plans (e.g., "Gold/Premium")
+ * @param {string} requiredPlans - Required subscription plans (e.g., "Premium")
  */
-const showSalesUpgradeNotification = (featureName, requiredPlans = "Gold/Premium") => {
+const showSalesUpgradeNotification = (featureName, requiredPlans = "Premium") => {
   const message = `🚀 Upgrade Required! The ${featureName} feature is available in ${requiredPlans} plans. Upgrade now to unlock this powerful feature and boost your sales efficiency.`;
  
   // Simple alert for now - can be enhanced with toast notifications
@@ -25,7 +25,7 @@ const showSalesUpgradeNotification = (featureName, requiredPlans = "Gold/Premium
  * @param {string} requiredPlans - Required subscription plans
  * @returns {boolean} - True if feature is enabled, false otherwise
  */
-const checkSalesFeatureAccess = (featureKey, featureName, features, requiredPlans = "Gold/Premium") => {
+const checkSalesFeatureAccess = (featureKey, featureName, features, requiredPlans = "Premium") => {
   const isEnabled = features[featureKey]?.enabled;
  
   if (!isEnabled) {
@@ -58,7 +58,7 @@ const checkSalesFeatureLimit = (featureKey, limitKey, currentCount, features, fe
   if (isLimitReached) {
     showSalesUpgradeNotification(
       `${featureName} Limit Reached`,
-      "Gold/Premium"
+      "Premium"
     );
   }
  
@@ -74,7 +74,7 @@ const checkSalesFeatureLimit = (featureKey, limitKey, currentCount, features, fe
  * @param {function} onUpgrade - Function to call when upgrade button is clicked
  * @returns {React.Element} - React component
  */
-const createSalesFeatureLockedComponent = (featureName, description, requiredPlans = "Gold/Premium", onUpgrade) => {
+const createSalesFeatureLockedComponent = (featureName, description, requiredPlans = "Premium", onUpgrade) => {
   return React.createElement('div', {
     className: 'feature-locked-container',
     style: {
@@ -257,29 +257,29 @@ const createSalesFeatureLockedComponent = (featureName, description, requiredPla
 const SALES_FEATURE_CONFIG = {
   bank_accounts: {
     enabledKey: 'bank_accounts_enabled',
-    limitKey: 'bank_accounts_limit',
+    limitKey: 'bank_account_limit',
     name: 'Bank Account Management',
     description: 'Manage multiple bank accounts for your business transactions and financial tracking.',
-    requiredPlans: 'Gold/Premium'
+    requiredPlans: 'Premium'
   },
   suppliers: {
     enabledKey: 'suppliers_enabled',
-    limitKey: 'suppliers_limit',
+    limitKey: 'supplier_limit',
     name: 'Supplier Management',
     description: 'Add and manage suppliers for your inventory and supply chain operations.',
-    requiredPlans: 'Gold/Premium'
+    requiredPlans: 'Premium'
   },
   gst_calculator: {
     enabledKey: 'gst_calculator_enabled',
     name: 'GST Calculator',
     description: 'Calculate GST for your transactions and maintain tax compliance with advanced GST tools.',
-    requiredPlans: 'Gold/Premium'
+    requiredPlans: 'Premium'
   },
   payment_history: {
     enabledKey: 'payment_history_enabled',
     name: 'Payment History',
     description: 'Track and analyze your payment history with detailed financial reports.',
-    requiredPlans: 'Gold/Premium'
+    requiredPlans: 'Premium'
   },
   supply_history: {
     enabledKey: 'supply_history_enabled',
@@ -292,13 +292,13 @@ const SALES_FEATURE_CONFIG = {
     limitKey: 'branch_limit',
     name: 'Branch Management',
     description: 'Create and manage multiple branches for your business operations.',
-    requiredPlans: 'Gold/Premium'
+    requiredPlans: 'Premium'
   },
   inventory_volume: {
     limitKey: 'total_inventory_volume',
     name: 'Inventory Management',
     description: 'Manage your product inventory with advanced tracking and analytics.',
-    requiredPlans: 'Gold/Premium'
+    requiredPlans: 'Premium'
   }
 };
 

@@ -1,11 +1,29 @@
 const Supplier = require('../models/supplier');
+const axios = require('axios').create({ family: 4, timeout: 10000 });
 
+// Helper to get supplier limit
+async function getSupplierLimit(userId, planId) {
+  try {
+    const Feature = require('../models/feature');
+    const feature = await Feature.findOne({ 
+      plan_id: 'sales-premium',
+      feature_key: 'supplier_limit' 
+    });
+    
+    if (feature?.config?.maxSuppliers) {
+      return feature.config.maxSuppliers;
+    }
+    return 10; // Fallback
+  } catch (err) {
+    console.error('Error fetching supplier limit:', err.message);
+    return 10;
+  }
+}
 
 exports.createSupplier = async (req, res) => {
   try {
     const { shop_id, userId } = req.user || {};
     if (!shop_id) return res.status(400).json({ success: false, message: 'Shop missing' });
-
 
     const {
       supplierName = '',
@@ -16,21 +34,24 @@ exports.createSupplier = async (req, res) => {
       panNumber = ''
     } = req.body || {};
 
-
     // If this is a branch user, allow access regardless of plan feature flag / limits
-    // Branch tokens are intended for branch-level operations and should not be blocked
-    // by the parent shop's subscription checks in this controller.
     if (!req.user?.isBranch) {
-      // Check supplier limit from plan features (if any)
+      // Check supplier limit from plan features (considering trial)
       try {
-        const Feature = require('../models/feature');
         const mongoPlanId = req.user.mongoPlanId;
         if (mongoPlanId) {
-          const limitFeature = await Feature.findOne({ plan_id: mongoPlanId, feature_key: 'suppliers_limit' }).lean();
-          if (limitFeature && limitFeature.type === 'limit' && limitFeature.config && typeof limitFeature.config.maxSuppliers === 'number') {
+          const maxSuppliers = await getSupplierLimit(userId, mongoPlanId);
+          
+          if (maxSuppliers > 0) {
             const currentCount = await Supplier.countDocuments({ shop_id });
-            if (currentCount >= limitFeature.config.maxSuppliers) {
-              return res.status(403).json({ success: false, message: `Supplier limit reached (${currentCount}/${limitFeature.config.maxSuppliers})` });
+            
+            console.log(`🏢 Supplier creation check: ${currentCount}/${maxSuppliers} (Plan: ${mongoPlanId})`);
+            
+            if (currentCount >= maxSuppliers) {
+              return res.status(403).json({ 
+                success: false, 
+                message: `Supplier limit reached (${currentCount}/${maxSuppliers}). Upgrade to Premium for more suppliers.` 
+              });
             }
           }
         }

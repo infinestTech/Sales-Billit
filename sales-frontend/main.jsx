@@ -36,7 +36,21 @@ function App() {
         body: JSON.stringify({ email, password })
       });
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error || data.message || 'Login failed');
+      
+      // Check for trial expiry
+      if (!res.ok) {
+        if (data.trialExpired && data.redirectToPricing) {
+          setError(data.message || "Your trial has expired. Please upgrade to continue.");
+          setLoading(false);
+          // Redirect to pricing after showing error
+          setTimeout(() => {
+            window.open('/pricing/sales', '_blank');
+          }, 2000);
+          return;
+        }
+        throw new Error(data.error || data.message || 'Login failed');
+      }
+      
       if (!data.token) throw new Error('No token returned');
       
       // Ensure branch token is removed so only one token type exists in this browser
@@ -334,17 +348,7 @@ function App() {
         ) : (view === 'supplier') ? (
           <CreateSupplier salesUrl={SALES_URL} token={effectiveToken} />
         ) : (!branchUser && view === 'branch') ? (
-          (planId === 'sales-gold' || planId === 'sales-premium') ? (
-            <CreateBranch salesUrl={SALES_URL} token={effectiveToken} planId={planId} branchLimit={branchLimit} />
-          ) : (
-            <div className="card">
-              <div className="empty-state">
-                <div className="empty-icon">🔒</div>
-                <div className="empty-title">Upgrade Required</div>
-                <div className="empty-sub">Branch management is available on Sales Gold and Premium plans.</div>
-              </div>
-            </div>
-          )
+          <CreateBranch salesUrl={SALES_URL} token={effectiveToken} planId={planId} branchLimit={branchLimit} />
         ) : view === 'branch-login' ? (
           <BranchLogin salesUrl={SALES_URL} />
         ) : view === 'branch-supply' ? (
@@ -486,11 +490,12 @@ function App() {
 }
 
 // Modern CreateBranch component with enhanced UI
-function CreateBranch({ salesUrl, token, planId, branchLimit = 0 }) {
+function CreateBranch({ salesUrl, token, planId, branchLimit: propBranchLimit = 0 }) {
   const [form, setForm] = React.useState({
     name: '', address: '', gstNo: '', phoneNumber: '', email: '', password: '', confirmPassword: ''
   });
   const [rows, setRows] = React.useState([]);
+  const [branchLimit, setBranchLimit] = React.useState(propBranchLimit);
   const [saving, setSaving] = React.useState(false);
   const [error, setError] = React.useState('');
   const [page, setPage] = React.useState(1);
@@ -512,7 +517,22 @@ function CreateBranch({ salesUrl, token, planId, branchLimit = 0 }) {
     } catch (e) { setError(e.message); }
   };
 
-  React.useEffect(() => { loadBranches(); }, []);
+  const loadPlanLimits = async () => {
+    try {
+      const res = await fetch(salesUrl + '/api/plan-limits');
+      const data = await res.json();
+      if (res.ok && data.limits?.branches) {
+        setBranchLimit(data.limits.branches);
+      }
+    } catch (e) {
+      console.error('Failed to fetch plan limits:', e);
+    }
+  };
+
+  React.useEffect(() => { 
+    loadBranches(); 
+    loadPlanLimits();
+  }, []);
 
   const submit = async (e) => {
     e.preventDefault();

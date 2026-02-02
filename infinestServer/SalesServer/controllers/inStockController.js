@@ -2,6 +2,24 @@ const InStock = require('../models/inStock');
 const Bank = require('../models/bank');
 const BankTransaction = require('../models/bankTransaction');
 
+// Helper function to get product inventory limit
+async function getProductInventoryLimit(userId, shopId, mongoPlanId) {
+  try {
+    const { Feature } = require('../models/feature');
+    const feature = await Feature.findOne({ 
+      plan_id: 'sales-premium',
+      feature_key: 'product_inventory_limit' 
+    });
+    
+    if (feature?.config?.maxProducts) {
+      return feature.config.maxProducts;
+    }
+    return 150; // Fallback
+  } catch (err) {
+    console.error('Error fetching product inventory limit:', err.message);
+    return 150;
+  }
+}
 
 exports.createInStock = async (req, res) => {
   try {
@@ -17,6 +35,39 @@ exports.createInStock = async (req, res) => {
   const { supplier_id, bank_id, supplierAmount = 0, gstAmount = 0, items = [], reference = '' } = req.body || {};
     if (!supplier_id) return res.status(400).json({ success: false, message: 'supplier_id is required' });
   if (!bank_id) return res.status(400).json({ success: false, message: 'bank_id is required' });
+
+  // Check product inventory limit
+  const productLimit = await getProductInventoryLimit(userId, shop_id, req.user.mongoPlanId);
+  
+  // Count existing unique products across all InStock documents
+  const existingDocs = await InStock.find({ shop_id }).lean();
+  const existingProducts = new Set();
+  existingDocs.forEach(doc => {
+    doc.items.forEach(item => {
+      if (item.productNo) {
+        existingProducts.add(item.productNo);
+      }
+    });
+  });
+  
+  // Count new unique products being added
+  const newProducts = new Set();
+  items.forEach(item => {
+    if (item.productNo && !existingProducts.has(item.productNo)) {
+      newProducts.add(item.productNo);
+    }
+  });
+  
+  const totalUniqueProducts = existingProducts.size + newProducts.size;
+  
+  console.log(`📦 Product creation check: ${totalUniqueProducts}/${productLimit} (adding ${newProducts.size} new products)`);
+  
+  if (totalUniqueProducts > productLimit) {
+    return res.status(403).json({ 
+      success: false, 
+      message: `Product inventory limit reached. Your plan allows ${productLimit} unique products. You currently have ${existingProducts.size} products and are trying to add ${newProducts.size} new ones.` 
+    });
+  }
 
 
   // Calculate totalCost for bank balance and transaction logic
