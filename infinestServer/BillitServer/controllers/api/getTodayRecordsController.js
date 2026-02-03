@@ -45,70 +45,28 @@ const getTodayRecords = async (req, res) => {
     });
 
 
-    // Calculate revenue from mobiles created today based on TODAY'S PAYMENTS ONLY
-    let mobileRevenue = 0;
-    
-    mobiles.forEach((m) => {
-      // For mobiles created today, sum up payments made today
-      if (m.payments && m.payments.length > 0) {
-        const todaysPayments = m.payments.filter(p => {
-          const paymentDate = new Date(p.date);
-          return paymentDate >= startOfDay && paymentDate <= endOfDay;
-        });
-        mobileRevenue += todaysPayments.reduce((sum, p) => sum + (p.amount || 0), 0);
-      } else {
-        // Fallback for legacy data without payments array
-        mobileRevenue += (m.total_paid || m.paid_amount || 0);
-      }
-    });
-
-
-    // ✅ Fetch ALL mobiles (to capture payments made today on older mobiles)
+    // Calculate today's revenue from payments made TODAY (same logic as shop-admin portal)
+    // Fetch ALL mobiles to capture all payments made today
     const allMobiles = await Mobile.find({
       shop_id: actualUserId
     }).lean();
 
-
-    // ✅ Calculate revenue from payments made TODAY on mobiles NOT created today
-    let updatedMobileRevenue = 0;
-    
+    let todayRevenue = 0;
     allMobiles.forEach((m) => {
-      // Skip mobiles created today (already counted above)
-      if (m.added_date >= startOfDay && m.added_date <= endOfDay) {
-        return;
-      }
-      
-      // Count only payments made TODAY on older mobiles
       if (m.payments && m.payments.length > 0) {
+        // Sum up all payments made today (regardless of when mobile was created)
         const todaysPayments = m.payments.filter(p => {
           const paymentDate = new Date(p.date);
           return paymentDate >= startOfDay && paymentDate <= endOfDay;
         });
-        updatedMobileRevenue += todaysPayments.reduce((sum, p) => sum + (p.amount || 0), 0);
+        todayRevenue += todaysPayments.reduce((sum, p) => sum + (p.amount || 0), 0);
+      } else {
+        // Fallback for legacy data: if mobile was created today and has no payments array
+        if (new Date(m.added_date || m.created_at) >= startOfDay && new Date(m.added_date || m.created_at) <= endOfDay) {
+          todayRevenue += (m.total_paid || m.paid_amount || 0);
+        }
       }
     });
-
-
-    // Product sales revenue for today
-    const productRevenueAgg = await ProductHistory.aggregate([
-      {
-        $match: {
-          changeType: "SELL",
-          changeDate: { $gte: startOfDay, $lte: endOfDay }
-        }
-      },
-      {
-        $group: {
-          _id: null,
-          total: { $sum: "$paidAmount" }
-        }
-      }
-    ]);
-    const productRevenue = productRevenueAgg[0]?.total || 0;
-
-
-    // ✅ Final correct revenue calculation:
-    const todayRevenue = mobileRevenue + updatedMobileRevenue + productRevenue;
 
 
     const records = [
