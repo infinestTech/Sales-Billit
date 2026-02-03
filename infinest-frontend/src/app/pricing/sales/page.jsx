@@ -93,8 +93,8 @@ export default function SalesPricingPage() {
             } else if (response.data.newSubscriptionCreated || !response.data.alreadySubscribed) {
               logSuccess("Welcome to Fixel Sales! Enjoy your premium trial!");
               // Redirect to sales login
-              const salesUrl = process.env.NEXT_PUBLIC_SALES_APP_URL || "http://localhost:3020";
-              window.location.href = `${salesUrl}/#login`;
+              const salesUrl = process.env.NEXT_PUBLIC_SALES_FRONTEND_URL || "http://localhost:3020";
+              window.location.href = `${salesUrl}#login`;
             }
           }
         } catch (error) {
@@ -143,7 +143,8 @@ export default function SalesPricingPage() {
               );
 
               logSuccess("Sales subscription activated successfully!");
-              window.location.href = "http://localhost:3020/";
+              const salesUrl = process.env.NEXT_PUBLIC_SALES_FRONTEND_URL || "http://localhost:3020";
+              window.location.href = salesUrl;
             } catch (err) {
               logError("Payment verification failed", err);
               logAndNotify("Payment verification failed. Please contact support.", "error");
