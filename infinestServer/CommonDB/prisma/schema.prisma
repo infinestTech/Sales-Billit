@@ -25,10 +25,6 @@ model User {
   subscriptionId String?
   payments       Payment[]
   logs           SubscriptionLog[] @relation("UserLogs") // 👈 Add this
-
-  // Branch relations
-  branchesOwned  Branch[]          @relation("OwnerBranches")
-  adminBranches  Branch[]          @relation("BranchAdmin")
 }
 
 model Subscription {
@@ -80,9 +76,6 @@ model Plan {
   price       Decimal
   duration    SubscriptionDuration
 
-  // Branch limit (0 = not allowed)
-  branchLimit Int                  @default(0)
-
   mongoPlanId     String? // maps to MongoDB plan _id
   mongoCategoryId String? // maps to MongoDB category _id
 
@@ -95,24 +88,6 @@ model ProductAccess {
   user      User        @relation(fields: [userId], references: [id])
   product   ProductType
   createdAt DateTime    @default(now())
-}
-
-// New: Branch model
-model Branch {
-  id           String   @id @default(uuid())
-  name         String
-  address      String?
-  phone        String?
-  email        String
-  createdAt    DateTime @default(now())
-
-  // The user who created/owns this branch (can create multiple)
-  ownerId      String
-  owner        User     @relation("OwnerBranches", fields: [ownerId], references: [id], onDelete: Cascade)
-
-  // The user account that administers this branch (created from the form)
-  adminUserId  String   @unique
-  adminUser    User     @relation("BranchAdmin", fields: [adminUserId], references: [id], onDelete: Cascade)
 }
 
 enum ProductType {
