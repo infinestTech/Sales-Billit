@@ -11,7 +11,11 @@ import authApi from "../authApi";
 
 // Enhanced PrintableReceipt Component
 const PrintableReceipt = React.forwardRef(({ clientData, shopPhoneNumber, shopAddress, shopEmail, shopName }, ref) => {
-  const totalPaid = (clientData?.MobileName || []).reduce((s, m) => s + (Number(m.paid_amount) || 0), 0);
+  const totalPaid = (clientData?.MobileName || []).reduce((s, m) => {
+    // Use total_paid if available, otherwise calculate from payments, fallback to paid_amount
+    const paidAmt = m.total_paid || (m.payments && m.payments.length > 0 ? m.payments.reduce((sum, p) => sum + (p.amount || 0), 0) : 0) || m.paid_amount || 0;
+    return s + Number(paidAmt);
+  }, 0);
   return (
     <div ref={ref} className="bg-white p-6 rounded-lg shadow-lg border max-w-sm mx-auto text-sm font-mono">
       {/* Header */}
@@ -76,7 +80,7 @@ const PrintableReceipt = React.forwardRef(({ clientData, shopPhoneNumber, shopAd
                 <td className="border border-gray-400 px-2 py-2 text-center font-semibold">{index + 1}</td>
                 <td className="border border-gray-400 px-2 py-2"><div className="truncate max-w-full">{mobile.mobile_name}</div></td>
                 <td className="border border-gray-400 px-2 py-2">{mobile.issue || "General Service"}</td>
-                <td className="border border-gray-400 px-2 py-2 text-right">{(typeof mobile.paid_amount !== 'undefined' && mobile.paid_amount !== null) ? mobile.paid_amount : 0}</td>
+                <td className="border border-gray-400 px-2 py-2 text-right">{mobile.total_paid || (mobile.payments && mobile.payments.length > 0 ? mobile.payments.reduce((sum, p) => sum + (p.amount || 0), 0) : 0) || mobile.paid_amount || 0}</td>
               </tr>
             ))}
           </tbody>
@@ -170,7 +174,7 @@ const generateEnhancedPDF = (clientData, shopPhoneNumber, shopAddress, shopEmail
     String(index + 1),
     mobile.mobile_name,
   mobile.issue || "General Service",
-  (typeof mobile.paid_amount !== 'undefined' && mobile.paid_amount !== null) ? String(mobile.paid_amount) : "0",
+  String(mobile.total_paid || (mobile.payments && mobile.payments.length > 0 ? mobile.payments.reduce((sum, p) => sum + (p.amount || 0), 0) : 0) || mobile.paid_amount || 0),
   ]);
 
   autoTable(doc, {
@@ -204,7 +208,10 @@ const generateEnhancedPDF = (clientData, shopPhoneNumber, shopAddress, shopEmail
 
 
    // Total paid amount: place after the table and right-align near the page edge
-  const totalPaid = clientData.MobileName.reduce((sum, m) => sum + (Number(m.paid_amount) || 0), 0);
+  const totalPaid = clientData.MobileName.reduce((sum, m) => {
+    const paidAmt = m.total_paid || (m.payments && m.payments.length > 0 ? m.payments.reduce((pSum, p) => pSum + (p.amount || 0), 0) : 0) || m.paid_amount || 0;
+    return sum + Number(paidAmt);
+  }, 0);
   const tableEndY = doc.previousAutoTable?.finalY || yPosition;
   // move a bit below the table
   yPosition = tableEndY + 8;
@@ -242,6 +249,7 @@ const ReceiptGenerator = ({ clientData, shopPhoneNumber, closeModal, shopAddress
   const [shopEmail, setShopEmail] = useState(null);
   const [shopName, setShopName] = useState(null);
   const [profileAddress, setProfileAddress] = useState(null);
+  const [profilePhoneNumber, setProfilePhoneNumber] = useState(null);
   const [loading, setLoading] = useState(true);
 
   // Fetch shop details from profile
@@ -263,6 +271,9 @@ const ReceiptGenerator = ({ clientData, shopPhoneNumber, closeModal, shopAddress
         }
         if (res.data && res.data.address) {
           setProfileAddress(res.data.address);
+        }
+        if (res.data && res.data.phone) {
+          setProfilePhoneNumber(res.data.phone);
         }
       } catch (err) {
         console.error("Error fetching shop details:", err);
@@ -353,7 +364,8 @@ const ReceiptGenerator = ({ clientData, shopPhoneNumber, closeModal, shopAddress
 
   const handlePreview = () => {
     const finalAddress = profileAddress || shopAddress;
-    const doc = generateEnhancedPDF(clientData, shopPhoneNumber, finalAddress, shopEmail, shopName);
+    const finalPhoneNumber = profilePhoneNumber || shopPhoneNumber;
+    const doc = generateEnhancedPDF(clientData, finalPhoneNumber, finalAddress, shopEmail, shopName);
     const blob = doc.output("blob");
     const pdfURL = URL.createObjectURL(blob);
     setPreviewURL(pdfURL);
@@ -362,7 +374,8 @@ const ReceiptGenerator = ({ clientData, shopPhoneNumber, closeModal, shopAddress
 
   const handleDownloadPDF = () => {
     const finalAddress = profileAddress || shopAddress;
-    const doc = generateEnhancedPDF(clientData, shopPhoneNumber, finalAddress, shopEmail, shopName);
+    const finalPhoneNumber = profilePhoneNumber || shopPhoneNumber;
+    const doc = generateEnhancedPDF(clientData, finalPhoneNumber, finalAddress, shopEmail, shopName);
     const fileName = `Receipt-${clientData.bill_no || clientData.client_name || 'Service'}.pdf`;
     doc.save(fileName);
   };
@@ -384,8 +397,8 @@ const ReceiptGenerator = ({ clientData, shopPhoneNumber, closeModal, shopAddress
     const billNumber = clientData.bill_no || "N/A";
 
     const servicedMobiles = clientData.MobileName.map((device, index) => {
-  const paid = (typeof device.paid_amount !== 'undefined' && device.paid_amount !== null) ? device.paid_amount : 0;
-  return `${index + 1}. 📱 ${device.mobile_name} - ${device.issue || "General Service"} (Paid: ${paid})`;
+  const paid = device.total_paid || (device.payments && device.payments.length > 0 ? device.payments.reduce((sum, p) => sum + (p.amount || 0), 0) : 0) || device.paid_amount || 0;
+  return `${index + 1}. 📱 ${device.mobile_name} - ${device.issue || "General Service"} (Paid: ₹${paid})`;
     }).join("\n");
 
     const message = `🧾 *${shop}* - Service Receipt\n\n👤 Customer: ${customer}\n📞 Mobile: ${clientData.mobile_number}\n🧾 Bill No: ${billNumber}\n\n📱 *Devices:*\n${servicedMobiles}\n\n🔗 View Online: ${receiptLink}\n\n✨ Thank you for choosing our service!`;
@@ -428,7 +441,7 @@ const ReceiptGenerator = ({ clientData, shopPhoneNumber, closeModal, shopAddress
                 <PrintableReceipt
                   ref={receiptRef}
                   clientData={clientData}
-                  shopPhoneNumber={shopPhoneNumber}
+                  shopPhoneNumber={profilePhoneNumber || shopPhoneNumber}
                   shopAddress={profileAddress || shopAddress}
                   shopEmail={shopEmail}
                   shopName={shopName}

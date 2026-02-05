@@ -96,27 +96,59 @@ export default function LandingPage() {
               </div>
 
               {/* CTA Buttons */}
-              <div className="flex flex-wrap gap-4 pt-4">
-                <Link 
-                  href="/pricing"
-                  className="group relative overflow-hidden bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-semibold px-8 py-4 rounded-xl transition-all duration-200 transform hover:scale-105 focus:outline-none focus:ring-2 focus:ring-blue-500/50 shadow-lg"
-                >
-                  <div className="absolute inset-0 bg-gradient-to-r from-blue-400/20 to-indigo-400/20 opacity-0 group-hover:opacity-100 transition-opacity duration-200"></div>
-                  <span className="relative flex items-center gap-2">
-                    View Pricing
-                    <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
-                  </span>
-                </Link>
+              <div className="flex flex-col gap-4 pt-4">
+                <div className="flex flex-wrap gap-4">
+                  <Link 
+                    href="/pricing"
+                    className="group relative overflow-hidden bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-semibold px-8 py-4 rounded-xl transition-all duration-200 transform hover:scale-105 focus:outline-none focus:ring-2 focus:ring-blue-500/50 shadow-lg"
+                  >
+                    <div className="absolute inset-0 bg-gradient-to-r from-blue-400/20 to-indigo-400/20 opacity-0 group-hover:opacity-100 transition-opacity duration-200"></div>
+                    <span className="relative flex items-center gap-2">
+                      View Pricing
+                      <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
+                    </span>
+                  </Link>
 
-                <Link 
-                  href="/login"
-                  className="group relative overflow-hidden bg-gray-800/50 hover:bg-gray-700/50 border border-gray-600/50 text-white font-semibold px-8 py-4 rounded-xl transition-all duration-200 transform hover:scale-105 focus:outline-none focus:ring-2 focus:ring-gray-500/50 backdrop-blur-sm shadow-lg"
-                >
-                  <span className="relative flex items-center gap-2">
-                    Sign In
-                    <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
-                  </span>
-                </Link>
+                  <Link 
+                    href="/login"
+                    className="group relative overflow-hidden bg-gray-800/50 hover:bg-gray-700/50 border border-gray-600/50 text-white font-semibold px-8 py-4 rounded-xl transition-all duration-200 transform hover:scale-105 focus:outline-none focus:ring-2 focus:ring-gray-500/50 backdrop-blur-sm shadow-lg"
+                  >
+                    <span className="relative flex items-center gap-2">
+                      Sign In
+                      <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
+                    </span>
+                  </Link>
+                </div>
+
+                {/* Quick Access Login Buttons */}
+                <div className="flex flex-col sm:flex-row gap-3 pt-2">
+                  <div className="text-xs text-gray-400 flex items-center">
+                    <span className="hidden sm:inline mr-3">Quick access:</span>
+                  </div>
+                  <div className="flex flex-wrap gap-3">
+                    <Link 
+                      href="/billit-login"
+                      className="group relative overflow-hidden bg-blue-900/30 hover:bg-blue-800/40 border border-blue-500/40 hover:border-blue-400/60 text-blue-300 hover:text-blue-200 font-medium px-4 py-2 rounded-lg transition-all duration-200 backdrop-blur-sm text-sm"
+                    >
+                      <span className="relative flex items-center gap-2">
+                        <Wrench className="w-4 h-4" />
+                        Service Login
+                      </span>
+                    </Link>
+
+                    <a 
+                      href={`${process.env.NEXT_PUBLIC_SALES_FRONTEND_URL || 'http://localhost:3020'}#bank`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="group relative overflow-hidden bg-emerald-900/30 hover:bg-emerald-800/40 border border-emerald-500/40 hover:border-emerald-400/60 text-emerald-300 hover:text-emerald-200 font-medium px-4 py-2 rounded-lg transition-all duration-200 backdrop-blur-sm text-sm"
+                    >
+                      <span className="relative flex items-center gap-2">
+                        <ShoppingCart className="w-4 h-4" />
+                        Sales Login
+                      </span>
+                    </a>
+                  </div>
+                </div>
               </div>
 
               {/* Stats */}
