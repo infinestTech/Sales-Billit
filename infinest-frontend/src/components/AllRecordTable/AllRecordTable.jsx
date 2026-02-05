@@ -510,9 +510,11 @@ const [shopAddressState, setShopAddressState] = useState("")
                   issue: m.issue,
                   added_date: m.added_date || m.addedDate,
                   delivery_date: m.delivery_date || m.deliveryDate || null,
-                  // include paid amount so ReceiptGenerator can show accurate values
+                  // Use total_paid from payments array if available, fallback to legacy paid_amount
+                  payments: m.payments || [],
+                  total_paid: m.total_paid || 0,
                   paid_amount: typeof m.paid_amount !== 'undefined' && m.paid_amount !== null ? m.paid_amount : 0,
-                })),
+                })),  
           }}
           shopPhoneNumber={shopPhoneNumberState}
           shopAddress={shopAddressState}  

@@ -1,9 +1,11 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { usePathname } from 'next/navigation';
 import { X, Download, Smartphone, Plus } from 'lucide-react';
 
 const PWAInstallPrompt = () => {
+  const pathname = usePathname();
   const [deferredPrompt, setDeferredPrompt] = useState(null);
   const [showInstallPrompt, setShowInstallPrompt] = useState(false);
   const [isIOS, setIsIOS] = useState(false);
@@ -12,6 +14,14 @@ const PWAInstallPrompt = () => {
   useEffect(() => {
     // Only run on client side
     if (typeof window === 'undefined' || typeof navigator === 'undefined') return;
+
+    // Only show PWA prompt on specific routes
+    const allowedRoutes = ['/billit-login', '/application'];
+    const isAllowedRoute = allowedRoutes.some(route => pathname?.startsWith(route));
+    
+    if (!isAllowedRoute) {
+      return;
+    }
 
     // Check if running on iOS
     const iOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
@@ -56,7 +66,7 @@ const PWAInstallPrompt = () => {
         return () => clearTimeout(timer);
       }
     }
-  }, []);
+  }, [pathname]);
 
   const handleInstallClick = async () => {
     if (deferredPrompt && !isIOS) {
