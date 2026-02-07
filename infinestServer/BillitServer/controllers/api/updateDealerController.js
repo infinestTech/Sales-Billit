@@ -32,6 +32,7 @@ const updateDealer = async (req, res) => {
         dealer_id: dealer._id,
         mobile_name: mobile.mobileName,
         model: mobile.model || "",
+        imei: mobile.imei || "",
         issue: mobile.issues,
         added_date: new Date(mobile.date),
         technician_name: technicianname,

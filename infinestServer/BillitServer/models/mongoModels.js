@@ -112,6 +112,7 @@ const mobileSchema = new mongoose.Schema({
   dealer_id: { type: mongoose.Schema.Types.ObjectId, ref: "Dealer" },
   mobile_name: { type: String, required: true },
   model: { type: String }, // ✅ New field for mobile model
+  imei: { type: String },
   issue: { type: String },
   technician_name: { type: String },
   added_date: { type: Date, default: Date.now },

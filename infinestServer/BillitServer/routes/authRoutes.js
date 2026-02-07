@@ -117,7 +117,7 @@ router.post('/billit-login', async (req, res) => {
     // 6️⃣ Fetch user's session limit from MySQL
     let sessionLimit = 1; // Default
     try {
-      const { data: mysqlUserData } = await axios.get(`${process.env.AUTH_SERVER_URL}/get-user-session-limit/${mysqlUserId}`);
+      const { data: mysqlUserData } = await axios.get(`${process.env.AUTH_SERVER_URL}/admin/get-user-session-limit/${mysqlUserId}`);
       if (mysqlUserData.success && mysqlUserData.sessionLimit) {
         sessionLimit = mysqlUserData.sessionLimit;
       }
@@ -195,8 +195,8 @@ router.post('/logout', async (req, res) => {
     // Verify and decode token
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
     
-    // Invalidate session
-    await SessionManager.invalidateSession(decoded.userId);
+    // Invalidate only the current session (not all sessions for this user)
+    await SessionManager.invalidateCurrentSession(decoded.userId, token);
     
     return res.json({
       success: true,
