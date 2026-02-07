@@ -1875,7 +1875,7 @@ router.post('/logout', async (req, res) => {
         const decoded = jwt.verify(token, SHOP_ADMIN_JWT_SECRET);
         
         // Invalidate session
-        await SessionManager.invalidateSession(decoded.adminId.toString());
+        await SessionManager.invalidateCurrentSession(decoded.adminId.toString(), token);
         
         return res.json({
             success: true,

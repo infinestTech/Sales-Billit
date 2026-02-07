@@ -114,7 +114,30 @@ class SessionManager {
   }
   
   /**
-   * Invalidate a user's session (logout)
+   * Invalidate only the current session (logout from one device)
+   * @param {String} userIdentifier - User ID
+   * @param {String} jwtToken - The JWT token of the current session
+   * @returns {Boolean} true if session was deleted
+   */
+  static async invalidateCurrentSession(userIdentifier, jwtToken) {
+    try {
+      const tokenParts = jwtToken.split('.');
+      const jwtSignature = tokenParts[tokenParts.length - 1];
+      
+      const result = await Session.deleteOne({ 
+        user_identifier: userIdentifier,
+        jwt_token_signature: jwtSignature
+      });
+      console.log(`✅ Current session invalidated for user ${userIdentifier}: ${result.deletedCount} session(s) removed`);
+      return result.deletedCount > 0;
+    } catch (error) {
+      console.error('❌ Error invalidating current session:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Invalidate all sessions for a user (force logout from all devices)
    * @param {String} userIdentifier - User ID
    * @returns {Boolean} true if session was deleted
    */
