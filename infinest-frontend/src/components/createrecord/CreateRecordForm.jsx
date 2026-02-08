@@ -235,6 +235,7 @@ export default function CreateRecordForm({ shopId, isLimitReached, setIsLimitRea
       Array.from({ length: count }, () => ({
         description: "",
         descriptionIssue: "",
+        imei: "",
         date: new Date().toISOString().split("T")[0],
       })),
     )
@@ -253,6 +254,7 @@ export default function CreateRecordForm({ shopId, isLimitReached, setIsLimitRea
     const mobileNameIssues = rows.map((row) => ({
       mobileName: row.description,
       model: row.model || "",
+      imei: row.imei || "",
       issues: row.descriptionIssue,
       date: row.date,
       ready: false,

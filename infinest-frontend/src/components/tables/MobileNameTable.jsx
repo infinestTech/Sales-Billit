@@ -5,7 +5,8 @@
 import { useEffect, useState } from "react"
 import Pagination from "./Pagination"
 import api from "../api"
-import { Calendar, Smartphone, AlertCircle, CheckCircle, RotateCcw, DollarSign, Truck, Package } from "lucide-react"
+import { Calendar, Smartphone, AlertCircle, CheckCircle, RotateCcw, DollarSign, Truck, Package, Eye } from "lucide-react"
+import { useRouter } from "next/navigation"
 import { jwtDecode } from "jwt-decode"
 import { PAYMENT_METHOD_OPTIONS } from "@/constants/paymentMethods"
 
@@ -13,6 +14,7 @@ import { PAYMENT_METHOD_OPTIONS } from "@/constants/paymentMethods"
 
 
 const MobileNameTable = ({ mobileData, setMobileData, onRevenueUpdate, hideActions }) => {
+  const router = useRouter()
   const validMobileData = Array.isArray(mobileData) ? mobileData : []
   const [currentPage, setCurrentPage] = useState(1)
   const [sellOpen, setSellOpen] = useState(false)
@@ -586,6 +588,12 @@ const MobileNameTable = ({ mobileData, setMobileData, onRevenueUpdate, hideActio
                   Paid Amount
                 </div>
               </th>
+              <th className="px-6 py-4 text-left text-sm font-bold text-gray-700 border-b border-gray-300">
+                <div className="flex items-center">
+                  <Eye className="h-4 w-4 mr-2 text-teal-600" />
+                  IMEI
+                </div>
+              </th>
             </tr>
           </thead>
           <tbody>
@@ -702,6 +710,20 @@ const MobileNameTable = ({ mobileData, setMobileData, onRevenueUpdate, hideActio
                       + Add
                     </button>
                   </div>
+                </td>
+                <td className="px-6 py-4 border-b border-gray-200">
+                  {mobile.imei ? (
+                    <button
+                      onClick={() => router.push(`/mobilename?imei=${encodeURIComponent(mobile.imei)}`)}
+                      className="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium text-teal-700 bg-teal-50 border border-teal-200 rounded-lg hover:bg-teal-100 hover:text-teal-800 transition-colors"
+                      title={`IMEI: ${mobile.imei}`}
+                    >
+                      <Eye className="h-3 w-3" />
+                      View IMEI
+                    </button>
+                  ) : (
+                    <span className="text-xs text-gray-400">-</span>
+                  )}
                 </td>
               </tr>
             ))}

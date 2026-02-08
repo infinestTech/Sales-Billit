@@ -507,6 +507,8 @@ const [shopAddressState, setShopAddressState] = useState("")
             MobileName: selectedClient.MobileName.map((m) => ({
                   _id: m._id,
                   mobile_name: m.mobile_name || m.mobileName,
+              model: m.model || m.model_no || m.modelNo || "",
+              imei: m.imei || m.imei_no || m.imeiNo || "",
                   issue: m.issue,
                   added_date: m.added_date || m.addedDate,
                   delivery_date: m.delivery_date || m.deliveryDate || null,

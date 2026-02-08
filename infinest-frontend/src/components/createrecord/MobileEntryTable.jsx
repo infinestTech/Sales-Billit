@@ -229,6 +229,9 @@ export default function MobileEntryTable({ rows, setRows }) {
                 <span>Model</span>
               </th>
               <th className="px-6 py-3 text-left text-sm font-medium text-gray-700 border-b border-gray-200">
+                <span>IMEI No</span>
+              </th>
+              <th className="px-6 py-3 text-left text-sm font-medium text-gray-700 border-b border-gray-200">
                 <div className="flex items-center justify-between">
                   <span>Issues</span>
                   <button
@@ -316,6 +319,16 @@ export default function MobileEntryTable({ rows, setRows }) {
                       </div>
                     )}
                   </div>
+                </td>
+                <td className="px-6 py-4 border-b border-gray-200">
+                  <input
+                    type="text"
+                    name="imei"
+                    value={row.imei || ''}
+                    onChange={(e) => handleInputChange(index, e)}
+                    placeholder="Optional IMEI"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  />
                 </td>
                 <td className="px-6 py-4 border-b border-gray-200">
                   <div className="relative">
