@@ -4,7 +4,7 @@ import { useEffect, useState } from "react"
 import { useSearchParams } from "next/navigation"
 import Pagination from "@/components/tables/Pagination"
 import api from "@/components/api"
-import { Smartphone, Filter, Users, Phone, Wrench, User, Hash, AlertCircle, Edit3 } from "lucide-react"
+import { Smartphone, Filter, Users, Phone, Wrench, User, Hash, AlertCircle, Edit3, Search } from "lucide-react"
 
 const MobileNamePage = ({ shopId }) => {
   const searchParams = useSearchParams()
@@ -16,11 +16,15 @@ const MobileNamePage = ({ shopId }) => {
   const [loading, setLoading] = useState(true)
   const [editingTechnician, setEditingTechnician] = useState(null)
   const [technicianName, setTechnicianName] = useState("")
+  const [imeiSearch, setImeiSearch] = useState("")
 
-  // Set status from URL params on mount
+  // Set status and IMEI from URL params on mount
   useEffect(() => {
     const statusParam = searchParams.get('status')
-    if (statusParam === 'pending') {
+    const imeiParam = searchParams.get('imei')
+    if (imeiParam) {
+      setImeiSearch(imeiParam)
+    } else if (statusParam === 'pending') {
       setSelectedStatus('readyNotDelivered')
     } else if (statusParam === 'notReady') {
       setSelectedStatus('notReady')
@@ -53,6 +57,7 @@ const MobileNamePage = ({ shopId }) => {
           customerType: entry.customer_type,
           mobileName: mobile.mobile_name,
           model: mobile.model || "",
+          imei: mobile.imei || "",
           issues: mobile.issue || "No issues specified",
           technician: mobile.technician_name || "",
           isReady: mobile.ready,
@@ -125,9 +130,16 @@ const MobileNamePage = ({ shopId }) => {
     setCurrentPage(1)
   }
 
+  const handleImeiSearchChange = (e) => {
+    setImeiSearch(e.target.value)
+    setCurrentPage(1)
+  }
+
   const filteredMobileData = mobileData
     .filter((mobile) => (selectedCustomerType ? mobile.customerType === selectedCustomerType : true))
     .filter((mobile) => {
+      // When IMEI search is active, skip status filter and show all matching mobiles
+      if (imeiSearch.trim()) return true
       switch (selectedStatus) {
         case "notReady":
           return !mobile.isReady
@@ -140,6 +152,10 @@ const MobileNamePage = ({ shopId }) => {
         default:
           return true
       }
+    })
+    .filter((mobile) => {
+      if (!imeiSearch.trim()) return true
+      return mobile.imei && mobile.imei.toLowerCase().includes(imeiSearch.trim().toLowerCase())
     })
 
   const indexOfLastInvoice = currentPage * invoicesPerPage
@@ -174,7 +190,7 @@ const MobileNamePage = ({ shopId }) => {
             Filter Options
           </h3>
 
-          <div className="grid grid-cols-2 gap-6">
+          <div className="grid grid-cols-3 gap-6">
             <div className="space-y-2">
               <label className="text-sm font-semibold text-gray-700 flex items-center">
                 <Users className="h-4 w-4 mr-2 text-blue-600" />
@@ -199,13 +215,41 @@ const MobileNamePage = ({ shopId }) => {
               <select
                 value={selectedStatus}
                 onChange={handleStatusChange}
-                className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all duration-200 bg-gray-50 hover:bg-white"
+                className={`w-full px-4 py-3 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all duration-200 bg-gray-50 hover:bg-white ${imeiSearch.trim() ? "opacity-50 cursor-not-allowed" : ""}`}
+                disabled={!!imeiSearch.trim()}
               >
                 <option value="notReady">Not Ready</option>
                 <option value="notDelivered">Not Delivered</option>
                 <option value="readyNotDelivered">Pending</option>
                 <option value="return">Return</option>
               </select>
+              {imeiSearch.trim() && (
+                <p className="text-xs text-gray-400">Status filter disabled during IMEI search</p>
+              )}
+            </div>
+
+            <div className="space-y-2">
+              <label className="text-sm font-semibold text-gray-700 flex items-center">
+                <Search className="h-4 w-4 mr-2 text-teal-600" />
+                Filter by IMEI No
+              </label>
+              <div className="relative">
+                <input
+                  type="text"
+                  value={imeiSearch}
+                  onChange={handleImeiSearchChange}
+                  placeholder="Search IMEI number..."
+                  className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent transition-all duration-200 bg-gray-50 hover:bg-white pr-10"
+                />
+                {imeiSearch && (
+                  <button
+                    onClick={() => { setImeiSearch(""); setCurrentPage(1); }}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 transition-colors"
+                  >
+                    ✕
+                  </button>
+                )}
+              </div>
             </div>
           </div>
         </div>
@@ -261,6 +305,12 @@ const MobileNamePage = ({ shopId }) => {
                     </th>
                     <th className="px-6 py-4 text-left text-sm font-bold text-gray-700 border-b border-gray-300">
                       <div className="flex items-center">
+                        <Hash className="h-4 w-4 mr-2 text-teal-600" />
+                        IMEI No
+                      </div>
+                    </th>
+                    <th className="px-6 py-4 text-left text-sm font-bold text-gray-700 border-b border-gray-300">
+                      <div className="flex items-center">
                         <AlertCircle className="h-4 w-4 mr-2 text-orange-600" />
                         Issues
                       </div>
@@ -307,6 +357,9 @@ const MobileNamePage = ({ shopId }) => {
                             <span className="text-xs text-gray-500 mt-0.5">{data.model}</span>
                           )}
                         </div>
+                      </td>
+                      <td className="px-6 py-4 border-b border-gray-200">
+                        <span className="text-sm text-gray-600 font-mono">{data.imei || "-"}</span>
                       </td>
                       <td className="px-6 py-4 border-b border-gray-200">
                         <span className="text-sm text-gray-600">{data.issues}</span>
