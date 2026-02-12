@@ -141,7 +141,7 @@ function SecondsSalesView({ salesUrl, token, id }) {
     const { shopName, shopContact } = await getBranchInfo();
     const productName = `${entry.mobileName || ''}${entry.model ? (' — ' + entry.model) : ''}`.trim();
     const date = new Date(p.createdAt || Date.now()).toLocaleString();
-    const message = `Shop: ${shopName}\nContact: ${shopContact}\n\nProduct: ${productName}\nPrice: ₹ ${Number(p.price||0).toFixed(2)}\nDate: ${date}\nCustomer: ${p.customerName || '-'} — ${p.phone || '-'}\n\nThanks,\n${shopName}`;
+    const message = `━━━━━━━━━━━━━━━━━━━━\n   *${shopName || 'Store'}*\n${shopContact ? '   📞 ' + shopContact : ''}\n━━━━━━━━━━━━━━━━━━━━\n\n*PURCHASE RECEIPT*\n📅 ${date}\n\n*Product:* ${productName}\n*Price:* ₹${Number(p.price||0).toFixed(2)}\n*Customer:* ${p.customerName || '-'} — ${p.phone || '-'}\n\n━━━━━━━━━━━━━━━━━━━━\n*Total: ₹${Number(p.price||0).toFixed(2)}*\n━━━━━━━━━━━━━━━━━━━━\n\nThank you for your purchase! 🙏`;
     const cust = normalizePhone(p.phone || '');
     try {
       // Open WhatsApp web with prefilled message to customer number
