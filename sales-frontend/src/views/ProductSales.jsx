@@ -1,3 +1,18 @@
+// Constant payment methods used across the application
+window.__PAYMENT_METHODS__ = [
+	{ value: 'Cash', label: 'Cash' },
+	{ value: 'UPI', label: 'UPI' },
+	{ value: 'Card', label: 'Card' },
+	{ value: 'UPI-H', label: 'UPI-H' },
+	{ value: 'UPI-S', label: 'UPI-S' },
+	{ value: 'Cash + Card', label: 'Cash + Card' },
+	{ value: 'UPI H + CASH', label: 'UPI H + Cash' },
+	{ value: 'UPI S + CASH', label: 'UPI S + Cash' },
+	{ value: 'UPI H + CARD', label: 'UPI H + Card' },
+	{ value: 'UPI S + CARD', label: 'UPI S + Card' }
+];
+window.__PAYMENT_METHOD_VALUES__ = window.__PAYMENT_METHODS__.map(function(m) { return m.value; });
+
 function ProductSales({ salesUrl, token }) {
 	const [products, setProducts] = React.useState([]);
 	const [sellerProducts, setSellerProducts] = React.useState([]);
@@ -58,12 +73,12 @@ function ProductSales({ salesUrl, token }) {
 	);
 
 	function lineTotal(item) {
-		const qty = Number(item.sellingQty ?? item.qty ?? 0);
+		const qty = Number(item.sellingQty ?? 0);
 		const unit = Number(item.sellingPrice ?? item.unitSellingPrice ?? 0);
 		return qty * unit;
 	}
 
-	const totalCount = sellerProducts.reduce((s, it) => s + Number(it.sellingQty ?? it.qty ?? 0), 0);
+	const totalCount = sellerProducts.reduce((s, it) => s + Number(it.sellingQty ?? 0), 0);
 	const subTotal = sellerProducts.reduce((s, it) => s + lineTotal(it), 0);
 
 	// state to toggle IME list per product index
@@ -97,11 +112,14 @@ function ProductSales({ salesUrl, token }) {
 		try {
 			if (sellerProducts.length === 0) { setError('No products to sell'); return; }
 			// validate quantities before sending
-			const over = sellerProducts.find(it => Number(it.sellingQty ?? it.qty ?? 0) > Number(it.qty ?? 0));
+			const over = sellerProducts.find(it => Number(it.sellingQty ?? 0) > Number(it.qty ?? 0));
 			if (over) { setError('Your qty is low'); return; }
+			// validate: selling qty must be > 0
+			const zeroQty = sellerProducts.find(it => Number(it.sellingQty ?? 0) <= 0);
+			if (zeroQty) { setError('Selling quantity must be at least 1. For IMEI products, scan or select IMEIs first.'); return; }
 			// validate IME selections: for products that track IMEs, selected IMEs must match selling qty
 			const imeMismatch = sellerProducts.find(it => {
-				const sellingQty = Number(it.sellingQty ?? it.qty ?? 0);
+				const sellingQty = Number(it.sellingQty ?? 0);
 				const availableImes = (Array.isArray(it.centralOnlyImes) && it.centralOnlyImes.length) ? it.centralOnlyImes : (Array.isArray(it.centralImes) && it.centralImes.length) ? it.centralImes : (Array.isArray(it.imes) ? it.imes : []);
 				if (!availableImes || availableImes.length === 0) return false; // not IME-tracked
 				const selected = Array.isArray(it.selectedImes) ? it.selectedImes.length : 0;
@@ -113,10 +131,9 @@ function ProductSales({ salesUrl, token }) {
 			setSellingBusy(true);
 			setError('');
 			const url = new URL(salesUrl + '/api/sales');
-			// cash option removed: payments are online via selected bank
-			const paymentMethod = 'online';
+			const paymentMethod = (window.__PAYMENT_METHOD_VALUES__ || []).includes(selectedBank) ? selectedBank : 'online';
 			const payload = {
-				items: sellerProducts.map(it => ({ productId: it.productId || it._id || '', productNo: it.productNo || '', productName: it.productName || '', qty: Number(it.sellingQty ?? it.qty ?? 0), sellingPrice: Number(it.sellingPrice || 0), lineTotal: Number(lineTotal(it),), imes: Array.isArray(it.selectedImes) && it.selectedImes.length ? it.selectedImes : (Array.isArray(it.imes) ? it.imes : []) })),
+				items: sellerProducts.map(it => ({ productId: it.productId || it._id || '', productNo: it.productNo || '', productName: it.productName || '', qty: Number(it.sellingQty ?? 0), sellingPrice: Number(it.sellingPrice || 0), lineTotal: Number(lineTotal(it),), imes: Array.isArray(it.selectedImes) ? it.selectedImes : [] })),
 				customerNo,
 				customerName: customerName || 'Walk-in Customer',
 				subTotal,
@@ -131,7 +148,7 @@ function ProductSales({ salesUrl, token }) {
 				totalAmount: Number(totalAmount.toFixed(2)),
 				paymentMethod,
 				amountPaid: Number(totalAmount || 0),
-				bank_id: (selectedBank && selectedBank !== 'select') ? selectedBank : ''
+				bank_id: (selectedBank && selectedBank !== 'select' && !(window.__PAYMENT_METHOD_VALUES__ || []).includes(selectedBank)) ? selectedBank : ''
 			};
 			const res = await fetch(url, { method: 'POST', headers: { Authorization: 'Bearer ' + token, 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
 			const data = await res.json();
@@ -907,39 +924,61 @@ function ProductSales({ salesUrl, token }) {
 									if (e.key === 'Enter') {
 										const needle = (productNo || '').toString().trim().toLowerCase();
 										if (!needle) return;
-										// Try to find by product number or IMEI
-										let found = products.find(p => String(p.productNo || '').toLowerCase() === needle);
+										// Step 1: Try to find by IMEI first (phones have individual IMEI barcodes)
+										let found = null;
+										let matchedImei = null;
+										for (let pi = 0; pi < products.length; pi++) {
+											const p = products[pi];
+											const pImes = Array.isArray(p.centralOnlyImes) && p.centralOnlyImes.length ? p.centralOnlyImes : Array.isArray(p.centralImes) && p.centralImes.length ? p.centralImes : Array.isArray(p.imes) ? p.imes : [];
+											const match = pImes.find(imei => String(imei || '').toLowerCase() === needle);
+											if (match) { found = p; matchedImei = match; break; }
+										}
+										// Step 2: If not found by IMEI, try product number
+										let foundByProductNo = false;
 										if (!found) {
-											// Try to find by IMEI
-											found = products.find(p => {
-												const imes = Array.isArray(p.imes) ? p.imes : [];
-												return imes.some(imei => String(imei || '').toLowerCase() === needle);
-											});
-											if (found) {
-												// Auto-select this IMEI
-												const matchedImei = (Array.isArray(found.imes) ? found.imes : []).find(imei => String(imei || '').toLowerCase() === needle);
-												found = { ...found, selectedImes: [matchedImei] };
-											}
+											found = products.find(p => String(p.productNo || '').toLowerCase() === needle);
+											foundByProductNo = !!found;
 										}
 										if (!found) { setError('Product not found'); return; }
-										if (Number(found.qty) === 0) {
-											setError('This product has zero quantity and cannot be added to sales.');
-											return;
+										if (Number(found.qty) === 0) { setError('This product has zero quantity and cannot be added to sales.'); return; }
+										// Determine if product is IMEI-tracked
+										const availImes = (Array.isArray(found.centralOnlyImes) && found.centralOnlyImes.length) ? found.centralOnlyImes : (Array.isArray(found.centralImes) && found.centralImes.length) ? found.centralImes : (Array.isArray(found.imes) ? found.imes : []);
+										const isImeiTracked = availImes.length > 0;
+										const existingInCart = sellerProducts.find(x => (x.productId || x._id) === (found.productId || found._id));
+										// Validate before adding
+										if (matchedImei && existingInCart && Array.isArray(existingInCart.selectedImes) && existingInCart.selectedImes.includes(matchedImei)) {
+											setError('This IMEI is already in the cart'); return;
+										}
+										if (foundByProductNo && isImeiTracked && existingInCart) {
+											setError('Product already in cart. Scan individual IMEI barcodes to add phones.'); return;
+										}
+										if (foundByProductNo && !isImeiTracked && existingInCart) {
+											const currentQty = Number(existingInCart.sellingQty) || 0;
+											if (currentQty + 1 > Number(existingInCart.qty || 0)) { setError('Your qty is low'); return; }
 										}
 										setError('');
 										setSellerProducts(sp => {
-											const existing = sp.find(x => (x.productId || x._id) === (found.productId || found._id));
-											if (existing) {
-												// If IMEI scanned and product exists, add IMEI to selected
-												if (found.selectedImes && found.selectedImes.length) {
-													return sp.map(x => (x.productId || x._id) === (found.productId || found._id) 
-														? { ...x, selectedImes: [...new Set([...(x.selectedImes || []), ...found.selectedImes])] }
-														: x
-													);
+											const eid = (found.productId || found._id);
+											const eIdx = sp.findIndex(x => (x.productId || x._id) === eid);
+											if (matchedImei) {
+												// IMEI scan: add this specific phone
+												if (eIdx >= 0) {
+													return sp.map((x, idx) => idx === eIdx ? { ...x, selectedImes: [...(x.selectedImes || []), matchedImei], sellingQty: (Number(x.sellingQty) || 0) + 1 } : x);
 												}
-												return sp;
+												return [...sp, { ...found, sellingQty: 1, selectedImes: [matchedImei] }];
 											}
-											return [...sp, found];
+											if (foundByProductNo && isImeiTracked) {
+												// IMEI product by productNo: add to cart, user must scan/select IMEIs
+												return [...sp, { ...found, sellingQty: 0, selectedImes: [] }];
+											}
+											if (foundByProductNo && !isImeiTracked) {
+												// Accessory: increment qty or add new
+												if (eIdx >= 0) {
+													return sp.map((x, idx) => idx === eIdx ? { ...x, sellingQty: (Number(x.sellingQty) || 0) + 1 } : x);
+												}
+												return [...sp, { ...found, sellingQty: 1 }];
+											}
+											return sp;
 										});
 										setProductNo('');
 									}
@@ -973,35 +1012,56 @@ function ProductSales({ salesUrl, token }) {
 								onClick={() => {
 									const needle = (productNo || '').toString().trim().toLowerCase();
 									if (!needle) return;
-									let found = products.find(p => String(p.productNo || '').toLowerCase() === needle);
+									// Step 1: Try to find by IMEI first (phones have individual IMEI barcodes)
+									let found = null;
+									let matchedImei = null;
+									for (let pi = 0; pi < products.length; pi++) {
+										const p = products[pi];
+										const pImes = Array.isArray(p.centralOnlyImes) && p.centralOnlyImes.length ? p.centralOnlyImes : Array.isArray(p.centralImes) && p.centralImes.length ? p.centralImes : Array.isArray(p.imes) ? p.imes : [];
+										const match = pImes.find(imei => String(imei || '').toLowerCase() === needle);
+										if (match) { found = p; matchedImei = match; break; }
+									}
+									// Step 2: If not found by IMEI, try product number
+									let foundByProductNo = false;
 									if (!found) {
-										found = products.find(p => {
-											const imes = Array.isArray(p.imes) ? p.imes : [];
-											return imes.some(imei => String(imei || '').toLowerCase() === needle);
-										});
-										if (found) {
-											const matchedImei = (Array.isArray(found.imes) ? found.imes : []).find(imei => String(imei || '').toLowerCase() === needle);
-											found = { ...found, selectedImes: [matchedImei] };
-										}
+										found = products.find(p => String(p.productNo || '').toLowerCase() === needle);
+										foundByProductNo = !!found;
 									}
 									if (!found) { setError('Product not found'); return; }
-									if (Number(found.qty) === 0) {
-										setError('This product has zero quantity and cannot be added to sales.');
-										return;
+									if (Number(found.qty) === 0) { setError('This product has zero quantity and cannot be added to sales.'); return; }
+									const availImes = (Array.isArray(found.centralOnlyImes) && found.centralOnlyImes.length) ? found.centralOnlyImes : (Array.isArray(found.centralImes) && found.centralImes.length) ? found.centralImes : (Array.isArray(found.imes) ? found.imes : []);
+									const isImeiTracked = availImes.length > 0;
+									const existingInCart = sellerProducts.find(x => (x.productId || x._id) === (found.productId || found._id));
+									if (matchedImei && existingInCart && Array.isArray(existingInCart.selectedImes) && existingInCart.selectedImes.includes(matchedImei)) {
+										setError('This IMEI is already in the cart'); return;
+									}
+									if (foundByProductNo && isImeiTracked && existingInCart) {
+										setError('Product already in cart. Scan individual IMEI barcodes to add phones.'); return;
+									}
+									if (foundByProductNo && !isImeiTracked && existingInCart) {
+										const currentQty = Number(existingInCart.sellingQty) || 0;
+										if (currentQty + 1 > Number(existingInCart.qty || 0)) { setError('Your qty is low'); return; }
 									}
 									setError('');
 									setSellerProducts(sp => {
-										const existing = sp.find(x => (x.productId || x._id) === (found.productId || found._id));
-										if (existing) {
-											if (found.selectedImes && found.selectedImes.length) {
-												return sp.map(x => (x.productId || x._id) === (found.productId || found._id) 
-													? { ...x, selectedImes: [...new Set([...(x.selectedImes || []), ...found.selectedImes])] }
-													: x
-												);
+										const eid = (found.productId || found._id);
+										const eIdx = sp.findIndex(x => (x.productId || x._id) === eid);
+										if (matchedImei) {
+											if (eIdx >= 0) {
+												return sp.map((x, idx) => idx === eIdx ? { ...x, selectedImes: [...(x.selectedImes || []), matchedImei], sellingQty: (Number(x.sellingQty) || 0) + 1 } : x);
 											}
-											return sp;
+											return [...sp, { ...found, sellingQty: 1, selectedImes: [matchedImei] }];
 										}
-										return [...sp, found];
+										if (foundByProductNo && isImeiTracked) {
+											return [...sp, { ...found, sellingQty: 0, selectedImes: [] }];
+										}
+										if (foundByProductNo && !isImeiTracked) {
+											if (eIdx >= 0) {
+												return sp.map((x, idx) => idx === eIdx ? { ...x, sellingQty: (Number(x.sellingQty) || 0) + 1 } : x);
+											}
+											return [...sp, { ...found, sellingQty: 1 }];
+										}
+										return sp;
 									});
 									setProductNo('');
 								}}
@@ -1083,8 +1143,8 @@ function ProductSales({ salesUrl, token }) {
 														{p.brand || '-'} {p.model || '-'} • #{p.productNo || '-'}
 													</div>
 													{hasImes && (
-														<div style={{marginTop: '8px', fontSize: '12px', color: '#f59e0b', fontWeight: '500'}}>
-															📱 IMEI Required: {selectedCount}/{Number(p.sellingQty ?? p.qty ?? 1)}
+														<div style={{marginTop: '8px', fontSize: '12px', color: selectedCount > 0 && selectedCount === Number(p.sellingQty ?? 0) ? '#16a34a' : '#f59e0b', fontWeight: '500'}}>
+															{selectedCount > 0 ? '✅' : '📱'} IMEI: {selectedCount} selected {Number(p.sellingQty ?? 0) === 0 ? '(scan IMEI barcodes)' : ''}
 														</div>
 													)}
 												</div>
@@ -1118,13 +1178,17 @@ function ProductSales({ salesUrl, token }) {
 															border: '2px solid #cbd5e1',
 															borderRadius: '8px',
 															fontWeight: '600',
-															textAlign: 'center'
+															textAlign: 'center',
+															backgroundColor: hasImes ? '#f1f5f9' : '#fff',
+															cursor: hasImes ? 'not-allowed' : 'text'
 														}}
 														type="number"
-														min="1"
+														min={hasImes ? 0 : 1}
 														max={p.qty}
-														value={p.sellingQty ?? p.qty ?? 1} 
+														readOnly={hasImes}
+														value={p.sellingQty ?? 0} 
 														onChange={e => {
+															if (hasImes) return;
 															const inputVal = Number(e.target.value) || 0;
 															const available = Number(p.qty ?? 0);
 															let v = inputVal;
@@ -1135,6 +1199,7 @@ function ProductSales({ salesUrl, token }) {
 															setSellerProducts(sp => sp.map((s, idx) => idx === i ? { ...s, sellingQty: v } : s));
 														}} 
 													/>
+													{hasImes && <div style={{fontSize: '10px', color: '#94a3b8', marginTop: '4px', textAlign: 'center'}}>Auto from IMEI</div>}
 												</div>
 												<div>
 													<label style={{display: 'block', fontSize: '12px', color: '#64748b', marginBottom: '4px', fontWeight: '500'}}>
@@ -1231,7 +1296,11 @@ function ProductSales({ salesUrl, token }) {
 																			checked={checked}
 																			style={{marginRight: '12px', width: '18px', height: '18px', cursor: 'pointer'}}
 																			onChange={() => {
-																				setSellerProducts(sp => sp.map((s, idxS) => idxS === i ? { ...s, selectedImes: checked ? (s.selectedImes || []).filter(x => x !== val) : ((s.selectedImes || []).concat([val])) } : s));
+																				setSellerProducts(sp => sp.map((s, idxS) => {
+																					if (idxS !== i) return s;
+																					const newSelected = checked ? (s.selectedImes || []).filter(x => x !== val) : (s.selectedImes || []).concat([val]);
+																					return { ...s, selectedImes: newSelected, sellingQty: newSelected.length };
+																				}));
 																			}} 
 																		/>
 																		<div style={{flex: 1}}>
@@ -1324,6 +1393,17 @@ function ProductSales({ salesUrl, token }) {
 								}}
 							>
 								<option value="select">Select Payment Method</option>
+								<option value="Cash">Cash</option>
+								<option value="UPI">UPI</option>
+								<option value="Card">Card</option>
+								<option value="UPI-H">UPI-H</option>
+								<option value="UPI-S">UPI-S</option>
+								<option value="Cash + Card">Cash + Card</option>
+								<option value="UPI H + CASH">UPI H + Cash</option>
+								<option value="UPI S + CASH">UPI S + Cash</option>
+								<option value="UPI H + CARD">UPI H + Card</option>
+								<option value="UPI S + CARD">UPI S + Card</option>
+								{banks.length > 0 && <option disabled>── Bank Accounts ──</option>}
 								{banks.map(b => <option key={b._id} value={b._id}>{b.bankName}</option>)}
 							</select>
 						</div>
@@ -1537,12 +1617,25 @@ function ProductSales({ salesUrl, token }) {
 												shopName = shopName || payload.shopName || payload.name || payload.branchName || '';
 												shopContact = shopContact || payload.phone || payload.phoneNumber || payload.branchPhone || '';
 											}
-											const itemsText = (sale.items || []).map(i => {
+											const itemsText = (sale.items || []).map((i, idx) => {
 												const qty = i.qty || i.sellingQty || 0;
 												const unit = Number(i.sellingPrice || i.unitSellingPrice || 0).toFixed(2);
-												return `${i.productName || i.productNo || 'item'} x${qty} @ ${unit}`;
-											}).join('\n\n');
-											const message = `Shop: ${shopName}\nContact: ${shopContact}\n\nItems:\n${itemsText}\n\nTotal: ${Number(sale.totalAmount || totalAmount || 0).toFixed(2)}`;
+												const line = (qty * Number(unit)).toFixed(2);
+												return `${idx + 1}. ${i.productName || i.productNo || 'Item'}\n   Qty: ${qty} × ₹${unit} = ₹${line}`;
+											}).join('\n');
+											const invoiceNo = sale.billNo || sale.invoiceNo || sale._id || '';
+											const saleDate = new Date(sale.createdAt || Date.now()).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
+											const saleCustomer = sale.customerName || customerName || 'Valued Customer';
+											const saleTotal = Number(sale.totalAmount || totalAmount || 0).toFixed(2);
+											const saleDiscount = Number(sale.discountAmount || 0).toFixed(2);
+											const saleTaxable = Number(sale.subTotal || subTotal || 0).toFixed(2);
+											const saleCgst = Number(sale.cgstAmount || 0).toFixed(2);
+											const saleSgst = Number(sale.sgstAmount || 0).toFixed(2);
+											const saleIgst = Number(sale.igstAmount || 0).toFixed(2);
+											let taxLine = '';
+											if (Number(saleIgst) > 0) taxLine = `IGST: ₹${saleIgst}`;
+											else if (Number(saleCgst) > 0 || Number(saleSgst) > 0) taxLine = `CGST: ₹${saleCgst} | SGST: ₹${saleSgst}`;
+											const message = `━━━━━━━━━━━━━━━━━━━━\n   *${shopName || 'Store'}*\n${shopContact ? '   📞 ' + shopContact : ''}\n━━━━━━━━━━━━━━━━━━━━\n\n*INVOICE*${invoiceNo ? ' #' + invoiceNo : ''}\n📅 ${saleDate}\n👤 ${saleCustomer}\n\n*Items:*\n${itemsText}\n\n━━━━━━━━━━━━━━━━━━━━\nSubtotal: ₹${saleTaxable}${Number(saleDiscount) > 0 ? '\nDiscount: -₹' + saleDiscount : ''}${taxLine ? '\n' + taxLine : ''}\n\n*Total: ₹${saleTotal}*\n━━━━━━━━━━━━━━━━━━━━\n\nThank you for your purchase! 🙏`;
 											const whatsappUrl = window.ENV_CONFIG?.WHATSAPP_WEB_URL || 'https://web.whatsapp.com';
 											window.open(`${whatsappUrl}/send?phone=${cust}&text=${encodeURIComponent(message)}`, '_blank');
 										})();

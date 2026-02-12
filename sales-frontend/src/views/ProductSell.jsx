@@ -1,3 +1,18 @@
+// Constant payment methods used across the application
+window.__SELL_PAYMENT_METHODS__ = [
+  { value: 'Cash', label: 'Cash' },
+  { value: 'UPI', label: 'UPI' },
+  { value: 'Card', label: 'Card' },
+  { value: 'UPI-H', label: 'UPI-H' },
+  { value: 'UPI-S', label: 'UPI-S' },
+  { value: 'Cash + Card', label: 'Cash + Card' },
+  { value: 'UPI H + CASH', label: 'UPI H + Cash' },
+  { value: 'UPI S + CASH', label: 'UPI S + Cash' },
+  { value: 'UPI H + CARD', label: 'UPI H + Card' },
+  { value: 'UPI S + CARD', label: 'UPI S + Card' }
+];
+window.__SELL_PAYMENT_METHOD_VALUES__ = window.__SELL_PAYMENT_METHODS__.map(function(m) { return m.value; });
+
 function ProductSell({ salesUrl, token }) {
   const [products, setProducts] = React.useState([]);
   const [sellerProducts, setSellerProducts] = React.useState([]);
@@ -79,9 +94,9 @@ function ProductSell({ salesUrl, token }) {
       const payload = {
         items: sellerProducts.map(it => ({ productId: it._id || it.productId, productNo: it.productNo || '', productName: it.productName || it.name || '', qty: Number(it.sellingQty ?? it.qty ?? 0), sellingPrice: Number(it.sellingPrice || 0), lineTotal: Number(lineTotal(it)) })),
         customerNo,
-        paymentMethod: 'online',
+        paymentMethod: (window.__SELL_PAYMENT_METHOD_VALUES__ || []).includes(selectedBank) ? selectedBank : 'online',
         amountPaid: Number(totalAmount || 0),
-        bank_id: selectedBank
+        bank_id: (selectedBank && selectedBank !== 'select' && !(window.__SELL_PAYMENT_METHOD_VALUES__ || []).includes(selectedBank)) ? selectedBank : ''
       };
 
       // Decide endpoint: if any item is from whatsapp stock, use whatsapp-sales endpoint
@@ -201,17 +216,21 @@ function ProductSell({ salesUrl, token }) {
           shopContact = shopContact || payload.phone || payload.phoneNumber || payload.branchPhone || '';
         }
       }
-      const itemsText = (sale.items || []).map(i => {
+      const itemsText = (sale.items || []).map((i, idx) => {
         const qty = i.qty || i.sellingQty || 0;
         const unit = Number(i.sellingPrice || i.unitSellingPrice || 0).toFixed(2);
-        return `${i.productName || i.productNo || 'item'} x${qty} @ ${unit}`;
-      }).join('\n\n');
+        const line = (qty * Number(unit)).toFixed(2);
+        return `${idx + 1}. ${i.productName || i.productNo || 'Item'}\n   Qty: ${qty} × ₹${unit} = ₹${line}`;
+      }).join('\n');
+      const invoiceNo = sale.billNo || sale.invoiceNo || sale._id || '';
+      const saleDate = new Date(sale.createdAt || Date.now()).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
+      const saleTotal = Number(sale.totalAmount || totalAmount || 0).toFixed(2);
       // normalize customer number
       let digits = (sale.customerNo || '').toString().replace(/[^0-9]/g, '');
       if (digits.length === 11 && digits.startsWith('0')) digits = digits.slice(1);
       if (digits.length === 10) digits = '91' + digits;
       const cust = digits;
-      const message = `Shop: ${shopName}\nContact: ${shopContact}\n\nItems:\n${itemsText}\n\nTotal: ${Number(sale.totalAmount || totalAmount || 0).toFixed(2)}`;
+      const message = `━━━━━━━━━━━━━━━━━━━━\n   *${shopName || 'Store'}*\n${shopContact ? '   📞 ' + shopContact : ''}\n━━━━━━━━━━━━━━━━━━━━\n\n*INVOICE*${invoiceNo ? ' #' + invoiceNo : ''}\n📅 ${saleDate}\n\n*Items:*\n${itemsText}\n\n━━━━━━━━━━━━━━━━━━━━\n*Total: ₹${saleTotal}*\n━━━━━━━━━━━━━━━━━━━━\n\nThank you for your purchase! 🙏`;
       const whatsappUrl = window.ENV_CONFIG?.WHATSAPP_WEB_URL || 'https://web.whatsapp.com';
       window.open(`${whatsappUrl}/send?phone=${cust}&text=${encodeURIComponent(message)}`, '_blank');
     })();
@@ -319,6 +338,17 @@ function ProductSell({ salesUrl, token }) {
           <label>Payment <span style={{color:'red'}}>*</span></label><br />
           <select value={selectedBank} onChange={e => setSelectedBank(e.target.value)}>
             <option value="select">Select</option>
+            <option value="Cash">Cash</option>
+            <option value="UPI">UPI</option>
+            <option value="Card">Card</option>
+            <option value="UPI-H">UPI-H</option>
+            <option value="UPI-S">UPI-S</option>
+            <option value="Cash + Card">Cash + Card</option>
+            <option value="UPI H + CASH">UPI H + Cash</option>
+            <option value="UPI S + CASH">UPI S + Cash</option>
+            <option value="UPI H + CARD">UPI H + Card</option>
+            <option value="UPI S + CARD">UPI S + Card</option>
+            {banks.length > 0 && <option disabled>── Bank Accounts ──</option>}
             {banks.map(b => <option key={b._id} value={b._id}>{b.bankName || b.accountNumber || b._id}</option>)}
           </select>
         </div>

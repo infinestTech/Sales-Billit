@@ -413,15 +413,27 @@ function SalesTrack({ salesUrl, token }) {
                           if (sres.ok && Array.isArray(sdata.rows)) stock = sdata.rows;
                         } catch (e) { /* ignore */ }
 
-                        const itemsText = (s.items||[]).map(i => {
+                        const itemsText = (s.items||[]).map((i, idx) => {
                           const found = stock.find(p => (String(p._id) && String(p._id) === String(i.productId || i._id)) || (p.productId && String(p.productId) === String(i.productId)) || (p.productNo && i.productNo && String(p.productNo) === String(i.productNo)));
                           const name = found?.productName || found?.name || i.productName || i.productNo || '';
                           const unit = Number(found?.sellingPrice ?? found?.unitSellingPrice ?? i.sellingPrice ?? 0).toFixed(2);
                           const qty = Number(i.qty || i.sellingQty || 0);
-                          return `${name} x${qty} @ ${unit}`;
+                          const line = (qty * Number(unit)).toFixed(2);
+                          return `${idx + 1}. ${name}\n   Qty: ${qty} × ₹${unit} = ₹${line}`;
                         }).join('\n');
+                        const invoiceNo = s.billNo || s.invoiceNo || s._id || '';
+                        const saleDate = new Date(s.createdAt || Date.now()).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
+                        const saleCustomer = s.customerName || 'Valued Customer';
+                        const saleTotal = Number(s.totalAmount||0).toFixed(2);
+                        const saleDiscount = Number(s.discountAmount || 0).toFixed(2);
+                        const saleCgst = Number(s.cgstAmount || 0).toFixed(2);
+                        const saleSgst = Number(s.sgstAmount || 0).toFixed(2);
+                        const saleIgst = Number(s.igstAmount || 0).toFixed(2);
+                        let taxLine = '';
+                        if (Number(saleIgst) > 0) taxLine = `IGST: ₹${saleIgst}`;
+                        else if (Number(saleCgst) > 0 || Number(saleSgst) > 0) taxLine = `CGST: ₹${saleCgst} | SGST: ₹${saleSgst}`;
 
-                        const message = `Shop: ${branchName}\nContact: ${branchContact}\n\nItems:\n${itemsText}\n\nTotal: ${Number(s.totalAmount||0).toFixed(2)}`;
+                        const message = `━━━━━━━━━━━━━━━━━━━━\n   *${branchName || 'Store'}*\n${branchContact ? '   📞 ' + branchContact : ''}\n━━━━━━━━━━━━━━━━━━━━\n\n*INVOICE*${invoiceNo ? ' #' + invoiceNo : ''}\n📅 ${saleDate}\n👤 ${saleCustomer}\n\n*Items:*\n${itemsText}\n\n━━━━━━━━━━━━━━━━━━━━${Number(saleDiscount) > 0 ? '\nDiscount: -₹' + saleDiscount : ''}${taxLine ? '\n' + taxLine : ''}\n\n*Total: ₹${saleTotal}*\n━━━━━━━━━━━━━━━━━━━━\n\nThank you for your purchase! 🙏`;
                         const text = encodeURIComponent(message);
                         // no specific phone in sales track share previously; prefer sending directly to sale.customerNo when available
                         const raw = (s.customerNo || '').toString().replace(/[^0-9]/g, '');
