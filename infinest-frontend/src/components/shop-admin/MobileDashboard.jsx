@@ -13,6 +13,7 @@ import {
   CartesianGrid, Tooltip, Legend, ResponsiveContainer
 } from 'recharts';
 import MobileSalaryManagement from './mobile/MobileSalaryManagement';
+import * as XLSX from 'xlsx';
 
 export default function MobileDashboard({
   shopAdmin,
@@ -79,6 +80,7 @@ export default function MobileDashboard({
   const [localAnalytics, setLocalAnalytics] = useState(null);
   const [localReportData, setLocalReportData] = useState(null);
   const [loadingReport, setLoadingReport] = useState(false);
+  const [reportFormat, setReportFormat] = useState('pdf');
 
   const API_URL = process.env.NEXT_PUBLIC_API_URL_BILLIT || 'http://localhost:8000';
 
@@ -380,6 +382,164 @@ export default function MobileDashboard({
       printWindow.print();
       printWindow.close();
     }, 250);
+  };
+
+  const handleExcelReport = () => {
+    const reportToUse = localReportData || reportData;
+    if (!reportToUse) return;
+    const currentShop = shops.find(s => s.id === currentShopId);
+    const shopName = (currentShop?.name || 'Shop').toUpperCase();
+
+    const periodStart = reportToUse.periodStart || '';
+    const periodEnd = reportToUse.periodEnd || '';
+    const dateLabel = periodStart === periodEnd
+      ? `DAILY SHEET FOR ${periodStart}`
+      : `SHEET FOR ${periodStart} TO ${periodEnd}`;
+
+    // Payment method breakdown helper
+    const getPaymentColumns = (method, amount) => {
+      const m = (method || '').toLowerCase().trim();
+      const amt = amount || 0;
+      const half = Math.round(amt / 2);
+      const otherHalf = amt - half;
+
+      if (m === 'cash') return { cash: amt, gpay: '', card: '' };
+      if (m === 'upi' || m === 'upi-h' || m === 'upi-s') return { cash: '', gpay: amt, card: '' };
+      if (m === 'card') return { cash: '', gpay: '', card: amt };
+      if (m === 'cash + card') return { cash: half, gpay: '', card: otherHalf };
+      if (m === 'upi h + cash' || m === 'upi s + cash') return { cash: otherHalf, gpay: half, card: '' };
+      if (m === 'upi h + card' || m === 'upi s + card') return { cash: '', gpay: half, card: otherHalf };
+      return { cash: amt, gpay: '', card: '' };
+    };
+
+    const headers = ['S.No.', 'Customer Name', 'Contact No', 'BRAND', 'MODEL', 'COMPLIENT', 'TOTAL', 'CASH', 'G PAY', 'CARD', 'Supplier', 'cost'];
+
+    // Admin sheet
+    const adminRows = [];
+    adminRows.push([shopName]);
+    adminRows.push([]);
+    adminRows.push([dateLabel]);
+    adminRows.push(headers);
+
+    if (reportToUse.customerPayments && reportToUse.customerPayments.length > 0) {
+      reportToUse.customerPayments.forEach((payment, idx) => {
+        const brand = payment.brand || '';
+        const model = payment.model || '';
+        const { cash, gpay, card } = getPaymentColumns(payment.paymentMethod, payment.amount);
+        adminRows.push([
+          idx + 1,
+          payment.customerName || '',
+          payment.customerPhone || '',
+          brand,
+          model,
+          payment.issue || '',
+          payment.amount || 0,
+          cash,
+          gpay,
+          card,
+          '',
+          ''
+        ]);
+      });
+    }
+
+    const dataRows = reportToUse.customerPayments?.length || 0;
+    for (let i = dataRows; i < 20; i++) {
+      adminRows.push(['', '', '', '', '', '', '', '', '', '', '', '']);
+    }
+
+    adminRows.push([]);
+    adminRows.push(['EXPENSES PAID']);
+    adminRows.push(['S.No.', 'Description', 'Category', '', 'Amount']);
+    if (reportToUse.expenses && reportToUse.expenses.length > 0) {
+      reportToUse.expenses.forEach((expense, idx) => {
+        adminRows.push([idx + 1, expense.description || '', expense.category || '', '', expense.amount || 0]);
+      });
+    } else {
+      for (let i = 0; i < 5; i++) {
+        adminRows.push(['', '', '', '', '']);
+      }
+    }
+
+    // User sheet
+    const userRows = [];
+    userRows.push([shopName]);
+    userRows.push([]);
+    userRows.push([dateLabel]);
+    userRows.push(headers);
+
+    if (reportToUse.dealerPayments && reportToUse.dealerPayments.length > 0) {
+      reportToUse.dealerPayments.forEach((payment, idx) => {
+        const brand = payment.brand || '';
+        const model = payment.model || '';
+        const { cash, gpay, card } = getPaymentColumns(payment.paymentMethod, payment.amount);
+        userRows.push([
+          idx + 1,
+          payment.dealerName || '',
+          payment.dealerPhone || '',
+          brand,
+          model,
+          payment.issue || '',
+          payment.amount || 0,
+          cash,
+          gpay,
+          card,
+          payment.supplierName || '',
+          payment.supplierAmount || ''
+        ]);
+      });
+    }
+
+    const dealerDataRows = reportToUse.dealerPayments?.length || 0;
+    for (let i = dealerDataRows; i < 20; i++) {
+      userRows.push(['', '', '', '', '', '', '', '', '', '', '', '']);
+    }
+
+    userRows.push([]);
+    userRows.push(['SUPPLIER PAYMENTS']);
+    userRows.push(['S.No.', 'Supplier Name', 'Product/Part', '', 'Amount']);
+    if (reportToUse.supplierPayments && reportToUse.supplierPayments.length > 0) {
+      reportToUse.supplierPayments.forEach((payment, idx) => {
+        userRows.push([idx + 1, payment.supplierName || '', payment.productName || '', '', payment.amount || 0]);
+      });
+    } else {
+      for (let i = 0; i < 5; i++) {
+        userRows.push(['', '', '', '', '']);
+      }
+    }
+
+    const wb = XLSX.utils.book_new();
+    const colCount = headers.length;
+
+    const ws1 = XLSX.utils.aoa_to_sheet(adminRows);
+    ws1['!merges'] = [
+      { s: { r: 0, c: 0 }, e: { r: 0, c: colCount - 1 } },
+      { s: { r: 2, c: 0 }, e: { r: 2, c: colCount - 1 } },
+    ];
+    ws1['!cols'] = [
+      { wch: 6 }, { wch: 22 }, { wch: 14 }, { wch: 12 }, { wch: 14 },
+      { wch: 14 }, { wch: 10 }, { wch: 10 }, { wch: 10 }, { wch: 10 }, { wch: 14 }, { wch: 10 },
+    ];
+    XLSX.utils.book_append_sheet(wb, ws1, 'admin');
+
+    const ws2 = XLSX.utils.aoa_to_sheet(userRows);
+    ws2['!merges'] = [
+      { s: { r: 0, c: 0 }, e: { r: 0, c: colCount - 1 } },
+      { s: { r: 2, c: 0 }, e: { r: 2, c: colCount - 1 } },
+    ];
+    ws2['!cols'] = ws1['!cols'];
+    XLSX.utils.book_append_sheet(wb, ws2, 'user');
+
+    const fileName = `${shopName.replace(/\s+/g, '_')}_Report_${periodStart.replace(/\//g, '-')}.xlsx`;
+    XLSX.writeFile(wb, fileName);
+  };
+
+  const handleExportReport = () => {
+    if (reportFormat === 'excel') {
+      handleExcelReport();
+    } else {
+      handlePrintReport();
+    }
   };
 
   // Fetch analytics when revenue tab becomes active
@@ -1271,18 +1431,39 @@ export default function MobileDashboard({
                   </button>
                   {(localReportData || reportData) && (
                     <button
-                      onClick={handlePrintReport}
+                      onClick={handleExportReport}
                       className="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium flex items-center gap-1"
-                      title="Print/Save as PDF"
+                      title={reportFormat === 'excel' ? 'Export Excel' : 'Print/Save as PDF'}
                     >
-                      <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                        <polyline points="6 9 6 2 18 2 18 9"></polyline>
-                        <path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"></path>
-                        <rect x="6" y="14" width="12" height="8"></rect>
-                      </svg>
-                      PDF
+                      {reportFormat === 'excel' ? (
+                        <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                          <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                          <polyline points="14 2 14 8 20 8"></polyline>
+                          <line x1="16" y1="13" x2="8" y2="13"></line>
+                          <line x1="16" y1="17" x2="8" y2="17"></line>
+                        </svg>
+                      ) : (
+                        <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                          <polyline points="6 9 6 2 18 2 18 9"></polyline>
+                          <path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"></path>
+                          <rect x="6" y="14" width="12" height="8"></rect>
+                        </svg>
+                      )}
+                      {reportFormat === 'excel' ? 'Excel' : 'PDF'}
                     </button>
                   )}
+                </div>
+                {/* Format selector */}
+                <div>
+                  <label className="block text-xs text-gray-500 mb-1">Export Format</label>
+                  <select
+                    value={reportFormat}
+                    onChange={(e) => setReportFormat(e.target.value)}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
+                  >
+                    <option value="pdf">PDF</option>
+                    <option value="excel">Excel</option>
+                  </select>
                 </div>
               </div>
             </div>
