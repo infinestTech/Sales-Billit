@@ -1136,6 +1136,10 @@ router.get('/reports/financial', shopAdminAuth, async (req, res) => {
                 $project: {
                     date: '$payments.date',
                     customerName: { $ifNull: ['$customer.client_name', 'Walk-in Customer'] },
+                    customerPhone: { $ifNull: ['$customer.mobile_number', ''] },
+                    brand: { $ifNull: ['$mobile_name', ''] },
+                    model: { $ifNull: ['$model', ''] },
+                    issue: { $ifNull: ['$issue', ''] },
                     mobileName: {
                         $concat: [
                             { $ifNull: ['$mobile_name', ''] },
@@ -1177,6 +1181,10 @@ router.get('/reports/financial', shopAdminAuth, async (req, res) => {
                 $project: {
                     date: '$created_at',
                     customerName: { $ifNull: ['$customer.client_name', 'Walk-in Customer'] },
+                    customerPhone: { $ifNull: ['$customer.mobile_number', ''] },
+                    brand: { $ifNull: ['$mobile_name', ''] },
+                    model: { $ifNull: ['$model', ''] },
+                    issue: { $ifNull: ['$issue', ''] },
                     mobileName: {
                         $concat: [
                             { $ifNull: ['$mobile_name', ''] },
@@ -1228,6 +1236,10 @@ router.get('/reports/financial', shopAdminAuth, async (req, res) => {
                 $project: {
                     date: '$payments.date',
                     dealerName: { $ifNull: ['$dealer.client_name', 'Unknown Dealer'] },
+                    dealerPhone: { $ifNull: ['$dealer.mobile_number', ''] },
+                    brand: { $ifNull: ['$mobile_name', ''] },
+                    model: { $ifNull: ['$model', ''] },
+                    issue: { $ifNull: ['$issue', ''] },
                     mobileName: {
                         $concat: [
                             { $ifNull: ['$mobile_name', ''] },
@@ -1235,6 +1247,8 @@ router.get('/reports/financial', shopAdminAuth, async (req, res) => {
                             { $ifNull: ['$model', ''] }
                         ]
                     },
+                    supplierName: { $ifNull: ['$supplierName', ''] },
+                    supplierAmount: { $ifNull: ['$supplier_amount', 0] },
                     paymentMethod: { $ifNull: ['$payments.method', 'Cash'] },
                     amount: { $ifNull: ['$payments.amount', 0] }
                 }
@@ -1269,6 +1283,10 @@ router.get('/reports/financial', shopAdminAuth, async (req, res) => {
                 $project: {
                     date: '$created_at',
                     dealerName: { $ifNull: ['$dealer.client_name', 'Unknown Dealer'] },
+                    dealerPhone: { $ifNull: ['$dealer.mobile_number', ''] },
+                    brand: { $ifNull: ['$mobile_name', ''] },
+                    model: { $ifNull: ['$model', ''] },
+                    issue: { $ifNull: ['$issue', ''] },
                     mobileName: {
                         $concat: [
                             { $ifNull: ['$mobile_name', ''] },
@@ -1276,6 +1294,8 @@ router.get('/reports/financial', shopAdminAuth, async (req, res) => {
                             { $ifNull: ['$model', ''] }
                         ]
                     },
+                    supplierName: { $ifNull: ['$supplierName', ''] },
+                    supplierAmount: { $ifNull: ['$supplier_amount', 0] },
                     paymentMethod: { 
                         $cond: {
                             if: { $ne: ['$paymentMethod', null] },
