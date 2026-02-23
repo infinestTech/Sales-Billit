@@ -1,5 +1,5 @@
 const { Shop, Customer, Dealer, Mobile, ProductHistory, Product, Expense, DailySummary, MobileBrand, MobileIssue } = require("../models/mongoModels");
-const { getISTTodayRange, getISTStartOfDay, getISTEndOfDay } = require("../utils/dateHelper");
+const { getISTTodayRange, getISTStartOfDay, getISTEndOfDay, formatIST } = require("../utils/dateHelper");
 
 // ======================================
 // ✅ Create Customer Controller
@@ -1018,9 +1018,9 @@ const getTodayExpenses = async (req, res) => {
       return res.status(400).json({ error: "Valid shop ID (userId) is required." });
     }
 
-    const targetDate = date || new Date().toISOString().split("T")[0];
-    const start = new Date(`${targetDate}T00:00:00.000Z`);
-    const end = new Date(`${targetDate}T23:59:59.999Z`);
+    const targetDate = date || formatIST(new Date(), 'YYYY-MM-DD');
+    const start = getISTStartOfDay(new Date(targetDate));
+    const end = getISTEndOfDay(new Date(targetDate));
 
     const expenses = await Expense.find({
       userId,
@@ -1043,8 +1043,8 @@ const updateDailySummary = async (req, res) => {
     return res.status(400).json({ error: "Missing required fields" });
   }
 
-  const dayStart = new Date(`${date}T00:00:00.000Z`);
-  const dayEnd = new Date(`${date}T23:59:59.999Z`);
+  const dayStart = getISTStartOfDay(new Date(date));
+  const dayEnd = getISTEndOfDay(new Date(date));
 
   try {
     const expenses = await Expense.find({
@@ -1101,8 +1101,8 @@ const getDailySummary = async (req, res) => {
       return res.status(400).json({ error: "Valid userId and date are required" });
     }
 
-    const start = new Date(`${date}T00:00:00.000Z`);
-    const end = new Date(`${date}T23:59:59.999Z`);
+    const start = getISTStartOfDay(new Date(date));
+    const end = getISTEndOfDay(new Date(date));
 
     // ✅ Fetch mobile records for customers and dealers of this shop
     const customers = await Customer.find({ shop_id: userId }).lean();

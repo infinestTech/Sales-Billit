@@ -160,7 +160,7 @@ exports.getSupplierHistory = async (req, res) => {
 // Expects: { shop_id, supplierId, totalAmount, lastPaymentMethod, message }
 exports.updateSupplier = async (req, res) => {
   try {
-    const { shop_id, supplierId, totalAmount, lastPaymentMethod, message, paidAmount } = req.body || {};
+    const { shop_id, supplierId, totalAmount, lastPaymentMethod, message, paidAmount, changeDate } = req.body || {};
     if (!shop_id || !supplierId) {
       return res.status(400).json({ success: false, message: "shop_id and supplierId are required" });
     }
@@ -217,6 +217,11 @@ exports.updateSupplier = async (req, res) => {
       totalAmount: typeof update.totalAmount === "number" ? update.totalAmount : undefined,
       paymentMethod: update.lastPaymentMethod || "",
     };
+
+    // Use provided changeDate for financial report accuracy (e.g. recording yesterday's entry today)
+    if (changeDate) {
+      historyPayload.changeDate = new Date(changeDate);
+    }
 
     // If this update was a payment subtraction, include paid and previous amounts
     if (typeof paidAmount !== "undefined" && paidAmount !== null && paidAmount !== "") {

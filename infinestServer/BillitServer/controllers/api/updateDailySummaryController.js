@@ -1,4 +1,5 @@
 const { Expense, DailySummary } = require("../../models/mongoModels");
+const { getISTStartOfDay, getISTEndOfDay } = require("../../utils/dateHelper");
 
 const updateDailySummary = async (req, res) => {
   const { userId, date, todayRevenue } = req.body; // userId = shop_id
@@ -7,8 +8,9 @@ const updateDailySummary = async (req, res) => {
     return res.status(400).json({ error: "Missing required fields" });
   }
 
-  const dayStart = new Date(`${date}T00:00:00`);
-  const dayEnd = new Date(`${date}T23:59:59`);
+  // Use IST timezone boundaries for the given date
+  const dayStart = getISTStartOfDay(new Date(date));
+  const dayEnd = getISTEndOfDay(new Date(date));
 
   try {
     // 1. Sum today's expenses

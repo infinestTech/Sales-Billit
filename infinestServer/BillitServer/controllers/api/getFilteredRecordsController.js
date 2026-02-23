@@ -1,4 +1,5 @@
 const { Customer, Dealer, Mobile, Shop } = require("../../models/mongoModels");
+const { getISTStartOfDay, getISTEndOfDay, getISTRangeBetween } = require("../../utils/dateHelper");
 
 
 
@@ -52,21 +53,21 @@ if (!shop) {
 
 
     // Handle date filters - mobileDate takes precedence over date range
+    // Use IST timezone boundaries to ensure correct date matching for Indian users
     if (mobileDate) {
-      // If specific mobile date is provided, use exact date match
-      const startOfDay = new Date(mobileDate);
-      startOfDay.setHours(0, 0, 0, 0);
-      const endOfDay = new Date(mobileDate);
-      endOfDay.setHours(23, 59, 59, 999);
+      // If specific mobile date is provided, use exact date match in IST
+      const startOfDay = getISTStartOfDay(new Date(mobileDate));
+      const endOfDay = getISTEndOfDay(new Date(mobileDate));
       mobileFilters.added_date = {
         $gte: startOfDay,
         $lte: endOfDay,
       };
     } else if (fromDate && toDate) {
-      // Otherwise use date range if provided
+      // Otherwise use date range if provided, with IST boundaries
+      const { start, end } = getISTRangeBetween(new Date(fromDate), new Date(toDate));
       mobileFilters.added_date = {
-        $gte: new Date(fromDate),
-        $lte: new Date(toDate),
+        $gte: start,
+        $lte: end,
       };
     }
 

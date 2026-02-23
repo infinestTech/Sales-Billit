@@ -1,4 +1,5 @@
 const { Mobile } = require("../../models/mongoModels");
+const { getISTNow } = require("../../utils/dateHelper");
 
 const deletePaymentEntry = async (req, res) => {
   const { id, paymentId } = req.body;
@@ -26,8 +27,8 @@ const deletePaymentEntry = async (req, res) => {
     const totalPaid = existingMobile.payments.reduce((sum, payment) => sum + Number(payment.amount || 0), 0);
     existingMobile.total_paid = totalPaid;
 
-    // Update the update_date to track when payment was deleted
-    existingMobile.update_date = new Date();
+    // Update the update_date to track when payment was deleted (IST)
+    existingMobile.update_date = getISTNow().toDate();
 
     // Update the document
     await existingMobile.save();

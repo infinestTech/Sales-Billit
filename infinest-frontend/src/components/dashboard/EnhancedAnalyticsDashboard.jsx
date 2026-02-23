@@ -43,6 +43,7 @@ import {
   PhoneCall,
 } from "lucide-react";
 import api from "@/components/api";
+import { getLocalDateString } from "@/lib/utils";
 import { usePlanFeatures } from "@/context/PlanFeatureContext";
 import { createFeatureLockedComponent } from "@/utils/featureAccess";
 
@@ -166,7 +167,7 @@ export default function EnhancedAnalyticsDashboard({ shopId }) {
     const profitByDate = {};
     
     for (let d = new Date(startDate); d <= now; d.setDate(d.getDate() + 1)) {
-      const dateKey = d.toISOString().split('T')[0];
+      const dateKey = getLocalDateString(d);
       revenueByDate[dateKey] = { 
         date: dateKey, 
         revenue: 0, 
@@ -178,7 +179,7 @@ export default function EnhancedAnalyticsDashboard({ shopId }) {
     }
 
     mobilesInRange.forEach(mobile => {
-      const dateKey = new Date(mobile.added_date).toISOString().split('T')[0];
+      const dateKey = getLocalDateString(new Date(mobile.added_date));
       if (revenueByDate[dateKey]) {
         revenueByDate[dateKey].revenue += mobile.paid_amount || 0;
         revenueByDate[dateKey].count += 1;

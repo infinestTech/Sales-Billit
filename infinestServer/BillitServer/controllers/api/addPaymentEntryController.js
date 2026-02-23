@@ -1,5 +1,6 @@
 const { Mobile } = require("../../models/mongoModels");
 const { DEFAULT_PAYMENT_METHOD } = require("../../constants/paymentMethods");
+const { getISTNow } = require("../../utils/dateHelper");
 
 const addPaymentEntry = async (req, res) => {
   const { id, amount, method, date } = req.body;
@@ -24,7 +25,7 @@ const addPaymentEntry = async (req, res) => {
       existingMobile.payments.push({
         amount: Number(existingMobile.paid_amount),
         method: existingMobile.payment || DEFAULT_PAYMENT_METHOD,
-        date: existingMobile.update_date || new Date()
+        date: existingMobile.update_date || getISTNow().toDate()
       });
     }
 
@@ -39,8 +40,8 @@ const addPaymentEntry = async (req, res) => {
     const totalPaid = existingMobile.payments.reduce((sum, payment) => sum + Number(payment.amount || 0), 0);
     existingMobile.total_paid = totalPaid;
 
-    // Update the update_date to track when payment was added
-    existingMobile.update_date = new Date();
+    // Update the update_date to track when payment was added (IST)
+    existingMobile.update_date = getISTNow().toDate();
 
     // Update the document
     await existingMobile.save();

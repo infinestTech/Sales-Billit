@@ -1,4 +1,5 @@
 const { Mobile, Expense, Shop, Customer, Dealer, Product } = require("../../models/mongoModels");
+const { getISTTodayRange } = require("../../utils/dateHelper");
 
 
 // POST version (already present)
@@ -16,10 +17,7 @@ exports.getDashboardSummary = async (req, res) => {
     ]);
 
 
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    const endOfDay = new Date(today);
-    endOfDay.setHours(23, 59, 59, 999);
+    const { startOfDay: today, endOfDay } = getISTTodayRange();
 
     // Calculate revenue from payments made TODAY only
     let todayRevenue = 0;
@@ -73,10 +71,7 @@ exports.getDashboardSummaryPublic = async (req, res) => {
     ]);
 
 
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    const endOfDay = new Date(today);
-    endOfDay.setHours(23, 59, 59, 999);
+    const { startOfDay: today, endOfDay } = getISTTodayRange();
 
     // Calculate revenue from payments made TODAY only
     let todayRevenue = 0;
@@ -113,7 +108,4 @@ exports.getDashboardSummaryPublic = async (req, res) => {
     res.status(500).json({ message: "Error fetching dashboard data (public)" });
   }
 };
-
-
-
 

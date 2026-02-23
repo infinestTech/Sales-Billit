@@ -1,7 +1,7 @@
 const { Product, ProductHistory } = require("../../models/mongoModels");
 
 const sellProduct = async (req, res) => {
-  const { productId, quantitySold, paidAmount } = req.body;
+  const { productId, quantitySold, paidAmount, sellDate } = req.body;
 
   if (!productId || !quantitySold || paidAmount === undefined) {
     return res.status(400).json({ error: "Missing required fields." });
@@ -21,14 +21,21 @@ const sellProduct = async (req, res) => {
       totalCost: updatedTotalCost,
     });
 
-    await ProductHistory.create({
+    const historyEntry = {
       productId,
       changeType: "SELL",
       quantity: quantitySold,
       costPrice: product.costPrice,
       paidAmount,
       notes: "Product sold",
-    });
+    };
+
+    // Use provided sellDate for financial report accuracy (e.g. recording yesterday's entry today)
+    if (sellDate) {
+      historyEntry.changeDate = new Date(sellDate);
+    }
+
+    await ProductHistory.create(historyEntry);
 
     return res.status(200).json({ message: "Product sold successfully." });
   } catch (error) {

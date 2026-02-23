@@ -1,4 +1,5 @@
 const { ProductHistory } = require("../../models/mongoModels");
+const { getISTTodayRange } = require("../../utils/dateHelper");
 
 const getTodayProductRevenue = async (req, res) => {
   try {
@@ -8,9 +9,7 @@ const getTodayProductRevenue = async (req, res) => {
       return res.status(400).json({ error: "Shop ID is required." });
     }
 
-    const today = new Date();
-    const startOfDay = new Date(today.setHours(0, 0, 0, 0));
-    const endOfDay = new Date(today.setHours(23, 59, 59, 999));
+    const { startOfDay, endOfDay } = getISTTodayRange();
 
     const result = await ProductHistory.aggregate([
       {

@@ -27,14 +27,15 @@ import {
 import { usePlanFeatures } from "@/context/PlanFeatureContext"
 import { logAndNotify, logError, logSuccess } from "@/utils/logger"
 import api from "../api"
+import { getLocalDateString } from "@/lib/utils"
 
 export default function MobileAnalytics({ shopId }) {
   const { features, loading } = usePlanFeatures()
   const [activeTab, setActiveTab] = useState("overview") // overview, records, stock
   const [dateFilters, setDateFilters] = useState({
-    fromDate: new Date().toISOString().split("T")[0],
-    toDate: new Date().toISOString().split("T")[0],
-    specificDate: new Date().toISOString().split("T")[0]
+    fromDate: getLocalDateString(),
+    toDate: getLocalDateString(),
+    specificDate: getLocalDateString()
   })
   const [filterType, setFilterType] = useState("today") // today, range, specific
   const [isLoading, setIsLoading] = useState(false)
@@ -86,7 +87,7 @@ export default function MobileAnalytics({ shopId }) {
       // Prepare date parameters based on filter type
       let dateParams = {}
       if (filterType === "today") {
-        dateParams = { date: new Date().toISOString().split('T')[0] }
+        dateParams = { date: getLocalDateString() }
       } else if (filterType === "range") {
         dateParams = { 
           fromDate: dateFilters.fromDate, 
@@ -99,7 +100,7 @@ export default function MobileAnalytics({ shopId }) {
 
       // Ensure we always have a date parameter
       if (!dateParams.date) {
-        dateParams.date = new Date().toISOString().split('T')[0]
+        dateParams.date = getLocalDateString()
       }
       
       // Get dashboard summary data
@@ -110,7 +111,7 @@ export default function MobileAnalytics({ shopId }) {
       
       // Get daily summary for revenue breakdown
       const dailySummaryRes = await api.post("/api/daily-summary", 
-        { shop_id: shopId, date: new Date().toISOString().split('T')[0], ...dateParams }, 
+        { shop_id: shopId, date: getLocalDateString(), ...dateParams }, 
         { headers: { Authorization: `Bearer ${token}` } }
       )
       
@@ -367,7 +368,7 @@ export default function MobileAnalytics({ shopId }) {
   const getDateParams = () => {
     switch (filterType) {
       case "today":
-        return { date: new Date().toISOString().split("T")[0] }
+        return { date: getLocalDateString() }
       case "range":
         return { 
           fromDate: dateFilters.fromDate, 
@@ -376,7 +377,7 @@ export default function MobileAnalytics({ shopId }) {
       case "specific":
         return { date: dateFilters.specificDate }
       default:
-        return { date: new Date().toISOString().split("T")[0] }
+        return { date: getLocalDateString() }
     }
   }
 

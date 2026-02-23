@@ -7,6 +7,7 @@ import {
   XCircle, Clock, AlertCircle, ChevronDown, ChevronUp,
   Search, Filter, Download, Edit, Save, X
 } from 'lucide-react';
+import { getLocalDateString } from '@/lib/utils';
 
 export default function MobileSalaryManagement({ shopId }) {
   const [activeSubTab, setActiveSubTab] = useState('overview');
@@ -32,7 +33,7 @@ export default function MobileSalaryManagement({ shopId }) {
     if (shopId) {
       fetchEmployees();
       fetchSalaryConfig();
-      const currentMonth = new Date().toISOString().slice(0, 7);
+      const currentMonth = getLocalDateString().slice(0, 7);
       setSelectedMonth(currentMonth);
     }
   }, [shopId]);

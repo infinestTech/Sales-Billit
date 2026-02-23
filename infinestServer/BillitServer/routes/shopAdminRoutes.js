@@ -3,7 +3,7 @@ const router = express.Router();
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const SessionManager = require('../utils/sessionManager'); // ✅ Import session manager
-const { getISTTodayRange, getISTStartOfDay, getISTEndOfDay, subtractTimeIST } = require('../utils/dateHelper');
+const { getISTTodayRange, getISTStartOfDay, getISTEndOfDay, subtractTimeIST, formatIST } = require('../utils/dateHelper');
 const {
     Shop,
     ShopAdmin,
@@ -363,14 +363,13 @@ router.get('/employees', shopAdminAuth, async (req, res) => {
         const employees = await Employee.find({ shop_id: req.shopId }).sort({ created_at: -1 });
 
         // Get attendance stats for each employee (last 30 days)
-        const thirtyDaysAgo = new Date();
-        thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+        const thirtyDaysAgo = subtractTimeIST(30, 'days');
 
         const employeesWithStats = await Promise.all(
             employees.map(async (employee) => {
                 const attendanceRecords = await Attendance.find({
                     employee_id: employee._id,
-                    date: { $gte: thirtyDaysAgo.toISOString().split('T')[0] }
+                    date: { $gte: formatIST(thirtyDaysAgo, 'YYYY-MM-DD') }
                 });
 
                 const presentDays = attendanceRecords.filter(a => a.status === 'present').length;
@@ -661,18 +660,24 @@ router.get('/analytics/revenue', shopAdminAuth, async (req, res) => {
         ]);
 
         // Supplier Payments (from mobiles with supplier info) - grouped by date
+        // Use update_date (when supplier payment was recorded) with fallback to created_at for older records
         const supplierPayments = await Mobile.aggregate([
+            {
+                $addFields: {
+                    _supplierDate: { $ifNull: ['$update_date', '$created_at'] }
+                }
+            },
             {
                 $match: {
                     shop_id: req.shopId,
-                    created_at: { $gte: startDate, $lte: endDate },
+                    _supplierDate: { $gte: startDate, $lte: endDate },
                     supplier_amount: { $gt: 0 }
                 }
             },
             {
                 $group: {
                     _id: {
-                        date: { $dateToString: { format: "%Y-%m-%d", date: "$created_at" } }
+                        date: { $dateToString: { format: "%Y-%m-%d", date: "$_supplierDate" } }
                     },
                     amount: { $sum: "$supplier_amount" },
                     count: { $sum: 1 }
@@ -839,8 +844,7 @@ router.get('/analytics/revenue', shopAdminAuth, async (req, res) => {
 router.get('/analytics/service', shopAdminAuth, async (req, res) => {
     try {
         const { period = '30' } = req.query;
-        const daysAgo = new Date();
-        daysAgo.setDate(daysAgo.getDate() - parseInt(period));
+        const daysAgo = subtractTimeIST(parseInt(period), 'days');
 
         // Mobile status breakdown
         const statusBreakdown = await Mobile.aggregate([
@@ -960,16 +964,14 @@ router.get('/analytics/customers', shopAdminAuth, async (req, res) => {
         const totalCustomers = await Customer.countDocuments({ shop_id: req.shopId });
         
         // New customers this month
-        const monthAgo = new Date();
-        monthAgo.setMonth(monthAgo.getMonth() - 1);
+        const monthAgo = subtractTimeIST(1, 'months');
         const newThisMonth = await Customer.countDocuments({
             shop_id: req.shopId,
             created_at: { $gte: monthAgo }
         });
 
         // Active customers (have transactions in last 30 days)
-        const thirtyDaysAgo = new Date();
-        thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+        const thirtyDaysAgo = subtractTimeIST(30, 'days');
         const activeCustomerIds = await Mobile.distinct('customer_id', {
             shop_id: req.shopId,
             created_at: { $gte: thirtyDaysAgo }
@@ -1313,17 +1315,23 @@ router.get('/reports/financial', shopAdminAuth, async (req, res) => {
         const allDealerPayments = [...dealerPayments, ...legacyDealerPayments];
 
         // Supplier Payments - Get from mobiles with supplier info
+        // Use update_date (when supplier payment was recorded) with fallback to created_at for older records
         const supplierPayments = await Mobile.aggregate([
+            {
+                $addFields: {
+                    _supplierDate: { $ifNull: ['$update_date', '$created_at'] }
+                }
+            },
             {
                 $match: {
                     shop_id: req.shopId,
-                    created_at: { $gte: startDate, $lte: endDate },
+                    _supplierDate: { $gte: startDate, $lte: endDate },
                     supplier_amount: { $gt: 0 }
                 }
             },
             {
                 $project: {
-                    date: '$created_at',
+                    date: '$_supplierDate',
                     supplierName: { $ifNull: ['$supplierName', 'Supplier'] },
                     productName: { $ifNull: ['$productName', 'Product/Part'] },
                     paymentMethod: { 

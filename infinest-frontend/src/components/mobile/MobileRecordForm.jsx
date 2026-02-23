@@ -34,6 +34,7 @@ import {
 import { usePlanFeatures } from "@/context/PlanFeatureContext"
 import { logAndNotify, logError, logSuccess } from "@/utils/logger"
 import api from "../api"
+import { getLocalDateString } from "@/lib/utils"
 import MobileBillGenerator from "./MobileBillGenerator"
 
 export default function MobileRecordForm({ shopId, isLimitReached, setIsLimitReached }) {
@@ -318,7 +319,7 @@ export default function MobileRecordForm({ shopId, isLimitReached, setIsLimitRea
       id: Date.now(),
       description: "",
       descriptionIssue: "",
-      date: new Date().toISOString().split("T")[0]
+      date: getLocalDateString()
     }])
   }
 
