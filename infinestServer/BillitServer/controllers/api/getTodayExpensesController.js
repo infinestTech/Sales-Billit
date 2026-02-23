@@ -1,4 +1,5 @@
 const { Expense } = require("../../models/mongoModels");
+const { getISTStartOfDay, getISTEndOfDay, formatIST } = require("../../utils/dateHelper");
 
 const getTodayExpenses = async (req, res) => {
   const { shop_id, date } = req.body;
@@ -8,9 +9,10 @@ const getTodayExpenses = async (req, res) => {
   }
 
   try {
-    const targetDate = date || new Date().toISOString().split("T")[0];
-    const start = new Date(`${targetDate}T00:00:00.000Z`);
-    const end = new Date(`${targetDate}T23:59:59.999Z`);
+    const targetDate = date || formatIST(new Date(), 'YYYY-MM-DD');
+    // Use IST boundaries for the target date
+    const start = getISTStartOfDay(new Date(targetDate));
+    const end = getISTEndOfDay(new Date(targetDate));
 
     const expenses = await Expense.find({
       userId: shop_id,

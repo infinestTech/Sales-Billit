@@ -1,4 +1,5 @@
 const { Customer, Dealer, Mobile, ProductHistory, Product } = require("../../models/mongoModels");
+const { getISTStartOfDay, getISTEndOfDay } = require("../../utils/dateHelper");
 
 const getDailySummaryRevenue = async (req, res) => {
   try {
@@ -8,8 +9,9 @@ const getDailySummaryRevenue = async (req, res) => {
       return res.status(400).json({ error: "shop_id and date are required" });
     }
 
-    const start = new Date(`${date}T00:00:00.000Z`);
-    const end = new Date(`${date}T23:59:59.999Z`);
+    // Use IST boundaries for the given date
+    const start = getISTStartOfDay(new Date(date));
+    const end = getISTEndOfDay(new Date(date));
 
     // 1️⃣ Fetch customers & dealers (in case needed for advanced analytics later)
     const customers = await Customer.find({ shop_id }).lean();

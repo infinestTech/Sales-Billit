@@ -33,6 +33,7 @@ const MobileNameTable = ({ mobileData, setMobileData, onRevenueUpdate, hideActio
   const [paymentMethod, setPaymentMethod] = useState("")
   const [warranty, setWarranty] = useState("")
   const [selling, setSelling] = useState(false)
+  const [sellDate, setSellDate] = useState("today")
 
   // Split Payment Modal States
   const [paymentModalOpen, setPaymentModalOpen] = useState(false)
@@ -250,6 +251,7 @@ const MobileNameTable = ({ mobileData, setMobileData, onRevenueUpdate, hideActio
     setSellQty(1)
     setPaymentMethod("")
     setWarranty("")
+    setSellDate("today")
     try {
       const token = localStorage.getItem("token")
       if (!token || !shopId) return
@@ -287,6 +289,7 @@ const MobileNameTable = ({ mobileData, setMobileData, onRevenueUpdate, hideActio
     setPaidAmount(0)
     setPaymentMethod("")
     setWarranty("")
+    setSellDate("today")
     setSelectedSupplierId("")
     setSupplierQuery("")
     setProductNameInput("")
@@ -426,12 +429,24 @@ const MobileNameTable = ({ mobileData, setMobileData, onRevenueUpdate, hideActio
     try {
       const token = localStorage.getItem("token")
 
+      // Compute the selected date (today or yesterday)
+      const now = new Date()
+      let selectedDate
+      if (sellDate === "yesterday") {
+        const yesterday = new Date(now)
+        yesterday.setDate(yesterday.getDate() - 1)
+        yesterday.setHours(23, 59, 0, 0)
+        selectedDate = yesterday.toISOString()
+      } else {
+        selectedDate = now.toISOString()
+      }
+
       // If typed product matches an existing product by name, use its id to perform product sell
       const matchingProduct = products.find(p => (p.name || "").toLowerCase() === (productNameInput || "").toLowerCase())
       if (matchingProduct) {
         await api.post(
           "/api/products/sell",
-          { productId: matchingProduct._id || selectedProductId, quantitySold: Number(sellQty), paidAmount: Number(paidAmount || 0) },
+          { productId: matchingProduct._id || selectedProductId, quantitySold: Number(sellQty), paidAmount: Number(paidAmount || 0), sellDate: selectedDate },
           { headers: { Authorization: `Bearer ${token}` } }
         )
       } else {
@@ -448,7 +463,7 @@ const MobileNameTable = ({ mobileData, setMobileData, onRevenueUpdate, hideActio
       // call supplier update to record history and update totalAmount
       await api.post(
         "/api/suppliers/update",
-        { shop_id: shopId, supplierId: selectedSupplierId, totalAmount: newTotal, lastPaymentMethod: paymentMethod || DEFAULT_PAYMENT_METHOD, message: `Added: ${productNameInput} x${sellQty} - ₹${increment}` },
+        { shop_id: shopId, supplierId: selectedSupplierId, totalAmount: newTotal, lastPaymentMethod: paymentMethod || DEFAULT_PAYMENT_METHOD, message: `Added: ${productNameInput} x${sellQty} - ₹${increment}`, changeDate: selectedDate },
         { headers: { Authorization: `Bearer ${token}` } }
       )
       
@@ -466,7 +481,7 @@ const MobileNameTable = ({ mobileData, setMobileData, onRevenueUpdate, hideActio
             { 
               id: activeMobileId, 
               paidAmount: currentPaidAmount, 
-              updateDate: new Date().toISOString(), 
+              updateDate: selectedDate, 
               supplierId: selectedSupplierId, 
               supplierName: supplierQuery, 
               productName: productNameInput, 
@@ -938,6 +953,33 @@ const MobileNameTable = ({ mobileData, setMobileData, onRevenueUpdate, hideActio
           <div className="bg-white rounded-xl shadow-xl w-full max-w-md p-6">
             <h3 className="text-lg font-semibold mb-4">Sell Product</h3>
             <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Date</label>
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setSellDate("today")}
+                    className={`flex-1 px-3 py-2 rounded-lg text-sm font-medium border transition-colors ${
+                      sellDate === "today"
+                        ? "bg-blue-600 text-white border-blue-600"
+                        : "bg-white text-gray-700 border-gray-300 hover:bg-gray-50"
+                    }`}
+                  >
+                    Today ({new Date().toLocaleDateString("en-IN", { day: "2-digit", month: "short" })})
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setSellDate("yesterday")}
+                    className={`flex-1 px-3 py-2 rounded-lg text-sm font-medium border transition-colors ${
+                      sellDate === "yesterday"
+                        ? "bg-blue-600 text-white border-blue-600"
+                        : "bg-white text-gray-700 border-gray-300 hover:bg-gray-50"
+                    }`}
+                  >
+                    Yesterday ({new Date(Date.now() - 86400000).toLocaleDateString("en-IN", { day: "2-digit", month: "short" })})
+                  </button>
+                </div>
+              </div>
               <div className="relative">
                 <label className="block text-sm font-medium text-gray-700 mb-1">Supplier</label>
                 <input

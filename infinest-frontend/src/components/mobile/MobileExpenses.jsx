@@ -11,6 +11,7 @@ import {
   X,
   Clock
 } from "lucide-react"
+import { getLocalDateString } from "@/lib/utils"
 
 export default function MobileExpenses({ shopId }) {
   const [expenses, setExpenses] = useState([])
@@ -20,16 +21,16 @@ export default function MobileExpenses({ shopId }) {
   
   // Date filter states (similar to analytics)
   const [dateFilters, setDateFilters] = useState({
-    fromDate: new Date().toISOString().split("T")[0],
-    toDate: new Date().toISOString().split("T")[0],
-    specificDate: new Date().toISOString().split("T")[0]
+    fromDate: getLocalDateString(),
+    toDate: getLocalDateString(),
+    specificDate: getLocalDateString()
   })
   const [filterType, setFilterType] = useState("today") // today, range, specific
   
   const [newExpense, setNewExpense] = useState({
     title: "",
     amount: "",
-    date: new Date().toISOString().split('T')[0]
+    date: getLocalDateString()
   })
 
   // Remove categories since desktop version doesn't have them
@@ -70,7 +71,7 @@ export default function MobileExpenses({ shopId }) {
   const getDateParams = () => {
     switch (filterType) {
       case "today":
-        return { date: new Date().toISOString().split('T')[0] }
+        return { date: getLocalDateString() }
       case "specific":
         return { date: dateFilters.specificDate }
       case "range":
@@ -79,7 +80,7 @@ export default function MobileExpenses({ shopId }) {
           toDate: dateFilters.toDate 
         }
       default:
-        return { date: new Date().toISOString().split('T')[0] }
+        return { date: getLocalDateString() }
     }
   }
 
@@ -96,7 +97,7 @@ export default function MobileExpenses({ shopId }) {
         const allExpenses = []
         
         for (let d = new Date(startDate); d <= endDate; d.setDate(d.getDate() + 1)) {
-          const dateStr = d.toISOString().split('T')[0]
+          const dateStr = getLocalDateString(d)
           try {
             const response = await api.post(
               "/api/expenses/today",
@@ -166,7 +167,7 @@ export default function MobileExpenses({ shopId }) {
       setNewExpense({
         title: "",
         amount: "",
-        date: new Date().toISOString().split('T')[0]
+        date: getLocalDateString()
       })
       setIsAddModalOpen(false)
       fetchExpenses()

@@ -1,4 +1,8 @@
 const { Mobile, Expense, Shop, Customer, Dealer, Product, Technician, MobileBrand, MobileIssue } = require("../../models/mongoModels");
+const { getISTNow, subtractTimeIST, formatIST } = require("../../utils/dateHelper");
+
+// Helper to get IST date key (YYYY-MM-DD) from any date
+const getISTDateKey = (date) => formatIST(date, 'YYYY-MM-DD');
 
 exports.getAnalyticsData = async (req, res) => {
   try {
@@ -17,10 +21,10 @@ exports.getAnalyticsData = async (req, res) => {
     
     console.log('Analytics request:', { shop_id, time_range, method: req.method });
     
-    // Calculate date range
-    const now = new Date();
+    // Calculate date range using IST timezone
+    const now = getISTNow().toDate();
     const daysAgo = parseInt(time_range);
-    const startDate = new Date(now.getTime() - daysAgo * 24 * 60 * 60 * 1000);
+    const startDate = subtractTimeIST(daysAgo, 'days');
 
     // Fetch all relevant data in parallel
     const { SalaryRecord } = require("../../models/mongoModels");
@@ -62,7 +66,7 @@ exports.getAnalyticsData = async (req, res) => {
     
     // Create date array for consistent data
     for (let d = new Date(startDate); d <= now; d.setDate(d.getDate() + 1)) {
-      const dateKey = d.toISOString().split('T')[0];
+      const dateKey = getISTDateKey(d);
       revenueByDate[dateKey] = { date: dateKey, revenue: 0, count: 0, expenses: 0, profit: 0, avgValue: 0, supplierPayments: 0, operatingExpenses: 0, dailyWageExpenses: 0 };
       mobilesByDate[dateKey] = { date: dateKey, count: 0 };
       expensesByDate[dateKey] = { date: dateKey, expenses: 0 };
@@ -78,7 +82,7 @@ exports.getAnalyticsData = async (req, res) => {
         mobile.payments.forEach(payment => {
           const paymentDate = new Date(payment.date);
           if (paymentDate >= startDate && paymentDate <= now) {
-            const dateKey = paymentDate.toISOString().split('T')[0];
+            const dateKey = getISTDateKey(paymentDate);
             if (revenueByDate[dateKey]) {
               revenueByDate[dateKey].revenue += payment.amount || 0;
               revenueByDate[dateKey].count += 1;
@@ -87,16 +91,16 @@ exports.getAnalyticsData = async (req, res) => {
         });
       } else if (mobile.paid_amount > 0) {
         // Fallback to created_at date for legacy data
-        const dateKey = new Date(mobile.added_date).toISOString().split('T')[0];
+        const dateKey = getISTDateKey(new Date(mobile.added_date));
         if (revenueByDate[dateKey]) {
           revenueByDate[dateKey].revenue += mobile.paid_amount || 0;
           revenueByDate[dateKey].count += 1;
         }
       }
       
-      // Supplier payments (costs)
+      // Supplier payments (costs) - use update_date (when payment was recorded) for correct date placement
       if (mobile.supplier_amount > 0) {
-        const dateKey = new Date(mobile.added_date).toISOString().split('T')[0];
+        const dateKey = getISTDateKey(new Date(mobile.update_date || mobile.added_date));
         if (supplierPaymentsByDate[dateKey] !== undefined) {
           supplierPaymentsByDate[dateKey] += mobile.supplier_amount;
           if (revenueByDate[dateKey]) {
@@ -108,7 +112,7 @@ exports.getAnalyticsData = async (req, res) => {
 
     // Process operating expenses (from Expense collection)
     expensesInRange.forEach(expense => {
-      const dateKey = new Date(expense.createdAt).toISOString().split('T')[0];
+      const dateKey = getISTDateKey(new Date(expense.createdAt));
       if (operatingExpensesByDate[dateKey] !== undefined) {
         operatingExpensesByDate[dateKey] += expense.amount || 0;
         if (revenueByDate[dateKey]) {
@@ -123,7 +127,7 @@ exports.getAnalyticsData = async (req, res) => {
     // Process daily wage expenses (from paid salary records)
     salaryRecordsInRange.forEach(salary => {
       if (salary.payment_date) {
-        const dateKey = new Date(salary.payment_date).toISOString().split('T')[0];
+        const dateKey = getISTDateKey(new Date(salary.payment_date));
         if (dailyWageExpensesByDate[dateKey] !== undefined) {
           dailyWageExpensesByDate[dateKey] += salary.paid_amount || 0;
           if (revenueByDate[dateKey]) {
@@ -143,7 +147,7 @@ exports.getAnalyticsData = async (req, res) => {
 
     // Update mobile count data
     mobilesInRange.forEach(mobile => {
-      const dateKey = new Date(mobile.added_date).toISOString().split('T')[0];
+      const dateKey = getISTDateKey(new Date(mobile.added_date));
       if (mobilesByDate[dateKey]) {
         mobilesByDate[dateKey].count += 1;
       }
@@ -170,12 +174,12 @@ exports.getAnalyticsData = async (req, res) => {
     // 4. Customer Growth
     const customerGrowthByDate = {};
     for (let d = new Date(startDate); d <= now; d.setDate(d.getDate() + 1)) {
-      const dateKey = d.toISOString().split('T')[0];
+      const dateKey = getISTDateKey(d);
       customerGrowthByDate[dateKey] = { date: dateKey, newCustomers: 0, totalCustomers: 0 };
     }
 
     customersInRange.forEach(customer => {
-      const dateKey = new Date(customer.created_at).toISOString().split('T')[0];
+      const dateKey = getISTDateKey(new Date(customer.created_at));
       if (customerGrowthByDate[dateKey]) {
         customerGrowthByDate[dateKey].newCustomers += 1;
       }

@@ -21,6 +21,7 @@ import {
   DollarSign
 } from "lucide-react"
 import api from "../api"
+import { getLocalDateString } from "@/lib/utils"
 
 export default function MobileStockManager({ shopId }) {
   const [activeTab, setActiveTab] = useState("inventory") // inventory, add, history, analytics
@@ -105,7 +106,7 @@ export default function MobileStockManager({ shopId }) {
       // For revenue calculation, use the daily summary API that has actual sales data
       let totalRevenue = 0
       try {
-        const today = new Date().toISOString().split('T')[0]
+        const today = getLocalDateString()
         const revenueResponse = await api.post(
           "/api/daily-summary",
           { shop_id: shopId, date: today },

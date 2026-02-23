@@ -110,9 +110,14 @@ export default function MobileDashboard({
       const revenueData = revenueRes.data.analytics || {};
 
       // Calculate revenue by date
-      const today = new Date().toISOString().split('T')[0];
-      const weekAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
-      const monthAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+      // Use local date formatting (IST) to match server-side IST date keys
+      const getLocalDateKey = (d) => {
+        const dt = new Date(d);
+        return `${dt.getFullYear()}-${String(dt.getMonth()+1).padStart(2,'0')}-${String(dt.getDate()).padStart(2,'0')}`;
+      };
+      const today = getLocalDateKey(new Date());
+      const weekAgo = getLocalDateKey(new Date(Date.now() - 7 * 24 * 60 * 60 * 1000));
+      const monthAgo = getLocalDateKey(new Date(Date.now() - 30 * 24 * 60 * 60 * 1000));
 
       const revenueByDate = {};
       const countByDate = {};

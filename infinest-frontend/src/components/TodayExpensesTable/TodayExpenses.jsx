@@ -5,6 +5,7 @@ import { useEffect, useState } from "react"
 import api from "../../components/api"
 import { Plus, Calendar, Receipt, TrendingUp, TrendingDown, DollarSign, Clock, Hash, Smartphone, Package, Coins } from "lucide-react"
 import { PAYMENT_METHOD_OPTIONS, DEFAULT_PAYMENT_METHOD } from "@/constants/paymentMethods"
+import { getLocalDateString } from "@/lib/utils"
 
 
 const TodayExpenses = ({ shopId }) => {
@@ -12,7 +13,7 @@ const TodayExpenses = ({ shopId }) => {
   const [amount, setAmount] = useState("")
   const [paymentMethod, setPaymentMethod] = useState(DEFAULT_PAYMENT_METHOD)
   const [expenses, setExpenses] = useState([])
-  const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split("T")[0])
+  const [selectedDate, setSelectedDate] = useState(getLocalDateString())
   const [totalExpense, setTotalExpense] = useState(0)
   const [dailyRevenue, setDailyRevenue] = useState(0)
   const [serviceRevenue, setServiceRevenue] = useState(0)
@@ -68,7 +69,7 @@ const TodayExpenses = ({ shopId }) => {
       const now = new Date()
       let expenseDate
      
-      if (selectedDate === new Date().toISOString().split("T")[0]) {
+      if (selectedDate === getLocalDateString()) {
         // If it's today, use the current time
         expenseDate = now
       } else {
