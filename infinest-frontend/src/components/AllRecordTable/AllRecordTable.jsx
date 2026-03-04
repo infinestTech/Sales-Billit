@@ -5,6 +5,7 @@ import React, { useState, useEffect, useCallback } from "react"
 import Filters from "./Filters"
 import MobileNameTable from "../tables/MobileNameTable"
 import Pagination from "../tables/Pagination"
+import VendorHistoryPopup from "../tables/VendorHistoryPopup"
 import api from "../api"
 import ReceiptGenerator from "./ReceiptGenerator"
 import {
@@ -30,6 +31,7 @@ const AllRecordTable = ({ shopId, filterDate }) => {
   const [invoicesPerPage] = useState(7)
   const [expandedRow, setExpandedRow] = useState(null)
   const [selectedClient, setSelectedClient] = useState(null)
+  const [vendorPopup, setVendorPopup] = useState(null)
   const [shopPhoneNumberState, setShopPhoneNumberState] = useState("")
   const [totals, setTotals] = useState({
     notReadyCount: 0,
@@ -385,7 +387,20 @@ const [shopAddressState, setShopAddressState] = useState("")
                           </span>
                         </td>
                         <td className="px-6 py-4 border-b border-gray-200">
-                          <div className="font-semibold text-gray-800">{invoice.client_name}</div>
+                          <div className="flex items-center gap-2">
+                            <div className="font-semibold text-gray-800">{invoice.client_name}</div>
+                            {invoice.customer_type === "Dealer" && (
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation()
+                                  setVendorPopup({ dealerId: invoice._id, dealerName: invoice.client_name })
+                                }}
+                                className="px-2 py-0.5 text-xs font-medium text-blue-600 hover:text-blue-700 hover:bg-blue-50 rounded transition-colors"
+                              >
+                                View
+                              </button>
+                            )}
+                          </div>
                         </td>
                         <td className="px-6 py-4 border-b border-gray-200">
                           <span className="font-medium text-gray-700">{invoice.mobile_number}</span>
@@ -521,6 +536,15 @@ const [shopAddressState, setShopAddressState] = useState("")
           shopPhoneNumber={shopPhoneNumberState}
           shopAddress={shopAddressState}  
           closeModal={closeReceiptModal}
+        />
+      )}
+
+      {/* Vendor History Popup */}
+      {vendorPopup && (
+        <VendorHistoryPopup
+          dealerId={vendorPopup.dealerId}
+          dealerName={vendorPopup.dealerName}
+          onClose={() => setVendorPopup(null)}
         />
       )}
     </div>

@@ -33,7 +33,7 @@ const MobileNameTable = ({ mobileData, setMobileData, onRevenueUpdate, hideActio
   const [paymentMethod, setPaymentMethod] = useState("")
   const [warranty, setWarranty] = useState("")
   const [selling, setSelling] = useState(false)
-  const [sellDate, setSellDate] = useState("today")
+  const [sellDate, setSellDate] = useState(new Date().toISOString().split("T")[0])
 
   // Split Payment Modal States
   const [paymentModalOpen, setPaymentModalOpen] = useState(false)
@@ -251,7 +251,7 @@ const MobileNameTable = ({ mobileData, setMobileData, onRevenueUpdate, hideActio
     setSellQty(1)
     setPaymentMethod("")
     setWarranty("")
-    setSellDate("today")
+    setSellDate(new Date().toISOString().split("T")[0])
     try {
       const token = localStorage.getItem("token")
       if (!token || !shopId) return
@@ -289,7 +289,7 @@ const MobileNameTable = ({ mobileData, setMobileData, onRevenueUpdate, hideActio
     setPaidAmount(0)
     setPaymentMethod("")
     setWarranty("")
-    setSellDate("today")
+    setSellDate(new Date().toISOString().split("T")[0])
     setSelectedSupplierId("")
     setSupplierQuery("")
     setProductNameInput("")
@@ -429,17 +429,9 @@ const MobileNameTable = ({ mobileData, setMobileData, onRevenueUpdate, hideActio
     try {
       const token = localStorage.getItem("token")
 
-      // Compute the selected date (today or yesterday)
-      const now = new Date()
-      let selectedDate
-      if (sellDate === "yesterday") {
-        const yesterday = new Date(now)
-        yesterday.setDate(yesterday.getDate() - 1)
-        yesterday.setHours(23, 59, 0, 0)
-        selectedDate = yesterday.toISOString()
-      } else {
-        selectedDate = now.toISOString()
-      }
+      // Compute the selected date from date picker
+      const selectedDateObj = new Date(sellDate + "T12:00:00")
+      const selectedDate = selectedDateObj.toISOString()
 
       // If typed product matches an existing product by name, use its id to perform product sell
       const matchingProduct = products.find(p => (p.name || "").toLowerCase() === (productNameInput || "").toLowerCase())
@@ -951,34 +943,17 @@ const MobileNameTable = ({ mobileData, setMobileData, onRevenueUpdate, hideActio
       {sellOpen && (
         <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
           <div className="bg-white rounded-xl shadow-xl w-full max-w-md p-6">
-            <h3 className="text-lg font-semibold mb-4">Sell Product</h3>
+            <h3 className="text-lg font-semibold mb-4">Use Product</h3>
             <div className="space-y-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Date</label>
-                <div className="flex gap-2">
-                  <button
-                    type="button"
-                    onClick={() => setSellDate("today")}
-                    className={`flex-1 px-3 py-2 rounded-lg text-sm font-medium border transition-colors ${
-                      sellDate === "today"
-                        ? "bg-blue-600 text-white border-blue-600"
-                        : "bg-white text-gray-700 border-gray-300 hover:bg-gray-50"
-                    }`}
-                  >
-                    Today ({new Date().toLocaleDateString("en-IN", { day: "2-digit", month: "short" })})
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setSellDate("yesterday")}
-                    className={`flex-1 px-3 py-2 rounded-lg text-sm font-medium border transition-colors ${
-                      sellDate === "yesterday"
-                        ? "bg-blue-600 text-white border-blue-600"
-                        : "bg-white text-gray-700 border-gray-300 hover:bg-gray-50"
-                    }`}
-                  >
-                    Yesterday ({new Date(Date.now() - 86400000).toLocaleDateString("en-IN", { day: "2-digit", month: "short" })})
-                  </button>
-                </div>
+                <input
+                  type="date"
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  value={sellDate}
+                  onChange={(e) => setSellDate(e.target.value)}
+                  max={new Date().toISOString().split("T")[0]}
+                />
               </div>
               <div className="relative">
                 <label className="block text-sm font-medium text-gray-700 mb-1">Supplier</label>

@@ -74,6 +74,12 @@ const dealerSchema = new mongoose.Schema({
   customer_type: { type: String, default: "Dealer" },
   balance_amount: { type: Number, default: 0 },
   no_of_mobile: { type: Number, default: 0 },
+  vendors: [{
+    vendor_name: { type: String, required: true },
+    vendor_number: { type: String, required: true },
+    mobile_count: { type: Number, default: 0 },
+    created_at: { type: Date, default: Date.now }
+  }],
   created_at: { type: Date, default: Date.now }
 });
 

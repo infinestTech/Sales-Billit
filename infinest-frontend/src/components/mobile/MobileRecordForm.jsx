@@ -36,6 +36,7 @@ import { logAndNotify, logError, logSuccess } from "@/utils/logger"
 import api from "../api"
 import { getLocalDateString } from "@/lib/utils"
 import MobileBillGenerator from "./MobileBillGenerator"
+import VendorHistoryPopup from "../tables/VendorHistoryPopup"
 
 export default function MobileRecordForm({ shopId, isLimitReached, setIsLimitReached }) {
   const { features, loading } = usePlanFeatures()
@@ -65,6 +66,7 @@ export default function MobileRecordForm({ shopId, isLimitReached, setIsLimitRea
   const [showBillGenerator, setShowBillGenerator] = useState(false)
   const [selectedRecord, setSelectedRecord] = useState(null)
   const [shopData, setShopData] = useState(null)
+  const [vendorPopup, setVendorPopup] = useState(null)
 
   useEffect(() => {
     if (customerType === "Dealer" && shopId) fetchDealers()
@@ -796,6 +798,36 @@ export default function MobileRecordForm({ shopId, isLimitReached, setIsLimitRea
                 />
               </div>
 
+              {customerType === "Dealer" && (
+                <>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Vendor Name
+                    </label>
+                    <input
+                      type="text"
+                      value={formData.vendorName || ""}
+                      onChange={(e) => setFormData(prev => ({ ...prev, vendorName: e.target.value }))}
+                      className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                      placeholder="Enter vendor name"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Vendor Number
+                    </label>
+                    <input
+                      type="tel"
+                      value={formData.vendorNumber || ""}
+                      onChange={(e) => setFormData(prev => ({ ...prev, vendorNumber: e.target.value }))}
+                      className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                      placeholder="Enter vendor number"
+                    />
+                  </div>
+                </>
+              )}
+
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
                   Bill Number
@@ -1040,7 +1072,20 @@ export default function MobileRecordForm({ shopId, isLimitReached, setIsLimitRea
                     <CardContent className="p-4">
                       <div className="flex items-start justify-between mb-3">
                         <div className="flex-1">
-                          <h3 className="font-semibold text-gray-900">{record.client_name}</h3>
+                          <div className="flex items-center gap-2">
+                            <h3 className="font-semibold text-gray-900">{record.client_name}</h3>
+                            {record.customer_type === "Dealer" && (
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation()
+                                  setVendorPopup({ dealerId: record._id, dealerName: record.client_name })
+                                }}
+                                className="px-2 py-0.5 text-xs font-medium text-blue-600 hover:text-blue-700 hover:bg-blue-50 rounded transition-colors"
+                              >
+                                View
+                              </button>
+                            )}
+                          </div>
                           <p className="text-sm text-gray-600">{record.mobile_number}</p>
                         </div>
                         <div className="flex items-center space-x-2">
@@ -1193,6 +1238,15 @@ export default function MobileRecordForm({ shopId, isLimitReached, setIsLimitRea
             setShowBillGenerator(false)
             setSelectedRecord(null)
           }}
+        />
+      )}
+
+      {/* Vendor History Popup */}
+      {vendorPopup && (
+        <VendorHistoryPopup
+          dealerId={vendorPopup.dealerId}
+          dealerName={vendorPopup.dealerName}
+          onClose={() => setVendorPopup(null)}
         />
       )}
     </div>
