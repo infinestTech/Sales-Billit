@@ -2,7 +2,7 @@ const { Dealer, Mobile } = require("../../models/mongoModels");
 
 // POST /api/updatedealer
 const updateDealer = async (req, res) => {
-  const { dealerId, noOfMobile, billNo, MobileName, technicianname } = req.body;
+  const { dealerId, noOfMobile, billNo, MobileName, technicianname, vendorName, vendorNumber } = req.body;
 
   try {
     // Validate required fields
@@ -19,6 +19,20 @@ const updateDealer = async (req, res) => {
     // Update dealer data
     dealer.no_of_mobile += noOfMobile;
     dealer.bill_no = billNo;
+
+    // Add vendor details if provided
+    if (vendorName && vendorNumber) {
+      if (!dealer.vendors) {
+        dealer.vendors = [];
+      }
+      dealer.vendors.push({
+        vendor_name: vendorName,
+        vendor_number: vendorNumber,
+        mobile_count: Array.isArray(MobileName) ? MobileName.length : (parseInt(noOfMobile) || 0),
+        created_at: new Date()
+      });
+    }
+
     await dealer.save();
 
     // Add mobile entries

@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { PlusCircle, User, Hash, Smartphone, FileText, Wrench, Users, RefreshCw } from "lucide-react"
+import { PlusCircle, User, Hash, Smartphone, FileText, Wrench, Users, RefreshCw, UserCheck, Phone } from "lucide-react"
 import { logAndNotify, logSuccess } from "@/utils/logger"
 
 export default function DealerForm({ dealers, formData, setFormData, handleCreateDealer, disabled, onBillNumberChange, onRegenerateBillNumber }) {
@@ -91,7 +91,7 @@ export default function DealerForm({ dealers, formData, setFormData, handleCreat
           <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Dealer Information</h3>
         </div>
 
-        <div className="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-4">
+        <div className="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-3">
           <div className="space-y-2">
             <label className="flex items-center gap-2 text-sm font-medium text-gray-700 dark:text-gray-200">
               <User className="h-4 w-4 text-gray-500" />
@@ -164,6 +164,36 @@ export default function DealerForm({ dealers, formData, setFormData, handleCreat
               value={formData.technician || ""}
               disabled={disabled}
               onChange={(e) => setFormData((prev) => ({ ...prev, technician: e.target.value }))}
+              className="w-full rounded-md border border-gray-300 dark:border-gray-600 px-4 py-3 dark:bg-gray-700 dark:text-white focus:ring-2 focus:ring-green-500 focus:border-transparent transition-all"
+            />
+          </div>
+
+          <div className="space-y-2">
+            <label className="flex items-center gap-2 text-sm font-medium text-gray-700 dark:text-gray-200">
+              <UserCheck className="h-4 w-4 text-gray-500" />
+              Vendor Name
+            </label>
+            <input
+              type="text"
+              value={formData.vendorName || ""}
+              disabled={disabled}
+              onChange={(e) => setFormData((prev) => ({ ...prev, vendorName: e.target.value }))}
+              placeholder="Enter vendor name"
+              className="w-full rounded-md border border-gray-300 dark:border-gray-600 px-4 py-3 dark:bg-gray-700 dark:text-white focus:ring-2 focus:ring-green-500 focus:border-transparent transition-all"
+            />
+          </div>
+
+          <div className="space-y-2">
+            <label className="flex items-center gap-2 text-sm font-medium text-gray-700 dark:text-gray-200">
+              <Phone className="h-4 w-4 text-gray-500" />
+              Vendor Number
+            </label>
+            <input
+              type="text"
+              value={formData.vendorNumber || ""}
+              disabled={disabled}
+              onChange={(e) => setFormData((prev) => ({ ...prev, vendorNumber: e.target.value }))}
+              placeholder="Enter vendor number"
               className="w-full rounded-md border border-gray-300 dark:border-gray-600 px-4 py-3 dark:bg-gray-700 dark:text-white focus:ring-2 focus:ring-green-500 focus:border-transparent transition-all"
             />
           </div>

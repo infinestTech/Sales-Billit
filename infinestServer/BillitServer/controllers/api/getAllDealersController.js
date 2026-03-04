@@ -12,14 +12,15 @@ const getAllDealers = async (req, res) => {
 
 
   try {
-    const dealers = await Dealer.find({ shop_id }).select("client_name mobile_number balance_amount _id");
+    const dealers = await Dealer.find({ shop_id }).select("client_name mobile_number balance_amount vendors _id");
 
 
     const formatted = dealers.map((dealer) => ({
       id: dealer._id,
       clientName: dealer.client_name,
       mobileNumber: dealer.mobile_number,
-      balanceAmount: dealer.balance_amount ?? 0, // ✅ add balance amount
+      balanceAmount: dealer.balance_amount ?? 0,
+      vendors: dealer.vendors || [],
     }));
 
 

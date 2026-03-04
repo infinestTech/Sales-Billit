@@ -3,6 +3,7 @@
 import React, { useState, useEffect } from "react"
 import Pagination from "./Pagination"
 import MobileNameTable from "./MobileNameTable"
+import VendorHistoryPopup from "./VendorHistoryPopup"
 import api from "../api"
 import { usePlanFeatures } from "@/context/PlanFeatureContext"
 import { useRouter } from "next/navigation"
@@ -16,6 +17,7 @@ const RecordTable = ({ shop_id, setIsLimitReached }) => {
   const [currentPage, setCurrentPage] = useState(1)
   const [isNotReadyFilter, setIsNotReadyFilter] = useState(false)
   const [todayRevenue, setTodayRevenue] = useState(0)
+  const [vendorPopup, setVendorPopup] = useState(null) // { dealerId, dealerName }
   const ROWS_PER_PAGE = 15
 
   useEffect(() => {
@@ -231,7 +233,20 @@ const RecordTable = ({ shop_id, setIsLimitReached }) => {
                       <span className="text-sm text-gray-900">{(currentPage - 1) * ROWS_PER_PAGE + index + 1}</span>
                     </td>
                     <td className="px-6 py-4 border-b border-gray-200">
-                      <span className="text-sm text-gray-900">{record.clientName}</span>
+                      <div className="flex items-center gap-2">
+                        <span className="text-sm text-gray-900">{record.clientName}</span>
+                        {record.customerType === "Dealer" && (
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              setVendorPopup({ dealerId: record.id, dealerName: record.clientName })
+                            }}
+                            className="px-2 py-0.5 text-xs font-medium text-blue-600 hover:text-blue-700 hover:bg-blue-50 rounded transition-colors"
+                          >
+                            View
+                          </button>
+                        )}
+                      </div>
                     </td>
                     <td className="px-6 py-4 border-b border-gray-200">
                       <span className="text-sm text-gray-900">{record.mobileNumber}</span>
@@ -321,6 +336,15 @@ const RecordTable = ({ shop_id, setIsLimitReached }) => {
           />
         </div>
       </div>
+
+      {/* Vendor History Popup */}
+      {vendorPopup && (
+        <VendorHistoryPopup
+          dealerId={vendorPopup.dealerId}
+          dealerName={vendorPopup.dealerName}
+          onClose={() => setVendorPopup(null)}
+        />
+      )}
     </div>
   )
 }

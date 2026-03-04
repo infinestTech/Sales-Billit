@@ -9,6 +9,8 @@ const { createDealer } = require("../controllers/api/createDealerController");
 router.post("/createdealer",authenticateToken, createDealer);
 const { getAllDealers } = require("../controllers/api/getAllDealersController");
 router.post("/dealers", authenticateToken, getAllDealers);
+const { getDealerVendors } = require("../controllers/api/getDealerVendorsController");
+router.post("/dealer-vendors", authenticateToken, getDealerVendors);
 
 
 
