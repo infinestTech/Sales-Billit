@@ -71,6 +71,10 @@ export default function ShopAdminDashboard() {
   const [loadingReport, setLoadingReport] = useState(false);
   const [reportFormat, setReportFormat] = useState('pdf');
 
+  // Revenue visibility toggle state
+  const [revenueVisibleToUsers, setRevenueVisibleToUsers] = useState(true);
+  const [togglingRevenue, setTogglingRevenue] = useState(false);
+
   const API_URL = process.env.NEXT_PUBLIC_API_URL_BILLIT || 'http://localhost:8000';
 
   // Check if mobile on mount and window resize
@@ -114,6 +118,7 @@ export default function ShopAdminDashboard() {
   useEffect(() => {
     if (currentShopId) {
       fetchDashboardData();
+      fetchRevenueVisibility();
     }
   }, [currentShopId]);
 
@@ -189,6 +194,47 @@ export default function ShopAdminDashboard() {
       }
     } finally {
       setLoading(false);
+    }
+  };
+
+  // Fetch revenue visibility setting for current shop
+  const fetchRevenueVisibility = async () => {
+    try {
+      const token = localStorage.getItem('shopAdminToken');
+      const res = await axios.get(`${API_URL}/api/shop-admin/shop-settings/revenue-visibility`, {
+        headers: { 'Authorization': `Bearer ${token}` },
+        params: { shop_id: currentShopId }
+      });
+      if (res.data.success) {
+        setRevenueVisibleToUsers(res.data.revenueVisibleToUsers);
+      }
+    } catch (error) {
+      console.error('Error fetching revenue visibility:', error);
+    }
+  };
+
+  // Toggle revenue visibility for users
+  const toggleRevenueVisibility = async () => {
+    setTogglingRevenue(true);
+    try {
+      const token = localStorage.getItem('shopAdminToken');
+      const newValue = !revenueVisibleToUsers;
+      const res = await axios.patch(
+        `${API_URL}/api/shop-admin/shop-settings/revenue-visibility`,
+        { revenueVisibleToUsers: newValue },
+        {
+          headers: { 'Authorization': `Bearer ${token}` },
+          params: { shop_id: currentShopId }
+        }
+      );
+      if (res.data.success) {
+        setRevenueVisibleToUsers(res.data.revenueVisibleToUsers);
+      }
+    } catch (error) {
+      console.error('Error toggling revenue visibility:', error);
+      alert('Failed to update revenue visibility setting');
+    } finally {
+      setTogglingRevenue(false);
     }
   };
 
@@ -1459,6 +1505,40 @@ export default function ShopAdminDashboard() {
                 </div>
                 <div className="text-gray-900 text-3xl font-bold">{overview?.todayMobiles || 0}</div>
                 <div className="text-gray-500 text-xs mt-1">Added today</div>
+              </div>
+            </div>
+
+            {/* Revenue Visibility Toggle */}
+            <div className="bg-white border border-gray-200 rounded-xl p-6 shadow-sm">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className={`p-3 rounded-lg ${revenueVisibleToUsers ? 'bg-green-100' : 'bg-red-100'}`}>
+                    <DollarSign className={`h-6 w-6 ${revenueVisibleToUsers ? 'text-green-600' : 'text-red-600'}`} />
+                  </div>
+                  <div>
+                    <h3 className="text-gray-900 font-semibold text-lg">Revenue Visibility for Users</h3>
+                    <p className="text-gray-500 text-sm">
+                      {revenueVisibleToUsers 
+                        ? 'Users can see Today\'s Revenue & Analytics Dashboard' 
+                        : 'Today\'s Revenue & Analytics Dashboard are hidden from users'}
+                    </p>
+                  </div>
+                </div>
+                <button
+                  onClick={toggleRevenueVisibility}
+                  disabled={togglingRevenue}
+                  className={`relative inline-flex h-7 w-14 items-center rounded-full transition-colors duration-300 focus:outline-none focus:ring-2 focus:ring-offset-2 ${
+                    revenueVisibleToUsers 
+                      ? 'bg-green-500 focus:ring-green-500' 
+                      : 'bg-gray-300 focus:ring-gray-400'
+                  } ${togglingRevenue ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`}
+                >
+                  <span
+                    className={`inline-block h-5 w-5 transform rounded-full bg-white shadow-md transition-transform duration-300 ${
+                      revenueVisibleToUsers ? 'translate-x-8' : 'translate-x-1'
+                    }`}
+                  />
+                </button>
               </div>
             </div>
 

@@ -15,6 +15,7 @@ export function AppSidebar({ sidebarOpen, setSidebarOpen, role }) {
   const [profileName, setProfileName] = useState("User")
   const [isHovered, setIsHovered] = useState(false)
   const [shopId, setShopId] = useState(null)
+  const [revenueVisible, setRevenueVisible] = useState(true)
 
   useEffect(() => {
     const fetchProfile = async () => {
@@ -26,6 +27,19 @@ export function AppSidebar({ sidebarOpen, setSidebarOpen, role }) {
         const { jwtDecode } = await import("jwt-decode");
         const decoded = jwtDecode(token);
         setShopId(decoded?.shop_id || null);
+
+        // Fetch revenue visibility setting
+        try {
+          const rvRes = await fetch(`${process.env.NEXT_PUBLIC_API_URL_BILLIT}/api/dashboard/revenue-visibility`, {
+            headers: { Authorization: `Bearer ${token}` }
+          });
+          if (rvRes.ok) {
+            const rvData = await rvRes.json();
+            setRevenueVisible(rvData.revenueVisible !== false);
+          }
+        } catch (rvErr) {
+          console.error("Failed to check revenue visibility:", rvErr);
+        }
 
         const res = await authApi.get("/profile/get", {
           headers: { Authorization: `Bearer ${token}` },
@@ -124,7 +138,7 @@ export function AppSidebar({ sidebarOpen, setSidebarOpen, role }) {
         { title: "Supplier", url: "/supplier", icon: User },
     { title: "Mobile Registry", url: "/mobilename", icon: Smartphone },
     { title: "Balance Summary", url: "/balanceamount", icon: Wallet },
-    { title: "Analytics Dashboard", url: "/analytics", icon: BarChart3, featureKey: "analytics_dashboard_enabled" },
+    ...(revenueVisible ? [{ title: "Analytics Dashboard", url: "/analytics", icon: BarChart3, featureKey: "analytics_dashboard_enabled" }] : []),
     ...(role === "admin" ? [{ title: "Admin Dashboard", url: "/admin-dashboard", icon: Shield }] : []),
     { title: "Service Inventory", url: "/product", icon: Package, featureKey: "product_inventory_enabled" },
      { title: "Attendance", url: "/attendance", icon: CalendarCheck },

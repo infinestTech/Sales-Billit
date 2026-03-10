@@ -1960,4 +1960,50 @@ router.patch('/:adminId/session-limit', internalAuth, async (req, res) => {
     }
 });
 
+// ==============================
+// 🔒 Toggle Revenue Visibility for Users
+// ==============================
+// GET current revenue visibility setting
+router.get('/shop-settings/revenue-visibility', shopAdminAuth, async (req, res) => {
+    try {
+        const shop = await Shop.findById(req.shopId);
+        if (!shop) {
+            return res.status(404).json({ success: false, message: 'Shop not found' });
+        }
+        res.json({
+            success: true,
+            revenueVisibleToUsers: shop.revenue_visible_to_users !== false // default true
+        });
+    } catch (error) {
+        console.error('Get revenue visibility error:', error);
+        res.status(500).json({ success: false, message: 'Failed to get setting', error: error.message });
+    }
+});
+
+// PATCH toggle revenue visibility
+router.patch('/shop-settings/revenue-visibility', shopAdminAuth, async (req, res) => {
+    try {
+        const { revenueVisibleToUsers } = req.body;
+        if (typeof revenueVisibleToUsers !== 'boolean') {
+            return res.status(400).json({ success: false, message: 'revenueVisibleToUsers must be a boolean' });
+        }
+        const shop = await Shop.findByIdAndUpdate(
+            req.shopId,
+            { revenue_visible_to_users: revenueVisibleToUsers },
+            { new: true }
+        );
+        if (!shop) {
+            return res.status(404).json({ success: false, message: 'Shop not found' });
+        }
+        res.json({
+            success: true,
+            message: `Revenue visibility ${revenueVisibleToUsers ? 'enabled' : 'disabled'} for users`,
+            revenueVisibleToUsers: shop.revenue_visible_to_users
+        });
+    } catch (error) {
+        console.error('Toggle revenue visibility error:', error);
+        res.status(500).json({ success: false, message: 'Failed to update setting', error: error.message });
+    }
+});
+
 module.exports = router;
