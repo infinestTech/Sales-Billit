@@ -131,7 +131,8 @@ export default function MobileDashboard({ shopId }) {
       </div>
 
       <div className="p-4 space-y-4 pb-20">
-        {/* Sales Overview */}
+        {/* Sales Overview - Hidden when shop admin disables revenue visibility */}
+        {dashboardData?.revenueVisible !== false && (
         <Card>
           <CardHeader className="pb-3">
             <CardTitle className="flex items-center gap-2 text-lg">
@@ -164,6 +165,7 @@ export default function MobileDashboard({ shopId }) {
             </div>
           </CardContent>
         </Card>
+        )}
 
         {/* Mobile Repairs */}
         <Card>

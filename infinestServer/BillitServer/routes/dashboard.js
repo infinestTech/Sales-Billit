@@ -15,6 +15,25 @@ const {
   DailySummary,
 } = require("../models/mongoModels")
 
+// Lightweight endpoint for frontend to check if revenue/analytics is visible to users
+router.get("/revenue-visibility", authenticateToken, async (req, res) => {
+  try {
+    const shopId = req.user.shop_id
+    if (!shopId) {
+      return res.status(400).json({ error: "Shop ID is required" })
+    }
+    const mongoose = require('mongoose')
+    const shopObjectId = mongoose.Types.ObjectId.isValid(shopId) ? new mongoose.Types.ObjectId(shopId) : shopId
+    const shop = await Shop.findById(shopObjectId).select('revenue_visible_to_users').lean()
+    res.json({
+      revenueVisible: shop?.revenue_visible_to_users !== false // default true
+    })
+  } catch (error) {
+    console.error("Revenue visibility check error:", error)
+    res.status(500).json({ error: "Failed to check revenue visibility" })
+  }
+})
+
 router.get("/mobile-summary", authenticateToken, async (req, res) => {
   try {
     const userId = req.user.userId
@@ -27,6 +46,10 @@ router.get("/mobile-summary", authenticateToken, async (req, res) => {
     // Convert shopId to ObjectId if it's a string
     const mongoose = require('mongoose')
     const shopObjectId = mongoose.Types.ObjectId.isValid(shopId) ? new mongoose.Types.ObjectId(shopId) : shopId
+
+    // Check if revenue is visible to users for this shop
+    const shopDoc = await Shop.findById(shopObjectId).select('revenue_visible_to_users').lean()
+    const revenueVisible = shopDoc?.revenue_visible_to_users !== false // default true
 
     // Get today's date range in IST
     const { startOfDay, endOfDay } = getISTTodayRange()
@@ -231,7 +254,15 @@ router.get("/mobile-summary", authenticateToken, async (req, res) => {
       }
 
       const dashboardData = {
-        todaySales: finalSalesData,
+        todaySales: revenueVisible ? finalSalesData : {
+          totalRevenue: 0,
+          totalExpenses: 0,
+          netProfit: 0,
+          transactionCount: 0,
+          mobileRevenue: 0,
+          productRevenue: 0,
+        },
+        revenueVisible, // flag for frontend to know if revenue is hidden
         mobileRepairs: {
           totalMobiles,
           pendingRepairs,

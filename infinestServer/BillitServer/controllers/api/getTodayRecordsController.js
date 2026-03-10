@@ -1,4 +1,4 @@
-const { Customer, Dealer, Mobile, ProductHistory } = require("../../models/mongoModels");
+const { Customer, Dealer, Mobile, ProductHistory, Shop } = require("../../models/mongoModels");
 const moment = require("moment-timezone");
 
 
@@ -97,9 +97,15 @@ const getTodayRecords = async (req, res) => {
     ];
 
 
+    // Check if revenue is visible to users for this shop
+    const shopDoc = await Shop.findById(actualUserId).select('revenue_visible_to_users').lean();
+    const revenueVisible = shopDoc?.revenue_visible_to_users !== false; // default true
+
+
     res.status(200).json({
       records,
-      todayRevenue
+      todayRevenue: revenueVisible ? todayRevenue : 0,
+      revenueVisible
     });
   } catch (error) {
     console.error("❌ Error fetching today's records:", error);

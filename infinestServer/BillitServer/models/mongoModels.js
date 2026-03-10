@@ -60,6 +60,7 @@ const shopSchema = new mongoose.Schema({
   email: { type: String },
   address: { type: String },
   owner_name: { type: String }, // ✅ new field for MySQL name
+  revenue_visible_to_users: { type: Boolean, default: true }, // Toggle: show/hide revenue & analytics for regular users
   created_at: { type: Date, default: Date.now }
 });
 

@@ -17,6 +17,7 @@ const RecordTable = ({ shop_id, setIsLimitReached }) => {
   const [currentPage, setCurrentPage] = useState(1)
   const [isNotReadyFilter, setIsNotReadyFilter] = useState(false)
   const [todayRevenue, setTodayRevenue] = useState(0)
+  const [revenueVisible, setRevenueVisible] = useState(true)
   const [vendorPopup, setVendorPopup] = useState(null) // { dealerId, dealerName }
   const ROWS_PER_PAGE = 15
 
@@ -53,10 +54,11 @@ const RecordTable = ({ shop_id, setIsLimitReached }) => {
         },
       )
 
-      const { records, todayRevenue } = res.data
+      const { records, todayRevenue, revenueVisible: rv } = res.data
       setData(records)
       setFilteredData(records)
       setTodayRevenue(todayRevenue || 0)
+      if (rv !== undefined) setRevenueVisible(rv)
     } catch (error) {
       if (error.message === 'Session expired' || error.response?.data?.sessionExpired) return;
       console.error("Error fetching records:", error)
@@ -188,11 +190,13 @@ const RecordTable = ({ shop_id, setIsLimitReached }) => {
           <div className="text-green-600 font-medium text-lg">{totals.returned}</div>
         </div>
 
-        {/* Today's Revenue Card */}
-        <div className="bg-white border border-gray-200 rounded-lg p-4">
-          <div className="text-sm text-gray-600 mb-2">Today's Revenue</div>
-          <div className="text-green-600 font-medium text-lg">₹{todayRevenue.toLocaleString("en-IN")}</div>
-        </div>
+        {/* Today's Revenue Card - Hidden when shop admin disables revenue visibility */}
+        {revenueVisible && (
+          <div className="bg-white border border-gray-200 rounded-lg p-4">
+            <div className="text-sm text-gray-600 mb-2">Today's Revenue</div>
+            <div className="text-green-600 font-medium text-lg">₹{todayRevenue.toLocaleString("en-IN")}</div>
+          </div>
+        )}
       </div>
 
       {/* Records Table */}
