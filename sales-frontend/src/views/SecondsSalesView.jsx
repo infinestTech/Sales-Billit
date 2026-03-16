@@ -23,24 +23,10 @@ function SecondsSalesView({ salesUrl, token, id }) {
 
   // Purchase modal state (hooks before returns)
   const [showPurchase, setShowPurchase] = React.useState(false);
-  const [purchaseForm, setPurchaseForm] = React.useState({ customerName: '', phone: '', price: '', bankId: '' });
+  const [purchaseForm, setPurchaseForm] = React.useState({ customerName: '', phone: '', price: '' });
   const [purchaseImages, setPurchaseImages] = React.useState([]);
   const [purchaseDocs, setPurchaseDocs] = React.useState([]);
-  const [banks, setBanks] = React.useState([]);
   const [purchaseLoading, setPurchaseLoading] = React.useState(false);
-
-  // load banks
-  React.useEffect(() => {
-    let mounted = true;
-    (async () => {
-      try {
-        const res = await fetch((salesUrl || '') + '/api/banks', { headers: { Authorization: token ? ('Bearer ' + token) : '' } });
-        const data = await res.json();
-        if (res.ok && mounted) setBanks(Array.isArray(data.banks) ? data.banks : []);
-      } catch (err) { console.error('load banks', err); }
-    })();
-    return () => { mounted = false; };
-  }, []);
 
   function purchaseOnChange(e) {
     const { name, value } = e.target;
@@ -62,7 +48,6 @@ function SecondsSalesView({ salesUrl, token, id }) {
   async function submitPurchase(e) {
     e.preventDefault();
     const amount = Number(purchaseForm.price || 0);
-    const bankId = purchaseForm.bankId || '';
     if (!amount || amount <= 0) return alert('Enter valid price');
     setPurchaseLoading(true);
     try {
@@ -70,7 +55,6 @@ function SecondsSalesView({ salesUrl, token, id }) {
         customerName: purchaseForm.customerName || '',
         phone: purchaseForm.phone || '',
         price: amount,
-        bank_id: bankId || undefined,
         images: purchaseImages || [],
         documents: purchaseDocs || []
       };
@@ -84,7 +68,7 @@ function SecondsSalesView({ salesUrl, token, id }) {
       // server returns updated entry (with purchases)
       if (data.entry) setEntry(data.entry);
       setShowPurchase(false);
-      setPurchaseForm({ customerName: '', phone: '', price: '', bankId: '' });
+      setPurchaseForm({ customerName: '', phone: '', price: '' });
       setPurchaseImages([]); setPurchaseDocs([]);
     } catch (err) {
       alert(err.message || 'Purchase failed');
@@ -1135,40 +1119,6 @@ function SecondsSalesView({ salesUrl, token, id }) {
                       onFocus={(e) => e.target.style.borderColor = '#16a34a'}
                       onBlur={(e) => e.target.style.borderColor = '#e2e8f0'}
                     />
-                  </div>
-                  <div>
-                    <label style={{
-                      display: 'block',
-                      marginBottom: '6px',
-                      fontWeight: '500',
-                      color: '#374151',
-                      fontSize: '14px'
-                    }}>Credit to Bank Account *</label>
-                    <select 
-                      name="bankId" 
-                      value={purchaseForm.bankId} 
-                      onChange={purchaseOnChange} 
-                      required
-                      style={{
-                        width: '100%',
-                        padding: '12px 16px',
-                        border: '2px solid #e2e8f0',
-                        borderRadius: '8px',
-                        fontSize: '14px',
-                        backgroundColor: 'white',
-                        cursor: 'pointer',
-                        transition: 'all 0.2s ease'
-                      }}
-                      onFocus={(e) => e.target.style.borderColor = '#16a34a'}
-                      onBlur={(e) => e.target.style.borderColor = '#e2e8f0'}
-                    >
-                      <option value="">Select bank account</option>
-                      {banks.map(b => (
-                        <option key={b._id} value={b._id}>
-                          {b.bankName} — ₹{Number(b.accountBalance||0).toFixed(2)}
-                        </option>
-                      ))}
-                    </select>
                   </div>
                 </div>
               </div>

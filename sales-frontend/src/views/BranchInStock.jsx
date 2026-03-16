@@ -69,11 +69,9 @@ function BranchInStock({ salesUrl, token }) {
     } catch (e) { setError(e.message); }
   };
 
-  // Suppliers / Banks and form-level state for Add modal
+  // Suppliers and form-level state for Add modal
   const [suppliers, setSuppliers] = React.useState([]);
-  const [banks, setBanks] = React.useState([]);
   const [supplierId, setSupplierId] = React.useState('');
-  const [bankId, setBankId] = React.useState('');
   const [supplierAmount, setSupplierAmount] = React.useState('');
   const [gstAmount, setGstAmount] = React.useState('');
   const [category, setCategory] = React.useState('');
@@ -89,20 +87,6 @@ function BranchInStock({ salesUrl, token }) {
       const data = await res.json();
       if (!res.ok) throw new Error(data.message || 'Failed to load suppliers');
       setSuppliers(Array.isArray(data.suppliers) ? data.suppliers : []);
-    } catch (e) { /* ignore */ }
-  };
-
-  const loadBanks = async () => {
-    try {
-      const storedBranchToken = typeof window !== 'undefined' ? (localStorage.getItem('branch_token') || '') : '';
-      const effectiveToken = token || storedBranchToken || '';
-      let res = await fetch((salesUrl || '') + '/api/banks', { headers: { Authorization: 'Bearer ' + effectiveToken } });
-      if (res.status === 401 && storedBranchToken && storedBranchToken !== effectiveToken) {
-        res = await fetch((salesUrl || '') + '/api/banks', { headers: { Authorization: 'Bearer ' + storedBranchToken } });
-      }
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.message || 'Failed to load banks');
-      setBanks(Array.isArray(data.banks) ? data.banks : []);
     } catch (e) { /* ignore */ }
   };
 
@@ -165,7 +149,6 @@ function BranchInStock({ salesUrl, token }) {
       const body = {
         branch_id: undefined, // optional: allow server to pick branch from token
         supplier_id: supplierId || undefined,
-        bank_id: bankId || undefined,
         supplierAmount: Number(supplierAmount) || 0,
         gstAmount: Number(gstAmount) || 0,
         category: category || undefined,
@@ -203,7 +186,7 @@ function BranchInStock({ salesUrl, token }) {
       if (!res.ok || !data.success) throw new Error(data.message || 'Failed to add');
       setOpenAdd(false);
   setItemsToAdd([{ productNo: '', productName: '', brand: '', model: '', qty: 1, costPrice: '', sellingPrice: '', validity: '', imes: [] }]);
-  setSupplierId(''); setBankId(''); setSupplierAmount(''); setGstAmount(''); setCategory('');
+  setSupplierId(''); setSupplierAmount(''); setGstAmount(''); setCategory('');
       // reload entries and notify other components
       await loadEntries();
   try { window.dispatchEvent(new CustomEvent('branch-stock-updated', { detail: { supply: data.supply || null, rows: data.rows || [] } })); } catch (__) {}
@@ -224,7 +207,7 @@ function BranchInStock({ salesUrl, token }) {
     }));
   }, [category]);
 
-  React.useEffect(() => { loadEntries(); loadSuppliers(); loadBanks(); }, [token]);
+  React.useEffect(() => { loadEntries(); loadSuppliers(); }, [token]);
   React.useEffect(() => {
     const onUpdated = (e) => {
       // if branch-specific update then reload regardless; UI will decide filtering
@@ -235,11 +218,11 @@ function BranchInStock({ salesUrl, token }) {
   }, [token]);
 
   const canSubmitAdd = React.useMemo(() => {
-    if (!supplierId || !bankId) return false;
+    if (!supplierId) return false;
     if (!Array.isArray(itemsToAdd) || itemsToAdd.length === 0) return false;
     if (!itemsToAdd.every(it => it.productName && Number(it.qty) > 0)) return false;
     return true;
-  }, [supplierId, bankId, itemsToAdd]);
+  }, [supplierId, itemsToAdd]);
 
   const currency = (n) => new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 2 }).format(n || 0);
 
@@ -1253,37 +1236,6 @@ function BranchInStock({ salesUrl, token }) {
                       {suppliers.map(s => (
                         <option key={s._id} value={s._id}>
                           {s.supplierName || s.agencyName || s._id}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-
-                  <div>
-                    <label style={{ 
-                      display: 'block', 
-                      fontSize: '14px', 
-                      fontWeight: '500', 
-                      color: '#374151',
-                      marginBottom: '6px'
-                    }}>Bank Account *</label>
-                    <select 
-                      value={bankId} 
-                      onChange={e=>setBankId(e.target.value)}
-                      style={{
-                        width: '100%',
-                        padding: '12px 16px',
-                        border: '2px solid #e5e7eb',
-                        borderRadius: '8px',
-                        fontSize: '14px',
-                        backgroundColor: 'white',
-                        cursor: 'pointer',
-                        outline: 'none'
-                      }}
-                    >
-                      <option value="">Select bank</option>
-                      {banks.map(b => (
-                        <option key={b._id} value={b._id}>
-                          {b.bankName || b.accountNumber || b._id}
                         </option>
                       ))}
                     </select>

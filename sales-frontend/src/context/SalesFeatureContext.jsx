@@ -39,7 +39,7 @@ function SalesFeatureProvider({ children }) {
             };
           } else if (f.type === "limit") {
             featureMap[f.feature_key] = {
-              ...f.config, // includes maxBankAccounts, maxSuppliers, etc.
+              ...f.config, // includes maxSuppliers, etc.
               type: f.type,
               description: f.description,
               enabled: true // Limit features are considered "enabled" 

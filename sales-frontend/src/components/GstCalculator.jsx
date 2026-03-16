@@ -89,7 +89,6 @@ function GstCalculator(props) {
     }
     const checks = [];
     checks.push(hasText(t.supplierName || t.supplier || t.supplier_id));
-    checks.push(hasText(t.bankName || t.bank));
     checks.push(hasText(t.branchName || t.branch_name || t.branch));
     checks.push((Number(t.supplierAmount) || 0) > 0);
     checks.push((Number(t.gstAmount) || 0) > 0);
@@ -188,7 +187,6 @@ function GstCalculator(props) {
                 <thead>
                   <tr style={{ background: '#f3f6fa' }}>
                     <th style={{ fontWeight: 700, padding: '14px 10px', borderBottom: '1px solid #e5e7eb', textAlign: 'left' }}>Supplier</th>
-                    <th style={{ fontWeight: 700, padding: '14px 10px', borderBottom: '1px solid #e5e7eb', textAlign: 'left' }}>Bank</th>
                     <th style={{ fontWeight: 700, padding: '14px 10px', borderBottom: '1px solid #e5e7eb', textAlign: 'left' }}>Branch</th>
                     <th style={{ fontWeight: 700, padding: '14px 10px', borderBottom: '1px solid #e5e7eb', textAlign: 'right' }}>Supplier Amount</th>
                     <th style={{ fontWeight: 700, padding: '14px 10px', borderBottom: '1px solid #e5e7eb', textAlign: 'right' }}>GST Amount</th>
@@ -205,7 +203,6 @@ function GstCalculator(props) {
                       }}
                     >
                       <td style={{ padding: '12px 10px' }}>{t.supplierName || '-'}</td>
-                      <td style={{ padding: '12px 10px' }}>{t.bankName || '-'}</td>
                       <td style={{ padding: '12px 10px' }}>{t.branchName || '-'}</td>
                       <td style={{ padding: '12px 10px', textAlign: 'right' }}>{t.supplierAmount}</td>
                       <td style={{ padding: '12px 10px', textAlign: 'right' }}>{t.gstAmount}</td>

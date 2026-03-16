@@ -1,6 +1,4 @@
 const InStock = require('../models/inStock');
-const Bank = require('../models/bank');
-const BankTransaction = require('../models/bankTransaction');
 
 // Helper function to get product inventory limit
 async function getProductInventoryLimit(userId, shopId, mongoPlanId) {
@@ -32,9 +30,11 @@ exports.createInStock = async (req, res) => {
   if (req.user.isBranch) return res.status(403).json({ success: false, message: 'Branches cannot create in-stock entries' });
 
 
-  const { supplier_id, bank_id, supplierAmount = 0, gstAmount = 0, items = [], reference = '' } = req.body || {};
+  const { supplier_id, supplierAmount = 0, gstAmount = 0, items = [], purchaseType = 'normal', creditAmount = 0 } = req.body || {};
     if (!supplier_id) return res.status(400).json({ success: false, message: 'supplier_id is required' });
-  if (!bank_id) return res.status(400).json({ success: false, message: 'bank_id is required' });
+    if (purchaseType === 'credit' && (!creditAmount || Number(creditAmount) <= 0)) {
+      return res.status(400).json({ success: false, message: 'Credit amount is required for credit purchases' });
+    }
 
   // Check product inventory limit
   const productLimit = await getProductInventoryLimit(userId, shop_id, req.user.mongoPlanId);
@@ -70,23 +70,11 @@ exports.createInStock = async (req, res) => {
   }
 
 
-  // Calculate totalCost for bank balance and transaction logic
-  const totalCost = (items || []).reduce((s, it) => s + ((Number(it.costPrice) || 0) * (Number(it.quantity) || 1)), 0);
-
-
-    // Fetch and validate bank balance
-    const bank = await Bank.findOne({ _id: bank_id, $or: [{ shop_id }, { mysql_user_id: req.user.userId }] });
-    if (!bank) return res.status(404).json({ success: false, message: 'Bank not found' });
-    const currentBalance = Number(bank.accountBalance || 0);
-    if (currentBalance < totalCost) {
-      return res.status(400).json({ success: false, message: 'Insufficient bank balance' });
-    }
-
-
   const doc = await InStock.create({
       shop_id,
       supplier_id,
-      bank_id,
+      purchaseType: purchaseType || 'normal',
+      creditAmount: purchaseType === 'credit' ? (Number(creditAmount) || 0) : 0,
       supplierAmount: Number(supplierAmount) || 0,
       gstAmount: Number(gstAmount) || 0,
       items: (items || []).map(i => {
@@ -122,25 +110,21 @@ exports.createInStock = async (req, res) => {
     });
   console.debug('createInStock saved doc items:', JSON.stringify(doc.items || []));
 
+    // If credit purchase, create a SupplierCredit entry
+    let creditEntry = null;
+    if (purchaseType === 'credit' && Number(creditAmount) > 0) {
+      const SupplierCredit = require('../models/supplierCredit');
+      creditEntry = await SupplierCredit.create({
+        shop_id,
+        supplier_id,
+        inStock_id: doc._id,
+        totalAmount: Number(creditAmount),
+        note: `Credit purchase - Stock entry`,
+        createdBy: String(userId || ''),
+      });
+    }
 
-    // Debit bank and record transaction
-    const newBalance = currentBalance - totalCost;
-    bank.accountBalance = newBalance;
-    await bank.save();
-    const txn = await BankTransaction.create({
-      shop_id,
-      bank_id,
-      type: 'debit',
-      amount: totalCost,
-      reference: reference || `InStock payment for supplier ${String(supplier_id)}`,
-      supplier_id,
-      inStock_id: doc._id,
-      balanceAfter: newBalance,
-      createdBy: String(userId || '')
-    });
-
-
-    return res.json({ success: true, entry: doc, bank: { _id: bank._id, accountBalance: newBalance }, transaction: txn });
+    return res.json({ success: true, entry: doc, credit: creditEntry });
   } catch (err) {
     console.error('createInStock error:', err.message);
     return res.status(500).json({ success: false, message: err.message });
@@ -153,13 +137,9 @@ exports.listInStock = async (req, res) => {
   const { shop_id } = req.user || {};
   const gstOnly = req.query.gstOnly === '1';
     if (!shop_id) return res.status(400).json({ success: false, message: 'Shop missing' });
-    // If branch user, restrict to banks owned by that branch
+    // If branch user, restrict to their branch entries
     if (req.user.isBranch) {
-      const Bank = require('../models/bank');
-      const banks = await Bank.find({ branch_id: req.user.branch_id }).select('_id').lean();
-      const bankIds = banks.map(b => b._id);
-      if (!bankIds.length) return res.json({ success: true, entries: [] });
-      const entries = await InStock.find({ shop_id, bank_id: { $in: bankIds } })
+      const entries = await InStock.find({ shop_id })
         .sort({ createdAt: -1 })
         .populate('supplier_id', 'supplierName agencyName')
         .lean();
@@ -170,7 +150,6 @@ exports.listInStock = async (req, res) => {
     let entries = await InStock.find({ shop_id })
       .sort({ createdAt: -1 })
       .populate('supplier_id', 'supplierName agencyName')
-      .populate('bank_id', 'bankName accountNumber')
       .lean();
     if (gstOnly) {
       entries = entries.filter(e => Number(e.gstAmount) > 0);

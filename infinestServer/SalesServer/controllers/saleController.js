@@ -14,8 +14,31 @@ exports.listSales = async (req, res) => {
     const pageSize = Math.min(100, Math.max(10, Number(req.query.pageSize || 25)));
     const q = { shop_id };
     if (branch_id) q.branch_id = branch_id;
+
+    // Optional date range filtering
+    const from = req.query.from ? new Date(req.query.from) : null;
+    const to = req.query.to ? new Date(req.query.to) : null;
+    if (from || to) {
+      q.createdAt = {};
+      if (from && !isNaN(from.getTime())) q.createdAt.$gte = from;
+      if (to && !isNaN(to.getTime())) q.createdAt.$lte = new Date(to.getTime() + 86400000); // include full day
+    }
+
     const total = await Sale.countDocuments(q);
     const sales = await Sale.find(q).sort({ createdAt: -1 }).skip((page - 1) * pageSize).limit(pageSize).lean();
+
+    // Enrich sales with branch names
+    try {
+      const Branch = require('../models/branch');
+      const branchIds = [...new Set(sales.map(s => s.branch_id).filter(Boolean))];
+      if (branchIds.length) {
+        const branches = await Branch.find({ _id: { $in: branchIds } }).lean();
+        const branchMap = {};
+        branches.forEach(b => { branchMap[String(b._id)] = b.name || ''; });
+        sales.forEach(s => { s.branchName = branchMap[s.branch_id] || ''; });
+      }
+    } catch (e) { /* ignore enrichment errors */ }
+
     return res.json({ success: true, sales, total, page, pageSize });
   } catch (err) {
     console.error('listSales error:', err && err.message ? err.message : err);
@@ -32,10 +55,9 @@ exports.createSale = async (req, res) => {
     const seller_id = req.user.branch_id ? req.user.branch_id : (req.user.userId || '');
     const items = Array.isArray(req.body.items) ? req.body.items : [];
     const customerNo = req.body.customerNo || '';
+    const customerName = req.body.customerName || '';
     const paymentMethod = req.body.paymentMethod || 'cash';
     const amountPaid = Number(req.body.amountPaid || 0);
-    const bank_id = req.body.bank_id || '';
-
     // Subtotal and discount/taxable calculation
     const computedSubTotal = Number(req.body.subTotal || items.reduce((s, it) => s + (Number(it.qty || it.sellingQty || 0) * Number(it.sellingPrice || 0)), 0));
     const discount = Number(req.body.discount || 0);
@@ -107,6 +129,7 @@ exports.createSale = async (req, res) => {
       branch_id,
       seller_id,
       customerNo,
+      customerName,
       items,
       subTotal: Number(computedSubTotal.toFixed(2)),
       discount,
@@ -121,25 +144,8 @@ exports.createSale = async (req, res) => {
       totalAmount,
       paymentMethod,
       amountPaid,
-      bank_id,
       createdBy: req.user.userId || req.user.branch_id || ''
     });
-
-    // If payment went to a bank, create a BankTransaction (credit) and update Bank.accountBalance
-    try {
-      if (bank_id) {
-        const Bank = require('../models/bank');
-        const BankTransaction = require('../models/bankTransaction');
-        const bankDoc = await Bank.findById(bank_id);
-        if (bankDoc) {
-          const newBal = (Number(bankDoc.accountBalance || 0) + Number(totalAmount || 0));
-          const tx = await BankTransaction.create({ shop_id: shop_id, bank_id: bank_id, type: 'credit', amount: Number(totalAmount || 0), reference: `Sale:${doc._id}`, balanceAfter: newBal, createdBy: req.user.userId || req.user.branch_id || '' });
-          await Bank.findByIdAndUpdate(bank_id, { $set: { accountBalance: newBal } });
-        }
-      }
-    } catch (e) {
-      console.error('createSale: bank update failed', e && e.message ? e.message : e);
-    }
 
     // Decrement BranchStock quantities for sold items and remove sold IMEs from BranchStock.imes
     try {

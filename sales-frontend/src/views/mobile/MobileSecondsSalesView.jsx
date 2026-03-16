@@ -5,10 +5,9 @@ function MobileSecondsSalesView({ salesUrl, token, id }) {
 
   // Purchase modal state
   const [showPurchase, setShowPurchase] = React.useState(false);
-  const [purchaseForm, setPurchaseForm] = React.useState({ customerName: '', phone: '', price: '', bankId: '' });
+  const [purchaseForm, setPurchaseForm] = React.useState({ customerName: '', phone: '', price: '' });
   const [purchaseImages, setPurchaseImages] = React.useState([]);
   const [purchaseDocs, setPurchaseDocs] = React.useState([]);
-  const [banks, setBanks] = React.useState([]);
   const [purchaseLoading, setPurchaseLoading] = React.useState(false);
 
   React.useEffect(() => {
@@ -36,25 +35,6 @@ function MobileSecondsSalesView({ salesUrl, token, id }) {
     };
   }, [id, salesUrl, token]);
 
-  // load banks
-  React.useEffect(() => {
-    let mounted = true;
-    (async () => {
-      try {
-        const res = await fetch((salesUrl || '') + '/api/banks', {
-          headers: { Authorization: token ? 'Bearer ' + token : '' }
-        });
-        const data = await res.json();
-        if (res.ok && mounted) setBanks(Array.isArray(data.banks) ? data.banks : []);
-      } catch (err) {
-        console.error('load banks', err);
-      }
-    })();
-    return () => {
-      mounted = false;
-    };
-  }, [salesUrl, token]);
-
   function purchaseOnChange(e) {
     const { name, value } = e.target;
     setPurchaseForm((f) => ({ ...f, [name]: value }));
@@ -80,7 +60,6 @@ function MobileSecondsSalesView({ salesUrl, token, id }) {
   async function submitPurchase(e) {
     e.preventDefault();
     const amount = Number(purchaseForm.price || 0);
-    const bankId = purchaseForm.bankId || '';
     if (!amount || amount <= 0) return alert('Enter valid price');
     setPurchaseLoading(true);
     try {
@@ -88,7 +67,6 @@ function MobileSecondsSalesView({ salesUrl, token, id }) {
         customerName: purchaseForm.customerName || '',
         phone: purchaseForm.phone || '',
         price: amount,
-        bank_id: bankId || undefined,
         images: purchaseImages || [],
         documents: purchaseDocs || []
       };
@@ -101,7 +79,7 @@ function MobileSecondsSalesView({ salesUrl, token, id }) {
       if (!res.ok) throw new Error(data.message || 'Purchase API failed');
       if (data.entry) setEntry(data.entry);
       setShowPurchase(false);
-      setPurchaseForm({ customerName: '', phone: '', price: '', bankId: '' });
+      setPurchaseForm({ customerName: '', phone: '', price: '' });
       setPurchaseImages([]);
       setPurchaseDocs([]);
     } catch (err) {
@@ -448,17 +426,6 @@ function MobileSecondsSalesView({ salesUrl, token, id }) {
                 <div>
                   <label>Price *</label>
                   <input name="price" type="number" value={purchaseForm.price} onChange={purchaseOnChange} style={{ width: '100%', marginTop: 6 }} />
-                </div>
-                <div>
-                  <label>Bank</label>
-                  <select name="bankId" value={purchaseForm.bankId} onChange={purchaseOnChange} style={{ width: '100%', marginTop: 6 }}>
-                    <option value="">Select bank account</option>
-                    {banks.map((b) => (
-                      <option key={b._id} value={b._id}>
-                        {b.bankName} — ₹{Number(b.accountBalance || 0).toFixed(2)}
-                      </option>
-                    ))}
-                  </select>
                 </div>
 
                 <div>

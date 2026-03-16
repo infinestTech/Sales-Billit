@@ -1,8 +1,6 @@
 function BranchNewExpense({ salesUrl, token, adminUrl, branchUser }) {
-  const [form, setForm] = React.useState({ title: '', amount: '', date: '', bank_id: '' });
-  const [banks, setBanks] = React.useState([]);
+  const [form, setForm] = React.useState({ title: '', amount: '', date: '' });
   const [branches, setBranches] = React.useState([]);
-  const [selectedBank, setSelectedBank] = React.useState(null);
   const [loading, setLoading] = React.useState(false);
   const [error, setError] = React.useState('');
   const [rows, setRows] = React.useState([]);
@@ -56,20 +54,8 @@ function BranchNewExpense({ salesUrl, token, adminUrl, branchUser }) {
     })();
   }, [form.branch_id]);
 
-  // Load banks for selection
+  // Load branches for admin to select
   React.useEffect(() => {
-    const fetchBanks = async () => {
-      try {
-        const url = new URL(salesUrl + '/api/banks');
-        const res = await fetch(url, { headers: { Authorization: 'Bearer ' + token } });
-        const data = await res.json();
-        if (!res.ok) throw new Error(data.message || 'Failed to load banks');
-        setBanks(Array.isArray(data.banks) ? data.banks : []);
-      } catch (e) {
-        setBanks([]);
-      }
-    };
-    fetchBanks();
     // If this is an admin view (no branch token), load branches for admin to select
     const fetchBranches = async () => {
       try {
@@ -84,15 +70,6 @@ function BranchNewExpense({ salesUrl, token, adminUrl, branchUser }) {
     };
     fetchBranches();
   }, [token]);
-
-  React.useEffect(() => {
-    if (!form.bank_id) {
-      setSelectedBank(null);
-      return;
-    }
-    const bank = banks.find(b => b._id === form.bank_id);
-    setSelectedBank(bank || null);
-  }, [form.bank_id, banks]);
 
   // load sales for revenue computation
   React.useEffect(() => {
@@ -170,9 +147,6 @@ function BranchNewExpense({ salesUrl, token, adminUrl, branchUser }) {
     const amt = Number(form.amount);
     if (!form.title || String(form.title).trim() === '') return setError('Enter an expense title');
     if (!amt || amt <= 0) return setError('Enter a valid amount');
-    if (!form.bank_id) return setError('Select a bank');
-    if (!selectedBank) return setError('Invalid bank selected');
-    if (amt > Number(selectedBank.accountBalance)) return setError('Amount exceeds selected bank balance');
     setLoading(true);
     try {
       // capture values locally before we clear the form
@@ -183,7 +157,7 @@ function BranchNewExpense({ salesUrl, token, adminUrl, branchUser }) {
       const res = await fetch(salesUrl + '/api/branch-expenses', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token },
-        body: JSON.stringify({ title: postTitle, amount: amt, date: postDate, bank_id: form.bank_id, branch_id: postBranchId })
+        body: JSON.stringify({ title: postTitle, amount: amt, date: postDate, branch_id: postBranchId })
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.message || 'Create failed');
@@ -230,20 +204,6 @@ function BranchNewExpense({ salesUrl, token, adminUrl, branchUser }) {
                 <div style={{ marginTop: 6 }}>
                   <small style={{ color: '#999' }}></small>
                 </div>
-              </div>
-              <div className="col">
-                <label>Bank</label>
-                <select name="bank_id" value={form.bank_id} onChange={onChange}>
-                  <option value="">Select bank</option>
-                  {banks.map(b => (
-                    <option key={b._id} value={b._id}>{b.bankName} ({b.accountNumber}) - ₹{Number(b.accountBalance).toLocaleString()}</option>
-                  ))}
-                </select>
-                {selectedBank ? (
-                  <div style={{ marginTop: 6 }}>
-                    <small style={{ color: '#999' }}>Balance: ₹{Number(selectedBank.accountBalance).toLocaleString()}</small>
-                  </div>
-                ) : null}
               </div>
               {/* If admin (no branchUser) allow selecting a branch for the expense */}
               {!branchUser ? (

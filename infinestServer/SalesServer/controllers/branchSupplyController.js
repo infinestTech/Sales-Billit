@@ -11,8 +11,7 @@ const BranchSupply = mongoose.model('BranchSupply', new mongoose.Schema({
   branch_name: { type: String, default: '' },
   supplier_id: { type: String, default: '' },
   supplierName: { type: String, default: '' },
-  bank_id: { type: String, default: '' },
-  bankName: { type: String, default: '' },
+
   supplierAmount: { type: Number, default: 0 },
   gstAmount: { type: Number, default: 0 },
   items: { type: Array, default: [] }, // { productName, productId, qty, unitSellingPrice, value, costPrice, totalCostPrice }
@@ -43,7 +42,6 @@ exports.createBranchSupply = async (req, res) => {
     }
     const branch_name = req.user && req.user.branchName ? req.user.branchName : (req.body.branch_name || '');
     const supplier_id = req.body.supplier_id || '';
-    const bank_id = req.body.bank_id || '';
     const supplierAmount = Number(req.body.supplierAmount) || 0;
     const gstAmount = Number(req.body.gstAmount) || 0;
     const items = Array.isArray(req.body.items) ? req.body.items : [];
@@ -116,7 +114,7 @@ exports.createBranchSupply = async (req, res) => {
       }
     }
 
-    // Resolve supplierName and bankName when ids provided
+    // Resolve supplierName when id provided
     let supplierName = '';
     try {
       if (supplier_id) {
@@ -127,38 +125,12 @@ exports.createBranchSupply = async (req, res) => {
     } catch (e) {
       // ignore
     }
-    let bankName = '';
-    try {
-      if (bank_id) {
-        const Bank = require('../models/bank');
-        const bdoc = await Bank.findById(bank_id).lean();
-        if (bdoc) bankName = bdoc.bankName || bdoc.accountNumber || '';
-      }
-    } catch (e) {}
-
-    // Create supply record (after validation)
-    const supply = await BranchSupply.create({
-      shop_id,
-      branch_id,
-      branch_name,
-      supplier_id,
-      supplierName,
-      bank_id,
-      bankName,
-      supplierAmount,
-      gstAmount,
-      items: prepared,
-      totalSupplyValue: total,
-      totalSupplyCost: totalCost,
-      createdBy: req.user.userId || req.user.branch_id || '',
-      createdByType: req.user && req.user.isBranch ? 'branch' : 'admin'
-    });
-
-    // Update BranchStock: increment or create per item
+    // Update BranchStock FIRST, then create BranchSupply record only for items that succeeded.
+    // This prevents orphan supply records when BranchStock updates fail.
+    const successfulItems = [];
     for (const it of prepared) {
-      const filter = { shop_id, branch_id, productId: it.productId };
-      // Build $set object but include `imes` only when non-empty in the request to avoid
-      // overwriting existing branch imes with an empty array when the client didn't select any.
+      try {
+      const filter = { shop_id: String(shop_id), branch_id: String(branch_id), productId: String(it.productId) };
       const setObj = {
         productNo: it.productNo || '',
         productName: it.productName,
@@ -166,10 +138,8 @@ exports.createBranchSupply = async (req, res) => {
         brand: it.brand,
         model: it.model,
         validity: it.validity,
-        costPrice: it.costPrice,
-        updatedBy: req.user.userId || req.user.branch_id || ''
+        costPrice: it.costPrice
       };
-      // Do not include imes in $set to avoid overwriting existing branch imes with an incoming empty array.
       const update = { $set: setObj, $inc: { qty: it.qty } };
 
       // If this item references a central InStock item, try to fetch productNo from central
@@ -193,8 +163,9 @@ exports.createBranchSupply = async (req, res) => {
       }
 
       await BranchStock.findOneAndUpdate(filter, update, { upsert: true, new: true });
-      // If client provided imes, merge them into BranchStock. Use $addToSet to avoid duplicates and to
-      // avoid wiping existing imes on the branch row.
+      successfulItems.push(it);
+
+      // If client provided imes, merge them into BranchStock.
       if (Array.isArray(it.imes) && it.imes.length) {
         try {
           await BranchStock.findOneAndUpdate(filter, { $addToSet: { imes: { $each: it.imes } } });
@@ -203,31 +174,19 @@ exports.createBranchSupply = async (req, res) => {
         }
       }
 
-      // If this supply came from a central in-stock product (productId like '<docId>_<idx>'),
-      // decrement the central InStock.items[idx].quantity so central and branch stay consistent.
+      // Decrement the central InStock quantity so central and branch stay consistent.
       try {
         const pid = String(it.productId || '');
-        console.log('🔍 Processing supply for productId:', pid, 'qty:', it.qty);
         if (pid.includes('_')) {
           const [docId, idxStr] = pid.split('_');
           const idx = Number(idxStr);
-          console.log('📦 Parsed productId -', { docId, idx, hasImes: Array.isArray(it.imes) });
           if (docId && Number.isInteger(idx)) {
-            // Fetch BEFORE any changes to see current state
-            const centralBefore = await InStock.findById(docId).lean();
-            if (centralBefore && Array.isArray(centralBefore.items) && centralBefore.items[idx]) {
-              const itemBefore = centralBefore.items[idx];
-              console.log('📊 BEFORE supply - quantity:', itemBefore.quantity, 'imes:', itemBefore.imes?.length);
-            }
-
-            // If IMEs were supplied, use $pullAll to remove them from the central item's imes array.
+            // If IMEs were supplied, remove them from the central item's imes array.
             if (Array.isArray(it.imes) && it.imes.length) {
               try {
-                console.log('🔄 Removing IMEs from central:', it.imes);
                 await InStock.updateOne({ _id: docId }, { $pullAll: { [`items.${idx}.imes`]: it.imes } });
-                console.log('✅ IMEs removed successfully');
               } catch (e) {
-                console.error('❌ pullAll error', e && e.message ? e.message : e);
+                console.error('pullAll error', e && e.message ? e.message : e);
               }
             }
             // Re-fetch central doc to calculate correct quantity and remaining imes
@@ -235,27 +194,49 @@ exports.createBranchSupply = async (req, res) => {
             if (central && Array.isArray(central.items) && central.items[idx]) {
               const currentItem = central.items[idx];
               const currentQty = Number(currentItem.quantity || currentItem.qty || 0);
-              console.log('📊 AFTER pullAll - quantity:', currentQty, 'imes:', currentItem.imes?.length);
-              // prefer imes length as the source of truth when present
               const remainingImes = Array.isArray(currentItem.imes) ? currentItem.imes : [];
               const newQty = Array.isArray(currentItem.imes) && currentItem.imes.length ? remainingImes.length : Math.max(0, currentQty - Number(it.qty || 0));
               const qtyPath = `items.${idx}.quantity`;
               const imesPath = `items.${idx}.imes`;
               const setObj2 = { [qtyPath]: newQty };
               if (Array.isArray(currentItem.imes)) setObj2[imesPath] = remainingImes;
-              console.log('💾 Updating central stock - newQty:', newQty, 'path:', qtyPath);
               await InStock.findByIdAndUpdate(docId, { $set: setObj2 });
-              console.log('✅ Central stock updated successfully');
             }
           }
         }
       } catch (e) {
         console.error('createBranchSupply: failed to decrement central InStock for', it.productId, e && e.message ? e.message : e);
       }
+      } catch (itemErr) {
+        console.error('createBranchSupply: BranchStock update failed for item', it.productId, itemErr && itemErr.message ? itemErr.message : itemErr);
+      }
     }
 
-  // Return supply record plus the updated branch stock rows for the branch so frontend can refresh
-  // After upserts, try to backfill productNo into saved supply items if missing (fetch from central InStock)
+    if (successfulItems.length === 0) {
+      return res.status(500).json({ success: false, message: 'Failed to update branch stock for any items' });
+    }
+
+    // Recalculate totals based on items that actually updated
+    let successTotal = 0, successTotalCost = 0;
+    successfulItems.forEach(si => { successTotal += (si.value || 0); successTotalCost += (si.totalCostPrice || 0); });
+
+    // Create supply record only after BranchStock updates succeed
+    const supply = await BranchSupply.create({
+      shop_id: String(shop_id),
+      branch_id: String(branch_id),
+      branch_name,
+      supplier_id,
+      supplierName,
+      supplierAmount,
+      gstAmount,
+      items: successfulItems,
+      totalSupplyValue: successTotal,
+      totalSupplyCost: successTotalCost,
+      createdBy: req.user.userId || req.user.branch_id || '',
+      createdByType: req.user && req.user.isBranch ? 'branch' : 'admin'
+    });
+
+  // Backfill productNo into saved supply items if missing
   try {
     for (let i = 0; i < (supply.items || []).length; i++) {
       const it = supply.items[i];
@@ -268,11 +249,8 @@ exports.createBranchSupply = async (req, res) => {
           if (central && Array.isArray(central.items) && central.items[idx]) {
             const centralIt = central.items[idx];
             if (centralIt && centralIt.productNo) {
-              // update supply item
               await BranchSupply.findByIdAndUpdate(supply._id, { $set: { ['items.' + i + '.productNo']: centralIt.productNo } });
-              // update branch stock row as well
-              await BranchStock.findOneAndUpdate({ shop_id, branch_id, productId: it.productId }, { $set: { productNo: centralIt.productNo } });
-              // also update local supply.items for returning
+              await BranchStock.findOneAndUpdate({ shop_id: String(shop_id), branch_id: String(branch_id), productId: it.productId }, { $set: { productNo: centralIt.productNo } });
               supply.items[i].productNo = centralIt.productNo;
             }
           }
@@ -283,8 +261,7 @@ exports.createBranchSupply = async (req, res) => {
     // ignore backfill errors
   }
 
-  const updatedRows = await BranchStock.find({ shop_id, branch_id }).lean();
-  // reload supply to include any updates
+  const updatedRows = await BranchStock.find({ shop_id: String(shop_id), branch_id: String(branch_id) }).lean();
   const freshSupply = await BranchSupply.findById(supply._id).lean();
   try { console.debug('FLOW createBranchSupply: returning', { supplyId: freshSupply._id, updatedRowsCount: Array.isArray(updatedRows) ? updatedRows.length : 0 }); } catch (__) {}
   return res.json({ success: true, supply: freshSupply || supply, rows: updatedRows, gstAmount: gstAmount || 0 });
@@ -315,7 +292,7 @@ exports.listBranchStock = async (req, res) => {
       const bid = branch_id || req.user.branch_id || null;
       try { console.debug('FLOW listBranchStock: incoming onlyBranch', { shop_id, branch_id: bid }); } catch (__) {}
       if (!bid) return res.json({ success: true, rows: [] });
-      let rowsOnly = await BranchStock.find({ shop_id, branch_id: bid }).lean();
+      let rowsOnly = await BranchStock.find({ shop_id: String(shop_id), branch_id: String(bid) }).lean();
       try { console.debug('FLOW listBranchStock: branch rows fetched', { count: Array.isArray(rowsOnly) ? rowsOnly.length : 0 }); } catch (__) {}
 
       // If some branch rows are missing brand/model/validity, try to backfill from central InStock
@@ -366,7 +343,7 @@ exports.listBranchStock = async (req, res) => {
               try {
                 if (r.productNo && String(r.productId || '').includes('_')) {
                   const setObj = { productNo: r.productNo };
-                  await BranchStock.findOneAndUpdate({ shop_id, branch_id: bid, productId: r.productId }, { $set: setObj });
+                  await BranchStock.findOneAndUpdate({ shop_id: String(shop_id), branch_id: String(bid), productId: r.productId }, { $set: setObj });
                 }
               } catch (e) { /* ignore individual update errors */ }
             }
@@ -384,8 +361,8 @@ exports.listBranchStock = async (req, res) => {
       return res.json({ success: true, rows: rowsFiltered, customerNo: customerNo || null });
     }
 
-    const q = { shop_id };
-    if (branch_id) q.branch_id = branch_id;
+    const q = { shop_id: String(shop_id) };
+    if (branch_id) q.branch_id = String(branch_id);
     let rows = await BranchStock.find(q).lean();
 
     // Build an aggregated list of central InStock items (flatten items[])
@@ -435,7 +412,7 @@ exports.listBranchStock = async (req, res) => {
 
     // If a branch is requested, merge central items with branch-specific rows
   if (branch_id) {
-      const branchRows = await BranchStock.find({ shop_id, branch_id }).lean();
+      const branchRows = await BranchStock.find({ shop_id: String(shop_id), branch_id: String(branch_id) }).lean();
       const branchMap = {};
       (branchRows || []).forEach(br => { branchMap[String(br.productId)] = br; });
 
@@ -472,8 +449,6 @@ exports.listBranchStock = async (req, res) => {
           // explicit central-only IME list
           centralOnlyImes: Array.isArray(c.imes) ? c.imes : []
         };
-        try { console.debug('DEBUG merged item imes source', { productId: c.productId, branchHasImes: Array.isArray(br && br.imes) && br.imes.length, centralImesCount: Array.isArray(c.imes) ? c.imes.length : 0 }); } catch (__) {}
-        return obj;
       });
 
 
@@ -543,8 +518,8 @@ exports.listSuppliesForShop = async (req, res) => {
     const to = req.query.to ? new Date(req.query.to) : null;
     const supplier_id = req.query.supplier_id || null;
 
-    const query = { shop_id };
-    if (branch_id) query.branch_id = branch_id;
+    const query = { shop_id: String(shop_id) };
+    if (branch_id) query.branch_id = String(branch_id);
     if (supplier_id) query.supplier_id = supplier_id;
     if (from || to) {
       query.createdAt = {};

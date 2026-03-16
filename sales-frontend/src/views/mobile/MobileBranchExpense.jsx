@@ -1,8 +1,6 @@
 function MobileBranchExpense({ salesUrl, token, adminUrl, branchUser }) {
-  const [form, setForm] = React.useState({ title: '', amount: '', date: '', bank_id: '', branch_id: '' });
-  const [banks, setBanks] = React.useState([]);
+  const [form, setForm] = React.useState({ title: '', amount: '', date: '', branch_id: '' });
   const [branches, setBranches] = React.useState([]);
-  const [selectedBank, setSelectedBank] = React.useState(null);
   const [loading, setLoading] = React.useState(false);
   const [error, setError] = React.useState('');
   const [rows, setRows] = React.useState([]);
@@ -40,21 +38,6 @@ function MobileBranchExpense({ salesUrl, token, adminUrl, branchUser }) {
   }, [load]);
 
   React.useEffect(() => {
-    const fetchBanks = async () => {
-      try {
-        const url = new URL(salesUrl + '/api/banks');
-        const res = await fetch(url, { headers: { Authorization: 'Bearer ' + token } });
-        const data = await res.json();
-        if (!res.ok) throw new Error(data.message || 'Failed to load banks');
-        setBanks(Array.isArray(data.banks) ? data.banks : []);
-      } catch (_e) {
-        setBanks([]);
-      }
-    };
-    fetchBanks();
-  }, [salesUrl, token]);
-
-  React.useEffect(() => {
     const fetchBranches = async () => {
       try {
         const url = new URL(salesUrl + '/api/branches');
@@ -69,15 +52,6 @@ function MobileBranchExpense({ salesUrl, token, adminUrl, branchUser }) {
     // Desktop loads branches for admins; branch users don't need selector
     if (!branchUser) fetchBranches();
   }, [salesUrl, token, branchUser]);
-
-  React.useEffect(() => {
-    if (!form.bank_id) {
-      setSelectedBank(null);
-      return;
-    }
-    const bank = banks.find((b) => b._id === form.bank_id);
-    setSelectedBank(bank || null);
-  }, [form.bank_id, banks]);
 
   React.useEffect(() => {
     const loadSales = async () => {
@@ -158,9 +132,6 @@ function MobileBranchExpense({ salesUrl, token, adminUrl, branchUser }) {
     const amt = Number(form.amount);
     if (!form.title || String(form.title).trim() === '') return setError('Enter an expense title');
     if (!amt || amt <= 0) return setError('Enter a valid amount');
-    if (!form.bank_id) return setError('Select a bank');
-    if (!selectedBank) return setError('Invalid bank selected');
-    if (amt > Number(selectedBank.accountBalance)) return setError('Amount exceeds selected bank balance');
 
     setLoading(true);
     try {
@@ -171,7 +142,7 @@ function MobileBranchExpense({ salesUrl, token, adminUrl, branchUser }) {
       const res = await fetch(salesUrl + '/api/branch-expenses', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token },
-        body: JSON.stringify({ title: postTitle, amount: amt, date: postDate, bank_id: form.bank_id, branch_id: postBranchId })
+        body: JSON.stringify({ title: postTitle, amount: amt, date: postDate, branch_id: postBranchId })
       });
 
       const data = await res.json();
@@ -326,30 +297,6 @@ function MobileBranchExpense({ salesUrl, token, adminUrl, branchUser }) {
               className="form-input"
               style={{ fontSize: 16 }}
             />
-          </div>
-
-          <div className="form-group">
-            <label className="form-label">Bank</label>
-            <select
-              name="bank_id"
-              value={form.bank_id}
-              onChange={onChange}
-              className="form-input"
-              style={{ fontSize: 16 }}
-            >
-              <option value="">Select bank</option>
-              {banks.map((b) => {
-                const label = `${b.bankName || 'Bank'} (${b.accountNumber || '-'}) - ₹${Number(b.accountBalance || 0).toLocaleString()}`;
-                return (
-                  <option key={b._id} value={b._id}>{label}</option>
-                );
-              })}
-            </select>
-            {selectedBank ? (
-              <div style={{ marginTop: 6, color: 'var(--text-muted)', fontSize: 12 }}>
-                Balance: ₹{Number(selectedBank.accountBalance || 0).toLocaleString()}
-              </div>
-            ) : null}
           </div>
 
           {error ? (

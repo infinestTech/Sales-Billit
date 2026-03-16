@@ -1,4 +1,4 @@
-function Sidebar({ active = 'bank', onSelect, planId, branchLimit, branchUser }) {
+function Sidebar({ active = 'instock', onSelect, planId, branchLimit, branchUser }) {
   
   const Item = ({ id, label, icon = '📋', activeId, onClick }) => (
     <a
@@ -44,8 +44,6 @@ function Sidebar({ active = 'bank', onSelect, planId, branchLimit, branchUser })
             <div style={{borderTop: '2px solid var(--border)', margin: '16px 0'}}></div>
 
             <SectionTitle title="Financial" icon="💰" />
-            <Item id="bank" label="Bank Accounts" icon={"💳"} activeId={active} onClick={onSelect} />
-            <Item id="bank-history" label="Transaction History" icon={"📊"} activeId={active} onClick={onSelect} />
             <Item id="branch-expense" label="Expenses" icon={"💸"} activeId={active} onClick={onSelect} />
 
             <SectionTitle title="Inventory" icon="📦" />
@@ -61,8 +59,6 @@ function Sidebar({ active = 'bank', onSelect, planId, branchLimit, branchUser })
           // Admin / seller view
           <>
             <SectionTitle title="Financial Management" icon="💰" />
-            <Item id="bank" label="Bank Accounts" icon={"💳"} activeId={active} onClick={onSelect} />
-            <Item id="bank-history" label="Transaction History" icon={"📊"} activeId={active} onClick={onSelect} />
             <Item id="branch-expense" label="Expenses" icon={"💸"} activeId={active} onClick={onSelect} />
             <Item id="gst-calculator" label="GST Calculator" icon={"🧮"} activeId={active} onClick={onSelect} />
 
@@ -70,11 +66,13 @@ function Sidebar({ active = 'bank', onSelect, planId, branchLimit, branchUser })
             <Item id="supplier" label="Dealers" icon={"🏢"} activeId={active} onClick={onSelect} />
             <Item id="instock" label="Product Inventory" icon={"📦"} activeId={active} onClick={onSelect} />
             <Item id="stock-history" label="Stock History" icon={"📚"} activeId={active} onClick={onSelect} />
+            <Item id="supplier-credits" label="Supplier Credits" icon={"💳"} activeId={active} onClick={onSelect} />
 
             <SectionTitle title="Branch Operations" icon="🏪" />
             <Item id="branch" label="Branch Management" icon={"🏪"} activeId={active} onClick={onSelect} />
             <Item id="branch-supply" label="Branch Supply" icon={"🚚"} activeId={active} onClick={onSelect} />
             <Item id="branch-supply-history" label="Supply History" icon={"📋"} activeId={active} onClick={onSelect} />
+            <Item id="branch-sales-report" label="Branch Sales" icon={"📊"} activeId={active} onClick={onSelect} />
           </>
         )}
       </nav>

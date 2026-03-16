@@ -37,22 +37,6 @@ exports.create = async (req, res) => {
     const documents = (payload.documents || []).map(f => saveBase64File(f.base64, destBase, f.name)).filter(Boolean);
     const signatures = (payload.signatures || []).map(f => saveBase64File(f.base64, destBase, f.name)).filter(Boolean);
 
-    // If bank_id provided, debit the bank by valueOfProduct
-    const bank_id = payload.bank_id || payload.paymentBankId || null;
-    const value = Number(payload.valueOfProduct) || 0;
-    let txn = null;
-    if (bank_id) {
-      const Bank = require('../models/bank');
-      const BankTransaction = require('../models/bankTransaction');
-      const bank = await Bank.findOne({ _id: bank_id, $or: [{ shop_id }, { mysql_user_id: req.user.userId }] });
-      if (!bank) return res.status(404).json({ success: false, message: 'Bank not found' });
-      const current = Number(bank.accountBalance || 0);
-      if (current < value) return res.status(400).json({ success: false, message: 'Insufficient bank balance' });
-      bank.accountBalance = current - value;
-      await bank.save();
-      txn = await BankTransaction.create({ shop_id, bank_id: bank._id, type: 'debit', amount: value, reference: `SecondsSale debit`, balanceAfter: bank.accountBalance, createdBy: String(req.user.userId || '') });
-    }
-
     const doc = await SecondsSale.create({
       shop_id,
       branch_id: req.user.branch_id || undefined,
@@ -77,7 +61,7 @@ exports.create = async (req, res) => {
       createdBy: String(req.user.userId || ''),
     });
 
-  return res.json({ success: true, entry: doc, transaction: txn });
+  return res.json({ success: true, entry: doc });
   } catch (err) {
     console.error('secondsSales.create error', err && err.message);
     return res.status(500).json({ success: false, message: err.message });
@@ -119,26 +103,12 @@ exports.createPurchase = async (req, res) => {
     const doc = await SecondsSale.findOne({ _id: id, shop_id });
     if (!doc) return res.status(404).json({ success: false, message: 'SecondsSale entry not found' });
 
-    let txn = null;
-    if (payload.bank_id) {
-      const Bank = require('../models/bank');
-      const BankTransaction = require('../models/bankTransaction');
-      const bank = await Bank.findOne({ _id: payload.bank_id, $or: [{ shop_id }, { mysql_user_id: req.user.userId }] });
-      if (!bank) return res.status(404).json({ success: false, message: 'Bank not found' });
-      bank.accountBalance = Number(bank.accountBalance || 0) + price; // credit
-      await bank.save();
-      txn = await BankTransaction.create({ shop_id, bank_id: bank._id, type: 'credit', amount: price, reference: `Seconds Mobile sold for`, balanceAfter: bank.accountBalance, createdBy: String(req.user.userId || '') });
-    }
-
     const purchase = {
       customerName: payload.customerName || '',
       phone: payload.phone || '',
       price: price,
       images,
       documents,
-      bankTransactionId: txn ? txn._id : undefined,
-      bank_id: txn ? txn.bank_id : (payload.bank_id || undefined),
-      bankName: payload.bankName || undefined,
       createdAt: new Date()
     };
 
@@ -147,7 +117,7 @@ exports.createPurchase = async (req, res) => {
     doc.sold = true;
     await doc.save();
 
-    return res.json({ success: true, purchase, transaction: txn, entry: doc });
+    return res.json({ success: true, purchase, entry: doc });
   } catch (err) {
     console.error('createPurchase error:', err && err.message);
     return res.status(500).json({ success: false, message: err.message });

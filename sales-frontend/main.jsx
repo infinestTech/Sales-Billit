@@ -7,7 +7,7 @@ function App() {
   const [hasAccess, setHasAccess] = React.useState(null); // null=unknown, true/false
   const [loading, setLoading] = React.useState(false);
   const [error, setError] = React.useState('');
-  const [view, setView] = React.useState((location.hash || '#bank').slice(1));
+  const [view, setView] = React.useState((location.hash || '#instock').slice(1));
   const [planId, setPlanId] = React.useState('');
   const [branchLimit, setBranchLimit] = React.useState(0);
   const [branchUser, setBranchUser] = React.useState(null);
@@ -100,7 +100,7 @@ function App() {
     }
     if (token && hasAccess === null) checkAccess(token);
 
-    const onHash = () => setView((location.hash || '#bank').slice(1));
+    const onHash = () => setView((location.hash || '#instock').slice(1));
     window.addEventListener('hashchange', onHash);
 
     // Handle branch-login events dispatched from BranchLogin so same-tab updates work
@@ -149,7 +149,7 @@ function App() {
   // If we're not a branch user and we don't have a valid sales token, show auth screens
   if (!branchUser && ((!token) || hasAccess === false)) {
     // Allow visiting public branch-login route even without sales token
-    if ((location.hash || '#bank').slice(1) === 'branch-login') {
+    if ((location.hash || '#instock').slice(1) === 'branch-login') {
       if (isMobile) {
         return window.MobileBranchLogin ? React.createElement(window.MobileBranchLogin, { salesUrl: SALES_URL }) : null;
       }
@@ -250,7 +250,7 @@ function App() {
     setToken('');
     setBranchUser(null);
     setHasAccess(false);
-    location.hash = '#bank';
+    location.hash = '#instock';
   };
 
   const branchLogout = () => {
@@ -269,22 +269,22 @@ function App() {
         console.log('Event dispatch failed:', e);
       }
     }
-    location.hash = '#bank';
+    location.hash = '#instock';
   };
 
   // Helper function to get page title
   const getTitle = () => {
     if (branchUser) return 'Branch Dashboard';
     switch (view) {
-      case 'bank': return 'Payment Methods';
-      case 'bank-history': return 'Payment History';
       case 'supplier': return 'Supplier Management';
+      case 'supplier-credits': return 'Supplier Credits';
       case 'branch': return 'Branch Management';
       case 'whatsapp-contact': return 'WhatsApp Contacts';
       case 'whatsapp-stock': return 'WhatsApp Inventory';
       case 'product-sales': return 'Point of Sale';
       case 'sales-track': return 'Sales Analytics';
       case 'branch-expense': return 'Expenses';
+      case 'branch-sales-report': return 'Branch Sales Report';
       case 'seconds-sales': return 'Quick Sales';
       case 'offer': return 'Promotions';
       default: return 'Master Inventory';
@@ -295,15 +295,15 @@ function App() {
   const getSubtitle = () => {
     if (branchUser) return 'Manage your branch operations and sales';
     switch (view) {
-      case 'bank': return 'Set up payment methods for your business';
-      case 'bank-history': return 'View all payment transactions and balances';
       case 'supplier': return 'Manage your suppliers and vendors';
+      case 'supplier-credits': return 'Manage supplier credit accounts and balances';
       case 'branch': return 'Create and manage branch locations';
       case 'whatsapp-contact': return 'Manage WhatsApp customer contacts';
       case 'whatsapp-stock': return 'Track WhatsApp-specific inventory';
       case 'product-sales': return 'Process customer sales and transactions';
       case 'sales-track': return 'Monitor sales performance and trends';
       case 'branch-expense': return 'Record branch expenses and costs';
+      case 'branch-sales-report': return 'View sales details across all branches';
       case 'seconds-sales': return 'Quick sale processing for busy periods';
       case 'offer': return 'Create and manage promotional offers';
       default: return 'Track and manage your complete inventory';
@@ -313,7 +313,7 @@ function App() {
   // Main content component
   const MainContent = () => {
     // Show mobile dashboard only on default view when on mobile
-    if (isMobile && view === 'bank') {
+    if (isMobile && view === 'instock') {
       return (
         <MobileDashboard 
           branchUser={branchUser} 
@@ -334,14 +334,7 @@ function App() {
           ) : null
         ) : null}
 
-        {view === 'bank' ? (
-          <CreateBank salesUrl={SALES_URL} token={effectiveToken} />
-        ) : view === 'bank-history' ? (
-          window.BankHistory ? React.createElement(window.BankHistory, { 
-            salesUrl: SALES_URL, 
-            token: effectiveToken 
-          }) : React.createElement('div', { style: { padding: '20px' } }, 'Loading Payment History...')
-        ) : (!branchUser && view === 'gst-calculator') ? (
+        {(!branchUser && view === 'gst-calculator') ? (
           (window.GstCalculatorView ? React.createElement(window.GstCalculatorView) : (
             <div className="card"><div className="empty-state"><div className="empty-icon">🧮</div><div className="empty-title">Loading…</div></div></div>
           ))
@@ -387,6 +380,14 @@ function App() {
               </div>
             </div>
           ))
+        ) : view === 'supplier-credits' ? (
+          (window.SupplierCredits ? React.createElement(window.SupplierCredits, { salesUrl: SALES_URL, token: effectiveToken }) : (
+            <div className="card"><div className="empty-state"><div className="empty-icon">💳</div><div className="empty-title">Loading…</div></div></div>
+          ))
+        ) : view === 'branch-sales-report' ? (
+          (window.BranchSalesReport ? React.createElement(window.BranchSalesReport, { salesUrl: SALES_URL, token: effectiveToken }) : (
+            <div className="card"><div className="empty-state"><div className="empty-icon">📊</div><div className="empty-title">Loading…</div></div></div>
+          ))
         ) : view === 'stock-history' ? (
           (window.StockHistory ? React.createElement(window.StockHistory, { salesUrl: SALES_URL, token: effectiveToken, branchUser }) : (
             <div className="card">
@@ -412,8 +413,8 @@ function App() {
               <div className="card"><div className="empty-state"><div className="empty-icon">🛍️</div><div className="empty-title">Loading…</div></div></div>
             ))
           ) : (
-            // Redirect admin to bank view if they somehow access product-sales
-            React.useEffect(() => { location.hash = '#bank'; }, []),
+            // Redirect admin to instock view if they somehow access product-sales
+            React.useEffect(() => { location.hash = '#instock'; }, []),
             <div className="card"><div className="empty-state"><div className="empty-icon">🔒</div><div className="empty-title">Redirecting…</div></div></div>
           )
         ) : (

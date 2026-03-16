@@ -21,7 +21,6 @@ function MobileProductSales({ salesUrl, token }) {
   const [customerName, setCustomerName] = React.useState('');
   const [error, setError] = React.useState('');
   const [showAlert, setShowAlert] = React.useState(false);
-  const [banks, setBanks] = React.useState([]);
   const [selectedBank, setSelectedBank] = React.useState('select');
   const [sellingBusy, setSellingBusy] = React.useState(false);
   const [lastSale, setLastSale] = React.useState(null);
@@ -69,21 +68,6 @@ function MobileProductSales({ salesUrl, token }) {
     }, 4000);
     return () => clearTimeout(t);
   }, [error]);
-
-  // Fetch banks for online payment dropdown
-  React.useEffect(() => {
-    async function loadBanks() {
-      try {
-        const url = new URL(salesUrl + '/api/banks');
-        const res = await fetch(url, { headers: { Authorization: 'Bearer ' + token } });
-        const data = await res.json();
-        if (res.ok && Array.isArray(data.banks)) setBanks(data.banks);
-      } catch (e) {
-        /* ignore */
-      }
-    }
-    loadBanks();
-  }, [salesUrl, token]);
 
   function lineTotal(item) {
     const qty = Number(item.sellingQty ?? 0);
@@ -213,7 +197,7 @@ function MobileProductSales({ salesUrl, token }) {
       setSellingBusy(true);
       setError('');
       const url = new URL(salesUrl + '/api/sales');
-      const paymentMethod = (window.__MOBILE_PAYMENT_METHOD_VALUES__ || []).includes(selectedBank) ? selectedBank : 'online';
+      const paymentMethod = selectedBank;
       const payload = {
         items: sellerProducts.map((it) => ({
           productId: it.productId || it._id || '',
@@ -237,8 +221,7 @@ function MobileProductSales({ salesUrl, token }) {
         igstAmount: Number(igstAmount.toFixed(2)),
         totalAmount: Number(totalAmount.toFixed(2)),
         paymentMethod,
-        amountPaid: Number(totalAmount || 0),
-        bank_id: selectedBank && selectedBank !== 'select' && !(window.__MOBILE_PAYMENT_METHOD_VALUES__ || []).includes(selectedBank) ? selectedBank : ''
+        amountPaid: Number(totalAmount || 0)
       };
       const res = await fetch(url, {
         method: 'POST',
@@ -956,12 +939,6 @@ function MobileProductSales({ salesUrl, token }) {
           <option value="UPI S + CASH">UPI S + Cash</option>
           <option value="UPI H + CARD">UPI H + Card</option>
           <option value="UPI S + CARD">UPI S + Card</option>
-          {banks.length > 0 && <option disabled>── Bank Accounts ──</option>}
-          {banks.map((b) => (
-            <option key={b._id} value={b._id}>
-              {b.bankName}
-            </option>
-          ))}
         </select>
       </div>
 
@@ -996,7 +973,7 @@ function MobileProductSales({ salesUrl, token }) {
                           {(p.brand || p.model) ? <span> • {(p.brand || '').trim()} {(p.model || '').trim()}</span> : null}
                         </div>
                         <div style={{ fontSize: 12, opacity: 0.85, marginTop: 6 }}>
-                          Available: <b>{p.qty ?? '-'}</b> &nbsp;|&nbsp; Unit: <b>{currency(p.sellingPrice ?? '-')}</b>
+                          Available: <b>{p.qty ?? '-'}</b>
                         </div>
                         {p.validity ? (
                           <div style={{ fontSize: 12, opacity: 0.85, marginTop: 2 }}>Validity: {new Date(p.validity).toLocaleDateString()}</div>
@@ -1031,6 +1008,20 @@ function MobileProductSales({ salesUrl, token }) {
                             setSellerProducts((sp) => sp.map((s, idx) => (idx === i ? { ...s, sellingQty: v } : s)));
                           }}
                           style={{ width: '100%', marginTop: 6, backgroundColor: isImeiTracked ? '#f1f5f9' : '#fff' }}
+                        />
+                      </div>
+                      <div style={{ flex: '1 1 100px' }}>
+                        <label>Unit Price</label>
+                        <input
+                          type="number"
+                          min="0"
+                          step="0.01"
+                          value={p.sellingPrice ?? 0}
+                          onChange={(e) => {
+                            const v = Number(e.target.value) || 0;
+                            setSellerProducts((sp) => sp.map((s, idx) => (idx === i ? { ...s, sellingPrice: v } : s)));
+                          }}
+                          style={{ width: '100%', marginTop: 6 }}
                         />
                       </div>
                       <div style={{ flex: '1 1 120px' }}>
