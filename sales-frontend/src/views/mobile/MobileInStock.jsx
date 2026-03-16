@@ -1,11 +1,9 @@
 // Mobile-optimized InStock view
 function MobileInStock({ salesUrl, token }) {
   const [suppliers, setSuppliers] = React.useState([]);
-  const [banks, setBanks] = React.useState([]);
   const [entries, setEntries] = React.useState([]);
   const [showAddForm, setShowAddForm] = React.useState(false);
   const [supplierId, setSupplierId] = React.useState('');
-  const [bankId, setBankId] = React.useState('');
   const [supplierAmount, setSupplierAmount] = React.useState('');
   const [gstAmount, setGstAmount] = React.useState('');
   const [category, setCategory] = React.useState('');
@@ -14,6 +12,8 @@ function MobileInStock({ salesUrl, token }) {
   ]);
   const [saving, setSaving] = React.useState(false);
   const [error, setError] = React.useState('');
+  const [purchaseType, setPurchaseType] = React.useState('normal');
+  const [creditAmount, setCreditAmount] = React.useState('');
 
   const loadSuppliers = async () => {
     try {
@@ -23,17 +23,6 @@ function MobileInStock({ salesUrl, token }) {
       const data = await res.json();
       if (!res.ok) throw new Error(data.message || 'Failed to load suppliers');
       setSuppliers(Array.isArray(data.suppliers) ? data.suppliers : []);
-    } catch (e) { setError(e.message); }
-  };
-
-  const loadBanks = async () => {
-    try {
-      const storedBranchToken = typeof window !== 'undefined' ? (localStorage.getItem('branch_token') || '') : '';
-      const effectiveToken = token || storedBranchToken || '';
-      const res = await fetch(salesUrl + '/api/banks', { headers: { Authorization: 'Bearer ' + effectiveToken } });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.message || 'Failed to load banks');
-      setBanks(Array.isArray(data.banks) ? data.banks : []);
     } catch (e) { setError(e.message); }
   };
 
@@ -48,9 +37,9 @@ function MobileInStock({ salesUrl, token }) {
     } catch (e) { setError(e.message); }
   };
 
-  React.useEffect(() => { loadSuppliers(); loadBanks(); loadEntries(); }, []);
+  React.useEffect(() => { loadSuppliers(); loadEntries(); }, []);
 
-  const canSubmit = supplierId && bankId && items.every(it => it.productName);
+  const canSubmit = supplierId && items.every(it => it.productName);
   const totalProductAmount = items.reduce((sum, it) => sum + ((Number(it.quantity) || 0) * (Number(it.costPrice) || 0)), 0);
   const totalBillAmount = (Number(supplierAmount) || 0) + (Number(gstAmount) || 0);
 
@@ -91,10 +80,11 @@ function MobileInStock({ salesUrl, token }) {
         headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + effectiveToken },
         body: JSON.stringify({
           supplier_id: supplierId,
-          bank_id: bankId,
           supplierAmount: Number(supplierAmount) || 0,
           gstAmount: Number(gstAmount) || 0,
           category,
+          purchaseType,
+          creditAmount: purchaseType === 'credit' ? (Number(creditAmount) || 0) : 0,
           items: items.map(it => ({
             productNo: it.productNo && String(it.productNo).trim() ? it.productNo : randomProductNo(),
             productName: it.productName,
@@ -112,10 +102,11 @@ function MobileInStock({ salesUrl, token }) {
       
       // Reset form
       setSupplierId('');
-      setBankId('');
       setSupplierAmount('');
       setGstAmount('');
       setCategory('');
+      setPurchaseType('normal');
+      setCreditAmount('');
       setItems([{ productNo: '', productName: '', brand: '', model: '', quantity: 1, costPrice: '', validity: '', imes: [] }]);
       setShowAddForm(false);
       await loadEntries();
@@ -169,21 +160,6 @@ function MobileInStock({ salesUrl, token }) {
             </div>
 
             <div className="form-group mobile-mb-3">
-              <label className="form-label">Payment Method</label>
-              <select 
-                className="form-select"
-                value={bankId}
-                onChange={(e) => setBankId(e.target.value)}
-                required
-              >
-                <option value="">Select Payment Method</option>
-                {banks.map(b => (
-                  <option key={b._id} value={b._id}>{b.bankName}</option>
-                ))}
-              </select>
-            </div>
-
-            <div className="form-group mobile-mb-3">
               <label className="form-label">Category</label>
               <select 
                 className="form-select"
@@ -207,6 +183,62 @@ function MobileInStock({ salesUrl, token }) {
                 step="0.01"
               />
             </div>
+
+            {/* Purchase Type Toggle */}
+            <div className="form-group mobile-mb-3">
+              <label className="form-label">Purchase Type</label>
+              <div style={{ display: 'flex', gap: '8px' }}>
+                <button
+                  type="button"
+                  onClick={() => { setPurchaseType('normal'); setCreditAmount(''); }}
+                  style={{
+                    flex: 1,
+                    padding: '10px',
+                    borderRadius: '8px',
+                    fontSize: '14px',
+                    fontWeight: '600',
+                    cursor: 'pointer',
+                    border: purchaseType === 'normal' ? '2px solid #059669' : '2px solid #d1d5db',
+                    background: purchaseType === 'normal' ? '#ecfdf5' : '#fff',
+                    color: purchaseType === 'normal' ? '#059669' : '#6b7280'
+                  }}
+                >
+                  💵 Normal
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setPurchaseType('credit')}
+                  style={{
+                    flex: 1,
+                    padding: '10px',
+                    borderRadius: '8px',
+                    fontSize: '14px',
+                    fontWeight: '600',
+                    cursor: 'pointer',
+                    border: purchaseType === 'credit' ? '2px solid #dc2626' : '2px solid #d1d5db',
+                    background: purchaseType === 'credit' ? '#fef2f2' : '#fff',
+                    color: purchaseType === 'credit' ? '#dc2626' : '#6b7280'
+                  }}
+                >
+                  🏷️ Credit
+                </button>
+              </div>
+            </div>
+
+            {purchaseType === 'credit' && (
+              <div className="form-group mobile-mb-3" style={{ background: '#fef2f2', padding: '12px', borderRadius: '8px', border: '1px solid #fecaca' }}>
+                <div style={{ fontSize: '12px', color: '#991b1b', marginBottom: '8px' }}>⚠️ This amount will be recorded as credit owed to the supplier</div>
+                <label className="form-label" style={{ color: '#991b1b' }}>Credit Amount *</label>
+                <input
+                  className="form-input"
+                  type="number"
+                  value={creditAmount}
+                  onChange={(e) => setCreditAmount(e.target.value)}
+                  placeholder="Enter credit amount"
+                  step="0.01"
+                />
+              </div>
+            )}
 
             <div className="form-group mobile-mb-3">
               <label className="form-label">GST Amount</label>

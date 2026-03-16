@@ -24,6 +24,8 @@ const InStockSchema = new mongoose.Schema({
   shop_id: { type: mongoose.Schema.Types.ObjectId, ref: 'Shop', index: true, required: true },
   supplier_id: { type: mongoose.Schema.Types.ObjectId, ref: 'Supplier', index: true, required: true },
   bank_id: { type: mongoose.Schema.Types.ObjectId, ref: 'Bank', index: true },
+  purchaseType: { type: String, enum: ['normal', 'credit'], default: 'normal' },
+  creditAmount: { type: Number, default: 0 },
   supplierAmount: { type: Number, default: 0 },
   gstAmount: { type: Number, default: 0 },
   items: { type: [InStockItemSchema], default: [] },

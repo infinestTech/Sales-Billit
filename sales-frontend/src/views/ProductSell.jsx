@@ -20,7 +20,6 @@ function ProductSell({ salesUrl, token }) {
   const [customerNo, setCustomerNo] = React.useState('');
   const [error, setError] = React.useState('');
   const [showAlert, setShowAlert] = React.useState(false);
-  const [banks, setBanks] = React.useState([]);
   const [whatsappStock, setWhatsappStock] = React.useState([]);
   const [selectedBank, setSelectedBank] = React.useState('select');
   const [sellingBusy, setSellingBusy] = React.useState(false);
@@ -50,18 +49,6 @@ function ProductSell({ salesUrl, token }) {
     const t = setTimeout(() => setShowAlert(false), 4000);
     return () => clearTimeout(t);
   }, [error]);
-
-  React.useEffect(() => {
-    async function loadBanks() {
-      try {
-        const url = new URL((salesUrl || '') + '/api/banks');
-        const res = await fetch(url, { headers: { Authorization: 'Bearer ' + token } });
-        const data = await res.json();
-        if (res.ok && Array.isArray(data.banks)) setBanks(data.banks);
-      } catch (e) { /* ignore */ }
-    }
-    loadBanks();
-  }, [token]);
 
   React.useEffect(() => {
     async function loadWhatsappStock() {
@@ -94,9 +81,8 @@ function ProductSell({ salesUrl, token }) {
       const payload = {
         items: sellerProducts.map(it => ({ productId: it._id || it.productId, productNo: it.productNo || '', productName: it.productName || it.name || '', qty: Number(it.sellingQty ?? it.qty ?? 0), sellingPrice: Number(it.sellingPrice || 0), lineTotal: Number(lineTotal(it)) })),
         customerNo,
-        paymentMethod: (window.__SELL_PAYMENT_METHOD_VALUES__ || []).includes(selectedBank) ? selectedBank : 'online',
-        amountPaid: Number(totalAmount || 0),
-        bank_id: (selectedBank && selectedBank !== 'select' && !(window.__SELL_PAYMENT_METHOD_VALUES__ || []).includes(selectedBank)) ? selectedBank : ''
+        paymentMethod: selectedBank,
+        amountPaid: Number(totalAmount || 0)
       };
 
       // Decide endpoint: if any item is from whatsapp stock, use whatsapp-sales endpoint
@@ -348,8 +334,6 @@ function ProductSell({ salesUrl, token }) {
             <option value="UPI S + CASH">UPI S + Cash</option>
             <option value="UPI H + CARD">UPI H + Card</option>
             <option value="UPI S + CARD">UPI S + Card</option>
-            {banks.length > 0 && <option disabled>── Bank Accounts ──</option>}
-            {banks.map(b => <option key={b._id} value={b._id}>{b.bankName || b.accountNumber || b._id}</option>)}
           </select>
         </div>
       </div>

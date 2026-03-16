@@ -22,36 +22,10 @@ exports.createBranchExpense = async (req, res) => {
     const title = (req.body.title || '').toString();
     const amount = Number(req.body.amount) || 0;
     const date = req.body.date ? new Date(req.body.date) : new Date();
-    const bank_id = req.body.bank_id || null;
 
     if (!branch_id) return res.status(400).json({ success: false, message: 'branch_id required' });
     if (!title) return res.status(400).json({ success: false, message: 'title required' });
     if (!amount || amount <= 0) return res.status(400).json({ success: false, message: 'amount must be > 0' });
-    if (!bank_id) return res.status(400).json({ success: false, message: 'bank_id required' });
-
-    // Validate bank balance
-    const Bank = require('../models/bank');
-    const BankTransaction = require('../models/bankTransaction');
-    const bank = await Bank.findById(bank_id);
-    if (!bank) return res.status(404).json({ success: false, message: 'Bank not found' });
-    if (Number(bank.accountBalance) < amount) {
-      return res.status(400).json({ success: false, message: 'Insufficient bank balance' });
-    }
-
-    // Deduct amount from bank
-    bank.accountBalance = Number(bank.accountBalance) - amount;
-    await bank.save();
-
-    // Create bank transaction
-    await BankTransaction.create({
-      shop_id: shop_id,
-      bank_id: bank._id,
-      type: 'debit',
-      amount: amount,
-      reference: `Expense: ${title}`,
-      balanceAfter: bank.accountBalance,
-      createdBy: req.user.userId || req.user.branch_id || ''
-    });
 
     // Create expense
     const createdBy = req.user.userId || req.user.branch_id || '';

@@ -255,13 +255,6 @@ const createSalesFeatureLockedComponent = (featureName, description, requiredPla
  * Feature access mapping for different sales features
  */
 const SALES_FEATURE_CONFIG = {
-  bank_accounts: {
-    enabledKey: 'bank_accounts_enabled',
-    limitKey: 'bank_account_limit',
-    name: 'Bank Account Management',
-    description: 'Manage multiple bank accounts for your business transactions and financial tracking.',
-    requiredPlans: 'Premium'
-  },
   suppliers: {
     enabledKey: 'suppliers_enabled',
     limitKey: 'supplier_limit',

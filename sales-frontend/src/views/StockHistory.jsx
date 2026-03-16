@@ -402,14 +402,6 @@ function StockHistory({ salesUrl, token, branchUser }) {
                     }}>Supplier</th>
                     <th style={{
                       padding: '16px 12px',
-                      textAlign: 'left',
-                      fontWeight: '600',
-                      color: '#374151',
-                      borderBottom: '2px solid #e5e7eb',
-                      minWidth: '130px'
-                    }}>Bank</th>
-                    <th style={{
-                      padding: '16px 12px',
                       textAlign: 'right',
                       fontWeight: '600',
                       color: '#374151',
@@ -477,9 +469,6 @@ function StockHistory({ salesUrl, token, branchUser }) {
                         <div style={{ fontWeight: '500', color: '#1e293b' }}>
                           {s.supplierName || s.supplier || '-'}
                         </div>
-                      </td>
-                      <td style={{ padding: '16px 12px', color: '#475569' }}>
-                        {s.bankName || s.bank || '-'}
                       </td>
                       <td style={{ padding: '16px 12px', textAlign: 'right' }}>
                         <span style={{
@@ -647,13 +636,6 @@ function StockHistory({ salesUrl, token, branchUser }) {
                     <div style={{ fontSize: '12px', color: '#64748b', marginBottom: '4px' }}>Supplier</div>
                     <div style={{ fontSize: '16px', fontWeight: '600', color: '#1e293b' }}>
                       {selected.supplierName || selected.supplier || '-'}
-                    </div>
-                  </div>
-                  
-                  <div>
-                    <div style={{ fontSize: '12px', color: '#64748b', marginBottom: '4px' }}>Bank</div>
-                    <div style={{ fontSize: '16px', fontWeight: '600', color: '#1e293b' }}>
-                      {selected.bankName || selected.bank || '-'}
                     </div>
                   </div>
                   

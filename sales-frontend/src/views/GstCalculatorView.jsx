@@ -65,7 +65,6 @@ function GstCalculatorView() {
         entries.forEach(e => {
           list.push({
             supplierName: (e.supplier_id && (e.supplier_id.supplierName || e.supplier_id.agencyName)) || '-',
-            bankName: (e.bank_id && (e.bank_id.bankName || e.bank_id.accountNumber)) || '-',
             supplierAmount: e.supplierAmount,
             gstAmount: e.gstAmount,
             createdAt: e.createdAt,
@@ -75,7 +74,6 @@ function GstCalculatorView() {
         supplies.forEach(s => {
           list.push({
             supplierName: s.supplierName || '-',
-            bankName: s.bankName || '-',
             supplierAmount: (s.supplierAmount != null) ? s.supplierAmount : 0,
             gstAmount: (s.gstAmount != null) ? s.gstAmount : 0,
             createdAt: s.createdAt,

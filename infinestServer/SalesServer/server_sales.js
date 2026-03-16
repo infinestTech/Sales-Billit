@@ -8,10 +8,8 @@ const path = require('path');
 const axios = require('axios').create({ family: 4, timeout: 10000 });
 const jwt = require('jsonwebtoken');
 const Shop = require('./models/shop');
-const bankRoutes = require('./routes/bankRoutes');
 const supplierRoutes = require('./routes/supplierRoutes');
 const inStockRoutes = require('./routes/inStockRoutes');
-const bankTransactionRoutes = require('./routes/bankTransactionRoutes');
 const branchRoutes = require('./routes/branchRoutes');
 const branchSupplyRoutes = require('./routes/branchSupplyRoutes');
 const branchExpenseRoutes = require('./routes/branchExpenseRoutes');
@@ -22,6 +20,7 @@ const whatsappSaleRoutes = require('./routes/whatsappSaleRoutes');
 const mysqlUserRoutes = require('./routes/mysqlUserRoutes');
 const secondsSalesRoutes = require('./routes/secondsSalesRoutes');
 const featureRoutes = require('./routes/featureRoutes');
+const supplierCreditRoutes = require('./routes/supplierCreditRoutes');
 
 const { syncSalesUser } = require('./controllers/salesSyncController');
 const app = express();
@@ -85,17 +84,15 @@ app.get('/debug/branch', async (req, res) => {
   // GST-only in-stock API endpoint for frontend
   const InStock = require('./models/inStock');
   const Supplier = require('./models/supplier');
-  const Bank = require('./models/bank');
 
   app.get('/api/in-stock', async (req, res) => {
     try {
       // Only GST entries if gstOnly=1
       const gstOnly = req.query.gstOnly === '1';
       const query = gstOnly ? { gstAmount: { $gt: 0 } } : {};
-      // Populate supplier and bank info
+      // Populate supplier info
       const entries = await InStock.find(query)
         .populate('supplier_id', 'supplierName agencyName')
-        .populate('bank_id', 'bankName accountNumber')
         .sort({ createdAt: -1 })
         .lean();
       res.json({ entries });
@@ -116,15 +113,20 @@ app.post('/auth/branch-login', async (req, res) => {
 
     const normalizedEmail = (email || '').toLowerCase().trim();
     console.log('➡️ Branch login attempt for:', normalizedEmail);
-    const branch = await Branch.findOne({ email: normalizedEmail });
-    if (!branch) {
+
+    const hash = crypto.createHash('sha256').update(password).digest('hex');
+
+    // Find ALL branches with this email (multiple shops may have branches with
+    // the same email). Sort newest-first so the most recently created branch wins
+    // when credentials match multiple branches.
+    const candidates = await Branch.find({ email: normalizedEmail }).sort({ _id: -1 }).lean();
+    if (!candidates.length) {
       console.log('⬇️ Branch not found for:', normalizedEmail);
       return res.status(401).json({ message: 'Invalid credentials' });
     }
 
-    const hash = crypto.createHash('sha256').update(password).digest('hex');
-    console.log('🔐 Hash compare (prefixes): computed=', hash.slice(0, 8), ' stored=', (branch.passwordHash || '').slice(0, 8));
-    if (hash !== branch.passwordHash) {
+    const branch = candidates.find(b => b.passwordHash === hash);
+    if (!branch) {
       console.log('❌ Password hash mismatch for:', normalizedEmail);
       return res.status(401).json({ message: 'Invalid credentials' });
     }
@@ -284,13 +286,12 @@ app.get('/api/plan-limits', async (req, res) => {
     
     const features = await Feature.find({
       plan_id: 'sales-premium',
-      feature_key: { $in: ['branch_limit', 'bank_account_limit', 'supplier_limit', 'product_inventory_limit'] }
+      feature_key: { $in: ['branch_limit', 'supplier_limit', 'product_inventory_limit'] }
     });
     
     const limits = {};
     features.forEach(f => {
       if (f.feature_key === 'branch_limit') limits.branches = f.config?.maxBranches || 5;
-      if (f.feature_key === 'bank_account_limit') limits.banks = f.config?.maxBankAccounts || 5;
       if (f.feature_key === 'supplier_limit') limits.suppliers = f.config?.maxSuppliers || 10;
       if (f.feature_key === 'product_inventory_limit') limits.products = f.config?.maxProducts || 150;
     });
@@ -429,10 +430,8 @@ app.post('/api/subscribe', async (req, res) => {
 });
 
 // Mount feature routes
-app.use(bankRoutes);
 app.use(supplierRoutes);
 app.use(inStockRoutes);
-app.use(bankTransactionRoutes);
 app.use(branchRoutes);
 app.use(branchSupplyRoutes);
 app.use(branchExpenseRoutes);
@@ -443,6 +442,7 @@ app.use(whatsappSaleRoutes);
 app.use(mysqlUserRoutes);
 app.use(secondsSalesRoutes);
 app.use(featureRoutes);
+app.use(supplierCreditRoutes);
 
 const PORT = process.env.SALES_PORT || 9000;
 app.listen(PORT, '0.0.0.0', function () {

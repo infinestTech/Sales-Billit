@@ -22,8 +22,6 @@ function ProductSales({ salesUrl, token }) {
 	const [error, setError] = React.useState('');
 	const [showAlert, setShowAlert] = React.useState(false);
 	const [loadingLoad, setLoadingLoad] = React.useState(false);
-	const [banks, setBanks] = React.useState([]);
-	const [selectedBank, setSelectedBank] = React.useState('select');
 	const [sellingBusy, setSellingBusy] = React.useState(false);
 	const [lastSale, setLastSale] = React.useState(null);
 	const [previewHtml, setPreviewHtml] = React.useState('');
@@ -54,19 +52,6 @@ function ProductSales({ salesUrl, token }) {
 		return () => clearTimeout(t);
 	}, [error]);
 
-	// Fetch banks for online payment dropdown
-	React.useEffect(() => {
-		async function loadBanks() {
-			try {
-				const url = new URL(salesUrl + '/api/banks');
-				const res = await fetch(url, { headers: { Authorization: 'Bearer ' + token } });
-				const data = await res.json();
-				if (res.ok && Array.isArray(data.banks)) setBanks(data.banks);
-			} catch (e) { /* ignore */ }
-		}
-		loadBanks();
-	}, [salesUrl, token]);
-
 	// Filter products by productNo
 	const filtered = products.filter(p =>
 		(!productNo || (p.productNo && p.productNo.toLowerCase().includes(productNo.toLowerCase())))
@@ -86,6 +71,7 @@ function ProductSales({ salesUrl, token }) {
 
 	// Discount state (percentage)
 	const [discount, setDiscount] = React.useState(0);
+	const [selectedBank, setSelectedBank] = React.useState('');
 	const discountAmount = ((Number(discount) || 0) / 100) * subTotal;
 	const taxableAmount = Math.max(0, subTotal - discountAmount);
 
@@ -131,7 +117,7 @@ function ProductSales({ salesUrl, token }) {
 			setSellingBusy(true);
 			setError('');
 			const url = new URL(salesUrl + '/api/sales');
-			const paymentMethod = (window.__PAYMENT_METHOD_VALUES__ || []).includes(selectedBank) ? selectedBank : 'online';
+			const paymentMethod = selectedBank;
 			const payload = {
 				items: sellerProducts.map(it => ({ productId: it.productId || it._id || '', productNo: it.productNo || '', productName: it.productName || '', qty: Number(it.sellingQty ?? 0), sellingPrice: Number(it.sellingPrice || 0), lineTotal: Number(lineTotal(it),), imes: Array.isArray(it.selectedImes) ? it.selectedImes : [] })),
 				customerNo,
@@ -147,8 +133,7 @@ function ProductSales({ salesUrl, token }) {
 				igstAmount: Number(igstAmount.toFixed(2)),
 				totalAmount: Number(totalAmount.toFixed(2)),
 				paymentMethod,
-				amountPaid: Number(totalAmount || 0),
-				bank_id: (selectedBank && selectedBank !== 'select' && !(window.__PAYMENT_METHOD_VALUES__ || []).includes(selectedBank)) ? selectedBank : ''
+				amountPaid: Number(totalAmount || 0)
 			};
 			const res = await fetch(url, { method: 'POST', headers: { Authorization: 'Bearer ' + token, 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
 			const data = await res.json();
@@ -1205,17 +1190,28 @@ function ProductSales({ salesUrl, token }) {
 													<label style={{display: 'block', fontSize: '12px', color: '#64748b', marginBottom: '4px', fontWeight: '500'}}>
 														Unit Price
 													</label>
-													<div style={{
-														padding: '10px',
-														fontSize: '15px',
-														fontWeight: '600',
-														backgroundColor: '#e0f2fe',
-														borderRadius: '8px',
-														textAlign: 'center',
-														color: '#0284c7'
-													}}>
-														₹{Number(p.sellingPrice ?? 0).toFixed(2)}
-													</div>
+													<input
+														type="number"
+														min="0"
+														step="0.01"
+														value={p.sellingPrice ?? 0}
+														onChange={e => {
+															const v = Number(e.target.value) || 0;
+															setSellerProducts(sp => sp.map((s, idx) => idx === i ? { ...s, sellingPrice: v } : s));
+														}}
+														style={{
+															width: '100%',
+															padding: '10px',
+															fontSize: '15px',
+															fontWeight: '600',
+															backgroundColor: '#e0f2fe',
+															borderRadius: '8px',
+															textAlign: 'center',
+															color: '#0284c7',
+															border: '1px solid #bae6fd',
+															outline: 'none'
+														}}
+													/>
 												</div>
 												<div>
 													<label style={{display: 'block', fontSize: '12px', color: '#64748b', marginBottom: '4px', fontWeight: '500'}}>
@@ -1403,8 +1399,6 @@ function ProductSales({ salesUrl, token }) {
 								<option value="UPI S + CASH">UPI S + Cash</option>
 								<option value="UPI H + CARD">UPI H + Card</option>
 								<option value="UPI S + CARD">UPI S + Card</option>
-								{banks.length > 0 && <option disabled>── Bank Accounts ──</option>}
-								{banks.map(b => <option key={b._id} value={b._id}>{b.bankName}</option>)}
 							</select>
 						</div>
 					</div>

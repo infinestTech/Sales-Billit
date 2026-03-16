@@ -12,28 +12,11 @@ exports.createWhatsappSale = async (req, res) => {
     const customerNo = req.body.customerNo || '';
     const paymentMethod = req.body.paymentMethod || 'cash';
     const amountPaid = Number(req.body.amountPaid || 0);
-    const bank_id = req.body.bank_id || '';
 
     const totalAmount = items.reduce((s, it) => s + (Number(it.qty || it.sellingQty || 0) * Number(it.sellingPrice || 0)), 0);
 
     // Create record
-    const doc = await WhatsappSale.create({ shop_id, branch_id, seller_id, customerNo, items, totalAmount, paymentMethod, amountPaid, bank_id, createdBy: req.user.userId || req.user.branch_id || '' });
-
-    // If payment to bank, create transaction similar to Sale
-    try {
-      if (bank_id) {
-        const Bank = require('../models/bank');
-        const BankTransaction = require('../models/bankTransaction');
-        const bankDoc = await Bank.findById(bank_id);
-        if (bankDoc) {
-          const newBal = (Number(bankDoc.accountBalance || 0) + Number(totalAmount || 0));
-          const tx = await BankTransaction.create({ shop_id: shop_id, bank_id: bank_id, type: 'credit', amount: Number(totalAmount || 0), reference: `WhatsappSale:${doc._id}`, balanceAfter: newBal, createdBy: req.user.userId || req.user.branch_id || '' });
-          await Bank.findByIdAndUpdate(bank_id, { $set: { accountBalance: newBal } });
-        }
-      }
-    } catch (e) {
-      console.error('createWhatsappSale: bank update failed', e && e.message ? e.message : e);
-    }
+    const doc = await WhatsappSale.create({ shop_id, branch_id, seller_id, customerNo, items, totalAmount, paymentMethod, amountPaid, createdBy: req.user.userId || req.user.branch_id || '' });
 
     // Decrement stock: prefer WhatsappStock supplyQty decrement, fallback to BranchStock by productId/productNo
     try {

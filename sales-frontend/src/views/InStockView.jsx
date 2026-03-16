@@ -1,10 +1,8 @@
 function InStockView({ salesUrl, token }) {
   const [suppliers, setSuppliers] = React.useState([]);
-  const [banks, setBanks] = React.useState([]);
   const [entries, setEntries] = React.useState([]);
   const [open, setOpen] = React.useState(false);
   const [supplierId, setSupplierId] = React.useState('');
-  const [bankId, setBankId] = React.useState('');
   const [supplierAmount, setSupplierAmount] = React.useState('');
   const [gstAmount, setGstAmount] = React.useState('');
   const [category, setCategory] = React.useState('');
@@ -13,6 +11,8 @@ function InStockView({ salesUrl, token }) {
   ]);
   const [saving, setSaving] = React.useState(false);
   const [error, setError] = React.useState('');
+  const [purchaseType, setPurchaseType] = React.useState('normal');
+  const [creditAmount, setCreditAmount] = React.useState('');
   const [filter, setFilter] = React.useState({
     productNo: '',
     productName: '',
@@ -40,16 +40,6 @@ function InStockView({ salesUrl, token }) {
       setSuppliers(Array.isArray(data.suppliers) ? data.suppliers : []);
     } catch (e) { setError(e.message); }
   };
-  const loadBanks = async () => {
-    try {
-      const storedBranchToken = typeof window !== 'undefined' ? (localStorage.getItem('branch_token') || '') : '';
-      const effectiveToken = token || storedBranchToken || '';
-      const res = await fetch(salesUrl + '/api/banks', { headers: { Authorization: 'Bearer ' + effectiveToken } });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.message || 'Failed to load banks');
-      setBanks(Array.isArray(data.banks) ? data.banks : []);
-    } catch (e) { setError(e.message); }
-  };
   const loadEntries = async () => {
     try {
       const storedBranchToken = typeof window !== 'undefined' ? (localStorage.getItem('branch_token') || '') : '';
@@ -63,7 +53,7 @@ function InStockView({ salesUrl, token }) {
       setEntries(Array.isArray(data.entries) ? data.entries : []);
     } catch (e) { setError(e.message); }
   };
-  React.useEffect(() => { loadSuppliers(); loadBanks(); loadEntries(); }, []);
+  React.useEffect(() => { loadSuppliers(); loadEntries(); }, []);
 
 
   React.useEffect(() => {
@@ -107,7 +97,7 @@ function InStockView({ salesUrl, token }) {
 
 
   // Removed sumCost calculation and Supplier Amount check
-  const canSubmit = supplierId && bankId && items.every(it => it.productName);
+  const canSubmit = supplierId && items.every(it => it.productName);
   // Calculate product amount (qty x cost price) for each item
   const productAmounts = items.map(it => (Number(it.quantity) || 0) * (Number(it.costPrice) || 0));
   const totalProductAmount = productAmounts.reduce((sum, amt) => sum + amt, 0);
@@ -134,11 +124,13 @@ function InStockView({ salesUrl, token }) {
 
 
   const resetModal = () => {
-    setSupplierId(''); setBankId(''); setSupplierAmount('');
+    setSupplierId(''); setSupplierAmount('');
   setItems([{ productNo: '', productName: '', brand: '', model: '', quantity: 1, costPrice: '', validity: '', imes: [] }]);
     setError('');
     setGstAmount('');
     setCategory('');
+    setPurchaseType('normal');
+    setCreditAmount('');
   };
 
 
@@ -187,9 +179,10 @@ function InStockView({ salesUrl, token }) {
         headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token },
             body: JSON.stringify({
               supplier_id: supplierId,
-              bank_id: bankId,
               supplierAmount: Number(supplierAmount) || 0,
               gstAmount: Number(gstAmount) || 0,
+              purchaseType,
+              creditAmount: purchaseType === 'credit' ? (Number(creditAmount) || 0) : 0,
               category: category || null,
               items: items.map(it => {
                 // Generate or validate product number
@@ -1102,37 +1095,6 @@ function InStockView({ salesUrl, token }) {
                       fontWeight: '500', 
                       color: '#374151',
                       marginBottom: '6px'
-                    }}>Bank Account *</label>
-                    <select 
-                      value={bankId} 
-                      onChange={e=>setBankId(e.target.value)}
-                      style={{
-                        width: '100%',
-                        padding: '12px 16px',
-                        border: '2px solid #e5e7eb',
-                        borderRadius: '8px',
-                        fontSize: '14px',
-                        backgroundColor: 'white',
-                        cursor: 'pointer',
-                        outline: 'none'
-                      }}
-                    >
-                      <option value="">Select bank</option>
-                      {banks.map(b => (
-                        <option key={b._id} value={b._id}>
-                          {b.bankName || b.accountNumber || b._id}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-
-                  <div>
-                    <label style={{ 
-                      display: 'block', 
-                      fontSize: '14px', 
-                      fontWeight: '500', 
-                      color: '#374151',
-                      marginBottom: '6px'
                     }}>Supplier Amount</label>
                     <input 
                       type="number" 
@@ -1201,6 +1163,94 @@ function InStockView({ salesUrl, token }) {
                       <option value="Mobile">Mobile</option>
                     </select>
                   </div>
+                </div>
+
+                {/* Purchase Type Toggle */}
+                <div style={{ marginTop: '24px' }}>
+                  <label style={{ 
+                    display: 'block', 
+                    fontSize: '14px', 
+                    fontWeight: '500', 
+                    color: '#374151',
+                    marginBottom: '10px'
+                  }}>Purchase Type</label>
+                  <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
+                    <button
+                      type="button"
+                      onClick={() => { setPurchaseType('normal'); setCreditAmount(''); }}
+                      style={{
+                        padding: '10px 24px',
+                        borderRadius: '8px',
+                        fontSize: '14px',
+                        fontWeight: '600',
+                        cursor: 'pointer',
+                        border: purchaseType === 'normal' ? '2px solid #059669' : '2px solid #d1d5db',
+                        background: purchaseType === 'normal' ? '#ecfdf5' : '#fff',
+                        color: purchaseType === 'normal' ? '#059669' : '#6b7280',
+                        transition: 'all 0.2s ease'
+                      }}
+                    >
+                      💵 Normal Purchase
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setPurchaseType('credit')}
+                      style={{
+                        padding: '10px 24px',
+                        borderRadius: '8px',
+                        fontSize: '14px',
+                        fontWeight: '600',
+                        cursor: 'pointer',
+                        border: purchaseType === 'credit' ? '2px solid #dc2626' : '2px solid #d1d5db',
+                        background: purchaseType === 'credit' ? '#fef2f2' : '#fff',
+                        color: purchaseType === 'credit' ? '#dc2626' : '#6b7280',
+                        transition: 'all 0.2s ease'
+                      }}
+                    >
+                      🏷️ Credit Purchase
+                    </button>
+                  </div>
+
+                  {purchaseType === 'credit' && (
+                    <div style={{ 
+                      marginTop: '16px', 
+                      padding: '16px', 
+                      background: '#fef2f2', 
+                      borderRadius: '10px', 
+                      border: '1px solid #fecaca' 
+                    }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '12px' }}>
+                        <span style={{ fontSize: '16px' }}>⚠️</span>
+                        <span style={{ fontSize: '13px', color: '#991b1b', fontWeight: '500' }}>
+                          This amount will be recorded as credit owed to the supplier
+                        </span>
+                      </div>
+                      <label style={{ 
+                        display: 'block', 
+                        fontSize: '14px', 
+                        fontWeight: '500', 
+                        color: '#991b1b',
+                        marginBottom: '6px'
+                      }}>Credit Amount *</label>
+                      <input 
+                        type="number" 
+                        value={creditAmount} 
+                        onChange={e => setCreditAmount(e.target.value)} 
+                        placeholder="Enter credit amount"
+                        style={{
+                          width: '100%',
+                          padding: '12px 16px',
+                          border: '2px solid #fca5a5',
+                          borderRadius: '8px',
+                          fontSize: '14px',
+                          outline: 'none',
+                          maxWidth: '300px'
+                        }}
+                        onFocus={(e) => e.target.style.borderColor = '#dc2626'}
+                        onBlur={(e) => e.target.style.borderColor = '#fca5a5'}
+                      />
+                    </div>
+                  )}
                 </div>
               </div>
 

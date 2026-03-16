@@ -61,8 +61,6 @@ function MobileViewRenderer({ view, salesUrl, token, branchUser, ...props }) {
 
   // Map views to mobile components
   const viewComponents = {
-    'bank': window.MobileCreateBank,
-    'bank-history': window.MobileBankHistory,
     'instock': window.MobileInStock,
     'branch-expense': window.MobileBranchExpense,
     'supplier': window.MobileCreateSupplier,
@@ -70,7 +68,8 @@ function MobileViewRenderer({ view, salesUrl, token, branchUser, ...props }) {
     'branch-supply-history': window.MobileBranchSupplyHistory,
     'product-sales': window.MobileProductSales,
     'seconds-sales': window.MobileSecondsSales,
-    // Add more as they're created
+    'supplier-credits': window.MobileSupplierCredits,
+    'branch-sales-report': window.MobileBranchSalesReport,
   };
 
   const MobileComponent = viewComponents[view];
@@ -91,10 +90,6 @@ function MobileViewRenderer({ view, salesUrl, token, branchUser, ...props }) {
 function renderDesktopView(view, salesUrl, token, branchUser, props) {
   // Render desktop components in mobile container
   switch(view) {
-    case 'bank':
-      return window.CreateBank ? React.createElement(window.CreateBank, { salesUrl, token }) : null;
-    case 'bank-history':
-      return window.BankHistory ? React.createElement(window.BankHistory, { salesUrl, token }) : null;
     case 'branch-expense':
       return window.BranchNewExpense ? React.createElement(window.BranchNewExpense, { salesUrl, token, branchUser }) : null;
     case 'gst-calculator':
@@ -108,6 +103,8 @@ function renderDesktopView(view, salesUrl, token, branchUser, props) {
       return window.InStockView ? React.createElement(window.InStockView, { salesUrl, token }) : null;
     case 'stock-history':
       return window.StockHistory ? React.createElement(window.StockHistory, { salesUrl, token, branchUser }) : null;
+    case 'supplier-credits':
+      return window.SupplierCredits ? React.createElement(window.SupplierCredits, { salesUrl, token }) : null;
     case 'branch':
       return window.CreateBranch ? React.createElement(window.CreateBranch, { salesUrl, token, ...props }) : null;
     case 'branch-supply':

@@ -15,6 +15,7 @@ const SaleSchema = new mongoose.Schema({
   branch_id: { type: String, index: true },
   seller_id: { type: String, default: '' },
   customerNo: { type: String, default: '' },
+  customerName: { type: String, default: '' },
   items: { type: [SaleItem], default: [] },
   subTotal: { type: Number, default: 0 },
   discount: { type: Number, default: 0 }, // discount percentage

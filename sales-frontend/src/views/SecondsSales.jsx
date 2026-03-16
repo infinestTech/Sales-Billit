@@ -9,9 +9,6 @@ function SecondsSales({ salesUrl, token }) {
   const [error, setError] = React.useState('');
   const [success, setSuccess] = React.useState('');
   const [entries, setEntries] = React.useState([]);
-  const [banks, setBanks] = React.useState([]);
-  const [selectedBankId, setSelectedBankId] = React.useState('');
-  const [selectedBankBalance, setSelectedBankBalance] = React.useState(0);
   const [mobileNameFilter, setMobileNameFilter] = React.useState('');
   const [modelFilter, setModelFilter] = React.useState('');
 
@@ -29,16 +26,6 @@ function SecondsSales({ salesUrl, token }) {
   }
 
   React.useEffect(() => { loadEntries(); }, []);
-  React.useEffect(() => { loadBanks(); }, []);
-
-  async function loadBanks() {
-    try {
-      const res = await fetch((salesUrl || '') + '/api/banks', { headers: { Authorization: token ? ('Bearer ' + token) : '' } });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.message || 'Failed to load banks');
-      setBanks(Array.isArray(data.banks) ? data.banks : []);
-    } catch (err) { console.error('loadBanks error', err); }
-  }
 
   function onChange(e) {
     const { name, value } = e.target;
@@ -73,7 +60,7 @@ function SecondsSales({ salesUrl, token }) {
     setSuccess('');
     setLoading(true);
     try {
-  const payload = { ...form, images, documents, signatures, bank_id: form.paymentMethod || '' };
+  const payload = { ...form, images, documents, signatures };
       const res = await fetch((salesUrl || '') + '/api/seconds-sales', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: token ? ('Bearer ' + token) : '' },
@@ -572,7 +559,7 @@ function SecondsSales({ salesUrl, token }) {
                   fontWeight: '500', 
                   color: '#374151',
                   fontSize: '14px'
-                }}>Payment Method (Bank) *</label>
+                }}>Payment Method *</label>
                 <select 
                   name="paymentMethod" 
                   value={form.paymentMethod} 
@@ -590,26 +577,18 @@ function SecondsSales({ salesUrl, token }) {
                   onFocus={(e) => e.target.style.borderColor = '#15803d'}
                   onBlur={(e) => e.target.style.borderColor = '#bbf7d0'}
                 >
-                  <option value="">Select bank account</option>
-                  {banks.map(b => (
-                    <option key={b._id} value={b._id}>
-                      {b.bankName} — ₹{Number(b.accountBalance||0).toFixed(2)}
-                    </option>
-                  ))}
+                  <option value="">Select payment method</option>
+                  <option value="Cash">Cash</option>
+                  <option value="UPI">UPI</option>
+                  <option value="Card">Card</option>
+                  <option value="UPI-H">UPI-H</option>
+                  <option value="UPI-S">UPI-S</option>
+                  <option value="Cash + Card">Cash + Card</option>
+                  <option value="UPI H + CASH">UPI H + Cash</option>
+                  <option value="UPI S + CASH">UPI S + Cash</option>
+                  <option value="UPI H + CARD">UPI H + Card</option>
+                  <option value="UPI S + CARD">UPI S + Card</option>
                 </select>
-                {form.paymentMethod ? (
-                  <div style={{
-                    fontSize: '12px',
-                    marginTop: '8px',
-                    padding: '6px 12px',
-                    backgroundColor: '#dcfce7',
-                    color: '#15803d',
-                    borderRadius: '6px',
-                    border: '1px solid #bbf7d0'
-                  }}>
-                    💳 Selected balance: ₹{Number((banks.find(x=>x._id===form.paymentMethod)||{}).accountBalance||0).toFixed(2)}
-                  </div>
-                ) : null}
               </div>
             </div>
           </div>

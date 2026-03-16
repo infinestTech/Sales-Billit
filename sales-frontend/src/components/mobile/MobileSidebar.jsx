@@ -1,4 +1,4 @@
-function MobileSidebar({ active = 'bank', onSelect, planId, branchLimit, branchUser, isOpen, onClose }) {
+function MobileSidebar({ active = 'instock', onSelect, planId, branchLimit, branchUser, isOpen, onClose }) {
 
   const MobileNavItem = ({ id, label, icon = '📋', activeId, onClick, description }) => (
     <a
@@ -87,22 +87,6 @@ function MobileSidebar({ active = 'bank', onSelect, planId, branchLimit, branchU
                   Financial
                 </div>
                 <MobileNavItem 
-                  id="bank" 
-                  label="Bank Accounts" 
-                  icon="💳" 
-                  description="Manage payment methods"
-                  activeId={active} 
-                  onClick={onSelect}
-                />
-                <MobileNavItem 
-                  id="bank-history" 
-                  label="Transaction History" 
-                  icon="📊" 
-                  description="View transaction records"
-                  activeId={active} 
-                  onClick={onSelect}
-                />
-                <MobileNavItem 
                   id="branch-expense" 
                   label="Expenses" 
                   icon="💸" 
@@ -183,22 +167,6 @@ function MobileSidebar({ active = 'bank', onSelect, planId, branchLimit, branchU
                   Financial Management
                 </div>
                 <MobileNavItem 
-                  id="bank" 
-                  label="Bank Accounts" 
-                  icon="💳" 
-                  description="Set up payment options"
-                  activeId={active} 
-                  onClick={onSelect}
-                />
-                <MobileNavItem 
-                  id="bank-history" 
-                  label="Transaction History" 
-                  icon="📊" 
-                  description="View all transactions"
-                  activeId={active} 
-                  onClick={onSelect}
-                />
-                <MobileNavItem 
                   id="branch-expense" 
                   label="Expenses" 
                   icon="💸" 
@@ -245,6 +213,14 @@ function MobileSidebar({ active = 'bank', onSelect, planId, branchLimit, branchU
                   activeId={active} 
                   onClick={onSelect} 
                 />
+                <MobileNavItem 
+                  id="supplier-credits" 
+                  label="Supplier Credits" 
+                  icon="💳" 
+                  description="Manage credit accounts"
+                  activeId={active} 
+                  onClick={onSelect} 
+                />
               </div>
 
               <div className="mobile-nav-section">
@@ -273,6 +249,14 @@ function MobileSidebar({ active = 'bank', onSelect, planId, branchLimit, branchU
                   label="Supply History" 
                   icon="📋" 
                   description="Track supplies"
+                  activeId={active} 
+                  onClick={onSelect} 
+                />
+                <MobileNavItem 
+                  id="branch-sales-report" 
+                  label="Branch Sales" 
+                  icon="📊" 
+                  description="View branch sales"
                   activeId={active} 
                   onClick={onSelect} 
                 />
