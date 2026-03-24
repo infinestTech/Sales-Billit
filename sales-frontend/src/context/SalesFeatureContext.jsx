@@ -83,7 +83,7 @@ function SalesFeatureProvider({ children }) {
   }, []);
 
   // ✅ Feature access control:
-  // - During 10-day trial: ALL premium features enabled (Basic plan gets Premium features)
+  // - During trial plan (1 month): ALL premium features enabled (Trial plan gets Premium features)
   // - After trial ends: Login is BLOCKED, user must upgrade to Premium
   // - Premium plan: Always has full feature access
   const isFeatureEnabled = (featureKey) => {

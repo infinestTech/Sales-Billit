@@ -202,8 +202,8 @@ app.post('/auth/login', async (req, res) => {
     // Get the plan from the access check
     const mongoPlanId = accessRes.data?.mongoPlanId || null;
     
-    // Ensure user has a valid sales plan (not service plan)
-    if (!mongoPlanId || !mongoPlanId.startsWith('sales-')) {
+    // Ensure user has a valid sales plan or combo plan
+    if (!mongoPlanId || (!mongoPlanId.startsWith('sales-') && !mongoPlanId.startsWith('combo-'))) {
       return res.status(403).json({ 
         message: 'Sales app access requires a sales plan subscription. Please subscribe to a sales plan to access this application.' 
       });
@@ -222,14 +222,14 @@ app.post('/auth/login', async (req, res) => {
         if (trialRes.data && !trialRes.data.isActive) {
           console.log('❌ Trial has expired for user:', userId);
           return res.status(403).json({ 
-            message: "Your free trial has ended. Please subscribe to Premium to continue enjoying Fixel Sales' amazing features!",
+            message: "Your trial plan has ended. Please subscribe to Premium to continue enjoying Fixel Sales' amazing features!",
             trialExpired: true,
             redirectToPricing: true
           });
         }
       } catch (trialErr) {
         console.warn('⚠️ Could not verify trial status:', trialErr.message);
-        // If we can't verify trial, block access for Basic plan users
+        // If we can't verify trial, block access for Trial plan users
         return res.status(403).json({ 
           message: "Unable to verify trial status. Please subscribe to Premium to continue.",
           trialExpired: true,

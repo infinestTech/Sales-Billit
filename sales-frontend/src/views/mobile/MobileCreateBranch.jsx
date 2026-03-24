@@ -224,7 +224,7 @@ function MobileCreateBranch({ salesUrl, token, planId, branchLimit: propBranchLi
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginTop: 12 }}>
           <div style={{ border: '1px solid var(--border)', borderRadius: 12, padding: 10, background: 'var(--bg)' }}>
             <div style={{ fontSize: 12, fontWeight: 800, color: 'var(--text-muted)' }}>Plan</div>
-            <div style={{ fontSize: 14, fontWeight: 900, color: 'var(--text)', marginTop: 2 }}>{planId || 'Basic'}</div>
+            <div style={{ fontSize: 14, fontWeight: 900, color: 'var(--text)', marginTop: 2 }}>{planId || 'Trial'}</div>
             <div style={subStyle}>Your current plan</div>
           </div>
           <div style={{ border: '1px solid var(--border)', borderRadius: 12, padding: 10, background: 'var(--bg)' }}>

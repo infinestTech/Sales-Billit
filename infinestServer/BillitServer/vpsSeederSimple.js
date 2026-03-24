@@ -1,6 +1,17 @@
 const mongoose = require('mongoose');
 const { Plan, PlanCategory } = require('./models/mongoModels');
 
+// Feature model (shared with SalesServer)
+const featureSchema = new mongoose.Schema({
+  plan_id: { type: String, required: true },
+  feature_key: { type: String, required: true },
+  type: { type: String, enum: ["boolean", "limit"], required: true },
+  enabled: { type: Boolean },
+  config: mongoose.Schema.Types.Mixed,
+  description: { type: String }
+}, { timestamps: true });
+const Feature = mongoose.models.Feature || mongoose.model("Feature", featureSchema);
+
 
 // MongoDB connection URI for production VPS
 const MONGO_URI = process.env.MONGO_URI || 'mongodb://127.0.0.1:27017/billit_db';
@@ -50,15 +61,15 @@ const plans = [
     "branchLimit": 1,
     "category_id": "Sales",
     "created_at": "2025-08-30T18:16:46.235Z",
-    "description": "Try all premium features free - complete sales and inventory management",
+    "description": "Try all premium features for just ₹99/month - complete sales and inventory management",
     "isPopular": false,
-    "name": "Basic",
-    "originalPrice": "0",
-    "price": "0",
-    "renewalPrice": "Free Trial",
-    "renewalTerm": "No payment required",
-    "savePercentage": 0,
-    "term": "Free Trial"
+    "name": "Trial",
+    "originalPrice": "199",
+    "price": "99",
+    "renewalPrice": "99",
+    "renewalTerm": "per month",
+    "savePercentage": 50,
+    "term": "Trial Plan"
   },
   {
     "_id": "sales-premium",
@@ -117,15 +128,15 @@ const plans = [
     "branchLimit": 1,
     "category_id": "Service",
     "created_at": "2025-09-09T05:52:44.564Z",
-    "description": "Try all premium features free - full access to professional service management",
+    "description": "Try all premium features for just ₹99/month - full access to professional service management",
     "isPopular": false,
-    "name": "Basic",
-    "originalPrice": "0",
-    "price": "0",
-    "renewalPrice": "Free Trial",
-    "renewalTerm": "No payment required",
-    "savePercentage": 0,
-    "term": "Free Trial"
+    "name": "Trial",
+    "originalPrice": "199",
+    "price": "99",
+    "renewalPrice": "99",
+    "renewalTerm": "per month",
+    "savePercentage": 50,
+    "term": "Trial Plan"
   },
   {
     "_id": "service-premium",
@@ -142,6 +153,23 @@ const plans = [
     "renewalPrice": "499",
     "renewalTerm": "per month",
     "savePercentage": 75,
+    "term": "Monthly Plan"
+  },
+  {
+    "_id": "combo-premium",
+    "__v": 0,
+    "bonusOffer": null,
+    "branchLimit": 5,
+    "category_id": "Sales_Service",
+    "created_at": "2025-09-09T05:52:44.700Z",
+    "description": "Complete Sales + Service bundle — manage both products with a single subscription",
+    "isPopular": true,
+    "name": "Combo",
+    "originalPrice": "898",
+    "price": "899",
+    "renewalPrice": "899",
+    "renewalTerm": "per month",
+    "savePercentage": 0,
     "term": "Monthly Plan"
   }
 ];
@@ -578,6 +606,135 @@ const features = [
     "description": "Priority support",
     "__v": 0
   },
+  // --- Combo plan features (Sales-premium + Service-premium level) ---
+  {
+    "plan_id": "combo-premium",
+    "feature_key": "entry_limit",
+    "type": "limit",
+    "config": { "totalPages": 60, "entriesPerPage": 15 },
+    "description": "60 pages × 15 records",
+    "__v": 0
+  },
+  {
+    "plan_id": "combo-premium",
+    "feature_key": "dealer_mobile_create_limit",
+    "type": "limit",
+    "config": { "maxPerCreation": 30 },
+    "description": "Dealer mobile creation limit: 30",
+    "__v": 0
+  },
+  {
+    "plan_id": "combo-premium",
+    "feature_key": "allow_paper_billing",
+    "type": "boolean",
+    "enabled": true,
+    "description": "Paper billing allowed",
+    "__v": 0
+  },
+  {
+    "plan_id": "combo-premium",
+    "feature_key": "allow_whatsapp_billing",
+    "type": "boolean",
+    "enabled": true,
+    "description": "WhatsApp billing allowed",
+    "__v": 0
+  },
+  {
+    "plan_id": "combo-premium",
+    "feature_key": "dashboard_enabled",
+    "type": "boolean",
+    "enabled": true,
+    "description": "Dashboard enabled",
+    "__v": 0
+  },
+  {
+    "plan_id": "combo-premium",
+    "feature_key": "expense_tracker_enabled",
+    "type": "boolean",
+    "enabled": true,
+    "description": "Expense tracker enabled",
+    "__v": 0
+  },
+  {
+    "plan_id": "combo-premium",
+    "feature_key": "product_inventory_enabled",
+    "type": "boolean",
+    "enabled": true,
+    "description": "Product inventory enabled",
+    "__v": 0
+  },
+  {
+    "plan_id": "combo-premium",
+    "feature_key": "notifications_enabled",
+    "type": "boolean",
+    "enabled": true,
+    "description": "Notifications enabled",
+    "__v": 0
+  },
+  {
+    "plan_id": "combo-premium",
+    "feature_key": "analytics_dashboard_enabled",
+    "type": "boolean",
+    "enabled": true,
+    "description": "Advanced analytics dashboard enabled",
+    "__v": 0
+  },
+  {
+    "plan_id": "combo-premium",
+    "feature_key": "show_ads",
+    "type": "boolean",
+    "enabled": false,
+    "description": "Ads removed",
+    "__v": 0
+  },
+  {
+    "plan_id": "combo-premium",
+    "feature_key": "sales_products_limit",
+    "type": "limit",
+    "config": { "totalPages": 999999 },
+    "description": "Unlimited products",
+    "__v": 0
+  },
+  {
+    "plan_id": "combo-premium",
+    "feature_key": "bank_accounts_limit",
+    "type": "limit",
+    "config": { "maxBankAccounts": 30 },
+    "description": "Max 30 bank accounts",
+    "__v": 0
+  },
+  {
+    "plan_id": "combo-premium",
+    "feature_key": "suppliers_limit",
+    "type": "limit",
+    "config": { "maxSuppliers": 100 },
+    "description": "Max 100 suppliers",
+    "__v": 0
+  },
+  {
+    "plan_id": "combo-premium",
+    "feature_key": "gst_calculator_enabled",
+    "type": "boolean",
+    "enabled": true,
+    "description": "GST Calculator enabled",
+    "__v": 0
+  },
+  {
+    "plan_id": "combo-premium",
+    "feature_key": "sales_analytics",
+    "type": "boolean",
+    "enabled": true,
+    "description": "Advanced analytics",
+    "__v": 0
+  },
+  {
+    "plan_id": "combo-premium",
+    "feature_key": "priority_support",
+    "type": "boolean",
+    "enabled": true,
+    "description": "Priority support",
+    "__v": 0
+  },
   {
     "_id": "68bfc0aca1815bd5628643f4",
     "plan_id": "enterprise-basic",
@@ -701,7 +858,18 @@ async function seedVPSDatabase() {
 
 
     // Seed Features
-    console.log(`📊 Summary:`);
+    console.log('\n🔧 Seeding Features...');
+    await Feature.deleteMany({});
+    for (const feature of features) {
+      try {
+        await Feature.create(feature);
+      } catch (error) {
+        console.log(`❌ Error creating feature ${feature.plan_id}/${feature.feature_key}:`, error.message);
+      }
+    }
+    console.log(`✅ Seeded ${features.length} features`);
+
+    console.log(`\n📊 Summary:`);
     console.log(`   - Categories: ${planCategories.length}`);
     console.log(`   - Plans: ${plans.length}`);
     console.log(`   - Features: ${features.length}`);

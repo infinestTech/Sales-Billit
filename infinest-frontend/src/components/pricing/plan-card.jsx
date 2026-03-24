@@ -1,11 +1,13 @@
 "use client"
 
 import { useState } from "react"
-import { Check, Shield, Sparkles, X } from "lucide-react"
+import { Check, Shield, Sparkles, Layers, X } from "lucide-react"
 
 const planIcons = {
   Basic: Shield,
+  Trial: Shield,
   Premium: Sparkles,
+  Combo: Layers,
 }
 
 export default function PlanCard({

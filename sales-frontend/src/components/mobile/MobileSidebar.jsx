@@ -269,7 +269,7 @@ function MobileSidebar({ active = 'instock', onSelect, planId, branchLimit, bran
               <div className="mobile-plan-badge">
                 <span className="mobile-plan-icon">⭐</span>
                 <span className="mobile-plan-text">
-                  {planId === 'sales-premium' ? 'Premium Plan' : 'Basic Plan'}
+                  {planId === 'sales-premium' ? 'Premium Plan' : planId?.startsWith('combo-') ? 'Combo Plan' : 'Trial Plan'}
                 </span>
               </div>
               {!isBranch && (

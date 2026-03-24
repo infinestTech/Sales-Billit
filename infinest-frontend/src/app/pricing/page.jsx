@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { Sparkles, Package, ArrowRight, Zap } from "lucide-react";
+import { Sparkles, Package, ArrowRight, Zap, Layers, Crown } from "lucide-react";
 
 export default function PricingPage() {
   const router = useRouter();
@@ -27,6 +27,41 @@ export default function PricingPage() {
           <p className="text-gray-400 text-xl max-w-2xl mx-auto">
             Select the perfect solution for your business needs
           </p>
+        </div>
+
+        {/* Combo Plan Banner */}
+        <div className="max-w-5xl mx-auto mb-10">
+          <div
+            onClick={() => router.push('/pricing/combo')}
+            className="group relative backdrop-blur-xl bg-gradient-to-r from-purple-900/40 via-violet-900/40 to-pink-900/40 border-2 border-purple-500/50 rounded-3xl shadow-2xl overflow-hidden cursor-pointer transition-all duration-300 hover:scale-[1.02] hover:shadow-purple-500/20"
+          >
+            <div className="absolute inset-0 bg-gradient-to-r from-purple-500/10 via-transparent to-pink-500/10 rounded-3xl"></div>
+
+            <div className="absolute top-4 right-6 z-20">
+              <div className="flex items-center gap-1 bg-gradient-to-r from-purple-500 to-pink-500 text-white px-3 py-1 rounded-full text-xs font-semibold shadow-lg">
+                <Crown className="w-3 h-3" />
+                BEST VALUE
+              </div>
+            </div>
+
+            <div className="relative z-10 p-8 flex flex-col md:flex-row items-center gap-6">
+              <div className="p-4 bg-gradient-to-r from-purple-500 to-pink-600 rounded-2xl shadow-xl shrink-0">
+                <Layers className="w-10 h-10 text-white" />
+              </div>
+              <div className="flex-1 text-center md:text-left">
+                <h2 className="text-2xl font-bold text-white mb-1">Combo Plan — Sales + Service</h2>
+                <p className="text-gray-300">Both apps with a single subscription. Login with one email to manage everything.</p>
+              </div>
+              <div className="text-center shrink-0">
+                <span className="text-3xl font-bold text-white">₹899</span>
+                <span className="text-gray-400 text-sm">/month</span>
+              </div>
+              <div className="flex items-center gap-2 text-purple-400 group-hover:text-purple-300 transition-colors shrink-0">
+                <span className="font-semibold">View Plan</span>
+                <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
+              </div>
+            </div>
+          </div>
         </div>
 
         {/* Product Selection Cards */}

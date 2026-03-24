@@ -7,11 +7,13 @@ async function main() {
   // Plans to upsert - Only Basic and Premium for each product
   const plans = [
     // Service
-    { name: 'Basic', price: 0, duration: 'MONTHLY', branchLimit: 1, mongoPlanId: 'service-basic', mongoCategoryId: 'Service' },
+    { name: 'Trial', price: 99, duration: 'MONTHLY', branchLimit: 1, mongoPlanId: 'service-basic', mongoCategoryId: 'Service' },
     { name: 'Premium', price: 499, duration: 'MONTHLY', branchLimit: 1, mongoPlanId: 'service-premium', mongoCategoryId: 'Service' },
     // Sales
-    { name: 'Sales Basic', price: 0, duration: 'MONTHLY', branchLimit: 0, mongoPlanId: 'sales-basic', mongoCategoryId: 'Sales' },
+    { name: 'Sales Trial', price: 99, duration: 'MONTHLY', branchLimit: 0, mongoPlanId: 'sales-basic', mongoCategoryId: 'Sales' },
     { name: 'Sales Premium', price: 399, duration: 'MONTHLY', branchLimit: 5, mongoPlanId: 'sales-premium', mongoCategoryId: 'Sales' },
+    // Combo (Sales + Service)
+    { name: 'Combo', price: 899, duration: 'MONTHLY', branchLimit: 5, mongoPlanId: 'combo-premium', mongoCategoryId: 'Sales_Service' },
   ];
 
   for (const p of plans) {

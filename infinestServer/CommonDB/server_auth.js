@@ -347,8 +347,8 @@ app.post("/mysql-subscribe", authenticateToken, async (req, res) => {
       return res.status(404).json({ message: "Plan not found in MySQL for given mongoPlanId" });
     }
 
-    // ✅ Validate plan has proper duration (except for Basic plans)
-    if (plan.name !== "Basic" && (!plan.duration || !["MONTHLY", "YEARLY"].includes(plan.duration))) {
+    // ✅ Validate plan has proper duration
+    if (!plan.duration || !["MONTHLY", "YEARLY"].includes(plan.duration)) {
       console.error(`❌ Plan ${plan.id} has invalid duration: ${plan.duration}`);
       return res.status(400).json({ message: "Plan has invalid or missing duration" });
     }
@@ -401,24 +401,17 @@ app.post("/mysql-subscribe", authenticateToken, async (req, res) => {
       }
     });
 
-    // ✅ Calculate proper end date based on plan type and duration
+    // ✅ Calculate proper end date based on plan duration
     let endDate;
     
-    // 🟩 BASIC PLAN → 10-day trial period
-    if (plan.name === "Basic") {
-      endDate = moment().tz("Asia/Kolkata").add(10, 'days').toDate();
-      console.log(`✅ Basic plan detected: Setting 10-day free trial period`);
+    if (plan.duration === "MONTHLY") {
+      endDate = moment().tz("Asia/Kolkata").add(1, 'month').toDate();
+    } else if (plan.duration === "YEARLY") {
+      endDate = moment().tz("Asia/Kolkata").add(1, 'year').toDate();
     } else {
-      // 🟨 PAID PLAN → Calculate based on duration
-      if (plan.duration === "MONTHLY") {
-        endDate = moment().tz("Asia/Kolkata").add(1, 'month').toDate();
-      } else if (plan.duration === "YEARLY") {
-        endDate = moment().tz("Asia/Kolkata").add(1, 'year').toDate();
-      } else {
-        // Fallback for plans without duration (should not happen, but safety check)
-        console.warn(`⚠️ Plan ${planId} has invalid duration: ${plan.duration}, defaulting to 30 days`);
-        endDate = moment().tz("Asia/Kolkata").add(30, 'days').toDate();
-      }
+      // Fallback for plans without duration (should not happen, but safety check)
+      console.warn(`⚠️ Plan ${planId} has invalid duration: ${plan.duration}, defaulting to 30 days`);
+      endDate = moment().tz("Asia/Kolkata").add(30, 'days').toDate();
     }
     // const endDate = moment().tz("Asia/Kolkata").add(1, 'minute').toDate();
 
@@ -540,8 +533,8 @@ app.post("/upgrade-subscription", authenticateToken, async (req, res) => {
       return res.status(400).json({ message: "Plan not found in SQL DB" });
     }
 
-    // ✅ Validate plan has proper duration (except for Basic plans)
-    if (plan.name !== "Basic" && (!plan.duration || !["MONTHLY", "YEARLY"].includes(plan.duration))) {
+    // ✅ Validate plan has proper duration
+    if (!plan.duration || !["MONTHLY", "YEARLY"].includes(plan.duration)) {
       console.error(`❌ Plan ${plan.id} has invalid duration: ${plan.duration}`);
       return res.status(400).json({ message: "Plan has invalid or missing duration" });
     }
@@ -584,11 +577,11 @@ app.post("/upgrade-subscription", authenticateToken, async (req, res) => {
       if (currentSub.plan.id === plan.id) {
         // 🟩 SAME PLAN → Queue subscription
 
-        // ⚠️ Special handling for Basic plans (they never expire, so can't be queued)
-        if (plan.name === "Basic") {
-          console.log(`⚠️ User already has active Basic plan - Basic plans don't need renewal/queueing`);
+        // ⚠️ Special handling for Trial plans (they have fixed duration, so can't be queued)
+        if (plan.name === "Trial" || plan.name === "Sales Trial") {
+          console.log(`⚠️ User already has active Trial plan - Trial plans don't need renewal/queueing`);
           return res.json({
-            message: "✅ User already has active Basic plan (no expiry needed).",
+            message: "✅ User already has active Trial plan (no renewal needed).",
             currentSubscription: currentSub
           });
         }
@@ -693,22 +686,15 @@ app.post("/upgrade-subscription", authenticateToken, async (req, res) => {
         const startDate = new Date();
         let endDate;
         
-        // ✅ Calculate proper end date based on plan type and duration
-        if (plan.name === "Basic") {
-          // 🟩 BASIC PLAN → 10-day trial period
-          endDate = moment().tz("Asia/Kolkata").add(10, 'days').toDate();
-          console.log(`✅ Upgrading to Basic plan: Setting 10-day free trial period`);
+        // ✅ Calculate proper end date based on plan duration
+        if (plan.duration === "MONTHLY") {
+          endDate = moment().tz("Asia/Kolkata").add(1, 'month').toDate();
+        } else if (plan.duration === "YEARLY") {
+          endDate = moment().tz("Asia/Kolkata").add(1, 'year').toDate();
         } else {
-          // 🟨 PAID PLAN → Calculate based on duration
-          if (plan.duration === "MONTHLY") {
-            endDate = moment().tz("Asia/Kolkata").add(1, 'month').toDate();
-          } else if (plan.duration === "YEARLY") {
-            endDate = moment().tz("Asia/Kolkata").add(1, 'year').toDate();
-          } else {
-            // Fallback for plans without duration (should not happen, but safety check)
-            console.warn(`⚠️ Plan ${plan.id} has invalid duration: ${plan.duration}, defaulting to 30 days`);
-            endDate = moment().tz("Asia/Kolkata").add(30, 'days').toDate();
-          }
+          // Fallback for plans without duration (should not happen, but safety check)
+          console.warn(`⚠️ Plan ${plan.id} has invalid duration: ${plan.duration}, defaulting to 30 days`);
+          endDate = moment().tz("Asia/Kolkata").add(30, 'days').toDate();
         }
 
     newSub = await prisma.subscription.create({
@@ -770,22 +756,15 @@ app.post("/upgrade-subscription", authenticateToken, async (req, res) => {
       const startDate = new Date();
       let endDate;
       
-      // ✅ Calculate proper end date based on plan type and duration
-      if (plan.name === "Basic") {
-        // 🟩 BASIC PLAN → 10-day trial period
-        endDate = moment().tz("Asia/Kolkata").add(10, 'days').toDate();
-        console.log(`✅ First-time Basic plan: Setting 10-day free trial period`);
+      // ✅ Calculate proper end date based on plan duration
+      if (plan.duration === "MONTHLY") {
+        endDate = moment().tz("Asia/Kolkata").add(1, 'month').toDate();
+      } else if (plan.duration === "YEARLY") {
+        endDate = moment().tz("Asia/Kolkata").add(1, 'year').toDate();
       } else {
-        // 🟨 PAID PLAN → Calculate based on duration
-        if (plan.duration === "MONTHLY") {
-          endDate = moment().tz("Asia/Kolkata").add(1, 'month').toDate();
-        } else if (plan.duration === "YEARLY") {
-          endDate = moment().tz("Asia/Kolkata").add(1, 'year').toDate();
-        } else {
-          // Fallback for plans without duration (should not happen, but safety check)
-          console.warn(`⚠️ Plan ${plan.id} has invalid duration: ${plan.duration}, defaulting to 30 days`);
-          endDate = moment().tz("Asia/Kolkata").add(30, 'days').toDate();
-        }
+        // Fallback for plans without duration (should not happen, but safety check)
+        console.warn(`⚠️ Plan ${plan.id} has invalid duration: ${plan.duration}, defaulting to 30 days`);
+        endDate = moment().tz("Asia/Kolkata").add(30, 'days').toDate();
       }
 
     newSub = await prisma.subscription.create({
@@ -1097,7 +1076,7 @@ app.get('/plan/by-mongo/:mongoPlanId', async (req, res) => {
   try {
     const plan = await prisma.plan.findFirst({
       where: { mongoPlanId },
-      select: { id: true, name: true, branchLimit: true, mongoPlanId: true }
+      select: { id: true, name: true, price: true, branchLimit: true, mongoPlanId: true }
     });
     if (!plan) return res.status(404).json({ message: 'Plan not found' });
     return res.json({ plan });
@@ -1197,21 +1176,15 @@ cron.schedule("30 18 * * *", async () => {
           // ✅ Calculate proper end date based on plan type and duration
           let newEndDate;
           
-          if (nextQueued.plan.name === "Basic") {
-            // 🟩 BASIC PLAN → 10-day trial period
-            newEndDate = moment().tz("Asia/Kolkata").add(10, 'days').toDate();
-            console.log(`✅ Activating queued Basic plan: Setting 10-day free trial period`);
+          // ✅ Calculate proper end date based on plan duration
+          if (nextQueued.plan.duration === "MONTHLY") {
+            newEndDate = moment().tz("Asia/Kolkata").add(1, 'month').toDate();
+          } else if (nextQueued.plan.duration === "YEARLY") {
+            newEndDate = moment().tz("Asia/Kolkata").add(1, 'year').toDate();
           } else {
-            // 🟨 PAID PLAN → Calculate based on duration
-            if (nextQueued.plan.duration === "MONTHLY") {
-              newEndDate = moment().tz("Asia/Kolkata").add(1, 'month').toDate();
-            } else if (nextQueued.plan.duration === "YEARLY") {
-              newEndDate = moment().tz("Asia/Kolkata").add(1, 'year').toDate();
-            } else {
-              // Fallback for plans without duration (should not happen, but safety check)
-              console.warn(`⚠️ Queued plan ${nextQueued.planId} has invalid duration: ${nextQueued.plan.duration}, defaulting to 30 days`);
-              newEndDate = moment().tz("Asia/Kolkata").add(30, 'days').toDate();
-            }
+            // Fallback for plans without duration (should not happen, but safety check)
+            console.warn(`⚠️ Queued plan ${nextQueued.planId} has invalid duration: ${nextQueued.plan.duration}, defaulting to 30 days`);
+            newEndDate = moment().tz("Asia/Kolkata").add(30, 'days').toDate();
           }
 
           await prisma.subscription.update({
@@ -1249,30 +1222,30 @@ cron.schedule("30 18 * * *", async () => {
             console.error("MongoDB activate update failed:", mongoActivateErr?.response?.data || mongoActivateErr.message);
           }
         } else{
-          // 🟥 NO QUEUED PLAN → Automatically downgrade to Basic plan
-          console.log(`📉 No queued plan found for user ${sub.userId}, creating automatic Basic plan downgrade`);
+          // 🟥 NO QUEUED PLAN → Subscription expired
+          console.log(`📉 No queued plan found for user ${sub.userId}, subscription expired`);
           
           try {
-            // Find Basic plan
-            const basicPlan = await prisma.plan.findFirst({
-              where: { name: "Basic" }
+            // Find Trial plan
+            const trialPlan = await prisma.plan.findFirst({
+              where: { name: { in: ["Trial", "Sales Trial"] } }
             });
 
-            if (basicPlan) {
-              // ⚠️ User's trial has ended - DO NOT auto-downgrade to Basic
+            if (trialPlan) {
+              // ⚠️ User's subscription has ended - DO NOT auto-downgrade
               // Instead, expire their subscription and let them choose to subscribe again
-              console.log(`⚠️ User ${sub.userId} subscription expired - not auto-downgrading (trial ended)`);
+              console.log(`⚠️ User ${sub.userId} subscription expired - not auto-downgrading`);
               
               // Log that user needs to re-subscribe
               try {
                 await axios.post(`${process.env.SERVER_URL}/log-subscription-event`, {
                   userId: sub.userId,
                   subscriptionId: sub.id,
-                  action: "TRIAL_ENDED",
-                  message: "Free trial period ended - user must subscribe to continue",
+                  action: "SUBSCRIPTION_EXPIRED",
+                  message: "Subscription period ended - user must subscribe to continue",
                   metadata: {
                     previousPlanId: sub.planId,
-                    trialEndReason: "10_DAY_TRIAL_EXPIRED"
+                    reason: "SUBSCRIPTION_EXPIRED"
                   }
                 },
                   {
@@ -1285,10 +1258,10 @@ cron.schedule("30 18 * * *", async () => {
                 console.warn("⚠️ Failed to log trial end:", logErr.message);
               }
             } else {
-              console.error(`❌ Basic plan not found in database - user ${sub.userId} left without subscription`);
+              console.error(`❌ Trial plan not found in database - user ${sub.userId} left without subscription`);
             }
           } catch (downgradeErr) {
-            console.error(`❌ Failed to create automatic Basic plan for user ${sub.userId}:`, downgradeErr.message);
+            console.error(`❌ Failed to handle subscription expiry for user ${sub.userId}:`, downgradeErr.message);
           }
         }
 
