@@ -59,7 +59,7 @@ router.post('/billit-login', async (req, res) => {
     // ✅ Check if sync returned subscription expired
     if (syncResult && !syncResult.success && syncResult.subscriptionExpired) {
       return res.status(403).json({ 
-        message: "Your free trial has ended. Please subscribe to a valid plan to continue enjoying Fixel's amazing features!",
+        message: "Your trial plan has ended. Please subscribe to a valid plan to continue enjoying Fixel's amazing features!",
         trialExpired: true,
         redirectToPricing: true
       });
@@ -85,7 +85,7 @@ router.post('/billit-login', async (req, res) => {
       
       if (!isPremiumPlan) {
         return res.status(403).json({ 
-          message: "Your free trial has ended. Please subscribe to a valid plan to continue enjoying Fixel's amazing features!",
+          message: "Your trial plan has ended. Please subscribe to a valid plan to continue enjoying Fixel's amazing features!",
           trialExpired: true,
           redirectToPricing: true
         });
@@ -145,7 +145,7 @@ router.post('/billit-login', async (req, res) => {
     // Handle subscription-related errors
     if (err.message && err.message.includes('does not have active subscription access')) {
       return res.status(403).json({ 
-        message: "Your free trial has ended. Please subscribe to a valid plan to continue enjoying Fixel's amazing features!",
+        message: "Your trial plan has ended. Please subscribe to a valid plan to continue enjoying Fixel's amazing features!",
         trialExpired: true,
         redirectToPricing: true
       });

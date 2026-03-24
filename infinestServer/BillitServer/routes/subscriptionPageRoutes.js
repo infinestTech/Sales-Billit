@@ -28,10 +28,10 @@ router.post("/create-free-subscription", authMySQLToken, async (req, res) => {
     const response = await axios.get(`${process.env.BILLIT_BACKEND_URL}/api/plan/${planId}`);
     const plan = response.data;
     
-    if (!plan || plan.name !== "Basic") {
+    if (!plan || (plan.name !== "Basic" && plan.name !== "Trial" && plan.name !== "Sales Trial")) {
       return res.status(400).json({ 
         success: false, 
-        message: "This endpoint can only be used for Basic plan subscriptions." 
+        message: "This endpoint can only be used for Basic/Trial plan subscriptions." 
       });
     }
   } catch (err) {
@@ -496,7 +496,20 @@ router.post("/subscribe", authMySQLToken, async (req, res) => {
         });
       }
 
-      if (!planDetails || !planDetails.price) {
+      // Fetch authoritative price from MySQL (avoids stale MongoDB price)
+      let mysqlPlanPrice = null;
+      try {
+        const mysqlResponse = await axios.get(`${process.env.AUTH_SERVER_URL}/plan/by-mongo/${planId}`);
+        mysqlPlanPrice = mysqlResponse.data?.plan?.price;
+      } catch (err) {
+        console.warn("⚠️ Could not fetch MySQL plan price, falling back to MongoDB price:", err.message);
+      }
+
+      const planPrice = mysqlPlanPrice !== null && mysqlPlanPrice !== undefined
+        ? Number(mysqlPlanPrice)
+        : Number(planDetails?.price);
+
+      if (!planDetails || !planPrice || planPrice <= 0) {
         return res.status(400).json({
           success: false,
           message: "Invalid plan or missing price information"
@@ -505,7 +518,7 @@ router.post("/subscribe", authMySQLToken, async (req, res) => {
 
       // Create a Razorpay order
       const orderOptions = {
-        amount: Number(planDetails.price) * 100, // Convert to paise
+        amount: planPrice * 100, // Convert to paise
         currency: "INR",
         receipt: `order_${Date.now()}`,
         notes: {

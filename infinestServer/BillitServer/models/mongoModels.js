@@ -22,8 +22,8 @@ const userSchema = new mongoose.Schema({
   mysql_user_id: { type: String, required: true, unique: true },
   role_id: { type: mongoose.Schema.Types.ObjectId, ref: "Role", required: true },
   isSubscriptionActive: { type: Boolean, default: true }, // ✅ New field
-  trialExpiryDate: { type: Date, default: () => new Date(Date.now() + 10 * 24 * 60 * 60 * 1000) }, // 10 days trial
-  hasUsedTrial: { type: Boolean, default: false }, // Track if user already used free trial
+  trialExpiryDate: { type: Date, default: () => new Date(Date.now() + 30 * 24 * 60 * 60 * 1000) }, // 1 month trial
+  hasUsedTrial: { type: Boolean, default: false }, // Track if user already used trial
   created_at: { type: Date, default: Date.now }
 });        
 
@@ -191,7 +191,7 @@ const planSchema = new mongoose.Schema({
     ref: "PlanCategory",
     required: true
   },
-  name: { type: String, enum: ["Basic", "Gold", "Premium"], required: true },
+  name: { type: String, enum: ["Basic", "Gold", "Premium", "Trial", "Combo"], required: true },
   description: String,
   branchLimit: { type: Number, required: true },
   originalPrice: String,

@@ -10,7 +10,6 @@ import { logAndNotify, logError, logSuccess } from "@/utils/logger";
 export default function PricingPage() {
   const [userId, setUserId] = useState(null);
   const [loadingPlan, setLoadingPlan] = useState(null);
-  const [hasUsedTrial, setHasUsedTrial] = useState(false);
   const router = useRouter();
 
   useEffect(() => {
@@ -37,27 +36,6 @@ export default function PricingPage() {
     document.body.appendChild(script);
   }, []);
 
-  useEffect(() => {
-    const checkTrialStatus = async () => {
-      const token = localStorage.getItem("token");
-      if (!token) return;
-
-      try {
-        const response = await axios.get(
-          `${process.env.NEXT_PUBLIC_API_URL_BILLIT}/api/check-trial-status`,
-          { headers: { Authorization: `Bearer ${token}` } }
-        );
-        setHasUsedTrial(response.data.hasUsedTrial || false);
-      } catch (error) {
-        console.error("Failed to check trial status:", error);
-      }
-    };
-
-    if (userId) {
-      checkTrialStatus();
-    }
-  }, [userId]);
-
   const handlePlanSelect = async (plan) => {
     if (!userId) {
       logAndNotify("Please log in to continue.", "warning");
@@ -69,42 +47,7 @@ export default function PricingPage() {
     try {
       setLoadingPlan(name);
 
-      // For Basic plan (free)
-      if (name === "Basic" && price === 0) {
-        const token = localStorage.getItem("token");
-        if (!token) {
-          logAndNotify("Authentication token missing. Please login again.", "error");
-          router.replace("/login");
-          return;
-        }
-
-        try {
-          const response = await axios.post(
-            `${process.env.NEXT_PUBLIC_API_URL_BILLIT}/api/subscribe`,
-            { planId: mongoPlanId, categoryId: mongoCategoryId, isPaidPlan: false },
-            { headers: { Authorization: `Bearer ${token}` } }
-          );
-
-          if (response.data.success) {
-            if (response.data.noNewSubscription && response.data.alreadySubscribed) {
-              const activePlanName = response.data.activePlan?.planName || "active plan";
-              logAndNotify(`You already have an active subscription: ${activePlanName}.`, "warning");
-              return;
-            } else if (response.data.newSubscriptionCreated || !response.data.alreadySubscribed) {
-              logSuccess("Welcome to Fixel! Enjoy your premium trial!");
-              const billitUrl = process.env.NEXT_PUBLIC_FRONTEND_URL || "http://localhost:3000";
-              window.location.href = `${billitUrl}#login`;
-            }
-          }
-        } catch (error) {
-          logError("Subscription failed", error);
-          logAndNotify(error.response?.data?.message || "Failed to subscribe. Please try again.", "error");
-        }
-        setLoadingPlan(null);
-        return;
-      }
-
-      // For Premium plan (paid)
+      // All plans (Trial and Premium) go through Razorpay payment flow
       const token = localStorage.getItem("token");
       if (!token) {
         logAndNotify("Authentication token missing. Please login again.", "error");
@@ -118,6 +61,13 @@ export default function PricingPage() {
           { planId: mongoPlanId, categoryId: mongoCategoryId, isPaidPlan: true },
           { headers: { Authorization: `Bearer ${token}` } }
         );
+
+        if (res.data.alreadySubscribed) {
+          const activePlanName = res.data.activePlan?.planName || "active plan";
+          logAndNotify(`You already have an active subscription: ${activePlanName}.`, "warning");
+          setLoadingPlan(null);
+          return;
+        }
 
         const { orderId, amount: razorpayAmount, razorpayKeyId } = res.data;
 
@@ -141,7 +91,7 @@ export default function PricingPage() {
                 { headers: { Authorization: `Bearer ${token}` } }
               );
 
-              logSuccess("Premium subscription activated successfully!");
+              logSuccess("Subscription activated successfully!");
               router.replace("/billit-login");
             } catch (err) {
               logError("Payment verification failed", err);
@@ -173,7 +123,7 @@ export default function PricingPage() {
         razorpay.open();
       } catch (error) {
         logError("Failed to create payment order", error);
-        logAndNotify("Failed to initiate payment. Please try again.", "error");
+        logAndNotify(error.response?.data?.message || "Failed to initiate payment. Please try again.", "error");
       } finally {
         setLoadingPlan(null);
       }
@@ -207,11 +157,11 @@ export default function PricingPage() {
   };
 
   const basicPlan = {
-    name: "Basic",
-    price: 0,
+    name: "Trial",
+    price: 99,
     mongoPlanId: "service-basic",
     mongoCategoryId: "Service",
-    description: "Try all premium features free",
+    description: "Try all premium features for just ₹99/month",
   };
 
   return (
@@ -241,10 +191,10 @@ export default function PricingPage() {
           </p>
         </div>
 
-        {/* Premium & Basic Plans Side by Side */}
-        <div className={`max-w-6xl mx-auto mb-8 ${hasUsedTrial ? 'flex justify-center' : 'grid md:grid-cols-2 gap-6'}`}>
+        {/* Premium & Trial Plans Side by Side */}
+        <div className="max-w-6xl mx-auto mb-8 grid md:grid-cols-2 gap-6">
           {/* Premium Plan */}
-          <div className={`relative backdrop-blur-xl bg-gradient-to-br from-blue-900/40 via-indigo-900/40 to-purple-900/40 border-2 border-blue-500/50 rounded-3xl shadow-2xl overflow-hidden ${hasUsedTrial ? 'max-w-xl' : ''}`}>
+          <div className="relative backdrop-blur-xl bg-gradient-to-br from-blue-900/40 via-indigo-900/40 to-purple-900/40 border-2 border-blue-500/50 rounded-3xl shadow-2xl overflow-hidden">
             <div className="absolute inset-0 bg-gradient-to-r from-blue-500/20 via-transparent to-indigo-500/20 rounded-3xl"></div>
             
             <div className="absolute top-6 right-6 z-20">
@@ -307,15 +257,14 @@ export default function PricingPage() {
             </div>
           </div>
 
-          {/* Basic Plan - Try Premium Free */}
-          {!hasUsedTrial && (
+          {/* Trial Plan */}
           <div className="relative backdrop-blur-xl bg-gradient-to-br from-green-900/40 via-emerald-900/40 to-teal-900/40 border-2 border-green-500/50 rounded-3xl shadow-2xl overflow-hidden">
             <div className="absolute inset-0 bg-gradient-to-r from-green-500/20 via-transparent to-emerald-500/20 rounded-3xl"></div>
             
             <div className="absolute top-6 right-6 z-20">
               <div className="flex items-center gap-1 bg-gradient-to-r from-green-500 to-emerald-500 text-white px-4 py-1.5 rounded-full text-sm font-semibold shadow-lg">
                 <Star className="w-4 h-4" />
-                FREE TRIAL
+                TRIAL PLAN
               </div>
             </div>
 
@@ -325,16 +274,16 @@ export default function PricingPage() {
                   <Gift className="w-8 h-8 text-white" />
                 </div>
                 <div>
-                  <h2 className="text-3xl font-bold text-white">Start Free</h2>
-                  <p className="text-green-300 text-sm">Try Premium Features Free</p>
+                  <h2 className="text-3xl font-bold text-white">Trial Plan</h2>
+                  <p className="text-green-300 text-sm">Try All Premium Features</p>
                 </div>
               </div>
 
-              <p className="text-gray-300 mb-6">Get full access to all premium features with no credit card required</p>
+              <p className="text-gray-300 mb-6">Get full access to all premium features at an introductory price</p>
 
               <div className="flex items-baseline gap-3 mb-6">
-                <span className="text-5xl font-bold text-white">₹0</span>
-                <span className="text-gray-400 text-lg">Free to start</span>
+                <span className="text-5xl font-bold text-white">₹99</span>
+                <span className="text-gray-400 text-lg">/month</span>
               </div>
 
               <div className="space-y-2 mb-6">
@@ -348,13 +297,7 @@ export default function PricingPage() {
                   <div className="p-1 bg-green-500/20 rounded-full">
                     <Check className="w-3 h-3 text-green-400" />
                   </div>
-                  <span className="text-gray-300">No Credit Card Required</span>
-                </div>
-                <div className="flex items-center gap-2 text-sm">
-                  <div className="p-1 bg-green-500/20 rounded-full">
-                    <Check className="w-3 h-3 text-green-400" />
-                  </div>
-                  <span className="text-gray-300">Start Immediately</span>
+                  <span className="text-gray-300">1 Month Full Access</span>
                 </div>
                 <div className="flex items-center gap-2 text-sm">
                   <div className="p-1 bg-green-500/20 rounded-full">
@@ -378,29 +321,28 @@ export default function PricingPage() {
                   <div className="p-1 bg-green-500/20 rounded-full">
                     <Check className="w-3 h-3 text-green-400" />
                   </div>
-                  <span className="text-gray-300">Upgrade Anytime</span>
+                  <span className="text-gray-300">Upgrade to Premium Anytime</span>
                 </div>
               </div>
 
               <button
                 onClick={() => handlePlanSelect(basicPlan)}
-                disabled={loadingPlan === "Basic"}
+                disabled={loadingPlan === "Trial"}
                 className="w-full bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 text-white font-bold py-4 px-8 rounded-xl shadow-lg hover:shadow-xl transition-all duration-300 transform hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
               >
-                {loadingPlan === "Basic" ? "Processing..." : (
+                {loadingPlan === "Trial" ? "Processing..." : (
                   <>
                     <Sparkles className="w-5 h-5" />
-                    Start Free Trial
+                    Start Trial - ₹99/month
                   </>
                 )}
               </button>
 
               <p className="text-gray-400 text-sm mt-4 text-center">
-                No payment required • Instant access
+                ₹99/month • Secure Payment • Instant Access
               </p>
             </div>
           </div>
-          )}
         </div>
 
         {/* Trust badges */}
