@@ -1,16 +1,24 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useEffect, useState, useMemo, useRef } from "react"
 import { useSearchParams } from "next/navigation"
 import Pagination from "@/components/tables/Pagination"
 import api from "@/components/api"
-import { Smartphone, Filter, Users, Phone, Wrench, User, Hash, AlertCircle, Edit3, Search } from "lucide-react"
+import { Smartphone, Filter, Users, Phone, Wrench, User, Hash, AlertCircle, Edit3, Search, Calendar, Download, ChevronDown } from "lucide-react"
+import jsPDF from "jspdf"
+import autoTable from "jspdf-autotable"
 
 const MobileNamePage = ({ shopId }) => {
   const searchParams = useSearchParams()
   const [mobileData, setMobileData] = useState([])
-  const [selectedCustomerType, setSelectedCustomerType] = useState("")
+  const [clientFilter, setClientFilter] = useState("")
+  const [clientFilterLabel, setClientFilterLabel] = useState("")
+  const [clientSearchOpen, setClientSearchOpen] = useState(false)
+  const [clientSearchText, setClientSearchText] = useState("")
+  const clientDropdownRef = useRef(null)
   const [selectedStatus, setSelectedStatus] = useState("notReady")
+  const [dateFrom, setDateFrom] = useState("")
+  const [dateTo, setDateTo] = useState("")
   const [currentPage, setCurrentPage] = useState(1)
   const [invoicesPerPage] = useState(15)
   const [loading, setLoading] = useState(true)
@@ -120,8 +128,22 @@ const MobileNamePage = ({ shopId }) => {
     fetchMobileData()
   }, [shopId])
 
-  const handleCustomerTypeChange = (e) => {
-    setSelectedCustomerType(e.target.value)
+  // Close client dropdown on outside click
+  useEffect(() => {
+    const handler = (e) => {
+      if (clientDropdownRef.current && !clientDropdownRef.current.contains(e.target)) {
+        setClientSearchOpen(false)
+      }
+    }
+    document.addEventListener("mousedown", handler)
+    return () => document.removeEventListener("mousedown", handler)
+  }, [])
+
+  const handleClientSelect = (value, label) => {
+    setClientFilter(value)
+    setClientFilterLabel(label)
+    setClientSearchText("")
+    setClientSearchOpen(false)
     setCurrentPage(1)
   }
 
@@ -135,8 +157,35 @@ const MobileNamePage = ({ shopId }) => {
     setCurrentPage(1)
   }
 
+  // Unique dealer names derived from data
+  const dealerNames = useMemo(() => {
+    const names = mobileData
+      .filter((m) => m.customerType === "Dealer")
+      .map((m) => m.clientName)
+    return [...new Set(names)].sort()
+  }, [mobileData])
+
+  const filteredDealerNames = dealerNames.filter((n) =>
+    n.toLowerCase().includes(clientSearchText.toLowerCase())
+  )
+
   const filteredMobileData = mobileData
-    .filter((mobile) => (selectedCustomerType ? mobile.customerType === selectedCustomerType : true))
+    .filter((mobile) => {
+      if (!clientFilter) return true
+      if (clientFilter === "__customers__") return mobile.customerType === "Customer"
+      if (clientFilter === "__dealers__") return mobile.customerType === "Dealer"
+      return mobile.clientName === clientFilter
+    })
+    .filter((mobile) => {
+      if (!dateFrom && !dateTo) return true
+      const added = mobile.addedDate ? new Date(mobile.addedDate) : null
+      if (!added) return false
+      const from = dateFrom ? new Date(dateFrom) : null
+      const to = dateTo ? new Date(new Date(dateTo).setHours(23, 59, 59, 999)) : null
+      if (from && added < from) return false
+      if (to && added > to) return false
+      return true
+    })
     .filter((mobile) => {
       // When IMEI search is active, skip status filter and show all matching mobiles
       if (imeiSearch.trim()) return true
@@ -167,6 +216,60 @@ const MobileNamePage = ({ shopId }) => {
     setCurrentPage(pageNumber)
   }
 
+  const handleExportPDF = () => {
+    const doc = new jsPDF({ orientation: "landscape" })
+
+    // Title
+    doc.setFontSize(16)
+    doc.setTextColor(30, 64, 175)
+    doc.text("Mobile Registry Report", 14, 16)
+
+    // Applied filters summary
+    doc.setFontSize(9)
+    doc.setTextColor(80, 80, 80)
+    const filterParts = []
+    if (clientFilter === "__customers__") filterParts.push("Type: Customer")
+    else if (clientFilter === "__dealers__") filterParts.push("Type: Dealer")
+    else if (clientFilter) filterParts.push(`Dealer: ${clientFilter}`)
+    if (selectedStatus && !imeiSearch.trim()) {
+      const statusLabels = { notReady: "Not Ready", notDelivered: "Not Delivered", readyNotDelivered: "Pending", return: "Return" }
+      filterParts.push(`Status: ${statusLabels[selectedStatus] || selectedStatus}`)
+    }
+    if (dateFrom) filterParts.push(`From: ${dateFrom}`)
+    if (dateTo) filterParts.push(`To: ${dateTo}`)
+    if (imeiSearch.trim()) filterParts.push(`IMEI: ${imeiSearch.trim()}`)
+    if (filterParts.length > 0) {
+      doc.text(`Filters — ${filterParts.join("  |  ")}`, 14, 23)
+    }
+    doc.setFontSize(8)
+    doc.setTextColor(120, 120, 120)
+    doc.text(`Generated: ${new Date().toLocaleString("en-IN")}  |  Total records: ${filteredMobileData.length}`, 14, 29)
+
+    autoTable(doc, {
+      startY: 33,
+      head: [["S.No", "Client Name", "Type", "Mobile Name", "Model", "IMEI No", "Issues", "Technician", "Status", "Date Added"]],
+      body: filteredMobileData.map((m, i) => [
+        i + 1,
+        m.clientName,
+        m.customerType,
+        m.mobileName,
+        m.model || "-",
+        m.imei || "-",
+        m.issues,
+        m.technician || "-",
+        m.isDelivered ? "Delivered" : m.isReturn ? "Returned" : m.isReady ? "Ready" : "Not Ready",
+        m.addedDate ? new Date(m.addedDate).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" }) : "N/A",
+      ]),
+      styles: { fontSize: 8, cellPadding: 3 },
+      headStyles: { fillColor: [30, 64, 175], textColor: 255, fontStyle: "bold" },
+      alternateRowStyles: { fillColor: [240, 244, 255] },
+      columnStyles: { 0: { cellWidth: 12 }, 6: { cellWidth: 40 } },
+    })
+
+    const dateStr = new Date().toISOString().split("T")[0]
+    doc.save(`mobile-registry-${dateStr}.pdf`)
+  }
+
   return (
     <div className="h-screen bg-white flex flex-col">
       {/* Header */}
@@ -185,28 +288,93 @@ const MobileNamePage = ({ shopId }) => {
       {/* Filter Section */}
       <div className="px-8 py-6 bg-gradient-to-r from-gray-50 to-blue-50 border-b border-gray-200 flex-shrink-0">
         <div className="bg-white rounded-xl p-6 shadow-lg border border-gray-200">
-          <h3 className="text-lg font-semibold text-gray-800 mb-4 flex items-center">
-            <Filter className="h-5 w-5 mr-2 text-blue-600" />
-            Filter Options
-          </h3>
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="text-lg font-semibold text-gray-800 flex items-center">
+              <Filter className="h-5 w-5 mr-2 text-blue-600" />
+              Filter Options
+            </h3>
+            <button
+              onClick={handleExportPDF}
+              className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium rounded-lg transition-colors duration-200 shadow-sm"
+            >
+              <Download className="h-4 w-4" />
+              Export PDF
+            </button>
+          </div>
 
-          <div className="grid grid-cols-3 gap-6">
-            <div className="space-y-2">
+          <div className="grid grid-cols-2 md:grid-cols-3 gap-6">
+            {/* Client Filter */}
+            <div className="space-y-2" ref={clientDropdownRef}>
               <label className="text-sm font-semibold text-gray-700 flex items-center">
                 <Users className="h-4 w-4 mr-2 text-blue-600" />
-                Filter by Customer Type
+                Filter by Client
               </label>
-              <select
-                value={selectedCustomerType}
-                onChange={handleCustomerTypeChange}
-                className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 bg-gray-50 hover:bg-white"
-              >
-                <option value="">All Types</option>
-                <option value="Customer">Customer</option>
-                <option value="Dealer">Dealer</option>
-              </select>
+              <div className="relative">
+                <button
+                  type="button"
+                  onClick={() => setClientSearchOpen((prev) => !prev)}
+                  className="w-full flex items-center justify-between px-4 py-3 border border-gray-300 rounded-xl bg-gray-50 hover:bg-white text-left focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all duration-200"
+                >
+                  <span className={clientFilterLabel ? "text-gray-900" : "text-gray-400"}>
+                    {clientFilterLabel || "All"}
+                  </span>
+                  <ChevronDown className={`h-4 w-4 text-gray-500 transition-transform ${clientSearchOpen ? "rotate-180" : ""}`} />
+                </button>
+
+                {clientSearchOpen && (
+                  <div className="absolute z-50 mt-1 w-full rounded-xl border border-gray-200 bg-white shadow-lg">
+                    <div className="p-2 border-b border-gray-100">
+                      <div className="relative">
+                        <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+                        <input
+                          type="text"
+                          value={clientSearchText}
+                          onChange={(e) => setClientSearchText(e.target.value)}
+                          placeholder="Search dealer..."
+                          autoFocus
+                          className="w-full pl-8 pr-3 py-2 text-sm rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        />
+                      </div>
+                    </div>
+                    <ul className="max-h-52 overflow-y-auto py-1">
+                      {!clientSearchText && (
+                        <>
+                          <li>
+                            <button type="button" onClick={() => handleClientSelect("", "")} className="w-full text-left px-4 py-2 text-sm text-gray-500 hover:bg-gray-50">All</button>
+                          </li>
+                          <li>
+                            <button type="button" onClick={() => handleClientSelect("__customers__", "All Customers")} className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-blue-50">All Customers</button>
+                          </li>
+                          <li>
+                            <button type="button" onClick={() => handleClientSelect("__dealers__", "All Dealers")} className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-blue-50">All Dealers</button>
+                          </li>
+                          {filteredDealerNames.length > 0 && (
+                            <li className="px-4 py-1 text-xs font-semibold text-gray-400 uppercase tracking-wide border-t border-gray-100 mt-1 pt-2">Specific Dealer</li>
+                          )}
+                        </>
+                      )}
+                      {filteredDealerNames.length > 0 ? (
+                        filteredDealerNames.map((name) => (
+                          <li key={name}>
+                            <button
+                              type="button"
+                              onClick={() => handleClientSelect(name, name)}
+                              className={`w-full text-left px-4 py-2 text-sm hover:bg-blue-50 text-gray-800 ${clientFilter === name ? "bg-blue-50 font-medium" : ""}`}
+                            >
+                              {name}
+                            </button>
+                          </li>
+                        ))
+                      ) : (
+                        clientSearchText && <li className="px-4 py-2 text-sm text-gray-400">No dealers found</li>
+                      )}
+                    </ul>
+                  </div>
+                )}
+              </div>
             </div>
 
+            {/* Status */}
             <div className="space-y-2">
               <label className="text-sm font-semibold text-gray-700 flex items-center">
                 <AlertCircle className="h-4 w-4 mr-2 text-indigo-600" />
@@ -228,6 +396,7 @@ const MobileNamePage = ({ shopId }) => {
               )}
             </div>
 
+            {/* IMEI Search */}
             <div className="space-y-2">
               <label className="text-sm font-semibold text-gray-700 flex items-center">
                 <Search className="h-4 w-4 mr-2 text-teal-600" />
@@ -245,6 +414,48 @@ const MobileNamePage = ({ shopId }) => {
                   <button
                     onClick={() => { setImeiSearch(""); setCurrentPage(1); }}
                     className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 transition-colors"
+                  >
+                    ✕
+                  </button>
+                )}
+              </div>
+            </div>
+
+
+
+            {/* Date From */}
+            <div className="space-y-2">
+              <label className="text-sm font-semibold text-gray-700 flex items-center">
+                <Calendar className="h-4 w-4 mr-2 text-orange-600" />
+                From Date
+              </label>
+              <input
+                type="date"
+                value={dateFrom}
+                onChange={(e) => { setDateFrom(e.target.value); setCurrentPage(1) }}
+                className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent transition-all duration-200 bg-gray-50 hover:bg-white"
+              />
+            </div>
+
+            {/* Date To */}
+            <div className="space-y-2">
+              <label className="text-sm font-semibold text-gray-700 flex items-center">
+                <Calendar className="h-4 w-4 mr-2 text-orange-600" />
+                To Date
+              </label>
+              <div className="flex gap-2 items-end">
+                <input
+                  type="date"
+                  value={dateTo}
+                  min={dateFrom || undefined}
+                  onChange={(e) => { setDateTo(e.target.value); setCurrentPage(1) }}
+                  className="flex-1 px-4 py-3 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent transition-all duration-200 bg-gray-50 hover:bg-white"
+                />
+                {(dateFrom || dateTo) && (
+                  <button
+                    onClick={() => { setDateFrom(""); setDateTo(""); setCurrentPage(1) }}
+                    className="px-3 py-3 text-xs text-gray-500 hover:text-red-500 border border-gray-300 rounded-xl hover:border-red-300 transition-colors bg-gray-50"
+                    title="Clear dates"
                   >
                     ✕
                   </button>
@@ -281,6 +492,12 @@ const MobileNamePage = ({ shopId }) => {
           </div>
         ) : (
           <div className="bg-white border border-gray-200 overflow-hidden shadow-lg rounded-xl">
+            <div className="px-6 py-3 bg-blue-50 border-b border-blue-100 flex items-center justify-between">
+              <span className="text-sm text-blue-700 font-medium">
+                Showing {filteredMobileData.length} record{filteredMobileData.length !== 1 ? "s" : ""}
+                {clientFilter && clientFilter !== "__customers__" && clientFilter !== "__dealers__" ? ` for ${clientFilter}` : ""}
+              </span>
+            </div>
             <div className="overflow-x-auto">
               <table className="min-w-full">
                 <thead className="bg-gradient-to-r from-gray-100 to-gray-200">
@@ -327,6 +544,12 @@ const MobileNamePage = ({ shopId }) => {
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
                         </svg>
                         Date Added
+                      </div>
+                    </th>
+                    <th className="px-6 py-4 text-left text-sm font-bold text-gray-700 border-b border-gray-300">
+                      <div className="flex items-center">
+                        <AlertCircle className="h-4 w-4 mr-2 text-green-600" />
+                        Status
                       </div>
                     </th>
                   </tr>
@@ -394,6 +617,17 @@ const MobileNamePage = ({ shopId }) => {
                             year: 'numeric'
                           }) : 'N/A'}
                         </span>
+                      </td>
+                      <td className="px-6 py-4 border-b border-gray-200">
+                        {data.isDelivered ? (
+                          <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold bg-green-100 text-green-800">Delivered</span>
+                        ) : data.isReturn ? (
+                          <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold bg-yellow-100 text-yellow-800">Returned</span>
+                        ) : data.isReady ? (
+                          <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold bg-blue-100 text-blue-800">Ready</span>
+                        ) : (
+                          <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold bg-red-100 text-red-800">Not Ready</span>
+                        )}
                       </td>
                     </tr>
                   ))}

@@ -1,10 +1,33 @@
 "use client"
 
-import { useState, useEffect } from "react"
-import { PlusCircle, User, Hash, Smartphone, FileText, Wrench, Users, RefreshCw, UserCheck, Phone } from "lucide-react"
+import { useState, useEffect, useRef } from "react"
+import { PlusCircle, User, Hash, Smartphone, FileText, Wrench, Users, RefreshCw, UserCheck, Phone, Search, ChevronDown } from "lucide-react"
 import { logAndNotify, logSuccess } from "@/utils/logger"
 
 export default function DealerForm({ dealers, formData, setFormData, handleCreateDealer, disabled, onBillNumberChange, onRegenerateBillNumber }) {
+  const [dealerSearch, setDealerSearch] = useState("")
+  const [dealerDropdownOpen, setDealerDropdownOpen] = useState(false)
+  const dealerDropdownRef = useRef(null)
+
+  const filteredDealers = dealers.filter((dealer) =>
+    dealer.clientName.toLowerCase().includes(dealerSearch.toLowerCase())
+  )
+
+  useEffect(() => {
+    const handleClickOutside = (e) => {
+      if (dealerDropdownRef.current && !dealerDropdownRef.current.contains(e.target)) {
+        setDealerDropdownOpen(false)
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside)
+    return () => document.removeEventListener("mousedown", handleClickOutside)
+  }, [])
+
+  const handleDealerSelect = (clientName) => {
+    setFormData((prev) => ({ ...prev, selectedDealer: clientName }))
+    setDealerSearch("")
+    setDealerDropdownOpen(false)
+  }
 
   const handleDealerCreate = async () => {
     // Add validation for dealerName and dealerNumber
@@ -92,23 +115,68 @@ export default function DealerForm({ dealers, formData, setFormData, handleCreat
         </div>
 
         <div className="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-3">
-          <div className="space-y-2">
+          <div className="space-y-2" ref={dealerDropdownRef}>
             <label className="flex items-center gap-2 text-sm font-medium text-gray-700 dark:text-gray-200">
               <User className="h-4 w-4 text-gray-500" />
               Select Dealer
             </label>
-            <select
-              value={formData.selectedDealer || ""}
-              onChange={(e) => setFormData((prev) => ({ ...prev, selectedDealer: e.target.value }))}
-              className="w-full rounded-md border border-gray-300 dark:border-gray-600 px-4 py-3 dark:bg-gray-700 dark:text-white focus:ring-2 focus:ring-green-500 focus:border-transparent transition-all"
-            >
-              <option value="">Select Dealer</option>
-              {dealers.map((dealer) => (
-                <option key={dealer.id} value={dealer.clientName}>
-                  {dealer.clientName}
-                </option>
-              ))}
-            </select>
+            <div className="relative">
+              <button
+                type="button"
+                onClick={() => !disabled && setDealerDropdownOpen((prev) => !prev)}
+                disabled={disabled}
+                className="w-full flex items-center justify-between rounded-md border border-gray-300 dark:border-gray-600 px-4 py-3 bg-white dark:bg-gray-700 text-left text-gray-900 dark:text-white focus:ring-2 focus:ring-green-500 focus:border-transparent transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                <span className={formData.selectedDealer ? "" : "text-gray-400 dark:text-gray-500"}>
+                  {formData.selectedDealer || "Select Dealer"}
+                </span>
+                <ChevronDown className={`h-4 w-4 text-gray-500 transition-transform ${dealerDropdownOpen ? "rotate-180" : ""}`} />
+              </button>
+
+              {dealerDropdownOpen && (
+                <div className="absolute z-50 mt-1 w-full rounded-md border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-700 shadow-lg">
+                  <div className="p-2 border-b border-gray-200 dark:border-gray-600">
+                    <div className="relative">
+                      <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+                      <input
+                        type="text"
+                        value={dealerSearch}
+                        onChange={(e) => setDealerSearch(e.target.value)}
+                        placeholder="Search dealer..."
+                        autoFocus
+                        className="w-full pl-8 pr-3 py-2 text-sm rounded border border-gray-300 dark:border-gray-500 dark:bg-gray-600 dark:text-white focus:outline-none focus:ring-2 focus:ring-green-500"
+                      />
+                    </div>
+                  </div>
+                  <ul className="max-h-48 overflow-y-auto py-1">
+                    <li>
+                      <button
+                        type="button"
+                        onClick={() => handleDealerSelect("")}
+                        className="w-full text-left px-4 py-2 text-sm text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-600"
+                      >
+                        Select Dealer
+                      </button>
+                    </li>
+                    {filteredDealers.length > 0 ? (
+                      filteredDealers.map((dealer) => (
+                        <li key={dealer.id}>
+                          <button
+                            type="button"
+                            onClick={() => handleDealerSelect(dealer.clientName)}
+                            className={`w-full text-left px-4 py-2 text-sm hover:bg-green-50 dark:hover:bg-gray-600 text-gray-900 dark:text-white ${formData.selectedDealer === dealer.clientName ? "bg-green-50 dark:bg-gray-600 font-medium" : ""}`}
+                          >
+                            {dealer.clientName}
+                          </button>
+                        </li>
+                      ))
+                    ) : (
+                      <li className="px-4 py-2 text-sm text-gray-400 dark:text-gray-500">No dealers found</li>
+                    )}
+                  </ul>
+                </div>
+              )}
+            </div>
           </div>
 
           <div className="space-y-2">

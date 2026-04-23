@@ -19,6 +19,7 @@ export default function CreateRecordForm({ shopId, isLimitReached, setIsLimitRea
   const [isTableVisible, setIsTableVisible] = useState(false)
   const [recordTableKey, setRecordTableKey] = useState(0)
   const [billNumberTimeout, setBillNumberTimeout] = useState(null)
+  const [isSubmitting, setIsSubmitting] = useState(false)
 
 
   useEffect(() => {
@@ -242,45 +243,54 @@ export default function CreateRecordForm({ shopId, isLimitReached, setIsLimitRea
     setIsTableVisible(true)
   }
   const handleSubmit = async () => {
-    // Validate bill number uniqueness before submission
-    if (formData.billNo && formData.billNo.trim().length > 0) {
-      const exists = await checkBillNumberExists(formData.billNo.trim())
-      if (exists) {
-        logAndNotify("This bill number already exists. Please use a different number or regenerate a new one.", "error", shopId)
+    if (isSubmitting) return
+    setIsSubmitting(true)
+    try {
+      // Validate bill number uniqueness before submission
+      if (formData.billNo && formData.billNo.trim().length > 0) {
+        const exists = await checkBillNumberExists(formData.billNo.trim())
+        if (exists) {
+          logAndNotify("This bill number already exists. Please use a different number or regenerate a new one.", "error", shopId)
+          return
+        }
+      }
+
+      const mobileNameIssues = rows.map((row) => ({
+        mobileName: row.description,
+        model: row.model || "",
+        imei: row.imei || "",
+        issues: row.descriptionIssue,
+        date: row.date,
+        ready: false,
+        delivered: false,
+        return: false,
+      }));
+
+      // Validate every row has a mobile brand selected
+      const emptyBrandIndex = mobileNameIssues.findIndex((m) => !m.mobileName || !m.mobileName.trim())
+      if (emptyBrandIndex !== -1) {
+        logAndNotify(`Row ${emptyBrandIndex + 1}: Mobile Name is required. Please select a brand.`, "warning", shopId)
         return
       }
-    }
 
-    const mobileNameIssues = rows.map((row) => ({
-      mobileName: row.description,
-      model: row.model || "",
-      imei: row.imei || "",
-      issues: row.descriptionIssue,
-      date: row.date,
-      ready: false,
-      delivered: false,
-      return: false,
-    }));
+      const dataToSend = {
+        ...formData,
+        customerType,
+        MobileName: mobileNameIssues,
+        userId: shopId,
+      };
 
-    const dataToSend = {
-      ...formData,
-      customerType,
-      MobileName: mobileNameIssues,
-      userId: shopId,
-    };
-
-    if (customerType === "Dealer") {
-      const matchedDealer = dealers.find((d) => d.clientName === formData.selectedDealer);
-      if (!matchedDealer) {
-        logAndNotify("Selected dealer not found. Please try again.", "error", shopId);
-        return;
+      if (customerType === "Dealer") {
+        const matchedDealer = dealers.find((d) => d.clientName === formData.selectedDealer);
+        if (!matchedDealer) {
+          logAndNotify("Selected dealer not found. Please try again.", "error", shopId);
+          return;
+        }
+        dataToSend.dealerId = matchedDealer.id;
+        delete dataToSend.dealerName;
+        delete dataToSend.dealerNumber;
       }
-      dataToSend.dealerId = matchedDealer.id;
-      delete dataToSend.dealerName;
-      delete dataToSend.dealerNumber;
-    }
 
-    try {
       const endpoint = customerType === "Customer" ? "createcustomer" : "updatedealer";
       const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL_BILLIT}/api/${endpoint}`, {
         method: "POST",
@@ -305,11 +315,13 @@ export default function CreateRecordForm({ shopId, isLimitReached, setIsLimitRea
       setRows([]);
       setFormData({});
       setRecordTableKey((prev) => prev + 1);
-      
+
       // Generate new bill number for next record
       generateSequentialBillNumber();
     } catch (error) {
       logError("Submit failed", error);
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -419,11 +431,11 @@ export default function CreateRecordForm({ shopId, isLimitReached, setIsLimitRea
                 <div className="mt-6 flex justify-end">
                   <button
                     onClick={handleSubmit}
-                    disabled={isLimitReached}
+                    disabled={isLimitReached || isSubmitting}
                     className="bg-green-600 hover:bg-green-700 text-white px-6 py-2 rounded-md font-medium transition-colors duration-200 flex items-center space-x-2 disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     <Check className="h-4 w-4" />
-                    <span>Submit Record</span>
+                    <span>{isSubmitting ? "Submitting..." : "Submit Record"}</span>
                   </button>
                 </div>
               </div>
