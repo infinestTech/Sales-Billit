@@ -24,6 +24,12 @@ const createCustomerController = async (req, res) => {
       return res.status(400).json({ error: "Missing required fields." });
     }
 
+    // Validate every mobile entry has a mobile_name
+    const invalidMobile = MobileName.findIndex((m) => !m.mobileName || !String(m.mobileName).trim())
+    if (invalidMobile !== -1) {
+      return res.status(400).json({ error: `Row ${invalidMobile + 1}: Mobile Name is required.` })
+    }
+
 
     const shop = await Shop.findById(userId);
     if (!shop) {
