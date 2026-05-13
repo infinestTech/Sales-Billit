@@ -55,15 +55,15 @@ export default function DealerForm({ dealers, formData, setFormData, handleCreat
   }
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-4 xl:space-y-8">
       {/* Create New Dealer Section */}
-      <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-6 shadow-sm">
-        <div className="flex items-center gap-2 mb-6">
+      <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-4 xl:p-6 shadow-sm">
+        <div className="flex items-center gap-2 mb-4 xl:mb-6">
           <PlusCircle className="h-5 w-5 text-blue-600" />
           <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Create New Dealer</h3>
         </div>
 
-        <div className="grid grid-cols-1 gap-6 md:grid-cols-3 lg:grid-cols-3">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-2 xl:grid-cols-3">
           <div className="space-y-2">
             <label className="flex items-center gap-2 text-sm font-medium text-gray-700 dark:text-gray-200">
               <User className="h-4 w-4 text-gray-500" />
@@ -108,13 +108,13 @@ export default function DealerForm({ dealers, formData, setFormData, handleCreat
       </div>
 
       {/* Select Existing Dealer Section */}
-      <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-6 shadow-sm">
-        <div className="flex items-center gap-2 mb-6">
+      <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-4 xl:p-6 shadow-sm">
+        <div className="flex items-center gap-2 mb-4 xl:mb-6">
           <Users className="h-5 w-5 text-green-600" />
           <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Dealer Information</h3>
         </div>
 
-        <div className="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-3">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-2 xl:grid-cols-3">
           <div className="space-y-2" ref={dealerDropdownRef}>
             <label className="flex items-center gap-2 text-sm font-medium text-gray-700 dark:text-gray-200">
               <User className="h-4 w-4 text-gray-500" />

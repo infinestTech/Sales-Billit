@@ -155,7 +155,7 @@ const RecordTable = ({ shop_id, setIsLimitReached }) => {
       <h2 className="text-xl font-semibold text-gray-900">Today's Record</h2>
 
       {/* Statistics Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 gap-3 md:grid-cols-4 lg:grid-cols-2 xl:grid-cols-4 xl:gap-4">
         {/* Ready/Not Ready Card */}
         <div className="bg-white border border-gray-200 rounded-lg p-4">
           <div className="text-sm text-gray-600 mb-2">Ready/Not Ready</div>
@@ -202,7 +202,7 @@ const RecordTable = ({ shop_id, setIsLimitReached }) => {
       {/* Records Table */}
       <div className="bg-white border border-gray-200 rounded-lg overflow-hidden">
         <div className="overflow-x-auto">
-          <table className="min-w-full">
+          <table className="min-w-[840px] w-full">
             <thead className="bg-gray-50">
               <tr>
                 <th className="px-6 py-3 text-left text-sm font-medium text-gray-700 border-b border-gray-200">S.No</th>
@@ -354,3 +354,4 @@ const RecordTable = ({ shop_id, setIsLimitReached }) => {
 }
 
 export default RecordTable
+

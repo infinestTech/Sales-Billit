@@ -412,10 +412,10 @@ export default function CreateRecordForm({ shopId, isLimitReached, setIsLimitRea
       {isTableVisible && (
         <>
           <div className="fixed inset-0 bg-black/50 z-40" onClick={() => setIsTableVisible(false)} />
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-            <div className="relative w-full max-w-6xl bg-white rounded-lg shadow-xl border border-gray-200 overflow-hidden max-h-[90vh]">
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-2 lg:p-4">
+            <div className="relative w-full max-w-6xl bg-white rounded-lg shadow-xl border border-gray-200 overflow-hidden max-h-[95vh] lg:max-h-[90vh]">
               {/* Modal Header */}
-              <div className="bg-gray-50 px-6 py-4 border-b border-gray-200 flex items-center justify-between">
+              <div className="bg-gray-50 px-4 py-3 xl:px-6 xl:py-4 border-b border-gray-200 flex items-center justify-between">
                 <h2 className="text-lg font-semibold text-gray-900">Add Mobile Entries</h2>
                 <button
                   onClick={() => setIsTableVisible(false)}

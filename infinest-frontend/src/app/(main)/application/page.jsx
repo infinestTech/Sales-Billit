@@ -67,7 +67,7 @@ export default function HomePage() {
   return (
     <div className="min-h-screen bg-white">
       {/* Header */}
-      <div className="bg-gradient-to-r from-blue-600 to-indigo-600 px-8 py-6">
+      <div className="bg-gradient-to-r from-blue-600 to-indigo-600 px-4 py-5 xl:px-8 xl:py-6">
         <div className="flex items-center space-x-3">
           <div className="p-3 bg-white/20 rounded-xl">
             <Plus className="h-8 w-8 text-white" />
@@ -80,7 +80,7 @@ export default function HomePage() {
       </div>
 
       {/* Content */}
-      <div className="px-8 py-6 bg-white">
+      <div className="px-4 py-4 xl:px-8 xl:py-6 bg-white">
         <CreateRecordForm shopId={shopId} isLimitReached={isLimitReached} setIsLimitReached={setIsLimitReached} />
       </div>
     </div>
