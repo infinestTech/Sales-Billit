@@ -226,7 +226,7 @@ const [shopAddressState, setShopAddressState] = useState("")
   return (
     <div className="min-h-screen bg-white">
       {/* Header */}
-      <div className="bg-gradient-to-r from-blue-600 to-indigo-600 px-8 py-6">
+      <div className="bg-gradient-to-r from-blue-600 to-indigo-600 px-4 py-5 xl:px-8 xl:py-6">
         <div className="flex items-center space-x-3">
           <div className="p-3 bg-white/20 rounded-xl">
             <Database className="h-8 w-8 text-white" />
@@ -240,9 +240,9 @@ const [shopAddressState, setShopAddressState] = useState("")
 
 
       {/* Summary Cards */}
-      <div className="px-8 py-6 bg-gradient-to-r from-gray-50 to-blue-50 border-b border-gray-200">
-        <div className="grid grid-cols-3 gap-6 mb-6">
-          <div className="bg-white rounded-xl p-6 shadow-lg border border-gray-200 hover:shadow-xl transition-shadow duration-200">
+      <div className="px-4 py-4 xl:px-8 xl:py-6 bg-gradient-to-r from-gray-50 to-blue-50 border-b border-gray-200">
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-2 xl:grid-cols-3 gap-4 xl:gap-6 mb-4 xl:mb-6">
+          <div className="bg-white rounded-xl p-4 xl:p-6 shadow-lg border border-gray-200 hover:shadow-xl transition-shadow duration-200">
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm font-semibold text-gray-600 mb-1">Ready Status</p>
@@ -266,7 +266,7 @@ const [shopAddressState, setShopAddressState] = useState("")
           </div>
 
 
-          <div className="bg-white rounded-xl p-6 shadow-lg border border-gray-200 hover:shadow-xl transition-shadow duration-200">
+          <div className="bg-white rounded-xl p-4 xl:p-6 shadow-lg border border-gray-200 hover:shadow-xl transition-shadow duration-200">
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm font-semibold text-gray-600 mb-1">Delivery Status</p>
@@ -290,7 +290,7 @@ const [shopAddressState, setShopAddressState] = useState("")
           </div>
 
 
-          <div className="bg-white rounded-xl p-6 shadow-lg border border-gray-200 hover:shadow-xl transition-shadow duration-200">
+          <div className="bg-white rounded-xl p-4 xl:p-6 shadow-lg border border-gray-200 hover:shadow-xl transition-shadow duration-200">
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm font-semibold text-gray-600 mb-1">Return Status</p>
@@ -311,7 +311,7 @@ const [shopAddressState, setShopAddressState] = useState("")
 
 
       {/* Table Section - Now flows naturally */}
-      <div className="px-8 py-6 bg-white">
+      <div className="px-4 py-4 xl:px-8 xl:py-6 bg-white">
         {filteredInvoices.length === 0 ? (
           <div className="text-center py-12">
             <div className="inline-flex items-center justify-center w-20 h-20 bg-gradient-to-r from-blue-100 to-indigo-100 rounded-full mb-6">
@@ -323,7 +323,7 @@ const [shopAddressState, setShopAddressState] = useState("")
         ) : (
           <div className="bg-white border border-gray-200 overflow-hidden shadow-lg rounded-xl">
             <div className="overflow-x-auto">
-              <table className="min-w-full">
+              <table className="min-w-[960px] w-full">
                 <thead className="bg-gradient-to-r from-gray-100 to-gray-200">
                   <tr>
                     <th className="px-6 py-4 text-left text-sm font-bold text-gray-700 border-b border-gray-300">
@@ -462,7 +462,7 @@ const [shopAddressState, setShopAddressState] = useState("")
                             onClick={(e) => e.stopPropagation()}
                           />
                         </td>
-                        <td className="px-6 py-4 border-b border-gray-200 text-center">
+                        <td className="px-3 py-3 xl:px-6 xl:py-4 border-b border-gray-200 text-center">
                           <button
                             onClick={(e) => {
                               e.stopPropagation()
@@ -553,6 +553,7 @@ const [shopAddressState, setShopAddressState] = useState("")
 
 
 export default AllRecordTable
+
 
 
 

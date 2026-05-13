@@ -13,7 +13,7 @@ export default function CustomerForm({ formData, setFormData, disabled, onBillNu
   }
 
   return (
-    <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-2 xl:grid-cols-3 gap-4 mb-4">
       {/* First Row */}
       <div>
         <label className="block text-gray-700 font-medium mb-2">Client Name</label>

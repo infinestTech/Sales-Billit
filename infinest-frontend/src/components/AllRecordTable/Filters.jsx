@@ -61,13 +61,13 @@ const Filters = ({ onFilter }) => {
   }
 
   return (
-    <div className="bg-white rounded-xl p-6 shadow-lg border border-gray-200">
+    <div className="bg-white rounded-xl p-4 xl:p-6 shadow-lg border border-gray-200">
       <h3 className="text-lg font-semibold text-gray-800 mb-4 flex items-center">
         <Filter className="h-5 w-5 mr-2 text-blue-600" />
         Filter Options
       </h3>
 
-      <div className="grid grid-cols-4 gap-4 mb-4">
+      <div className="grid grid-cols-2 gap-3 md:grid-cols-4 lg:grid-cols-2 xl:grid-cols-4 xl:gap-4 mb-3 xl:mb-4">
         {/* Client Name */}
         <div className="space-y-2">
           <label className="text-sm font-semibold text-gray-700 flex items-center">
@@ -80,7 +80,7 @@ const Filters = ({ onFilter }) => {
             placeholder="Enter client name"
             value={filters.clientName}
             onChange={handleChange}
-            className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 bg-gray-50 hover:bg-white"
+            className="w-full px-3 py-2 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 bg-gray-50 hover:bg-white"
           />
         </div>
 
@@ -96,7 +96,7 @@ const Filters = ({ onFilter }) => {
             placeholder="Enter mobile name"
             value={filters.mobileName}
             onChange={handleChange}
-            className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all duration-200 bg-gray-50 hover:bg-white"
+            className="w-full px-3 py-2 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all duration-200 bg-gray-50 hover:bg-white"
           />
         </div>
 
@@ -112,7 +112,7 @@ const Filters = ({ onFilter }) => {
             placeholder="Enter bill number"
             value={filters.billNo}
             onChange={handleChange}
-            className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent transition-all duration-200 bg-gray-50 hover:bg-white"
+            className="w-full px-3 py-2 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent transition-all duration-200 bg-gray-50 hover:bg-white"
           />
         </div>
 
@@ -128,12 +128,12 @@ const Filters = ({ onFilter }) => {
             placeholder="Enter mobile number"
             value={filters.mobileNumber}
             onChange={handleChange}
-            className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent transition-all duration-200 bg-gray-50 hover:bg-white"
+            className="w-full px-3 py-2 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent transition-all duration-200 bg-gray-50 hover:bg-white"
           />
         </div>
       </div>
 
-      <div className="grid grid-cols-4 gap-4 items-end">
+      <div className="grid grid-cols-2 gap-3 md:grid-cols-4 lg:grid-cols-2 xl:grid-cols-4 xl:gap-4 items-end">
         {/* Mobile Date */}
         <div className="space-y-2">
           <label className="text-sm font-semibold text-gray-700 flex items-center">
@@ -145,7 +145,7 @@ const Filters = ({ onFilter }) => {
             name="mobileDate"
             value={filters.mobileDate}
             onChange={handleChange}
-            className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent transition-all duration-200 bg-gray-50 hover:bg-white"
+            className="w-full px-3 py-2 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent transition-all duration-200 bg-gray-50 hover:bg-white"
           />
         </div>
 
@@ -157,7 +157,7 @@ const Filters = ({ onFilter }) => {
           </label>
           <button
             onClick={toggleDatePopup}
-            className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-pink-500 focus:border-transparent transition-all duration-200 bg-gray-50 hover:bg-white text-left"
+            className="w-full px-3 py-2 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-pink-500 focus:border-transparent transition-all duration-200 bg-gray-50 hover:bg-white text-left"
           >
             Select Date Range
           </button>
@@ -233,14 +233,14 @@ const Filters = ({ onFilter }) => {
         <div className="flex space-x-3">
           <button
             onClick={handleSearch}
-            className="flex-1 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white px-6 py-3 rounded-xl font-semibold transition-all duration-200 shadow-lg hover:shadow-xl transform hover:scale-[1.02] flex items-center justify-center space-x-2"
+            className="flex-1 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white px-4 py-2 xl:px-6 xl:py-3 rounded-xl font-semibold transition-all duration-200 shadow-lg hover:shadow-xl transform hover:scale-[1.02] flex items-center justify-center space-x-2"
           >
             <Search className="h-5 w-5" />
             <span>Search</span>
           </button>
           <button
             onClick={handleClear}
-            className="flex-1 bg-gradient-to-r from-gray-600 to-gray-700 hover:from-gray-700 hover:to-gray-800 text-white px-6 py-3 rounded-xl font-semibold transition-all duration-200 shadow-lg hover:shadow-xl transform hover:scale-[1.02] flex items-center justify-center space-x-2"
+            className="flex-1 bg-gradient-to-r from-gray-600 to-gray-700 hover:from-gray-700 hover:to-gray-800 text-white px-4 py-2 xl:px-6 xl:py-3 rounded-xl font-semibold transition-all duration-200 shadow-lg hover:shadow-xl transform hover:scale-[1.02] flex items-center justify-center space-x-2"
           >
             <X className="h-5 w-5" />
             <span>Clear</span>

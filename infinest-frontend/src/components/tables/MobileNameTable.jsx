@@ -1067,3 +1067,4 @@ const MobileNameTable = ({ mobileData, setMobileData, onRevenueUpdate, hideActio
 
 
 export default MobileNameTable
+
