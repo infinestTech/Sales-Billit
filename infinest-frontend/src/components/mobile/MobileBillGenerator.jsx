@@ -172,7 +172,7 @@ const MobileBillGenerator = ({ isOpen, onClose, clientData, shopData }) => {
         {/* Header */}
         <div className="sticky top-0 bg-white border-b border-gray-200 p-4 flex items-center justify-between">
           <div className="flex items-center space-x-2">
-            <FileText className="w-5 h-5 text-blue-600" />
+            <FileText className="w-5 h-5 text-indigo-600" />
             <h2 className="text-lg font-semibold text-gray-900">Service Receipt</h2>
           </div>
           <button
