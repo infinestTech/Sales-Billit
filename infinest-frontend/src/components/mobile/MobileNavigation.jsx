@@ -1,242 +1,257 @@
 "use client"
 
 import { useState } from "react"
-import { usePathname } from "next/navigation"
-import Link from "next/link"
-import { 
-  Home, 
-  Plus, 
-  Package, 
-  BarChart3, 
-  User, 
-  Menu, 
-  X,
+import {
+  Plus,
+  Database,
+  User,
   Smartphone,
+  Wallet,
+  Package,
+  CalendarCheck,
   Receipt,
-  DollarSign,
-  Wallet
+  Menu,
+  X,
+  LogOut,
 } from "lucide-react"
 
-export default function MobileNavigation({ activeView, setActiveView, profileImage, profileName, features, shopId }) {
+// Order matches the desktop sidebar (Sidebar.jsx)
+const NAV_ITEMS = [
+  { id: "records", label: "Create", icon: Plus, description: "Create / All Records" },
+  { id: "suppliers", label: "Supplier", icon: User, description: "Suppliers & dues" },
+  { id: "registry", label: "Mobile Registry", icon: Smartphone, description: "All devices" },
+  { id: "balance", label: "Balance Summary", icon: Wallet, description: "Outstanding balances" },
+  { id: "stock", label: "Service Inventory", icon: Package, description: "Inventory & history" },
+  { id: "attendance", label: "Attendance", icon: CalendarCheck, description: "Employee attendance" },
+  { id: "expenses", label: "Expenses", icon: Receipt, description: "Track expenses" },
+]
+
+// 5 most-used quick taps for the bottom bar
+const BOTTOM_TABS = [
+  { id: "records", label: "Home", icon: Plus },
+  { id: "balance", label: "Balance", icon: Wallet },
+  { id: "stock", label: "Stock", icon: Package },
+  { id: "attendance", label: "Staff", icon: CalendarCheck },
+  { id: "expenses", label: "Costs", icon: Receipt },
+]
+
+export default function MobileNavigation({
+  activeView,
+  setActiveView,
+  profileImage,
+  profileName,
+}) {
   const [isMenuOpen, setIsMenuOpen] = useState(false)
-  const pathname = usePathname()
 
-  const navigationItems = [
-    {
-      id: "records",
-      label: "Home",
-      icon: Smartphone,
-      description: "Mobile Services",
-      featureKey: null // Always available
-    },
-    {
-      id: "stock",
-      label: "Stock",
-      icon: Package,
-      description: "Inventory",
-      featureKey: "product_inventory_enabled"
-    },
-    {
-      id: "balance",
-      label: "Money",
-      icon: Wallet,
-      description: "Outstanding Balances",
-      featureKey: null // Always available
-    },
-    {
-      id: "expenses",
-      label: "Costs",
-      icon: DollarSign,
-      description: "Track Expenses",
-      featureKey: "expense_tracker_enabled"
-    },
-    {
-      id: "analytics",
-      label: "Charts",
-      icon: BarChart3,
-      description: "Reports & Insights",
-      featureKey: "dashboard_enabled"
-    }
-  ]
-
-  const handleNavClick = (viewId) => {
-    // Handle profile as a special case since it's not in navigationItems
-    if (viewId === "profile") {
-      setActiveView("profile")
-      setIsMenuOpen(false)
-      return
-    }
-    
-    // All features are available during 10-day trial - no feature checking needed
-    setActiveView(viewId)
+  const go = (id) => {
+    setActiveView(id)
     setIsMenuOpen(false)
   }
 
+  const handleSignOut = async () => {
+    if (!window.confirm("Sign out?")) return
+    try {
+      const token = localStorage.getItem("token")
+      if (token) {
+        await fetch(`${process.env.NEXT_PUBLIC_API_URL_BILLIT}/api/logout`, {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${token}`,
+            "Content-Type": "application/json",
+          },
+        }).catch(() => {})
+      }
+    } finally {
+      localStorage.removeItem("token")
+      localStorage.removeItem("authToken")
+      localStorage.removeItem("userRole")
+      localStorage.removeItem("profileImage")
+      localStorage.removeItem("profileName")
+      window.location.href = "/billit-login"
+    }
+  }
+
+  const activeMeta =
+    NAV_ITEMS.find((i) => i.id === activeView) ||
+    (activeView === "profile" ? { label: "Profile", description: "Account & settings" } : null)
+
   return (
     <>
-      {/* Top Header */}
-      <div className="bg-white border-b border-gray-200 sticky top-0 z-20">
-        <div className="flex items-center justify-between p-4">
-          <div className="flex items-center space-x-3">
+      {/* Top header */}
+      <header className="sticky top-0 z-20 border-b border-slate-200 bg-white/95 backdrop-blur">
+        <div className="flex items-center justify-between px-4 py-3">
+          <div className="flex items-center gap-3">
             <button
-              onClick={() => setIsMenuOpen(!isMenuOpen)}
-              className="p-2 text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-colors"
+              onClick={() => setIsMenuOpen(true)}
+              className="rounded-lg p-2 text-slate-600 hover:bg-slate-100"
+              aria-label="Open menu"
             >
-              {isMenuOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
+              <Menu className="h-6 w-6" />
             </button>
             <div>
-              <h1 className="text-xl font-bold text-gray-900">Fixel</h1>
-              <p className="text-sm text-gray-500">
-                {navigationItems.find(item => item.id === activeView)?.description || "Mobile Dashboard"}
+              <h1 className="bg-gradient-to-r from-indigo-600 to-violet-600 bg-clip-text text-xl font-extrabold tracking-tight text-transparent">
+                Fixel
+              </h1>
+              <p className="text-[11px] text-slate-500">
+                {activeMeta?.description || "Mobile Dashboard"}
               </p>
             </div>
           </div>
-          
-          <div className="flex items-center space-x-2">
-            <button 
-              onClick={() => handleNavClick("profile")}
-              className="relative hover:ring-2 hover:ring-blue-300 rounded-full transition-all"
-            >
-              <img
-                src={profileImage}
-                alt={profileName}
-                className="w-8 h-8 rounded-full border-2 border-gray-200"
-                onError={(e) => {
-                  e.target.src = "/default-profile.png"
-                }}
-              />
-            </button>
-          </div>
+          <button
+            onClick={() => go("profile")}
+            className="rounded-full ring-2 ring-transparent transition-all hover:ring-indigo-300"
+            aria-label="Profile"
+          >
+            <img
+              src={profileImage}
+              alt={profileName}
+              className="h-9 w-9 rounded-full border-2 border-slate-200 object-cover"
+              onError={(e) => {
+                e.target.onerror = null
+                e.target.src =
+                  "data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNDAiIGhlaWdodD0iNDAiIHZpZXdCb3g9IjAgMCA0MCA0MCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPGNpcmNsZSBjeD0iMjAiIGN5PSIyMCIgcj0iMjAiIGZpbGw9IiM0Qjc2ODgiLz4KPGNpcmNsZSBjeD0iMjAiIGN5PSIxNiIgcj0iNiIgZmlsbD0iI0Y5RkFGQiIvPgo8cGF0aCBkPSJNMTAgMzJjMC02IDQtMTAgMTAtMTBzMTAgNCAxMCAxMCIgZmlsbD0iI0Y5RkFGQiIvPgo8L3N2Zz4K"
+              }}
+            />
+          </button>
         </div>
-      </div>
+      </header>
 
-      {/* Overlay */}
+      {/* Drawer overlay */}
       {isMenuOpen && (
-        <div 
-          className="fixed inset-0 bg-black bg-opacity-50 z-30"
+        <div
+          className="fixed inset-0 z-30 bg-slate-900/60 backdrop-blur-sm"
           onClick={() => setIsMenuOpen(false)}
         />
       )}
 
-      {/* Side Navigation */}
-      <div className={`fixed left-0 top-0 h-full w-64 bg-white border-r border-gray-200 transform transition-transform duration-300 ease-in-out z-40 ${
-        isMenuOpen ? 'translate-x-0' : '-translate-x-full'
-      }`}>
-        <div className="p-4">
-          {/* Header */}
-          <div className="flex items-center justify-between mb-6">
-            <div className="flex items-center space-x-3">
-              <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center">
-                <span className="text-white font-bold text-sm">F</span>
-              </div>
-              <span className="text-lg font-bold text-gray-900">Fixel</span>
+      {/* Side drawer */}
+      <aside
+        className={`fixed left-0 top-0 z-40 flex h-full w-72 flex-col bg-gradient-to-b from-slate-900 via-slate-900 to-slate-800 text-slate-100 shadow-2xl transition-transform duration-300 ease-out ${
+          isMenuOpen ? "translate-x-0" : "-translate-x-full"
+        }`}
+      >
+        {/* Brand */}
+        <div className="flex items-center justify-between border-b border-white/10 px-5 py-5">
+          <div className="flex items-center gap-2">
+            <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-indigo-500 to-violet-600 text-base font-black text-white shadow-lg">
+              F
             </div>
-            <button
-              onClick={() => setIsMenuOpen(false)}
-              className="p-2 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-lg"
-            >
-              <X className="w-5 h-5" />
-            </button>
+            <span className="bg-gradient-to-r from-indigo-300 to-violet-300 bg-clip-text text-2xl font-black tracking-tight text-transparent">
+              Fixel
+            </span>
           </div>
+          <button
+            onClick={() => setIsMenuOpen(false)}
+            className="rounded-lg p-1.5 text-slate-400 hover:bg-white/10 hover:text-white"
+          >
+            <X className="h-5 w-5" />
+          </button>
+        </div>
 
-          {/* Profile Section */}
-          <div className="mb-6 p-4 bg-gray-50 rounded-lg">
-            <div className="flex items-center space-x-3">
-              <img
-                src={profileImage}
-                alt={profileName}
-                className="w-12 h-12 rounded-full border-2 border-gray-200"
-                onError={(e) => {
-                  e.target.onerror = null; // Prevent infinite loop
-                  e.target.src = "data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNDAiIGhlaWdodD0iNDAiIHZpZXdCb3g9IjAgMCA0MCA0MCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPGNpcmNsZSBjeD0iMjAiIGN5PSIyMCIgcj0iMjAiIGZpbGw9IiM0Qjc2ODgiLz4KPGNpcmNsZSBjeD0iMjAiIGN5PSIxNiIgcj0iNiIgZmlsbD0iI0Y5RkFGQiIvPgo8cGF0aCBkPSJNMTAgMzJjMC02IDQtMTAgMTAtMTBzMTAgNCAxMCAxMCIgZmlsbD0iI0Y5RkFGQiIvPgo8L3N2Zz4K"
-                }}
-              />
-              <div>
-                <p className="font-medium text-gray-900">{profileName}</p>
-                <p className="text-sm text-gray-500">Mobile User</p>
-              </div>
-            </div>
+        {/* Profile card */}
+        <button
+          onClick={() => go("profile")}
+          className={`mx-3 mt-3 flex items-center gap-3 rounded-xl border border-white/10 px-3 py-3 text-left transition-colors ${
+            activeView === "profile"
+              ? "bg-gradient-to-r from-indigo-500/30 to-violet-500/30"
+              : "bg-white/5 hover:bg-white/10"
+          }`}
+        >
+          <img
+            src={profileImage}
+            alt={profileName}
+            className="h-11 w-11 rounded-full border-2 border-white/20 object-cover"
+            onError={(e) => {
+              e.target.onerror = null
+              e.target.src =
+                "data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNDAiIGhlaWdodD0iNDAiIHZpZXdCb3g9IjAgMCA0MCA0MCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPGNpcmNsZSBjeD0iMjAiIGN5PSIyMCIgcj0iMjAiIGZpbGw9IiM0Qjc2ODgiLz4KPGNpcmNsZSBjeD0iMjAiIGN5PSIxNiIgcj0iNiIgZmlsbD0iI0Y5RkFGQiIvPgo8cGF0aCBkPSJNMTAgMzJjMC02IDQtMTAgMTAtMTBzMTAgNCAxMCAxMCIgZmlsbD0iI0Y5RkFGQiIvPgo8L3N2Zz4K"
+            }}
+          />
+          <div className="min-w-0 flex-1">
+            <p className="truncate text-sm font-semibold text-white">{profileName}</p>
+            <p className="text-[11px] text-slate-400">View profile & settings</p>
           </div>
+        </button>
 
-          {/* Navigation Items */}
-          <nav className="space-y-2">
-            {navigationItems.map((item) => {
+        {/* Navigation */}
+        <nav className="flex-1 overflow-y-auto px-3 py-4">
+          <p className="mb-2 px-3 text-[10px] font-bold uppercase tracking-wider text-slate-500">
+            Workspace
+          </p>
+          <ul className="space-y-1">
+            {NAV_ITEMS.map((item) => {
               const Icon = item.icon
-              const isActive = activeView === item.id
-              const isFeatureLocked = item.featureKey && features && !features[item.featureKey]?.enabled
-              
+              const active = activeView === item.id
               return (
-                <button
-                  key={item.id}
-                  onClick={() => handleNavClick(item.id)}
-                  className={`w-full flex items-center justify-between px-4 py-3 rounded-lg transition-colors ${
-                    isActive
-                      ? 'bg-blue-100 text-blue-700 border border-blue-200'
-                      : isFeatureLocked
-                        ? 'text-gray-400 hover:bg-gray-50'
-                        : 'text-gray-700 hover:bg-gray-100'
-                  }`}
-                >
-                  <div className="flex items-center space-x-3">
-                    <Icon className={`w-5 h-5 ${
-                      isActive 
-                        ? 'text-blue-600' 
-                        : 'text-gray-500'
-                    }`} />
-                    <span className="font-medium">{item.label}</span>
-                  </div>
-                </button>
+                <li key={item.id}>
+                  <button
+                    onClick={() => go(item.id)}
+                    className={`group flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left transition-all ${
+                      active
+                        ? "bg-gradient-to-r from-indigo-500 to-violet-600 text-white shadow-lg shadow-indigo-900/40"
+                        : "text-slate-300 hover:bg-white/5 hover:text-white"
+                    }`}
+                  >
+                    <span
+                      className={`flex h-8 w-8 items-center justify-center rounded-lg ${
+                        active ? "bg-white/20" : "bg-white/5 group-hover:bg-white/10"
+                      }`}
+                    >
+                      <Icon className="h-4 w-4" />
+                    </span>
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm font-medium leading-tight">{item.label}</p>
+                      <p
+                        className={`truncate text-[10px] leading-tight ${
+                          active ? "text-white/80" : "text-slate-500"
+                        }`}
+                      >
+                        {item.description}
+                      </p>
+                    </div>
+                  </button>
+                </li>
               )
             })}
-          </nav>
+          </ul>
+        </nav>
 
-          {/* Quick Actions */}
-          <div className="mt-8 space-y-2">
-            <p className="text-sm font-medium text-gray-500 px-4">Quick Actions</p>
-            <Link
-              href="/pricing"
-              className="w-full flex items-center space-x-3 px-4 py-3 text-gray-700 hover:bg-gray-100 rounded-lg transition-colors"
-              onClick={() => setIsMenuOpen(false)}
-            >
-              <DollarSign className="w-5 h-5 text-gray-500" />
-              <span>Pricing</span>
-            </Link>
-          </div>
+        {/* Sign out */}
+        <div className="border-t border-white/10 p-3">
+          <button
+            onClick={handleSignOut}
+            className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-sm font-medium text-rose-300 hover:bg-rose-500/10"
+          >
+            <LogOut className="h-4 w-4" />
+            Sign out
+          </button>
         </div>
-      </div>
+      </aside>
 
-      {/* Bottom Navigation for Mobile */}
-      <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 z-10">
-        <div className="grid grid-cols-5 gap-0">
-          {navigationItems.map((item) => {
-            const Icon = item.icon
-            const isActive = activeView === item.id
-            // All features available during trial
-            const isFeatureLocked = false
-            
+      {/* Bottom nav */}
+      <nav className="fixed bottom-0 left-0 right-0 z-10 border-t border-slate-200 bg-white/95 backdrop-blur">
+        <div className="grid grid-cols-5">
+          {BOTTOM_TABS.map((tab) => {
+            const Icon = tab.icon
+            const active = activeView === tab.id
             return (
               <button
-                key={item.id}
-                onClick={() => handleNavClick(item.id)}
-                className={`relative flex flex-col items-center justify-center py-2 px-0 transition-colors ${
-                  isActive
-                    ? 'text-blue-600 bg-blue-50'
-                    : 'text-gray-500 hover:text-gray-700'
+                key={tab.id}
+                onClick={() => go(tab.id)}
+                className={`relative flex flex-col items-center justify-center py-2 transition-colors ${
+                  active ? "text-indigo-600" : "text-slate-500"
                 }`}
               >
-                <div className="relative">
-                  <Icon className={`w-6 h-6 mb-1 ${
-                    isActive 
-                      ? 'text-blue-600' 
-                      : 'text-gray-500'
-                  }`} />
-                </div>
-                <span className="text-xs font-medium whitespace-nowrap text-center leading-none">{item.label}</span>
+                {active && (
+                  <span className="absolute top-0 h-0.5 w-10 rounded-full bg-gradient-to-r from-indigo-500 to-violet-500" />
+                )}
+                <Icon className={`mb-0.5 h-5 w-5 ${active ? "text-indigo-600" : "text-slate-500"}`} />
+                <span className="text-[10px] font-medium leading-none">{tab.label}</span>
               </button>
             )
           })}
         </div>
-      </div>
+      </nav>
     </>
   )
 }

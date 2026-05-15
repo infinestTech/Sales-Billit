@@ -26,7 +26,7 @@ export const createMobileFeatureLockedComponent = (featureName, description, req
           </p>
           
           {/* Required Plan Badge */}
-          <div className="inline-flex items-center space-x-1 bg-gradient-to-r from-blue-100 to-purple-100 text-blue-800 px-3 py-1 rounded-full text-xs font-medium mb-6">
+          <div className="inline-flex items-center space-x-1 bg-gradient-to-r from-blue-100 to-purple-100 text-indigo-800 px-3 py-1 rounded-full text-xs font-medium mb-6">
             <Zap className="w-3 h-3" />
             <span>Requires {requiredPlans}</span>
           </div>
@@ -41,7 +41,7 @@ export const createMobileFeatureLockedComponent = (featureName, description, req
                   window.location.href = '/pricing';
                 }
               }}
-              className="w-full bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-semibold py-3 px-4 rounded-lg transition-all duration-200 text-sm"
+              className="w-full bg-gradient-to-r from-indigo-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-semibold py-3 px-4 rounded-lg transition-all duration-200 text-sm"
             >
               🚀 Upgrade Now
             </button>
