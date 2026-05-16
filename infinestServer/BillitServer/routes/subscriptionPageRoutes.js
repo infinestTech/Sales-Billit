@@ -264,10 +264,19 @@ router.post("/create-subscription", authMySQLToken, async (req, res) => {
         console.warn("⚠️ Could not verify existing subscription:", checkErr.message);
       }
 
+      // Map categoryId to the correct product enum value
+      const categoryProductMap = {
+        "Service": "SERVICE",
+        "Sales": "SALES",
+        "Sales_Service": "SERVICE" // Combo: subscription stored as SERVICE, SALES access granted separately
+      };
+      const subscriptionProduct = categoryProductMap[categoryId] || "SERVICE";
+
       if (hasActive) {
         mysqlResponse = await axios.post(`${process.env.AUTH_SERVER_URL}/upgrade-subscription`, {
           newMongoPlanId: planId,
           newMongoCategoryId: categoryId,
+          product: subscriptionProduct,
           amount
         }, {
           headers: {
@@ -278,6 +287,7 @@ router.post("/create-subscription", authMySQLToken, async (req, res) => {
         mysqlResponse = await axios.post(`${process.env.AUTH_SERVER_URL}/mysql-subscribe`, {
           mongoPlanId: planId,
           mongoCategoryId: categoryId,
+          product: subscriptionProduct,
           amount
         }, {
           headers: {

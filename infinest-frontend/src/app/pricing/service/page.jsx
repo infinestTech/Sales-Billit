@@ -10,6 +10,7 @@ import { logAndNotify, logError, logSuccess } from "@/utils/logger";
 export default function PricingPage() {
   const [userId, setUserId] = useState(null);
   const [loadingPlan, setLoadingPlan] = useState(null);
+  const [billingPeriod, setBillingPeriod] = useState("monthly");
   const router = useRouter();
 
   useEffect(() => {
@@ -133,27 +134,39 @@ export default function PricingPage() {
     }
   };
 
-  const premiumPlan = {
+  const serviceFeatures = [
+    { label: "Unlimited Service Records", icon: Check },
+    { label: "Advanced Dashboard & Analytics", icon: Check },
+    { label: "WhatsApp Billing Integration", icon: Check },
+    { label: "Inventory Management", icon: Check },
+    { label: "Expense Tracker", icon: Check },
+    { label: "Customer Management", icon: Check },
+    { label: "Multi-Device Support", icon: Check },
+    { label: "Priority Support", icon: Check },
+    { label: "No Advertisements", icon: Check },
+    { label: "Regular Updates", icon: Check },
+  ];
+
+  const premiumPlan = billingPeriod === "yearly" ? {
+    name: "Premium",
+    price: 4990,
+    originalPrice: "₹5,988",
+    savePercentage: 17,
+    term: "Yearly",
+    mongoPlanId: "service-premium-yearly",
+    mongoCategoryId: "Service",
+    description: "Everything you need to run your business professionally",
+    features: serviceFeatures,
+  } : {
     name: "Premium",
     price: 499,
-    originalPrice: "₹1999",
+    originalPrice: "₹1,999",
     savePercentage: 75,
     term: "Monthly",
     mongoPlanId: "service-premium",
     mongoCategoryId: "Service",
     description: "Everything you need to run your business professionally",
-    features: [
-      { label: "Unlimited Service Records", icon: Check },
-      { label: "Advanced Dashboard & Analytics", icon: Check },
-      { label: "WhatsApp Billing Integration", icon: Check },
-      { label: "Inventory Management", icon: Check },
-      { label: "Expense Tracker", icon: Check },
-      { label: "Customer Management", icon: Check },
-      { label: "Multi-Device Support", icon: Check },
-      { label: "Priority Support", icon: Check },
-      { label: "No Advertisements", icon: Check },
-      { label: "Regular Updates", icon: Check },
-    ],
+    features: serviceFeatures,
   };
 
   const basicPlan = {
@@ -189,6 +202,29 @@ export default function PricingPage() {
           <p className="text-gray-400 text-lg max-w-2xl mx-auto">
             Elevate your mobile repair business with powerful tools and premium features
           </p>
+        </div>
+
+        {/* Billing Period Toggle */}
+        <div className="flex items-center justify-center mb-8">
+          <div className="bg-white/5 border border-white/10 rounded-full p-1 flex items-center gap-1">
+            <button
+              onClick={() => setBillingPeriod("monthly")}
+              className={`px-6 py-2.5 rounded-full text-sm font-semibold transition-all duration-200 ${
+                billingPeriod === "monthly" ? "bg-white text-gray-900 shadow" : "text-gray-400 hover:text-white"
+              }`}
+            >
+              Monthly
+            </button>
+            <button
+              onClick={() => setBillingPeriod("yearly")}
+              className={`px-6 py-2.5 rounded-full text-sm font-semibold transition-all duration-200 flex items-center gap-2 ${
+                billingPeriod === "yearly" ? "bg-white text-gray-900 shadow" : "text-gray-400 hover:text-white"
+              }`}
+            >
+              Yearly
+              <span className="bg-green-500 text-white px-2 py-0.5 rounded-full text-xs font-bold">2 months free</span>
+            </button>
+          </div>
         </div>
 
         {/* Premium & Trial Plans Side by Side */}
@@ -252,7 +288,7 @@ export default function PricingPage() {
               </button>
 
               <p className="text-gray-400 text-sm mt-4 text-center">
-                ₹{premiumPlan.price}/month • Cancel anytime
+                ₹{premiumPlan.price}/{billingPeriod === "yearly" ? "year" : "month"} • Cancel anytime
               </p>
             </div>
           </div>
@@ -333,7 +369,7 @@ export default function PricingPage() {
                 {loadingPlan === "Trial" ? "Processing..." : (
                   <>
                     <Sparkles className="w-5 h-5" />
-                    Start Trial - ₹99/month
+                    Start Trial — ₹99/month
                   </>
                 )}
               </button>

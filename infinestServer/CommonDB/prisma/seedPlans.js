@@ -6,14 +6,20 @@ const prisma = new PrismaClient();
 async function main() {
   // Plans to upsert - Only Basic and Premium for each product
   const plans = [
-    // Service
+    // Service monthly
     { name: 'Trial', price: 99, duration: 'MONTHLY', branchLimit: 1, mongoPlanId: 'service-basic', mongoCategoryId: 'Service' },
     { name: 'Premium', price: 499, duration: 'MONTHLY', branchLimit: 1, mongoPlanId: 'service-premium', mongoCategoryId: 'Service' },
-    // Sales
+    // Service yearly (2 months free)
+    { name: 'Premium Yearly', price: 4990, duration: 'YEARLY', branchLimit: 1, mongoPlanId: 'service-premium-yearly', mongoCategoryId: 'Service' },
+    // Sales monthly
     { name: 'Sales Trial', price: 99, duration: 'MONTHLY', branchLimit: 0, mongoPlanId: 'sales-basic', mongoCategoryId: 'Sales' },
-    { name: 'Sales Premium', price: 399, duration: 'MONTHLY', branchLimit: 5, mongoPlanId: 'sales-premium', mongoCategoryId: 'Sales' },
+    { name: 'Sales Premium', price: 499, duration: 'MONTHLY', branchLimit: 5, mongoPlanId: 'sales-premium', mongoCategoryId: 'Sales' },
+    // Sales yearly (2 months free)
+    { name: 'Sales Premium Yearly', price: 4990, duration: 'YEARLY', branchLimit: 5, mongoPlanId: 'sales-premium-yearly', mongoCategoryId: 'Sales' },
     // Combo (Sales + Service)
     { name: 'Combo', price: 899, duration: 'MONTHLY', branchLimit: 5, mongoPlanId: 'combo-premium', mongoCategoryId: 'Sales_Service' },
+    // Combo yearly (2 months free)
+    { name: 'Combo Yearly', price: 8990, duration: 'YEARLY', branchLimit: 5, mongoPlanId: 'combo-premium-yearly', mongoCategoryId: 'Sales_Service' },
   ];
 
   for (const p of plans) {

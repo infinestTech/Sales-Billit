@@ -8,7 +8,7 @@ import api from "../api"
 import { Calendar, Smartphone, AlertCircle, CheckCircle, RotateCcw, DollarSign, Truck, Package, Eye } from "lucide-react"
 import { useRouter } from "next/navigation"
 import { jwtDecode } from "jwt-decode"
-import { PAYMENT_METHOD_OPTIONS } from "@/constants/paymentMethods"
+import { PAYMENT_METHOD_OPTIONS, DEFAULT_PAYMENT_METHOD } from "@/constants/paymentMethods"
 
 
 
@@ -28,6 +28,7 @@ const MobileNameTable = ({ mobileData, setMobileData, onRevenueUpdate, hideActio
   const [showSupplierDropdown, setShowSupplierDropdown] = useState(false)
   const [selectedProductId, setSelectedProductId] = useState("")
   const [productNameInput, setProductNameInput] = useState("")
+  const [showProductDropdown, setShowProductDropdown] = useState(false)
   const [sellQty, setSellQty] = useState(1)
   const [paidAmount, setPaidAmount] = useState(0)
   const [paymentMethod, setPaymentMethod] = useState("")
@@ -293,6 +294,7 @@ const MobileNameTable = ({ mobileData, setMobileData, onRevenueUpdate, hideActio
     setSelectedSupplierId("")
     setSupplierQuery("")
     setProductNameInput("")
+    setShowProductDropdown(false)
     setActiveMobileIndex(null)
     setActiveMobileId(null)
   }
@@ -425,6 +427,10 @@ const MobileNameTable = ({ mobileData, setMobileData, onRevenueUpdate, hideActio
       alert("Please select a supplier")
       return
     }
+    if (!selectedProductId && !paymentMethod) {
+      alert("Please select a Payment Method")
+      return
+    }
     setSelling(true)
     try {
       const token = localStorage.getItem("token")
@@ -433,8 +439,10 @@ const MobileNameTable = ({ mobileData, setMobileData, onRevenueUpdate, hideActio
       const selectedDateObj = new Date(sellDate + "T12:00:00")
       const selectedDate = selectedDateObj.toISOString()
 
-      // If typed product matches an existing product by name, use its id to perform product sell
-      const matchingProduct = products.find(p => (p.name || "").toLowerCase() === (productNameInput || "").toLowerCase())
+      // Use selectedProductId (from dropdown) first; fall back to name match for manual entries
+      const matchingProduct = selectedProductId
+        ? products.find(p => p._id === selectedProductId)
+        : products.find(p => (p.name || "").toLowerCase() === (productNameInput || "").toLowerCase())
       if (matchingProduct) {
         await api.post(
           "/api/products/sell",
@@ -989,16 +997,48 @@ const MobileNameTable = ({ mobileData, setMobileData, onRevenueUpdate, hideActio
                   </div>
                 )}
               </div>
-              <div>
+              <div className="relative">
                 <label className="block text-sm font-medium text-gray-700 mb-1">Product (type name)</label>
                 <input
                   type="text"
                   className="w-full border rounded-lg px-3 py-2"
-                  placeholder="Enter product name or select existing"
+                  placeholder="Search inventory or type product name..."
                   value={productNameInput}
-                  onChange={(e) => setProductNameInput(e.target.value)}
+                  onChange={(e) => {
+                    setProductNameInput(e.target.value)
+                    setSelectedProductId("")
+                    setShowProductDropdown(true)
+                  }}
+                  onFocus={() => setShowProductDropdown(true)}
                 />
-                {/* Product hint removed as requested */}
+                {showProductDropdown && productNameInput && (
+                  <div className="absolute z-50 left-0 right-0 mt-1 bg-white border border-gray-200 rounded-lg shadow-lg max-h-44 overflow-auto">
+                    {products
+                      .filter(p => (p.name || "").toLowerCase().includes(productNameInput.toLowerCase()))
+                      .map(p => (
+                        <div
+                          key={p._id}
+                          className="px-3 py-2 hover:bg-blue-50 cursor-pointer flex justify-between items-center"
+                          onMouseDown={(e) => e.preventDefault()}
+                          onClick={() => {
+                            setProductNameInput(p.name)
+                            setSelectedProductId(p._id)
+                            if (p.paymentMethod) setPaymentMethod(p.paymentMethod)
+                            setShowProductDropdown(false)
+                          }}
+                        >
+                          <span className="text-sm">{p.name}{p.category ? ` (${p.category})` : ""}</span>
+                          <span className={`text-xs font-semibold ml-2 ${p.quantity <= 5 ? "text-red-500" : "text-green-600"}`}>
+                            Stock: {p.quantity}
+                          </span>
+                        </div>
+                      ))
+                    }
+                    {products.filter(p => (p.name || "").toLowerCase().includes(productNameInput.toLowerCase())).length === 0 && (
+                      <div className="px-3 py-2 text-sm text-gray-500">No inventory match — will save as custom product</div>
+                    )}
+                  </div>
+                )}
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Quantity</label>
@@ -1024,9 +1064,15 @@ const MobileNameTable = ({ mobileData, setMobileData, onRevenueUpdate, hideActio
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Payment Method</label>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Payment Method
+                  {selectedProductId
+                    ? <span className="ml-2 text-xs text-green-600 font-normal">(auto-filled from inventory)</span>
+                    : <span className="ml-1 text-red-500">*</span>
+                  }
+                </label>
                 <select
-                  className="w-full border rounded-lg px-3 py-2"
+                  className={`w-full border rounded-lg px-3 py-2 ${!selectedProductId && !paymentMethod ? 'border-red-300' : 'border-gray-300'}`}
                   value={paymentMethod}
                   onChange={(e) => setPaymentMethod(e.target.value)}
                 >

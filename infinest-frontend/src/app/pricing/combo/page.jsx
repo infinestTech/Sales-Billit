@@ -10,6 +10,7 @@ import { logAndNotify, logError, logSuccess } from "@/utils/logger";
 export default function ComboPricingPage() {
   const [userId, setUserId] = useState(null);
   const [loadingPlan, setLoadingPlan] = useState(null);
+  const [billingPeriod, setBillingPeriod] = useState("monthly");
   const router = useRouter();
 
   useEffect(() => {
@@ -54,7 +55,11 @@ export default function ComboPricingPage() {
 
       const res = await axios.post(
         `${process.env.NEXT_PUBLIC_API_URL_BILLIT}/api/subscribe`,
-        { planId: "combo-premium", categoryId: "Sales_Service", isPaidPlan: true },
+        {
+          planId: billingPeriod === "yearly" ? "combo-premium-yearly" : "combo-premium",
+          categoryId: "Sales_Service",
+          isPaidPlan: true
+        },
         { headers: { Authorization: `Bearer ${token}` } }
       );
 
@@ -169,6 +174,29 @@ export default function ComboPricingPage() {
           </p>
         </div>
 
+        {/* Billing Period Toggle */}
+        <div className="flex items-center justify-center mb-8">
+          <div className="bg-white/5 border border-white/10 rounded-full p-1 flex items-center gap-1">
+            <button
+              onClick={() => setBillingPeriod("monthly")}
+              className={`px-6 py-2.5 rounded-full text-sm font-semibold transition-all duration-200 ${
+                billingPeriod === "monthly" ? "bg-white text-gray-900 shadow" : "text-gray-400 hover:text-white"
+              }`}
+            >
+              Monthly
+            </button>
+            <button
+              onClick={() => setBillingPeriod("yearly")}
+              className={`px-6 py-2.5 rounded-full text-sm font-semibold transition-all duration-200 flex items-center gap-2 ${
+                billingPeriod === "yearly" ? "bg-white text-gray-900 shadow" : "text-gray-400 hover:text-white"
+              }`}
+            >
+              Yearly
+              <span className="bg-green-500 text-white px-2 py-0.5 rounded-full text-xs font-bold">2 months free</span>
+            </button>
+          </div>
+        </div>
+
         {/* Combo Plan Card */}
         <div className="max-w-3xl mx-auto mb-8">
           <div className="relative backdrop-blur-xl bg-gradient-to-br from-purple-900/40 via-violet-900/40 to-indigo-900/40 border-2 border-purple-500/50 rounded-3xl shadow-2xl overflow-hidden">
@@ -193,17 +221,30 @@ export default function ComboPricingPage() {
               </div>
 
               <p className="text-gray-300 mb-6">
-                Everything from both Sales Premium (₹399) and Service Premium (₹499) — bundled together at a special price
+                Everything from both Sales Premium (₹499) and Service Premium (₹499) — bundled together at a special price
               </p>
 
               <div className="flex items-baseline gap-3 mb-8">
-                <span className="text-5xl font-bold text-white">₹899</span>
-                <div>
-                  <span className="text-gray-400 line-through text-lg">₹898</span>
-                  <span className="ml-2 bg-purple-500/20 text-purple-300 px-2 py-1 rounded text-sm font-semibold">
-                    Both Apps Included
-                  </span>
-                </div>
+                {billingPeriod === "yearly" ? (
+                  <>
+                    <span className="text-5xl font-bold text-white">₹8,990</span>
+                    <div>
+                      <span className="text-gray-400 line-through text-lg">₹10,788</span>
+                      <span className="ml-2 bg-green-500/20 text-green-300 px-2 py-1 rounded text-sm font-semibold">
+                        Save ₹1,798
+                      </span>
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <span className="text-5xl font-bold text-white">₹899</span>
+                    <div>
+                      <span className="ml-2 bg-purple-500/20 text-purple-300 px-2 py-1 rounded text-sm font-semibold">
+                        Both Apps Included
+                      </span>
+                    </div>
+                  </>
+                )}
               </div>
 
               {/* Two-column feature list */}
@@ -265,15 +306,15 @@ export default function ComboPricingPage() {
                 {loadingPlan === "Combo" ? (
                   "Processing..."
                 ) : (
-                  <>
+                  <>  
                     <Zap className="w-5 h-5" />
-                    Get Combo Plan — ₹899/month
+                    {billingPeriod === "yearly" ? "Get Combo Yearly — ₹8,990/year" : "Get Combo Plan — ₹899/month"}
                   </>
                 )}
               </button>
 
               <p className="text-gray-400 text-sm mt-4 text-center">
-                ₹899/month • Cancel anytime • Instant access to both apps
+                {billingPeriod === "yearly" ? "₹8,990/year" : "₹899/month"} • Cancel anytime • Instant access to both apps
               </p>
             </div>
           </div>
