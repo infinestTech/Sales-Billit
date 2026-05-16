@@ -6,6 +6,9 @@
   },
   "exclude": [
     "infinestServer/Salesserver",
-    "infinestServer/Salesserver/**"
+    "infinestServer/Salesserver/**",
+    "**/node_modules/**",
+    "**/dist/**",
+    "**/build/**"
   ]
 }

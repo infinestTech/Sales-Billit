@@ -10,6 +10,7 @@ import { logAndNotify, logError, logSuccess } from "@/utils/logger";
 export default function SalesPricingPage() {
   const [userId, setUserId] = useState(null);
   const [loadingPlan, setLoadingPlan] = useState(null);
+  const [billingPeriod, setBillingPeriod] = useState("monthly");
   const router = useRouter();
 
   useEffect(() => {
@@ -132,27 +133,39 @@ export default function SalesPricingPage() {
     }
   };
 
-  const premiumPlan = {
+  const salesFeatures = [
+    { label: "Unlimited Products", icon: Package },
+    { label: "30 Bank Accounts", icon: DollarSign },
+    { label: "100 Suppliers", icon: TrendingUp },
+    { label: "GST Calculator", icon: Check },
+    { label: "Advanced Analytics", icon: Check },
+    { label: "Priority Support", icon: Check },
+    { label: "WhatsApp Integration", icon: Check },
+    { label: "Multi-Device Sync", icon: Check },
+    { label: "Custom Reports", icon: Check },
+    { label: "No Advertisements", icon: Check },
+  ];
+
+  const premiumPlan = billingPeriod === "yearly" ? {
+    name: "Premium",
+    price: 4990,
+    originalPrice: "₹5,988",
+    savePercentage: 17,
+    term: "Yearly",
+    mongoPlanId: "sales-premium-yearly",
+    mongoCategoryId: "Sales",
+    description: "Complete sales suite for high-volume retailers",
+    features: salesFeatures,
+  } : {
     name: "Premium",
     price: 499,
-    originalPrice: "₹1999",
+    originalPrice: "₹1,999",
     savePercentage: 75,
     term: "Monthly",
     mongoPlanId: "sales-premium",
     mongoCategoryId: "Sales",
     description: "Complete sales suite for high-volume retailers",
-    features: [
-      { label: "Unlimited Products", icon: Package },
-      { label: "30 Bank Accounts", icon: DollarSign },
-      { label: "100 Suppliers", icon: TrendingUp },
-      { label: "GST Calculator", icon: Check },
-      { label: "Advanced Analytics", icon: Check },
-      { label: "Priority Support", icon: Check },
-      { label: "WhatsApp Integration", icon: Check },
-      { label: "Multi-Device Sync", icon: Check },
-      { label: "Custom Reports", icon: Check },
-      { label: "No Advertisements", icon: Check },
-    ],
+    features: salesFeatures,
   };
 
   const basicPlan = {
@@ -188,6 +201,29 @@ export default function SalesPricingPage() {
           <p className="text-gray-400 text-lg max-w-2xl mx-auto">
             Powerful inventory and billing solutions for retail businesses
           </p>
+        </div>
+
+        {/* Billing Period Toggle */}
+        <div className="flex items-center justify-center mb-8">
+          <div className="bg-white/5 border border-white/10 rounded-full p-1 flex items-center gap-1">
+            <button
+              onClick={() => setBillingPeriod("monthly")}
+              className={`px-6 py-2.5 rounded-full text-sm font-semibold transition-all duration-200 ${
+                billingPeriod === "monthly" ? "bg-white text-gray-900 shadow" : "text-gray-400 hover:text-white"
+              }`}
+            >
+              Monthly
+            </button>
+            <button
+              onClick={() => setBillingPeriod("yearly")}
+              className={`px-6 py-2.5 rounded-full text-sm font-semibold transition-all duration-200 flex items-center gap-2 ${
+                billingPeriod === "yearly" ? "bg-white text-gray-900 shadow" : "text-gray-400 hover:text-white"
+              }`}
+            >
+              Yearly
+              <span className="bg-green-500 text-white px-2 py-0.5 rounded-full text-xs font-bold">2 months free</span>
+            </button>
+          </div>
         </div>
 
         {/* Premium & Trial Plans Side by Side */}
@@ -251,7 +287,7 @@ export default function SalesPricingPage() {
               </button>
 
               <p className="text-gray-400 text-sm mt-4 text-center">
-                ₹{premiumPlan.price}/month • Cancel anytime
+                ₹{premiumPlan.price}/{billingPeriod === "yearly" ? "year" : "month"} • Cancel anytime
               </p>
             </div>
           </div>
@@ -332,7 +368,7 @@ export default function SalesPricingPage() {
                 {loadingPlan === "Trial" ? "Processing..." : (
                   <>
                     <Sparkles className="w-5 h-5" />
-                    Start Trial - ₹99/month
+                    Start Trial — ₹99/month
                   </>
                 )}
               </button>

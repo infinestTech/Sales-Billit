@@ -449,6 +449,14 @@ app.post("/mysql-subscribe", authenticateToken, async (req, res) => {
       });
     }
 
+    // ✅ Combo plan: also grant SALES access
+    if (mongoCategoryId === "Sales_Service") {
+      const salesAccess = await prisma.productAccess.findFirst({ where: { userId, product: "SALES" } });
+      if (!salesAccess) {
+        await prisma.productAccess.create({ data: { userId, product: "SALES" } });
+      }
+    }
+
     const user = await prisma.user.findUnique({ where: { id: userId } });
 
     return res.json({
@@ -674,13 +682,16 @@ app.post("/upgrade-subscription", authenticateToken, async (req, res) => {
           console.warn("⚠️ Failed to log SUBSCRIPTION_CANCELLED:", err.message);
         }
 
-        // Remove product access
+        // Remove product access (also remove SALES access if old plan was Combo)
     await prisma.productAccess.deleteMany({
           where: {
             userId,
       product: productForAccess
           }
         });
+    if (currentSub?.plan?.mongoCategoryId === "Sales_Service") {
+          await prisma.productAccess.deleteMany({ where: { userId, product: "SALES" } });
+        }
 
         // Create new active subscription
         const startDate = new Date();
@@ -721,6 +732,13 @@ app.post("/upgrade-subscription", authenticateToken, async (req, res) => {
       product: productForAccess
           }
         });
+    // Combo plan: also grant SALES access
+        if (newMongoCategoryId === "Sales_Service") {
+          const salesAccess = await prisma.productAccess.findFirst({ where: { userId, product: "SALES" } });
+          if (!salesAccess) {
+            await prisma.productAccess.create({ data: { userId, product: "SALES" } });
+          }
+        }
 
         // Log SUBSCRIPTION_STARTED
         try {
@@ -791,6 +809,13 @@ app.post("/upgrade-subscription", authenticateToken, async (req, res) => {
       product: productForAccess
         }
       });
+      // Combo plan: also grant SALES access
+      if (newMongoCategoryId === "Sales_Service") {
+        const salesAccess = await prisma.productAccess.findFirst({ where: { userId, product: "SALES" } });
+        if (!salesAccess) {
+          await prisma.productAccess.create({ data: { userId, product: "SALES" } });
+        }
+      }
 
       // Log SUBSCRIPTION_STARTED
       try {

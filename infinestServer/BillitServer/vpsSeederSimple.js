@@ -171,6 +171,57 @@ const plans = [
     "renewalTerm": "per month",
     "savePercentage": 0,
     "term": "Monthly Plan"
+  },
+  {
+    "_id": "service-premium-yearly",
+    "__v": 0,
+    "bonusOffer": "2 months free",
+    "branchLimit": 1,
+    "category_id": "Service",
+    "created_at": "2025-09-09T05:52:44.810Z",
+    "description": "Best value for professional service management — 2 months free",
+    "isPopular": false,
+    "name": "Premium Yearly",
+    "originalPrice": "5988",
+    "price": "4990",
+    "renewalPrice": "4990",
+    "renewalTerm": "per year",
+    "savePercentage": 17,
+    "term": "Yearly Plan"
+  },
+  {
+    "_id": "sales-premium-yearly",
+    "__v": 0,
+    "bonusOffer": "2 months free",
+    "branchLimit": 5,
+    "category_id": "Sales",
+    "created_at": "2025-09-09T05:52:44.830Z",
+    "description": "Best value for complete sales management — 2 months free",
+    "isPopular": false,
+    "name": "Premium Yearly",
+    "originalPrice": "5988",
+    "price": "4990",
+    "renewalPrice": "4990",
+    "renewalTerm": "per year",
+    "savePercentage": 17,
+    "term": "Yearly Plan"
+  },
+  {
+    "_id": "combo-premium-yearly",
+    "__v": 0,
+    "bonusOffer": "2 months free",
+    "branchLimit": 5,
+    "category_id": "Sales_Service",
+    "created_at": "2025-09-09T05:52:44.840Z",
+    "description": "Sales + Service yearly bundle — 2 months free at the best combined price",
+    "isPopular": true,
+    "name": "Combo Yearly",
+    "originalPrice": "10788",
+    "price": "8990",
+    "renewalPrice": "8990",
+    "renewalTerm": "per year",
+    "savePercentage": 17,
+    "term": "Yearly Plan"
   }
 ];
 
@@ -826,45 +877,48 @@ async function seedVPSDatabase() {
     console.log('✅ Connected to production MongoDB');
 
 
-    // Clean existing data
-    console.log('\n🗑️  Cleaning existing data...');
-    await Plan.deleteMany({});
-    await PlanCategory.deleteMany({});
-    console.log('✅ Cleaned existing data');
-
-
-    // Seed Plan Categories
+    // Upsert Plan Categories (no delete — safe to re-run)
     console.log('\n📂 Seeding Plan Categories...');
     for (const category of planCategories) {
       try {
-        const result = await PlanCategory.create(category);
-        console.log(`✅ Created category: ${result.name}`);
+        const res = await PlanCategory.updateOne({ _id: category._id }, { $set: category }, { upsert: true });
+        const action = res.upsertedCount ? 'INSERTED' : 'UPDATED';
+        console.log(`✅ [${action}] category: ${category.name}`);
       } catch (error) {
-        console.log(`❌ Error creating category ${category.name}:`, error.message);
+        console.log(`❌ Error upserting category ${category.name}:`, error.message);
       }
     }
 
 
-    // Seed Plans
+    // Upsert Plans (no delete — safe to re-run)
     console.log('\n📋 Seeding Plans...');
     for (const plan of plans) {
       try {
-        const result = await Plan.create(plan);
-        console.log(`✅ Created plan: ${result.category_id}/${result.name} - ₹${result.price}`);
+        const res = await Plan.updateOne({ _id: plan._id }, { $set: plan }, { upsert: true });
+        const action = res.upsertedCount ? 'INSERTED' : 'UPDATED';
+        console.log(`✅ [${action}] plan: ${plan.category_id}/${plan.name} - ₹${plan.price}`);
       } catch (error) {
-        console.log(`❌ Error creating plan ${plan.name}:`, error.message);
+        console.log(`❌ Error upserting plan ${plan.name}:`, error.message);
       }
     }
 
 
-    // Seed Features
+    // Upsert Features (no delete — safe to re-run)
     console.log('\n🔧 Seeding Features...');
-    await Feature.deleteMany({});
     for (const feature of features) {
       try {
-        await Feature.create(feature);
+        if (feature._id) {
+          await Feature.updateOne({ _id: feature._id }, { $set: feature }, { upsert: true });
+        } else {
+          // No _id: upsert by plan_id + feature_key to avoid duplicates
+          await Feature.updateOne(
+            { plan_id: feature.plan_id, feature_key: feature.feature_key },
+            { $set: feature },
+            { upsert: true }
+          );
+        }
       } catch (error) {
-        console.log(`❌ Error creating feature ${feature.plan_id}/${feature.feature_key}:`, error.message);
+        console.log(`❌ Error upserting feature ${feature.plan_id}/${feature.feature_key}:`, error.message);
       }
     }
     console.log(`✅ Seeded ${features.length} features`);
