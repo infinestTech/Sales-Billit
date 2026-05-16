@@ -16,11 +16,13 @@ import {
   Receipt,
   Save,
   Pencil,
+  PackageSearch,
 } from "lucide-react"
 import api from "@/components/api"
 import { logAndNotify, logError, logSuccess } from "@/utils/logger"
 import BottomSheet from "./BottomSheet"
 import MobilePaymentSheet from "./MobilePaymentSheet"
+import MobileUseProductSheet from "./MobileUseProductSheet"
 import { formatDate, formatINR } from "./utils"
 
 /**
@@ -43,6 +45,7 @@ export default function MobileRecordDetailSheet({
 }) {
   const [working, setWorking] = useState({}) // mobileId -> bool
   const [paymentMobile, setPaymentMobile] = useState(null)
+  const [useProductMobile, setUseProductMobile] = useState(null)
   const [balance, setBalance] = useState("")
   const [savingBalance, setSavingBalance] = useState(false)
   const [editingBalance, setEditingBalance] = useState(false)
@@ -317,11 +320,35 @@ export default function MobileRecordDetailSheet({
                   />
                 </div>
 
+                {/* Use Product row */}
+                <button
+                  type="button"
+                  onClick={() => setUseProductMobile(m)}
+                  className="mt-2 flex w-full items-center justify-between border-t border-gray-100 bg-violet-50 px-4 py-2.5 text-left"
+                >
+                  <div className="flex items-center gap-2">
+                    <PackageSearch className="h-4 w-4 text-violet-600" />
+                    <div>
+                      <p className="text-[11px] uppercase tracking-wide text-gray-500">
+                        Product used
+                      </p>
+                      <p className="text-sm font-semibold text-gray-900">
+                        {m.productName
+                          ? `${m.productName}${m.quantity ? ` × ${m.quantity}` : ""}`
+                          : "Not set"}
+                      </p>
+                    </div>
+                  </div>
+                  <span className="text-sm font-medium text-violet-700">
+                    {m.productName ? "Update" : "Add"}
+                  </span>
+                </button>
+
                 {/* Payment row */}
                 <button
                   type="button"
                   onClick={() => setPaymentMobile(m)}
-                  className="mt-3 flex w-full items-center justify-between border-t border-gray-100 bg-gray-50 px-4 py-2.5 text-left"
+                  className="flex w-full items-center justify-between border-t border-gray-100 bg-gray-50 px-4 py-2.5 text-left"
                 >
                   <div className="flex items-center gap-2">
                     <Wallet className="h-4 w-4 text-emerald-600" />
@@ -356,6 +383,17 @@ export default function MobileRecordDetailSheet({
         mobile={paymentMobile}
         shopId={shopId}
         onUpdated={handlePaymentUpdated}
+      />
+
+      <MobileUseProductSheet
+        open={!!useProductMobile}
+        onClose={() => setUseProductMobile(null)}
+        mobile={useProductMobile}
+        shopId={shopId}
+        onUpdated={() => {
+          setUseProductMobile(null)
+          onChanged?.({ type: "refresh" })
+        }}
       />
     </>
   )
