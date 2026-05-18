@@ -14,7 +14,7 @@ const Feature = mongoose.models.Feature || mongoose.model("Feature", featureSche
 
 
 // MongoDB connection URI for production VPS
-const MONGO_URI = process.env.MONGO_URI || 'mongodb://127.0.0.1:27017/billit_db';
+const MONGO_URI = process.env.BILLIT_MONGO_URI || process.env.MONGO_URI || 'mongodb://127.0.0.1:27017/billit_db';
 
 
 // PLAN CATEGORIES (exact from local data)
