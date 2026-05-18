@@ -50,6 +50,9 @@ const cron = require('node-cron');
 const prisma = new PrismaClient();
 const app = express();
 
+// ✅ Trust proxy for correct client IP detection behind nginx/reverse proxy
+app.set('trust proxy', true);
+
 const fs = require('fs');
 const uploadPath = path.join(__dirname, 'uploads', 'profile_images');
 fs.mkdirSync(uploadPath, { recursive: true });
