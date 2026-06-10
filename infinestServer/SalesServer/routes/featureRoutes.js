@@ -17,8 +17,16 @@ router.get('/api/user/features', requireUser, async (req, res) => {
       });
     }
 
+    // Combo plans include all Sales Premium features — map them to the equivalent sales plan
+    // so Feature lookups in MongoDB (which are seeded under sales-* IDs) work correctly.
+    const comboFeaturePlanMap = {
+      'combo-premium':        'sales-premium',
+      'combo-premium-yearly': 'sales-premium-yearly',
+    };
+    const featurePlanId = comboFeaturePlanMap[mongoPlanId] || mongoPlanId;
+
     // Check if user is on Basic plan (10-day trial)
-    const isBasicPlan = mongoPlanId === 'sales-basic';
+    const isBasicPlan = featurePlanId === 'sales-basic';
     
     // For Basic plan users, check trial status from CommonDB
     let trialInfo = null;
@@ -130,8 +138,8 @@ router.get('/api/user/features', requireUser, async (req, res) => {
     }
 
     // Otherwise, fetch features from database
-    console.log('🔍 Fetching features for plan:', mongoPlanId);
-    const features = await Feature.find({ plan_id: mongoPlanId }).lean().maxTimeMS(5000);
+    console.log('🔍 Fetching features for plan:', featurePlanId, '(userPlan:', mongoPlanId, ')');
+    const features = await Feature.find({ plan_id: featurePlanId }).lean().maxTimeMS(5000);
     console.log('🔍 Found features:', features.length);
     
     // Also return the user's plan for context
@@ -164,8 +172,12 @@ router.get('/api/user/features/:featureKey', requireUser, async (req, res) => {
       });
     }
 
+    // Map combo plans to their sales-premium equivalent for feature lookups
+    const comboFeaturePlanMap = { 'combo-premium': 'sales-premium', 'combo-premium-yearly': 'sales-premium-yearly' };
+    const featurePlanId = comboFeaturePlanMap[mongoPlanId] || mongoPlanId;
+
     const feature = await Feature.findOne({ 
-      plan_id: mongoPlanId, 
+      plan_id: featurePlanId, 
       feature_key: featureKey 
     }).lean();
     
@@ -205,8 +217,12 @@ router.get('/api/user/features/:featureKey/enabled', requireUser, async (req, re
       });
     }
 
+    // Map combo plans to their sales-premium equivalent for feature lookups
+    const comboFeaturePlanMap = { 'combo-premium': 'sales-premium', 'combo-premium-yearly': 'sales-premium-yearly' };
+    const featurePlanId = comboFeaturePlanMap[mongoPlanId] || mongoPlanId;
+
     const feature = await Feature.findOne({ 
-      plan_id: mongoPlanId, 
+      plan_id: featurePlanId, 
       feature_key: featureKey 
     }).lean();
     
@@ -243,8 +259,12 @@ router.get('/api/user/features/:featureKey/limits', requireUser, async (req, res
       });
     }
 
+    // Map combo plans to their sales-premium equivalent for feature lookups
+    const comboFeaturePlanMap = { 'combo-premium': 'sales-premium', 'combo-premium-yearly': 'sales-premium-yearly' };
+    const featurePlanId = comboFeaturePlanMap[mongoPlanId] || mongoPlanId;
+
     const feature = await Feature.findOne({ 
-      plan_id: mongoPlanId, 
+      plan_id: featurePlanId, 
       feature_key: featureKey 
     }).lean();
     
@@ -280,8 +300,12 @@ router.get('/api/debug/user-info', requireUser, async (req, res) => {
   try {
     const { mongoPlanId, userId, shop_id } = req.user;
     
+    // Map combo plans to their sales-premium equivalent for feature lookups
+    const comboFeaturePlanMap = { 'combo-premium': 'sales-premium', 'combo-premium-yearly': 'sales-premium-yearly' };
+    const featurePlanId = comboFeaturePlanMap[mongoPlanId] || mongoPlanId;
+
     // Get features for this plan
-    const features = await Feature.find({ plan_id: mongoPlanId }).lean();
+    const features = await Feature.find({ plan_id: featurePlanId }).lean();
     
     res.json({
       debug: true,
@@ -289,6 +313,7 @@ router.get('/api/debug/user-info', requireUser, async (req, res) => {
         userId,
         shop_id,
         mongoPlanId,
+        featurePlanId,
         hasFeatures: features.length > 0
       },
       features: features,
