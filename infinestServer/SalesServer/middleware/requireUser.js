@@ -24,13 +24,13 @@ module.exports = async function requireUser(req, res, next) {
         };
         return next();
       }
-      // Enforce plan type: only allow sales- plans
-      // Deny service plan users in Sales portal
+      // Enforce plan type: only allow sales- or combo- plans in the Sales portal
+      // Deny service-only plan users
       if (decoded.mongoPlanId && decoded.mongoPlanId.startsWith('service-')) {
         return res.status(403).json({ message: `You only have access to Service product. Please login to the Service portal.` });
       }
-      // Only allow sales plans, deny all others
-      if (decoded.mongoPlanId && !decoded.mongoPlanId.startsWith('sales-')) {
+      // Allow sales-* and combo-* plans, deny all others
+      if (decoded.mongoPlanId && !decoded.mongoPlanId.startsWith('sales-') && !decoded.mongoPlanId.startsWith('combo-')) {
         return res.status(403).json({ message: `You only have access to ${decoded.mongoPlanId.replace(/-.*/, '')} product. Please login to the correct portal.` });
       }
       req.user = { 
@@ -55,13 +55,13 @@ module.exports = async function requireUser(req, res, next) {
     
     const mongoPlanId = accessRes.data?.mongoPlanId || null;
 
-    // Enforce plan type: only allow sales- plans
-    // Deny service plan users in Sales portal
+    // Enforce plan type: only allow sales- or combo- plans in the Sales portal
+    // Deny service-only plan users
     if (mongoPlanId && mongoPlanId.startsWith('service-')) {
       return res.status(403).json({ message: `You only have access to Service product. Please login to the Service portal.` });
     }
-    // Only allow sales plans, deny all others
-    if (mongoPlanId && !mongoPlanId.startsWith('sales-')) {
+    // Allow sales-* and combo-* plans, deny all others
+    if (mongoPlanId && !mongoPlanId.startsWith('sales-') && !mongoPlanId.startsWith('combo-')) {
       return res.status(403).json({ message: `You only have access to ${mongoPlanId.replace(/-.*/, '')} product. Please login to the correct portal.` });
     }
 
