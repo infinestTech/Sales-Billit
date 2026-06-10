@@ -170,7 +170,7 @@ const planCategorySchema = new mongoose.Schema({
   },
   name: {
     type: String,
-    enum: ["Sales", "Service", "Sales + Service", "Manager", "Enterprise"],
+    enum: ["Sales", "Service", "Sales + Service"],
     required: true,
     unique: true
   },

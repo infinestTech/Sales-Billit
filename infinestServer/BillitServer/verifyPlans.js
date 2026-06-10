@@ -36,9 +36,9 @@ async function verifyPlans() {
     // Count all plans
     const totalPlans = await Plan.countDocuments();
     console.log(`📊 Total plans in database: ${totalPlans}`);
-    console.log('   Expected: 12 (3 sales + 3 service + 2 combo + 3 enterprise + 1 manager)\n');
+    console.log('   Expected: 8 (2 sales + 2 service + 2 combo monthly+yearly each, including trials)\n');
 
-    if (totalPlans < 12) {
+    if (totalPlans < 8) {
       console.log('⚠️  WARNING: Missing plans detected!');
       console.log('   Run the seeder script to populate the database:');
       console.log('   $ node vpsSeederSimple.js\n');

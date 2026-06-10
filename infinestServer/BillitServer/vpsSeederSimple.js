@@ -36,18 +36,6 @@ const planCategories = [
     "__v": 0,
     "created_at": "2025-07-18T21:02:37.114Z",
     "name": "Sales + Service"
-  },
-  {
-    "_id": "Manager",
-    "__v": 0,
-    "created_at": "2025-07-18T21:02:37.117Z",
-    "name": "Manager"
-  },
-  {
-    "_id": "Enterprise",
-    "__v": 0,
-    "created_at": "2025-08-30T18:16:46.053Z",
-    "name": "Enterprise"
   }
 ];
 
@@ -87,39 +75,6 @@ const plans = [
     "renewalTerm": "per month",
     "savePercentage": 75,
     "term": "Monthly Plan"
-  },
-  {
-    "_id": "enterprise-basic",
-    "__v": 0,
-    "category_id": "Enterprise",
-    "created_at": "2025-08-30T18:16:46.265Z",
-    "isPopular": false,
-    "name": "Basic",
-    "price": "0",
-    "term": "Free Plan",
-    "branchLimit": 1
-  },
-  {
-    "_id": "enterprise-gold",
-    "__v": 0,
-    "category_id": "Enterprise",
-    "created_at": "2025-08-30T18:16:46.274Z",
-    "isPopular": false,
-    "name": "Gold",
-    "price": "999",
-    "term": "Monthly Plan",
-    "branchLimit": 1
-  },
-  {
-    "_id": "enterprise-premium",
-    "__v": 0,
-    "category_id": "Enterprise",
-    "created_at": "2025-08-30T18:16:46.286Z",
-    "isPopular": false,
-    "name": "Premium",
-    "price": "1499",
-    "term": "Monthly Plan",
-    "branchLimit": 1
   },
   {
     "_id": "service-basic",
@@ -261,14 +216,6 @@ const features = [
     "__v": 0
   },
   {
-    "plan_id": "sales-gold",
-  "feature_key": "bank_accounts_limit",
-    "type": "limit",
-    "config": { "maxBankAccounts": 7 },
-    "description": "Max 7 bank accounts",
-    "__v": 0
-  },
-  {
     "plan_id": "sales-premium",
   "feature_key": "bank_accounts_limit",
     "type": "limit",
@@ -346,101 +293,6 @@ const features = [
     "type": "boolean",
     "enabled": true,
     "description": "Ads displayed",
-    "__v": 0
-  },
-  {
-    "_id": "68bfc0aca1815bd5628643c9",
-    "plan_id": "service-gold",
-    "feature_key": "entry_limit",
-    "type": "limit",
-    "config": {
-      "totalPages": 1,
-      "entriesPerPage": 15
-    },
-    "description": "40 pages × 15 records",
-    "__v": 0
-  },
-  {
-    "_id": "68bfc0aca1815bd5628643ca",
-    "plan_id": "service-gold",
-    "feature_key": "dealer_mobile_create_limit",
-    "type": "limit",
-    "config": {
-      "maxPerCreation": 10
-    },
-    "description": "Dealer mobile creation limit: 10",
-    "__v": 0
-  },
-  {
-    "_id": "68bfc0aca1815bd5628643cb",
-    "plan_id": "service-gold",
-    "feature_key": "allow_paper_billing",
-    "type": "boolean",
-    "enabled": true,
-    "description": "Paper billing allowed",
-    "__v": 0
-  },
-  {
-    "_id": "68bfc0aca1815bd5628643cc",
-    "plan_id": "service-gold",
-    "feature_key": "allow_whatsapp_billing",
-    "type": "boolean",
-    "enabled": true,
-    "description": "WhatsApp billing allowed",
-    "__v": 0
-  },
-  {
-    "_id": "68bfc0aca1815bd5628643cd",
-    "plan_id": "service-gold",
-    "feature_key": "dashboard_enabled",
-    "type": "boolean",
-    "enabled": true,
-    "description": "Dashboard enabled",
-    "__v": 0
-  },
-  {
-    "_id": "68bfc0aca1815bd5628643ce",
-    "plan_id": "service-gold",
-    "feature_key": "expense_tracker_enabled",
-    "type": "boolean",
-    "enabled": false,
-    "description": "Expense tracker enabled",
-    "__v": 0
-  },
-  {
-    "_id": "68bfc0aca1815bd5628643cf",
-    "plan_id": "service-gold",
-    "feature_key": "product_inventory_enabled",
-    "type": "boolean",
-    "enabled": false,
-    "description": "Product inventory enabled",
-    "__v": 0
-  },
-  {
-    "_id": "68bfc0aca1815bd5628643d0",
-    "plan_id": "service-gold",
-    "feature_key": "notifications_enabled",
-    "type": "boolean",
-    "enabled": true,
-    "description": "Notifications enabled",
-    "__v": 0
-  },
-  {
-    "_id": "68bfc0aca1815bd5628643d1",
-    "plan_id": "service-gold",
-    "feature_key": "analytics_dashboard_enabled",
-    "type": "boolean",
-    "enabled": false,
-    "description": "Advanced analytics dashboard disabled",
-    "__v": 0
-  },
-  {
-    "_id": "68bfc0aca1815bd5628643d2",
-    "plan_id": "service-gold",
-    "feature_key": "show_ads",
-    "type": "boolean",
-    "enabled": false,
-    "description": "Ads removed",
     "__v": 0
   },
   {
@@ -559,14 +411,6 @@ const features = [
     "__v": 0
   },
   {
-    "plan_id": "sales-gold",
-    "feature_key": "suppliers_limit",
-    "type": "limit",
-    "config": { "maxSuppliers": 10 },
-    "description": "Max 10 suppliers",
-    "__v": 0
-  },
-  {
     "plan_id": "sales-premium",
     "feature_key": "suppliers_limit",
     "type": "limit",
@@ -581,43 +425,6 @@ const features = [
     "type": "boolean",
     "enabled": true,
     "description": "Ads shown",
-    "__v": 0
-  },
-  {
-    "_id": "68bfc0aca1815bd5628643e8",
-    "plan_id": "sales-gold",
-    "feature_key": "sales_products_limit",
-    "type": "limit",
-    "config": {
-      "totalPages": 100
-    },
-    "description": "100 products",
-    "__v": 0
-  },
-  {
-    "plan_id": "sales-gold",
-    "feature_key": "gst_calculator_enabled",
-    "type": "boolean",
-    "enabled": true,
-    "description": "GST Calculator enabled for Gold",
-    "__v": 0
-  },
-  {
-    "_id": "68bfc0aca1815bd5628643e9",
-    "plan_id": "sales-gold",
-    "feature_key": "sales_analytics",
-    "type": "boolean",
-    "enabled": true,
-    "description": "Basic analytics",
-    "__v": 0
-  },
-  {
-    "_id": "68bfc0aca1815bd5628643ea",
-    "plan_id": "sales-gold",
-    "feature_key": "show_ads",
-    "type": "boolean",
-    "enabled": false,
-    "description": "No ads",
     "__v": 0
   },
   {
@@ -784,84 +591,6 @@ const features = [
     "type": "boolean",
     "enabled": true,
     "description": "Priority support",
-    "__v": 0
-  },
-  {
-    "_id": "68bfc0aca1815bd5628643f4",
-    "plan_id": "enterprise-basic",
-    "feature_key": "branch_limit",
-    "type": "limit",
-    "config": {
-      "totalPages": 2
-    },
-    "description": "2 branches",
-    "__v": 0
-  },
-  {
-    "_id": "68bfc0aca1815bd5628643f5",
-    "plan_id": "enterprise-basic",
-    "feature_key": "roles",
-    "type": "boolean",
-    "enabled": true,
-    "description": "Basic roles",
-    "__v": 0
-  },
-  {
-    "_id": "68bfc0aca1815bd5628643f9",
-    "plan_id": "enterprise-gold",
-    "feature_key": "branch_limit",
-    "type": "limit",
-    "config": {
-      "totalPages": 10
-    },
-    "description": "10 branches",
-    "__v": 0
-  },
-  {
-    "_id": "68bfc0aca1815bd5628643fa",
-    "plan_id": "enterprise-gold",
-    "feature_key": "security",
-    "type": "boolean",
-    "enabled": true,
-    "description": "SSO & audit logs",
-    "__v": 0
-  },
-  {
-    "_id": "68bfc0aca1815bd5628643fb",
-    "plan_id": "enterprise-gold",
-    "feature_key": "support",
-    "type": "boolean",
-    "enabled": true,
-    "description": "Priority support",
-    "__v": 0
-  },
-  {
-    "_id": "68bfc0aca1815bd5628643ff",
-    "plan_id": "enterprise-premium",
-    "feature_key": "branch_limit",
-    "type": "limit",
-    "config": {
-      "totalPages": 999999
-    },
-    "description": "Unlimited branches",
-    "__v": 0
-  },
-  {
-    "_id": "68bfc0aca1815bd562864400",
-    "plan_id": "enterprise-premium",
-    "feature_key": "sla",
-    "type": "boolean",
-    "enabled": true,
-    "description": "SLA + dedicated manager",
-    "__v": 0
-  },
-  {
-    "_id": "68bfc0aca1815bd562864401",
-    "plan_id": "enterprise-premium",
-    "feature_key": "integrations",
-    "type": "boolean",
-    "enabled": true,
-    "description": "Custom integrations",
     "__v": 0
   }
 ];
