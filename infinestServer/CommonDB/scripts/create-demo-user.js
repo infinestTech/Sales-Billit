@@ -60,16 +60,63 @@ async function main() {
   console.log('╚═══════════════════════════════════════════╝\n');
 
   // ── Load plans from MySQL at runtime ─────────────────────────────────────
-  const dbPlans = await prisma.plan.findMany({
-    where: { mongoPlanId: { not: null } },
-    orderBy: { createdAt: 'asc' },
-  }).catch(() => []);
-
-  if (!dbPlans.length) {
+  let dbPlans = [];
+  try {
+    dbPlans = await prisma.plan.findMany({
+      where: { mongoPlanId: { not: null } },
+      orderBy: { name: 'asc' },
+    });
+  } catch (err) {
     rl.close();
-    console.error('❌  No plans found in the database.');
-    console.error('    Run  npm run db:seed:plans  from the CommonDB directory first, then retry.\n');
+    console.error('❌  Could not connect to the database:', err.message);
+    console.error('    Check your DATABASE_URL in .env and ensure MySQL is running.\n');
     process.exit(1);
+  }
+
+  // ── Auto-seed plans if the Plan table is empty ───────────────────────────
+  if (!dbPlans.length) {
+    console.log('⚠️   No plans found in MySQL — auto-seeding from built-in plan list...\n');
+
+    const SEED_PLANS = [
+      { name: 'Trial',                price: 99,   duration: 'MONTHLY', branchLimit: 1, mongoPlanId: 'service-basic',         mongoCategoryId: 'Service'       },
+      { name: 'Premium',              price: 499,  duration: 'MONTHLY', branchLimit: 1, mongoPlanId: 'service-premium',        mongoCategoryId: 'Service'       },
+      { name: 'Premium Yearly',       price: 4990, duration: 'YEARLY',  branchLimit: 1, mongoPlanId: 'service-premium-yearly', mongoCategoryId: 'Service'       },
+      { name: 'Sales Trial',          price: 99,   duration: 'MONTHLY', branchLimit: 0, mongoPlanId: 'sales-basic',            mongoCategoryId: 'Sales'         },
+      { name: 'Sales Premium',        price: 499,  duration: 'MONTHLY', branchLimit: 5, mongoPlanId: 'sales-premium',          mongoCategoryId: 'Sales'         },
+      { name: 'Sales Premium Yearly', price: 4990, duration: 'YEARLY',  branchLimit: 5, mongoPlanId: 'sales-premium-yearly',   mongoCategoryId: 'Sales'         },
+      { name: 'Combo',                price: 899,  duration: 'MONTHLY', branchLimit: 5, mongoPlanId: 'combo-premium',          mongoCategoryId: 'Sales_Service' },
+      { name: 'Combo Yearly',         price: 8990, duration: 'YEARLY',  branchLimit: 5, mongoPlanId: 'combo-premium-yearly',   mongoCategoryId: 'Sales_Service' },
+    ];
+
+    for (const p of SEED_PLANS) {
+      try {
+        const existing = await prisma.plan.findFirst({ where: { mongoPlanId: p.mongoPlanId } });
+        if (!existing) {
+          await prisma.plan.create({ data: p });
+          console.log(`  ✅  Seeded: ${p.name} (${p.mongoPlanId})`);
+        }
+      } catch (seedErr) {
+        console.warn(`  ⚠️  Could not seed plan ${p.name}: ${seedErr.message}`);
+      }
+    }
+
+    // Re-fetch after seeding
+    try {
+      dbPlans = await prisma.plan.findMany({
+        where: { mongoPlanId: { not: null } },
+        orderBy: { name: 'asc' },
+      });
+    } catch (err) {
+      // ignore
+    }
+
+    if (!dbPlans.length) {
+      rl.close();
+      console.error('\n❌  Auto-seeding failed — no plans available. Check your database connection.\n');
+      process.exit(1);
+    }
+
+    console.log(`\n✅  Plans seeded successfully (${dbPlans.length} plans available).\n`);
   }
 
   // Enrich each DB plan with product/access metadata derived from category
