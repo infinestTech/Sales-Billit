@@ -8,7 +8,8 @@
     "db:push": "npx prisma db push",
     "db:generate": "npx prisma generate",
     "db:backfill:sales": "node ./scripts/backfill_productaccess_sales.js",
-    "db:backfill:sales:from-plan": "node ./scripts/backfill_sales_from_plan.js"
+    "db:backfill:sales:from-plan": "node ./scripts/backfill_sales_from_plan.js",
+    "create:demo-user": "node ./scripts/create-demo-user.js"
   },
   "keywords": [],
   "author": "",
