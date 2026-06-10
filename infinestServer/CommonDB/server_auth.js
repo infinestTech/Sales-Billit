@@ -910,15 +910,23 @@ app.post("/get-user-sales-access", authenticateToken, async (req, res) => {
   }
 
   try {
+    // Match any active subscription that grants SALES access:
+    //   - product === SALES (direct sales subscription)
+    //   - product === SERVICE (legacy / backward compat)
+    //   - plan.mongoCategoryId === "Sales_Service" (Combo plan — stored as
+    //     product="BILLIT" but grants SALES access via ProductAccess)
     const subscription = await prisma.subscription.findFirst({
       where: {
         userId: userId,
-        product: { in: ["SALES", "SERVICE"] }, // accept SERVICE for backward compatibility
-        status: "ACTIVE"
+        status: "ACTIVE",
+        OR: [
+          { product: { in: ["SALES", "SERVICE"] } },
+          { plan: { is: { mongoCategoryId: "Sales_Service" } } }
+        ]
       },
       select: {
         plan: {
-          select: { mongoPlanId: true }
+          select: { mongoPlanId: true, mongoCategoryId: true }
         }
       }
     });
