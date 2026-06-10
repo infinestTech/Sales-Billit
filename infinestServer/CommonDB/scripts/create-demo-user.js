@@ -20,20 +20,15 @@ const { PrismaClient } = require('@prisma/client');
 
 const prisma = new PrismaClient();
 
-// ─── Plan definitions ─────────────────────────────────────────────────────────
-// Each entry maps to a MySQL Plan row (looked up by mongoPlanId at runtime).
-// 'product'  → stored in Subscription.product (used by access-check endpoints)
-// 'access'   → ProductAccess rows to create (Prisma enum: BILLIT | SALES | SERVICE | FUTURE_PRODUCT)
-const PLANS = [
-  { num: 1, mongoPlanId: 'service-basic',           name: 'Service Trial',          mongoCategoryId: 'Service',       price: '₹99/mo',   product: 'BILLIT', access: ['BILLIT'] },
-  { num: 2, mongoPlanId: 'service-premium',          name: 'Service Premium',         mongoCategoryId: 'Service',       price: '₹499/mo',  product: 'BILLIT', access: ['BILLIT'] },
-  { num: 3, mongoPlanId: 'service-premium-yearly',   name: 'Service Premium Yearly',  mongoCategoryId: 'Service',       price: '₹4990/yr', product: 'BILLIT', access: ['BILLIT'] },
-  { num: 4, mongoPlanId: 'sales-basic',              name: 'Sales Trial',             mongoCategoryId: 'Sales',         price: '₹99/mo',   product: 'SALES',  access: ['SALES']  },
-  { num: 5, mongoPlanId: 'sales-premium',            name: 'Sales Premium',           mongoCategoryId: 'Sales',         price: '₹499/mo',  product: 'SALES',  access: ['SALES']  },
-  { num: 6, mongoPlanId: 'sales-premium-yearly',     name: 'Sales Premium Yearly',    mongoCategoryId: 'Sales',         price: '₹4990/yr', product: 'SALES',  access: ['SALES']  },
-  { num: 7, mongoPlanId: 'combo-premium',            name: 'Combo (Service + Sales)', mongoCategoryId: 'Sales_Service', price: '₹899/mo',  product: 'BILLIT', access: ['BILLIT', 'SALES'] },
-  { num: 8, mongoPlanId: 'combo-premium-yearly',     name: 'Combo Yearly',            mongoCategoryId: 'Sales_Service', price: '₹8990/yr', product: 'BILLIT', access: ['BILLIT', 'SALES'] },
-];
+// ─── Derive product + access grants from mongoCategoryId ──────────────────────
+// Combo plans are stored as product="BILLIT" (SERVICE subscription) in MySQL,
+// and separately granted SALES ProductAccess — mirroring the payment flow.
+function planMeta(mongoCategoryId) {
+  if (mongoCategoryId === 'Sales_Service') return { product: 'BILLIT', access: ['BILLIT', 'SALES'] };
+  if (mongoCategoryId === 'Sales')         return { product: 'SALES',  access: ['SALES']           };
+  // Service / anything else
+  return { product: 'BILLIT', access: ['BILLIT'] };
+}
 
 // ─── Readline helpers ─────────────────────────────────────────────────────────
 const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
@@ -63,6 +58,26 @@ async function main() {
   console.log('\n╔═══════════════════════════════════════════╗');
   console.log('║      Infinest  –  Demo Account Creator    ║');
   console.log('╚═══════════════════════════════════════════╝\n');
+
+  // ── Load plans from MySQL at runtime ─────────────────────────────────────
+  const dbPlans = await prisma.plan.findMany({
+    where: { mongoPlanId: { not: null } },
+    orderBy: { createdAt: 'asc' },
+  }).catch(() => []);
+
+  if (!dbPlans.length) {
+    rl.close();
+    console.error('❌  No plans found in the database.');
+    console.error('    Run  npm run db:seed:plans  from the CommonDB directory first, then retry.\n');
+    process.exit(1);
+  }
+
+  // Enrich each DB plan with product/access metadata derived from category
+  const PLANS = dbPlans.map((p, i) => {
+    const { product, access } = planMeta(p.mongoCategoryId);
+    const priceLabel = `₹${Number(p.price)}/${p.duration === 'YEARLY' ? 'yr' : 'mo'}`;
+    return { num: i + 1, dbPlan: p, mongoPlanId: p.mongoPlanId, mongoCategoryId: p.mongoCategoryId, name: p.name, price: priceLabel, product, access };
+  });
 
   // ── Step 1: User details ──────────────────────────────────────────────────
   console.log('[ Step 1 / 3 ]  User Details\n');
@@ -105,13 +120,11 @@ async function main() {
     const input = (await ask('  End date or days: ')).trim();
 
     if (/^\d{4}-\d{2}-\d{2}$/.test(input)) {
-      // ISO date string
       const d = new Date(`${input}T23:59:59.000Z`);
       if (isNaN(d.getTime()))    { console.log('  ⚠  Not a valid date.\n'); continue; }
       if (d <= new Date())       { console.log('  ⚠  Date must be in the future.\n'); continue; }
       endDate = d;
     } else if (/^\d+$/.test(input)) {
-      // Number of days
       const days = parseInt(input, 10);
       if (days <= 0) { console.log('  ⚠  Must be greater than 0.\n'); continue; }
       endDate = new Date(Date.now() + days * 24 * 60 * 60 * 1000);
@@ -159,13 +172,8 @@ async function main() {
       process.exit(1);
     }
 
-    // Resolve MySQL plan row
-    const plan = await prisma.plan.findFirst({ where: { mongoPlanId: selectedPlan.mongoPlanId } });
-    if (!plan) {
-      console.error(`❌  Plan "${selectedPlan.mongoPlanId}" not found in the database.`);
-      console.error('    Run  npm run db:seed:plans  from the CommonDB directory first.');
-      process.exit(1);
-    }
+    // Plan was already confirmed to exist in DB (loaded from DB above)
+    const plan = selectedPlan.dbPlan;
 
     // 1. Hash password
     const hashedPassword = await bcrypt.hash(password, 10);
