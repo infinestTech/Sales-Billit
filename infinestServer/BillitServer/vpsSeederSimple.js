@@ -209,7 +209,7 @@ const features = [
   // --- Bank account limits for Sales plans ---
   {
     "plan_id": "sales-basic",
-  "feature_key": "bank_accounts_limit",
+  "feature_key": "bank_account_limit",
     "type": "limit",
     "config": { "maxBankAccounts": 3 },
     "description": "Max 3 bank accounts",
@@ -217,7 +217,7 @@ const features = [
   },
   {
     "plan_id": "sales-premium",
-  "feature_key": "bank_accounts_limit",
+  "feature_key": "bank_account_limit",
     "type": "limit",
     "config": { "maxBankAccounts": 30 },
     "description": "Max 30 bank accounts",
@@ -404,7 +404,7 @@ const features = [
   // --- Supplier limits for Sales plans ---
   {
     "plan_id": "sales-basic",
-    "feature_key": "suppliers_limit",
+    "feature_key": "supplier_limit",
     "type": "limit",
     "config": { "maxSuppliers": 5 },
     "description": "Max 5 suppliers",
@@ -412,7 +412,7 @@ const features = [
   },
   {
     "plan_id": "sales-premium",
-    "feature_key": "suppliers_limit",
+    "feature_key": "supplier_limit",
     "type": "limit",
     "config": { "maxSuppliers": 100 },
     "description": "Max 100 suppliers",
