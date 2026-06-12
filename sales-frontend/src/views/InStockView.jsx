@@ -26,6 +26,27 @@ function InStockView({ salesUrl, token }) {
   const [showRedDot, setShowRedDot] = React.useState(false);
   const [showBarcodeSheet, setShowBarcodeSheet] = React.useState(false);
 
+  // Re-stock / delete (master inventory actions)
+  const [lowStockThreshold, setLowStockThreshold] = React.useState(5);
+  const [restockTarget, setRestockTarget] = React.useState(null); // { entryId, item }
+  const [restockQty, setRestockQty] = React.useState('');
+  const [restockCostPrice, setRestockCostPrice] = React.useState('');
+  const [restockImes, setRestockImes] = React.useState('');
+  const [restockSaving, setRestockSaving] = React.useState(false);
+  const [restockError, setRestockError] = React.useState('');
+  const [deleteTarget, setDeleteTarget] = React.useState(null); // { entryId, productNo, productName }
+  const [deleteBusy, setDeleteBusy] = React.useState(false);
+
+  // Detect admin vs branch user from localStorage (branch login stores branch_token)
+  const isBranchUser = typeof window !== 'undefined' && !!localStorage.getItem('branch_token');
+  const isAdminUser = !isBranchUser;
+
+  // Helper: get the best token to use for authenticated requests
+  const getAuthToken = React.useCallback(() => {
+    const storedBranchToken = typeof window !== 'undefined' ? (localStorage.getItem('branch_token') || '') : '';
+    return token || storedBranchToken || '';
+  }, [token]);
+
 
   const loadSuppliers = async () => {
     try {
@@ -94,6 +115,114 @@ function InStockView({ salesUrl, token }) {
       });
     });
   }, [entries, filter]);
+
+
+  // Flat list of all items across all entries that are at or below the low-stock threshold.
+  // Each element carries the parent entry reference so we can identify it for restock/delete.
+  const lowStockItems = React.useMemo(() => {
+    const out = [];
+    const t = Number(lowStockThreshold) || 0;
+    (entries || []).forEach(e => {
+      (Array.isArray(e.items) ? e.items : []).forEach(it => {
+        const q = Number(it.quantity || 0);
+        if (q <= t) {
+          out.push({
+            entryId: e._id,
+            supplierName: e.supplier_id?.supplierName || 'Unknown Supplier',
+            productNo: it.productNo,
+            productName: it.productName,
+            quantity: q,
+          });
+        }
+      });
+    });
+    return out;
+  }, [entries, lowStockThreshold]);
+
+
+  // Open the re-stock modal for a given entry/item
+  const openRestockModal = (entryId, item) => {
+    setRestockTarget({ entryId, item });
+    setRestockQty('');
+    setRestockCostPrice(String(item?.costPrice ?? ''));
+    setRestockImes('');
+    setRestockError('');
+  };
+
+  const closeRestockModal = () => {
+    setRestockTarget(null);
+    setRestockQty('');
+    setRestockCostPrice('');
+    setRestockImes('');
+    setRestockError('');
+    setRestockSaving(false);
+  };
+
+  const submitRestock = async () => {
+    if (!restockTarget) return;
+    const inc = Number(restockQty);
+    if (!inc || inc <= 0 || !Number.isFinite(inc)) {
+      setRestockError('Enter a quantity greater than 0');
+      return;
+    }
+    setRestockSaving(true);
+    setRestockError('');
+    try {
+      const { entryId, item } = restockTarget;
+      const payload = { addQty: inc };
+      if (restockCostPrice !== '' && !isNaN(Number(restockCostPrice))) {
+        payload.costPrice = Number(restockCostPrice);
+      }
+      const imesArr = (restockImes || '')
+        .split(/[\s,;\n]+/)
+        .map(s => s.trim())
+        .filter(Boolean);
+      if (imesArr.length > 0) payload.imes = imesArr;
+
+      const url = `${salesUrl}/api/in-stock/${encodeURIComponent(entryId)}/items/${encodeURIComponent(item.productNo)}/restock`;
+      const res = await fetch(url, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: 'Bearer ' + getAuthToken(),
+        },
+        body: JSON.stringify(payload),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || data.success === false) {
+        throw new Error(data.message || 'Failed to restock');
+      }
+      await loadEntries();
+      closeRestockModal();
+    } catch (e) {
+      setRestockError(e.message || 'Failed to restock');
+    } finally {
+      setRestockSaving(false);
+    }
+  };
+
+  const submitDelete = async () => {
+    if (!deleteTarget) return;
+    setDeleteBusy(true);
+    try {
+      const { entryId, productNo } = deleteTarget;
+      const url = `${salesUrl}/api/in-stock/${encodeURIComponent(entryId)}/items/${encodeURIComponent(productNo)}`;
+      const res = await fetch(url, {
+        method: 'DELETE',
+        headers: { Authorization: 'Bearer ' + getAuthToken() },
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || data.success === false) {
+        throw new Error(data.message || 'Failed to delete');
+      }
+      await loadEntries();
+      setDeleteTarget(null);
+    } catch (e) {
+      setError(e.message || 'Failed to delete');
+    } finally {
+      setDeleteBusy(false);
+    }
+  };
 
 
   // Removed sumCost calculation and Supplier Amount check
@@ -689,6 +818,99 @@ function InStockView({ salesUrl, token }) {
           }}>Complete list of all products in your inventory</p>
         </div>
 
+        {/* Low-stock alert banner */}
+        <div style={{
+          background: lowStockItems.length > 0 ? '#fef2f2' : '#f0fdf4',
+          border: `1px solid ${lowStockItems.length > 0 ? '#fecaca' : '#bbf7d0'}`,
+          borderRadius: '12px',
+          padding: '14px 18px',
+          marginBottom: '20px',
+          display: 'flex',
+          alignItems: 'center',
+          gap: '14px',
+          flexWrap: 'wrap'
+        }}>
+          <div style={{ fontSize: '24px' }}>
+            {lowStockItems.length > 0 ? '⚠️' : '✅'}
+          </div>
+          <div style={{ flex: 1, minWidth: '220px' }}>
+            <div style={{
+              fontWeight: '600',
+              color: lowStockItems.length > 0 ? '#b91c1c' : '#166534',
+              fontSize: '15px',
+              marginBottom: '2px'
+            }}>
+              {lowStockItems.length > 0
+                ? `${lowStockItems.length} item${lowStockItems.length > 1 ? 's' : ''} are low on stock`
+                : 'All stock levels are healthy'}
+            </div>
+            <div style={{
+              fontSize: '13px',
+              color: lowStockItems.length > 0 ? '#7f1d1d' : '#15803d'
+            }}>
+              {lowStockItems.length > 0
+                ? `Items at or below ${lowStockThreshold} unit${Number(lowStockThreshold) === 1 ? '' : 's'} in quantity. Consider re-stocking soon.`
+                : `No items at or below ${lowStockThreshold} unit${Number(lowStockThreshold) === 1 ? '' : 's'} in quantity.`}
+            </div>
+            {lowStockItems.length > 0 && (
+              <div style={{
+                marginTop: '8px',
+                display: 'flex',
+                flexWrap: 'wrap',
+                gap: '6px'
+              }}>
+                {lowStockItems.slice(0, 8).map((li, i) => (
+                  <span key={`${li.entryId}-${li.productNo}-${i}`} style={{
+                    background: '#fff',
+                    border: '1px solid #fecaca',
+                    color: '#991b1b',
+                    padding: '3px 8px',
+                    borderRadius: '999px',
+                    fontSize: '12px',
+                    fontWeight: 500
+                  }}>
+                    {li.productName || li.productNo || 'Item'} · {li.quantity}
+                  </span>
+                ))}
+                {lowStockItems.length > 8 && (
+                  <span style={{
+                    color: '#7f1d1d',
+                    fontSize: '12px',
+                    alignSelf: 'center'
+                  }}>+{lowStockItems.length - 8} more</span>
+                )}
+              </div>
+            )}
+          </div>
+          <div style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: '6px',
+            fontSize: '13px',
+            color: '#374151'
+          }}>
+            <label htmlFor="lowStockThreshold" style={{ whiteSpace: 'nowrap' }}>
+              Alert if qty ≤
+            </label>
+            <input
+              id="lowStockThreshold"
+              type="number"
+              min="0"
+              value={lowStockThreshold}
+              onChange={(e) => setLowStockThreshold(e.target.value === '' ? 0 : Math.max(0, parseInt(e.target.value, 10) || 0))}
+              style={{
+                width: '70px',
+                padding: '6px 8px',
+                border: '1px solid #e5e7eb',
+                borderRadius: '6px',
+                fontSize: '13px',
+                outline: 'none',
+                background: '#fff'
+              }}
+            />
+          </div>
+        </div>
+
         {filteredEntries.length === 0 ? (
           <div style={{
             textAlign: 'center',
@@ -815,17 +1037,30 @@ function InStockView({ salesUrl, token }) {
                     borderBottom: '2px solid #e5e7eb',
                     minWidth: '140px'
                   }}>Created</th>
+                  {isAdminUser && (
+                    <th style={{
+                      padding: '16px 12px',
+                      textAlign: 'center',
+                      fontWeight: '600',
+                      color: '#374151',
+                      borderBottom: '2px solid #e5e7eb',
+                      minWidth: '170px'
+                    }}>Actions</th>
+                  )}
                 </tr>
               </thead>
               <tbody>
                 {filteredEntries.flatMap((e) => (
-                  (Array.isArray(e.items) ? e.items : []).map((it, idx) => (
+                  (Array.isArray(e.items) ? e.items : []).map((it, idx) => {
+                    const isLowStock = Number(it.quantity || 0) <= Number(lowStockThreshold || 0);
+                    return (
                     <tr key={`${e._id}-${idx}`} style={{
                       borderBottom: '1px solid #f1f5f9',
-                      transition: 'background-color 0.2s ease'
+                      transition: 'background-color 0.2s ease',
+                      backgroundColor: isLowStock ? '#fff7ed' : 'transparent'
                     }}
-                    onMouseOver={(e) => e.target.parentElement.style.backgroundColor = '#f8fafc'}
-                    onMouseOut={(e) => e.target.parentElement.style.backgroundColor = 'transparent'}
+                    onMouseOver={(ev) => ev.currentTarget.style.backgroundColor = isLowStock ? '#ffedd5' : '#f8fafc'}
+                    onMouseOut={(ev) => ev.currentTarget.style.backgroundColor = isLowStock ? '#fff7ed' : 'transparent'}
                     >
                       <td style={{ padding: '16px 12px' }}>
                         <div>
@@ -945,8 +1180,59 @@ function InStockView({ salesUrl, token }) {
                           {new Date(e.createdAt).toLocaleTimeString()}
                         </div>
                       </td>
+                      {isAdminUser && (
+                        <td style={{ padding: '16px 12px', textAlign: 'center' }}>
+                          <div style={{ display: 'inline-flex', gap: '6px', justifyContent: 'center' }}>
+                            <button
+                              type="button"
+                              onClick={() => openRestockModal(e._id, it)}
+                              title="Re-stock this item"
+                              style={{
+                                background: '#ecfdf5',
+                                color: '#047857',
+                                border: '1px solid #a7f3d0',
+                                borderRadius: '6px',
+                                padding: '6px 10px',
+                                fontSize: '12px',
+                                fontWeight: 600,
+                                cursor: 'pointer',
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                gap: '4px'
+                              }}
+                            >
+                              ➕ Restock
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setDeleteTarget({
+                                entryId: e._id,
+                                productNo: it.productNo,
+                                productName: it.productName,
+                              })}
+                              title="Delete this item"
+                              style={{
+                                background: '#fef2f2',
+                                color: '#b91c1c',
+                                border: '1px solid #fecaca',
+                                borderRadius: '6px',
+                                padding: '6px 10px',
+                                fontSize: '12px',
+                                fontWeight: 600,
+                                cursor: 'pointer',
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                gap: '4px'
+                              }}
+                            >
+                              🗑️ Delete
+                            </button>
+                          </div>
+                        </td>
+                      )}
                     </tr>
-                  ))
+                    );
+                  })
                 ))}
               </tbody>
             </table>
@@ -1807,6 +2093,221 @@ function InStockView({ salesUrl, token }) {
           entries={entries}
           onClose={() => setShowBarcodeSheet(false)}
         />
+      )}
+
+      {/* Re-stock Modal */}
+      {restockTarget && (
+        <div style={{
+          position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
+          backgroundColor: 'rgba(0,0,0,0.5)',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          zIndex: 1100, padding: '20px'
+        }}>
+          <div style={{
+            background: 'white', borderRadius: '14px',
+            width: '100%', maxWidth: '440px',
+            boxShadow: '0 25px 50px rgba(0,0,0,0.25)',
+            overflow: 'hidden'
+          }}>
+            <div style={{
+              padding: '18px 22px',
+              borderBottom: '1px solid #e5e7eb',
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center'
+            }}>
+              <div>
+                <div style={{ fontSize: '18px', fontWeight: 700, color: '#1e293b' }}>
+                  ➕ Re-stock Item
+                </div>
+                <div style={{ fontSize: '13px', color: '#64748b', marginTop: '2px' }}>
+                  {restockTarget.item?.productName || restockTarget.item?.productNo || 'Item'}
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={closeRestockModal}
+                style={{
+                  background: '#f1f5f9', color: '#475569',
+                  border: 'none', borderRadius: '8px',
+                  padding: '6px 12px', fontSize: '13px',
+                  cursor: 'pointer'
+                }}
+              >✕</button>
+            </div>
+
+            <div style={{ padding: '20px 22px' }}>
+              <div style={{
+                background: '#f8fafc',
+                border: '1px solid #e2e8f0',
+                borderRadius: '8px',
+                padding: '10px 12px',
+                marginBottom: '16px',
+                fontSize: '13px',
+                color: '#475569'
+              }}>
+                <div>Current quantity: <strong style={{ color: '#1e293b' }}>{restockTarget.item?.quantity ?? 0}</strong></div>
+                <div>Cost price: <strong style={{ color: '#1e293b' }}>{restockTarget.item?.costPrice ?? 0}</strong></div>
+              </div>
+
+              <label style={{ display: 'block', fontSize: '13px', fontWeight: 500, color: '#374151', marginBottom: '6px' }}>
+                Additional quantity to add <span style={{ color: '#dc2626' }}>*</span>
+              </label>
+              <input
+                type="number"
+                min="1"
+                value={restockQty}
+                onChange={(e) => setRestockQty(e.target.value)}
+                placeholder="e.g. 10"
+                style={{
+                  width: '100%', padding: '10px 12px',
+                  border: '2px solid #e5e7eb', borderRadius: '8px',
+                  fontSize: '14px', outline: 'none',
+                  marginBottom: '14px'
+                }}
+              />
+
+              <label style={{ display: 'block', fontSize: '13px', fontWeight: 500, color: '#374151', marginBottom: '6px' }}>
+                Update cost price (optional)
+              </label>
+              <input
+                type="number"
+                value={restockCostPrice}
+                onChange={(e) => setRestockCostPrice(e.target.value)}
+                placeholder="Leave unchanged to keep current"
+                style={{
+                  width: '100%', padding: '10px 12px',
+                  border: '2px solid #e5e7eb', borderRadius: '8px',
+                  fontSize: '14px', outline: 'none',
+                  marginBottom: '14px'
+                }}
+              />
+
+              {Array.isArray(restockTarget.item?.imes) && (
+                <>
+                  <label style={{ display: 'block', fontSize: '13px', fontWeight: 500, color: '#374151', marginBottom: '6px' }}>
+                    Add IMEIs (optional, comma / newline separated)
+                  </label>
+                  <textarea
+                    rows={3}
+                    value={restockImes}
+                    onChange={(e) => setRestockImes(e.target.value)}
+                    placeholder="IMEI1, IMEI2, ..."
+                    style={{
+                      width: '100%', padding: '10px 12px',
+                      border: '2px solid #e5e7eb', borderRadius: '8px',
+                      fontSize: '13px', outline: 'none', resize: 'vertical',
+                      fontFamily: 'monospace',
+                      marginBottom: '14px'
+                    }}
+                  />
+                </>
+              )}
+
+              {restockError && (
+                <div style={{
+                  background: '#fef2f2',
+                  border: '1px solid #fecaca',
+                  color: '#b91c1c',
+                  padding: '10px 12px',
+                  borderRadius: '8px',
+                  fontSize: '13px',
+                  marginBottom: '12px'
+                }}>{restockError}</div>
+              )}
+            </div>
+
+            <div style={{
+              padding: '14px 22px',
+              borderTop: '1px solid #e5e7eb',
+              display: 'flex',
+              justifyContent: 'flex-end',
+              gap: '10px',
+              background: '#f9fafb'
+            }}>
+              <button
+                type="button"
+                onClick={closeRestockModal}
+                disabled={restockSaving}
+                style={{
+                  background: '#fff', color: '#475569',
+                  border: '1px solid #e5e7eb', borderRadius: '8px',
+                  padding: '9px 16px', fontSize: '14px',
+                  cursor: restockSaving ? 'not-allowed' : 'pointer'
+                }}
+              >Cancel</button>
+              <button
+                type="button"
+                onClick={submitRestock}
+                disabled={restockSaving}
+                style={{
+                  background: restockSaving ? '#94a3b8' : '#059669',
+                  color: '#fff', border: 'none', borderRadius: '8px',
+                  padding: '9px 18px', fontSize: '14px', fontWeight: 600,
+                  cursor: restockSaving ? 'not-allowed' : 'pointer'
+                }}
+              >{restockSaving ? 'Saving…' : 'Add Stock'}</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Delete Confirmation Modal */}
+      {deleteTarget && (
+        <div style={{
+          position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
+          backgroundColor: 'rgba(0,0,0,0.5)',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          zIndex: 1100, padding: '20px'
+        }}>
+          <div style={{
+            background: 'white', borderRadius: '14px',
+            width: '100%', maxWidth: '420px',
+            boxShadow: '0 25px 50px rgba(0,0,0,0.25)',
+            overflow: 'hidden'
+          }}>
+            <div style={{ padding: '20px 22px' }}>
+              <div style={{ fontSize: '18px', fontWeight: 700, color: '#1e293b', marginBottom: '6px' }}>
+                🗑️ Delete stock item?
+              </div>
+              <div style={{ fontSize: '14px', color: '#475569', marginBottom: '16px' }}>
+                This will permanently remove <strong>{deleteTarget.productName || deleteTarget.productNo}</strong> from the inventory.
+                If it's the last item in its stock entry, the entire entry will be removed. This action cannot be undone.
+              </div>
+            </div>
+            <div style={{
+              padding: '14px 22px',
+              borderTop: '1px solid #e5e7eb',
+              display: 'flex',
+              justifyContent: 'flex-end',
+              gap: '10px',
+              background: '#f9fafb'
+            }}>
+              <button
+                type="button"
+                onClick={() => setDeleteTarget(null)}
+                disabled={deleteBusy}
+                style={{
+                  background: '#fff', color: '#475569',
+                  border: '1px solid #e5e7eb', borderRadius: '8px',
+                  padding: '9px 16px', fontSize: '14px',
+                  cursor: deleteBusy ? 'not-allowed' : 'pointer'
+                }}
+              >Cancel</button>
+              <button
+                type="button"
+                onClick={submitDelete}
+                disabled={deleteBusy}
+                style={{
+                  background: deleteBusy ? '#94a3b8' : '#dc2626',
+                  color: '#fff', border: 'none', borderRadius: '8px',
+                  padding: '9px 18px', fontSize: '14px', fontWeight: 600,
+                  cursor: deleteBusy ? 'not-allowed' : 'pointer'
+                }}
+              >{deleteBusy ? 'Deleting…' : 'Delete'}</button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

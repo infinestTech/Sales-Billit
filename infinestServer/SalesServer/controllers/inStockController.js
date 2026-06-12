@@ -180,5 +180,113 @@ exports.listInStock = async (req, res) => {
 };
 
 
+// Re-stock (increase quantity of) a single item inside an InStock entry.
+// Admin (non-branch) only. Identifies the item by productNo within the entry.
+// Body: { addQty: Number (>0), costPrice?: Number, imes?: string[] }
+exports.restockItem = async (req, res) => {
+  try {
+    const { shop_id, userId } = req.user || {};
+    if (!shop_id) return res.status(400).json({ success: false, message: 'Shop missing' });
+    if (req.user.isBranch) return res.status(403).json({ success: false, message: 'Branches cannot restock items' });
+
+    const { entryId, productNo } = req.params;
+    const { addQty, costPrice, imes } = req.body || {};
+    const inc = Number(addQty);
+    if (!entryId || !productNo) return res.status(400).json({ success: false, message: 'entryId and productNo are required' });
+    if (!inc || inc <= 0 || !Number.isFinite(inc)) {
+      return res.status(400).json({ success: false, message: 'addQty must be a positive number' });
+    }
+
+    const doc = await InStock.findOne({ _id: entryId, shop_id });
+    if (!doc) return res.status(404).json({ success: false, message: 'Stock entry not found' });
+
+    const item = (doc.items || []).find(it => String(it.productNo) === String(productNo));
+    if (!item) return res.status(404).json({ success: false, message: 'Item not found in entry' });
+
+    // Increase both current quantity and the original totalQuantity so
+    // shipped/sold calculations remain consistent.
+    item.quantity = Number(item.quantity || 0) + inc;
+    item.totalQuantity = Number(item.totalQuantity || 0) + inc;
+
+    // Optional cost price update (only if a valid number is provided)
+    if (costPrice !== undefined && costPrice !== null && costPrice !== '' && Number.isFinite(Number(costPrice))) {
+      item.costPrice = Number(costPrice);
+    }
+
+    // Optional: append new IMEIs for mobile-type items
+    if (Array.isArray(imes) && imes.length > 0) {
+      const cleaned = imes.map(x => (x || '').toString().trim()).filter(Boolean);
+      if (cleaned.length > 0) {
+        item.imes = Array.isArray(item.imes) ? item.imes.concat(cleaned) : cleaned;
+      }
+    }
+
+    doc.updatedBy = String(userId || '');
+    await doc.save();
+
+    return res.json({ success: true, entry: doc });
+  } catch (err) {
+    console.error('restockItem error:', err.message);
+    return res.status(500).json({ success: false, message: err.message });
+  }
+};
+
+
+// Delete a single item from an InStock entry. If the entry has no more
+// items after the removal, delete the entire entry. Admin (non-branch) only.
+exports.deleteItem = async (req, res) => {
+  try {
+    const { shop_id } = req.user || {};
+    if (!shop_id) return res.status(400).json({ success: false, message: 'Shop missing' });
+    if (req.user.isBranch) return res.status(403).json({ success: false, message: 'Branches cannot delete stock items' });
+
+    const { entryId, productNo } = req.params;
+    if (!entryId || !productNo) return res.status(400).json({ success: false, message: 'entryId and productNo are required' });
+
+    const doc = await InStock.findOne({ _id: entryId, shop_id });
+    if (!doc) return res.status(404).json({ success: false, message: 'Stock entry not found' });
+
+    const before = (doc.items || []).length;
+    doc.items = (doc.items || []).filter(it => String(it.productNo) !== String(productNo));
+    if (doc.items.length === before) {
+      return res.status(404).json({ success: false, message: 'Item not found in entry' });
+    }
+
+    if (doc.items.length === 0) {
+      await InStock.deleteOne({ _id: doc._id });
+      return res.json({ success: true, deletedEntry: true });
+    }
+
+    await doc.save();
+    return res.json({ success: true, entry: doc, deletedEntry: false });
+  } catch (err) {
+    console.error('deleteItem error:', err.message);
+    return res.status(500).json({ success: false, message: err.message });
+  }
+};
+
+
+// Delete an entire InStock entry. Admin (non-branch) only.
+exports.deleteEntry = async (req, res) => {
+  try {
+    const { shop_id } = req.user || {};
+    if (!shop_id) return res.status(400).json({ success: false, message: 'Shop missing' });
+    if (req.user.isBranch) return res.status(403).json({ success: false, message: 'Branches cannot delete stock entries' });
+
+    const { entryId } = req.params;
+    if (!entryId) return res.status(400).json({ success: false, message: 'entryId is required' });
+
+    const result = await InStock.deleteOne({ _id: entryId, shop_id });
+    if (!result || result.deletedCount === 0) {
+      return res.status(404).json({ success: false, message: 'Stock entry not found' });
+    }
+    return res.json({ success: true });
+  } catch (err) {
+    console.error('deleteEntry error:', err.message);
+    return res.status(500).json({ success: false, message: err.message });
+  }
+};
+
+
 
 

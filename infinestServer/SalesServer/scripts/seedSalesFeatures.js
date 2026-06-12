@@ -71,9 +71,9 @@ const SALES_FEATURES = {
       feature_key: "supplier_limit",
       type: "limit",
       config: {
-        maxSuppliers: 10
+        maxSuppliers: 100
       },
-      description: "Premium plan: 10 suppliers maximum"
+      description: "Premium plan: 100 suppliers maximum"
     },
     {
       feature_key: "bank_account_limit",
