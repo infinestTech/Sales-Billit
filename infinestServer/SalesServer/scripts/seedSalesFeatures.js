@@ -15,8 +15,7 @@ const MONGO_URI = process.env.BILLIT_MONGO_URI || 'mongodb://127.0.0.1:27017/bil
 // Feature definitions - Only Premium plan features
 // Basic plan users get these same features during 10-day trial
 // After trial expires, they must upgrade to Premium to continue
-const SALES_FEATURES = {
-  'sales-premium': [
+const PREMIUM_FEATURES = [
     // Premium plan has all features enabled
     {
       feature_key: "suppliers_enabled",
@@ -99,7 +98,12 @@ const SALES_FEATURES = {
       },
       description: "Premium plan: 5 branches maximum"
     }
-  ]
+];
+
+const SALES_FEATURES = {
+  'sales-premium':        PREMIUM_FEATURES,
+  // Yearly variant — same entitlements as monthly premium
+  'sales-premium-yearly': PREMIUM_FEATURES,
 };
 
 async function seedFeatures() {
