@@ -530,8 +530,9 @@ app.post("/upgrade-subscription", authenticateToken, async (req, res) => {
   }
 
   try {
+    // ✅ Find ANY active subscription (cross-product aware — e.g. SALES trial → Combo which uses SERVICE)
     const currentSub = await prisma.subscription.findFirst({
-      where: { userId, status: "ACTIVE", product },
+      where: { userId, status: "ACTIVE" },
       orderBy: { createdAt: "desc" },
       include: { plan: true }
     });
@@ -686,14 +687,20 @@ app.post("/upgrade-subscription", authenticateToken, async (req, res) => {
         }
 
         // Remove product access (also remove SALES access if old plan was Combo)
+        // ✅ Use the OLD subscription's product for deletion, not the new plan's product
+        const oldProductForAccess = normalizeProductForAccess(currentSub.product || "SERVICE");
     await prisma.productAccess.deleteMany({
           where: {
             userId,
-      product: productForAccess
+            product: oldProductForAccess
           }
         });
     if (currentSub?.plan?.mongoCategoryId === "Sales_Service") {
           await prisma.productAccess.deleteMany({ where: { userId, product: "SALES" } });
+        }
+        // Also clean up the new product's existing access to avoid duplicates
+        if (oldProductForAccess !== productForAccess) {
+          await prisma.productAccess.deleteMany({ where: { userId, product: productForAccess } });
         }
 
         // Create new active subscription
@@ -1628,6 +1635,161 @@ app.post("/get-user-dashboard-data", authenticateToken, async (req, res) => {
   } catch (error) {
     console.error("Error fetching user dashboard data:", error);
     res.status(500).json({ success: false, message: "Server error" });
+  }
+});
+
+// ✅ Internal endpoint to activate/upgrade a subscription without session validation
+// Used by Razorpay webhook and admin manual recovery
+// Idempotent: skips if paymentId was already processed
+app.post("/internal-activate-subscription", internalAuth, async (req, res) => {
+  const { userId, mongoPlanId, mongoCategoryId, amount, paymentId } = req.body;
+
+  if (!userId || !mongoPlanId || !mongoCategoryId) {
+    return res.status(400).json({ message: "Missing required fields: userId, mongoPlanId, mongoCategoryId" });
+  }
+
+  const normalizeProductForAccess = (p) => {
+    const allowed = ["BILLIT", "SERVICE", "SALES", "FUTURE_PRODUCT"];
+    return allowed.includes(p) ? p : "FUTURE_PRODUCT";
+  };
+
+  const categoryProductMap = {
+    "Service": "SERVICE",
+    "Sales": "SALES",
+    "Sales_Service": "SERVICE"
+  };
+  const product = categoryProductMap[mongoCategoryId] || "SERVICE";
+  const productForAccess = normalizeProductForAccess(product);
+
+  // ✅ Idempotency: skip if this paymentId was already processed
+  if (paymentId) {
+    try {
+      const existingLog = await prisma.subscriptionLog.findFirst({
+        where: {
+          userId,
+          action: "SUBSCRIPTION_STARTED",
+          metadata: { path: ["paymentId"], equals: paymentId }
+        }
+      });
+      if (existingLog) {
+        console.log(`✅ Payment ${paymentId} already processed for user ${userId} — skipping`);
+        return res.json({ success: true, alreadyProcessed: true, message: "Payment already processed" });
+      }
+    } catch (idempErr) {
+      console.warn("⚠️ Could not check idempotency:", idempErr.message);
+    }
+  }
+
+  try {
+    // Step 1: Find the target plan
+    const plan = await prisma.plan.findFirst({ where: { mongoPlanId } });
+    if (!plan) {
+      return res.status(404).json({ message: `Plan not found for mongoPlanId: ${mongoPlanId}` });
+    }
+
+    // Step 2: Find ANY active subscription for this user (cross-product aware)
+    const currentSub = await prisma.subscription.findFirst({
+      where: { userId, status: "ACTIVE" },
+      orderBy: { createdAt: "desc" },
+      include: { plan: true }
+    });
+
+    // Step 3: Create payment record
+    const payment = await prisma.payment.create({
+      data: { userId, amount: amount || 0, status: "COMPLETED" }
+    });
+
+    let newSub;
+    const startDate = new Date();
+    let endDate;
+    if (plan.duration === "MONTHLY") {
+      endDate = moment().tz("Asia/Kolkata").add(1, "month").toDate();
+    } else if (plan.duration === "YEARLY") {
+      endDate = moment().tz("Asia/Kolkata").add(1, "year").toDate();
+    } else {
+      endDate = moment().tz("Asia/Kolkata").add(30, "days").toDate();
+    }
+
+    if (currentSub) {
+      if (currentSub.plan.id === plan.id) {
+        // Same plan — check if it's a Trial (no renewal needed)
+        if (plan.name === "Trial" || plan.name === "Sales Trial") {
+          return res.json({ success: true, message: "User already on this Trial plan", currentSubscription: currentSub });
+        }
+        // Same plan, queue it
+        newSub = await prisma.subscription.create({
+          data: { userId, planId: plan.id, product, status: "QUEUED", startDate: new Date(currentSub.endDate), endDate }
+        });
+      } else {
+        // Different plan — expire old, create new immediately
+        await prisma.subscription.update({ where: { id: currentSub.id }, data: { status: "EXPIRED" } });
+
+        // Remove old product access
+        const oldProductForAccess = normalizeProductForAccess(currentSub.product || "SERVICE");
+        await prisma.productAccess.deleteMany({ where: { userId, product: oldProductForAccess } });
+        // Also clean up SALES access if old plan was combo
+        if (currentSub?.plan?.mongoCategoryId === "Sales_Service") {
+          await prisma.productAccess.deleteMany({ where: { userId, product: "SALES" } });
+        }
+
+        newSub = await prisma.subscription.create({
+          data: { userId, planId: plan.id, product, status: "ACTIVE", startDate, endDate }
+        });
+        await prisma.user.update({ where: { id: userId }, data: { subscriptionId: newSub.id } });
+      }
+    } else {
+      // No active plan — create fresh
+      newSub = await prisma.subscription.create({
+        data: { userId, planId: plan.id, product, status: "ACTIVE", startDate, endDate }
+      });
+      await prisma.user.update({ where: { id: userId }, data: { subscriptionId: newSub.id } });
+    }
+
+    // Step 4: Grant product access
+    const existingAccess = await prisma.productAccess.findFirst({ where: { userId, product: productForAccess } });
+    if (!existingAccess) {
+      await prisma.productAccess.create({ data: { userId, product: productForAccess } });
+    }
+    // Combo plan: also grant SALES access
+    if (mongoCategoryId === "Sales_Service") {
+      const salesAccess = await prisma.productAccess.findFirst({ where: { userId, product: "SALES" } });
+      if (!salesAccess) {
+        await prisma.productAccess.create({ data: { userId, product: "SALES" } });
+      }
+    }
+
+    // Step 5: Log the activation
+    try {
+      await prisma.subscriptionLog.create({
+        data: {
+          userId,
+          subscriptionId: newSub.id,
+          paymentId: payment.id,
+          action: "SUBSCRIPTION_STARTED",
+          message: `Subscription activated via internal endpoint for planId: ${mongoPlanId}`,
+          metadata: {
+            mongoPlanId,
+            mongoCategoryId,
+            amount: amount || 0,
+            paymentId: paymentId || null,
+            source: "internal"
+          }
+        }
+      });
+    } catch (logErr) {
+      console.warn("⚠️ Failed to create activation log:", logErr.message);
+    }
+
+    return res.json({
+      success: true,
+      message: "Subscription activated successfully",
+      subscription: newSub,
+      plan: { name: plan.name, mongoPlanId, mongoCategoryId }
+    });
+
+  } catch (err) {
+    console.error("❌ Internal activate subscription error:", err);
+    return res.status(500).json({ message: "Activation failed", error: err.message });
   }
 });
 

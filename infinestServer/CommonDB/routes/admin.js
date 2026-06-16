@@ -760,4 +760,66 @@ router.get('/get-user-session-limit/:userId', async (req, res) => {
     }
 });
 
+// ✅ Admin: manually activate/recover subscription for a user
+// Use this to fix users who paid via Razorpay but subscription wasn't created
+// (e.g. page close / network drop after payment before create-subscription was called)
+router.post('/manual-activate-subscription', adminAuth, async (req, res) => {
+    const { email, userId: directUserId, mongoPlanId, mongoCategoryId, amount = 0, note } = req.body;
+
+    if (!mongoPlanId || !mongoCategoryId) {
+        return res.status(400).json({ message: "mongoPlanId and mongoCategoryId are required" });
+    }
+    if (!email && !directUserId) {
+        return res.status(400).json({ message: "Either email or userId is required" });
+    }
+
+    try {
+        // Resolve user
+        let userId = directUserId;
+        if (!userId && email) {
+            const user = await prisma.user.findUnique({ where: { email } });
+            if (!user) {
+                return res.status(404).json({ message: `No user found with email: ${email}` });
+            }
+            userId = user.id;
+        }
+
+        // Call internal activation endpoint
+        const serverUrl = process.env.SERVER_URL || `http://localhost:${process.env.AUTH_PORT || 7000}`;
+        const activateRes = await axios.post(
+            `${serverUrl}/internal-activate-subscription`,
+            { userId, mongoPlanId, mongoCategoryId, amount, paymentId: note || `admin-manual-${Date.now()}` },
+            { headers: { "x-internal-key": process.env.INTERNAL_API_KEY } }
+        );
+
+        // Log admin action
+        try {
+            await prisma.subscriptionLog.create({
+                data: {
+                    userId,
+                    action: "SUBSCRIPTION_STARTED",
+                    message: `[ADMIN MANUAL] Subscription manually activated by admin${note ? ` — reason: ${note}` : ''}`,
+                    metadata: { mongoPlanId, mongoCategoryId, amount, adminAction: true }
+                }
+            });
+        } catch (logErr) {
+            console.warn("⚠️ Failed to log admin manual activation:", logErr.message);
+        }
+
+        return res.json({
+            success: true,
+            message: `Subscription activated for user ${email || userId}`,
+            result: activateRes.data
+        });
+
+    } catch (err) {
+        console.error("❌ Admin manual activation error:", err.response?.data || err.message);
+        return res.status(500).json({
+            success: false,
+            message: "Manual activation failed",
+            error: err.response?.data?.message || err.message
+        });
+    }
+});
+
 module.exports = router;

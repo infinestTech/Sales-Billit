@@ -528,8 +528,105 @@ function ActiveUsersTab({ activeUsers }) {
 
 // Subscriptions Tab Component
 function SubscriptionsTab({ logs }) {
+  const [manualEmail, setManualEmail] = useState('');
+  const [manualPlanId, setManualPlanId] = useState('combo-premium');
+  const [manualCategoryId, setManualCategoryId] = useState('Sales_Service');
+  const [manualNote, setManualNote] = useState('');
+  const [manualLoading, setManualLoading] = useState(false);
+  const [manualResult, setManualResult] = useState(null);
+  const API_URL = process.env.NEXT_PUBLIC_API_URL_AUTH || 'http://localhost:7000';
+
+  const handleManualActivation = async () => {
+    if (!manualEmail || !manualPlanId || !manualCategoryId) {
+      alert('Email, Plan ID, and Category ID are required');
+      return;
+    }
+    setManualLoading(true);
+    setManualResult(null);
+    try {
+      const token = localStorage.getItem('adminToken');
+      const res = await fetch(`${API_URL}/admin/manual-activate-subscription`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ email: manualEmail, mongoPlanId: manualPlanId, mongoCategoryId: manualCategoryId, note: manualNote })
+      });
+      const data = await res.json();
+      setManualResult({ success: res.ok, message: data.message || (res.ok ? 'Success' : 'Failed'), detail: data.error || null });
+    } catch (err) {
+      setManualResult({ success: false, message: 'Request failed: ' + err.message });
+    } finally {
+      setManualLoading(false);
+    }
+  };
+
+  const PLAN_OPTIONS = [
+    { id: 'service-premium', cat: 'Service', label: 'Service Premium (Monthly)' },
+    { id: 'service-premium-yearly', cat: 'Service', label: 'Service Premium (Yearly)' },
+    { id: 'sales-premium', cat: 'Sales', label: 'Sales Premium (Monthly)' },
+    { id: 'sales-premium-yearly', cat: 'Sales', label: 'Sales Premium (Yearly)' },
+    { id: 'combo-premium', cat: 'Sales_Service', label: 'Combo (Monthly)' },
+    { id: 'combo-premium-yearly', cat: 'Sales_Service', label: 'Combo (Yearly)' },
+  ];
+
   return (
     <div className="space-y-6">
+      {/* ── Manual Subscription Recovery Panel ────────────────────────────── */}
+      <div className="bg-gray-800 rounded-xl border border-yellow-600/40 p-6">
+        <h3 className="text-lg font-bold text-yellow-400 mb-1">⚠️ Manual Subscription Recovery</h3>
+        <p className="text-gray-400 text-sm mb-4">
+          Use this when a user paid via Razorpay but their subscription was not activated (page closed / network issue after payment).
+        </p>
+        <div className="grid md:grid-cols-2 gap-4">
+          <div>
+            <label className="block text-gray-300 text-sm mb-1">User Email *</label>
+            <input
+              type="email"
+              placeholder="user@example.com"
+              value={manualEmail}
+              onChange={e => setManualEmail(e.target.value)}
+              className="w-full px-3 py-2 bg-gray-700 text-white rounded-lg border border-gray-600 focus:outline-none focus:ring-2 focus:ring-yellow-500 text-sm"
+            />
+          </div>
+          <div>
+            <label className="block text-gray-300 text-sm mb-1">Plan *</label>
+            <select
+              value={`${manualPlanId}|${manualCategoryId}`}
+              onChange={e => { const [p, c] = e.target.value.split('|'); setManualPlanId(p); setManualCategoryId(c); }}
+              className="w-full px-3 py-2 bg-gray-700 text-white rounded-lg border border-gray-600 focus:outline-none focus:ring-2 focus:ring-yellow-500 text-sm"
+            >
+              {PLAN_OPTIONS.map(p => (
+                <option key={p.id} value={`${p.id}|${p.cat}`}>{p.label}</option>
+              ))}
+            </select>
+          </div>
+          <div className="md:col-span-2">
+            <label className="block text-gray-300 text-sm mb-1">Note / Razorpay Payment ID (optional)</label>
+            <input
+              type="text"
+              placeholder="e.g. pay_xxx or reason for manual activation"
+              value={manualNote}
+              onChange={e => setManualNote(e.target.value)}
+              className="w-full px-3 py-2 bg-gray-700 text-white rounded-lg border border-gray-600 focus:outline-none focus:ring-2 focus:ring-yellow-500 text-sm"
+            />
+          </div>
+        </div>
+        <button
+          onClick={handleManualActivation}
+          disabled={manualLoading}
+          className="mt-4 px-6 py-2 bg-yellow-600 hover:bg-yellow-700 disabled:opacity-50 text-white font-semibold rounded-lg text-sm transition"
+        >
+          {manualLoading ? 'Activating...' : 'Manually Activate Subscription'}
+        </button>
+        {manualResult && (
+          <div className={`mt-3 px-4 py-3 rounded-lg text-sm ${manualResult.success ? 'bg-green-500/20 text-green-300' : 'bg-red-500/20 text-red-300'}`}>
+            {manualResult.message}
+            {manualResult.detail && <span className="block text-xs mt-1 opacity-75">{manualResult.detail}</span>}
+            {manualResult.success && <span className="block text-xs mt-1 opacity-75">⚠️ Remember to also trigger MongoDB sync by having the user log in again, or manually via BillitServer.</span>}
+          </div>
+        )}
+      </div>
+
+      {/* ── Subscription Logs Table ────────────────────────────────────────── */}
       <div className="bg-gray-800 rounded-xl border border-gray-700 overflow-hidden">
         <div className="p-6 border-b border-gray-700">
           <h3 className="text-xl font-bold text-white">Subscription Logs</h3>
