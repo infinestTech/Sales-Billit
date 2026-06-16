@@ -540,6 +540,18 @@ router.post("/subscribe", authMySQLToken, async (req, res) => {
 
       const order = await razorpay.orders.create(orderOptions);
 
+      // ✅ Log payment initiation
+      try {
+        await axios.post(`${process.env.AUTH_SERVER_URL}/log-subscription-event`, {
+          userId,
+          action: "PAYMENT_INITIATED",
+          message: `Payment initiated for ₹${planPrice} | Order ID: ${order.id} | Plan: ${planId}`,
+          metadata: { orderId: order.id, planId, categoryId, amount: planPrice }
+        }, { headers: { "x-internal-key": process.env.INTERNAL_API_KEY } });
+      } catch (logErr) {
+        console.warn("⚠️ Failed to log PAYMENT_INITIATED:", logErr.message);
+      }
+
       return res.json({
         success: true,
         orderId: order.id,

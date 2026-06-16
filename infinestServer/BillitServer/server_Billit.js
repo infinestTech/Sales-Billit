@@ -17,6 +17,11 @@ mongoose.connect(process.env.BILLIT_MONGO_URI)
   .catch(err => {});
 
 const app = express(); // ✅ MOVE THIS TO THE TOP
+
+// ✅ Webhook MUST be mounted BEFORE express.json() — needs raw body for signature verification
+const webhookRoutes = require("./routes/webhookRoutes");
+app.use("/api", webhookRoutes);
+
 app.use(express.json());
 // app.use(cors({
 //  origin: [
