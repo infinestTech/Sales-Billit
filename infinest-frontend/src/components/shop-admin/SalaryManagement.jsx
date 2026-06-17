@@ -39,7 +39,7 @@ export default function SalaryManagement({ shopId }) {
 
   const fetchEmployees = async () => {
     try {
-      const res = await axios.get(`${API_URL}/api/employees`, { headers: headers(), params: { shopId, isActive: true } });
+      const res = await axios.get(`${API_URL}/api/shop-admin/hr/employees`, { headers: headers(), params: { shopId, isActive: true } });
       if (res.data.success) setEmployees(res.data.data || []);
     } catch (_) {}
   };
@@ -47,7 +47,7 @@ export default function SalaryManagement({ shopId }) {
   const fetchSalaryReport = async () => {
     setLoading(true); setActionMsg(null);
     try {
-      const res = await axios.get(`${API_URL}/api/salary/report`, { headers: headers(), params: { shopId, month, year } });
+      const res = await axios.get(`${API_URL}/api/shop-admin/hr/salary/report`, { headers: headers(), params: { shopId, month, year } });
       if (res.data.success) { setRecords(res.data.data || []); setSummary(res.data.summary || null); }
     } catch (_) { setRecords([]); }
     finally { setLoading(false); }
@@ -57,7 +57,7 @@ export default function SalaryManagement({ shopId }) {
     if (!genEmployeeId) return;
     setGenerating(true); setActionMsg(null);
     try {
-      const res = await axios.post(`${API_URL}/api/salary/generate`, { employeeId: genEmployeeId, month, year }, { headers: headers() });
+      const res = await axios.post(`${API_URL}/api/shop-admin/hr/salary/generate`, { employeeId: genEmployeeId, month, year }, { headers: headers() });
       setActionMsg({ success: `Salary generated. Net: ₹${res.data.data?.netSalary?.toLocaleString() || 0}` });
       fetchSalaryReport();
     } catch (err) { setActionMsg({ error: err.response?.data?.message || "Generation failed" }); }
@@ -67,7 +67,7 @@ export default function SalaryManagement({ shopId }) {
   const handleGenerateBulk = async () => {
     setGenerating(true); setActionMsg(null);
     try {
-      const res = await axios.post(`${API_URL}/api/salary/generate-bulk`, { shopId, month, year }, { headers: headers() });
+      const res = await axios.post(`${API_URL}/api/shop-admin/hr/salary/generate-bulk`, { shopId, month, year }, { headers: headers() });
       const r = res.data.result;
       setActionMsg({ success: `Bulk generated: ${r.success.length} success, ${r.failed.length} failed` });
       fetchSalaryReport();
@@ -77,7 +77,7 @@ export default function SalaryManagement({ shopId }) {
 
   const handleFinalize = async (employeeId) => {
     try {
-      await axios.patch(`${API_URL}/api/salary/${employeeId}/finalize`, { month, year }, { headers: headers() });
+      await axios.patch(`${API_URL}/api/shop-admin/hr/salary/${employeeId}/finalize`, { month, year }, { headers: headers() });
       fetchSalaryReport();
       if (selectedRecord?.employeeId === employeeId) fetchRecord(employeeId);
     } catch (err) { setActionMsg({ error: err.response?.data?.message || "Finalize failed" }); }
@@ -85,7 +85,7 @@ export default function SalaryManagement({ shopId }) {
 
   const handleMarkPaid = async (employeeId) => {
     try {
-      await axios.patch(`${API_URL}/api/salary/${employeeId}/mark-paid`, { month, year }, { headers: headers() });
+      await axios.patch(`${API_URL}/api/shop-admin/hr/salary/${employeeId}/mark-paid`, { month, year }, { headers: headers() });
       fetchSalaryReport();
       if (selectedRecord?.employeeId === employeeId) fetchRecord(employeeId);
     } catch (err) { setActionMsg({ error: err.response?.data?.message || "Mark paid failed" }); }
@@ -93,7 +93,7 @@ export default function SalaryManagement({ shopId }) {
 
   const fetchRecord = async (employeeId) => {
     try {
-      const res = await axios.get(`${API_URL}/api/salary/${employeeId}`, { headers: headers(), params: { month, year } });
+      const res = await axios.get(`${API_URL}/api/shop-admin/hr/salary/${employeeId}`, { headers: headers(), params: { month, year } });
       if (res.data.success) setSelectedRecord(res.data.data);
     } catch (_) {}
   };

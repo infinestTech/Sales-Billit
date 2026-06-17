@@ -2133,5 +2133,30 @@ router.patch('/essl/employee-pin', shopAdminAuth, async (req, res) => {
     }
 });
 
+// ── HR Routes (employee CRUD, attendance punch, salary calculation) ───────────
+const hrController = require('../controllers/hrController');
+
+// Employee CRUD
+router.get('/hr/employees',                       hrController.listEmployees);
+router.post('/hr/employees',                      hrController.createEmployee);
+router.put('/hr/employees/:id',                   hrController.updateEmployee);
+router.patch('/hr/employees/:id/deactivate',      hrController.deactivateEmployee);
+router.patch('/hr/employees/:id/reactivate',      hrController.reactivateEmployee);
+
+// Attendance
+router.get('/hr/attendance/daily',                hrController.getDailyAttendance);
+router.post('/hr/attendance/punch',               hrController.softwarePunch);
+router.get('/hr/attendance/report',               hrController.getAttendanceReport);
+router.post('/hr/attendance/manual',              hrController.manualMark);
+router.get('/hr/attendance/:id/monthly',          hrController.getMonthlyAttendance);
+
+// Salary
+router.get('/hr/salary/report',                   hrController.getSalaryReport);
+router.post('/hr/salary/generate',                hrController.generateSalary);
+router.post('/hr/salary/generate-bulk',           hrController.generateBulkSalary);
+router.patch('/hr/salary/:id/finalize',           hrController.finalizeSalary);
+router.patch('/hr/salary/:id/mark-paid',          hrController.markSalaryPaid);
+router.get('/hr/salary/:id',                      hrController.getSalaryRecord);
+
 module.exports = router;
 

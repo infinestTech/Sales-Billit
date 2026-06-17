@@ -121,7 +121,7 @@ export default function EmployeeManagement({ shopId }) {
   const fetchEmployees = async () => {
     setLoading(true);
     try {
-      const res = await axios.get(`${API_URL}/api/employees`, {
+      const res = await axios.get(`${API_URL}/api/shop-admin/hr/employees`, {
         headers: headers(),
         params: { shopId, isActive: showInactive ? undefined : true },
       });
@@ -248,10 +248,10 @@ export default function EmployeeManagement({ shopId }) {
       };
 
       if (editingId) {
-        await axios.put(`${API_URL}/api/employees/${editingId}`, payload, { headers: headers() });
+        await axios.put(`${API_URL}/api/shop-admin/hr/employees/${editingId}`, payload, { headers: headers() });
         setSuccess("Employee updated successfully");
       } else {
-        await axios.post(`${API_URL}/api/employees`, payload, { headers: headers() });
+        await axios.post(`${API_URL}/api/shop-admin/hr/employees`, payload, { headers: headers() });
         setSuccess("Employee created successfully");
       }
       await fetchEmployees();
@@ -266,7 +266,7 @@ export default function EmployeeManagement({ shopId }) {
   const toggleActive = async (emp) => {
     try {
       const endpoint = emp.isActive ? "deactivate" : "reactivate";
-      await axios.patch(`${API_URL}/api/employees/${emp.employeeId}/${endpoint}`, {}, { headers: headers() });
+      await axios.patch(`${API_URL}/api/shop-admin/hr/employees/${emp.employeeId}/${endpoint}`, {}, { headers: headers() });
       fetchEmployees();
     } catch (err) {
       setError("Failed to update status");
