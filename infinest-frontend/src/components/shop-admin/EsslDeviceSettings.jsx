@@ -395,7 +395,7 @@ export default function EsslDeviceSettings({ shopId, employees = [] }) {
                   <div className="text-slate-400 mb-0.5">Last Punch</div>
                   <div className="font-semibold text-slate-700">
                     PIN {ds.lastPunch.pin} · {ds.lastPunch.type} ·{" "}
-                    {new Date(ds.lastPunch.time).toLocaleString("en-IN", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" })}
+                    {new Date(ds.lastPunch.time).toLocaleString("en-IN", { timeZone: "Asia/Kolkata", day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" })}
                   </div>
                 </div>
               )}
@@ -636,6 +636,7 @@ export default function EsslDeviceSettings({ shopId, employees = [] }) {
                           </td>
                           <td className="px-4 py-2.5 text-slate-600 text-xs">
                             {new Date(log.punch_time).toLocaleString("en-IN", {
+                              timeZone: "Asia/Kolkata",
                               day: "2-digit",
                               month: "short",
                               hour: "2-digit",

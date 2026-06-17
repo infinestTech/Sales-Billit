@@ -22,15 +22,23 @@
 'use strict';
 
 const crypto = require('crypto');
+const moment = require('moment-timezone');
 const { EsslDevice, EsslPunchLog, Employee, Attendance, Shop } = require('../models/mongoModels');
 const { formatIST } = require('../utils/dateHelper');
 const { processPunch } = require('./hrController');
+
+const IST_TZ = 'Asia/Kolkata';
 
 // ─── helpers ──────────────────────────────────────────────────────────────────
 
 /**
  * Determine punch type from the InOutCode field in ATTLOG.
  * Reference: ZKTeco ADMS documentation §4.2
+ *
+ * NOTE: Many eSSL M20 devices have no F1..F4 in/out keys configured, so they
+ * always send InOutCode = 0 (or always 1) for every fingerprint punch.  In that
+ * case we return 'auto' and the HR layer decides check_in / check_out based on
+ * punch order for the day.
  */
 function resolvePunchType(inOutCode) {
   switch (String(inOutCode).trim()) {
@@ -48,6 +56,12 @@ function resolvePunchType(inOutCode) {
  * Parse a single raw ATTLOG line.
  * Format: PIN\tDateTime\tVerifyCode\tInOutCode\tReserved\tWorkCode
  * Returns null if the line is malformed.
+ *
+ * IMPORTANT: The device sends the timestamp in its local timezone (IST for us).
+ * Node's `new Date("YYYY-MM-DD HH:MM:SS")` parses that string as the host
+ * server's local time — and Hetzner is in Europe (UTC+1/UTC+2).  We therefore
+ * explicitly parse the string in Asia/Kolkata so the stored UTC instant is
+ * correct regardless of where the server lives.
  */
 function parseAttLogLine(line) {
   if (!line || !line.trim()) return null;
@@ -57,13 +71,13 @@ function parseAttLogLine(line) {
   const [pin, dateTimeStr, verifyCode, inOutCode] = parts;
   if (!pin || !dateTimeStr) return null;
 
-  // Sanitise PIN — digits only (max 10 chars)
   if (!/^\d{1,10}$/.test(pin.trim())) return null;
 
-  // Parse datetime: "YYYY-MM-DD HH:MM:SS" or "YYYY/MM/DD HH:MM:SS"
+  // Parse "YYYY-MM-DD HH:MM:SS" or "YYYY/MM/DD HH:MM:SS" as IST wall-clock time.
   const normalised = dateTimeStr.trim().replace(/\//g, '-');
-  const punchTime = new Date(normalised);
-  if (isNaN(punchTime.getTime())) return null;
+  const m = moment.tz(normalised, ['YYYY-MM-DD HH:mm:ss', 'YYYY-MM-DD HH:mm'], true, IST_TZ);
+  if (!m.isValid()) return null;
+  const punchTime = m.toDate();
 
   return {
     device_pin: pin.trim(),
@@ -220,7 +234,15 @@ async function handleDataPush(req, res) {
 
       const employee = pinMap[parsed.device_pin] || null;
 
-      // Store raw punch log (even for unknown PINs for later reconciliation)
+      // Many M20 devices send the same InOutCode for every fingerprint scan.
+      // Defer the real classification to the HR layer and derive a useful value
+      // for the legacy Attendance row below.
+      const deviceClaimsCheckIn  = parsed.punch_type === 'check_in';
+      const deviceClaimsCheckOut = parsed.punch_type === 'check_out';
+
+      // Store raw punch log (even for unknown PINs for later reconciliation).
+      // We persist the device's claim so audit logs are honest; the HR/Attendance
+      // tables get the *resolved* punch type computed from punch order below.
       const punchLog = await EsslPunchLog.create({
         shop_id: device.shop_id,
         device_serial: sn,
@@ -238,7 +260,10 @@ async function handleDataPush(req, res) {
       // Derive attendance date
       const dateStr = punchDateString(parsed.punch_time);
 
-      // Upsert Attendance record for that date
+      // Upsert Attendance record for that date.
+      // Resolution rule: if no row yet for today → first punch is check_in.
+      // Otherwise → it's a check_out (overwrites any existing check_out so the
+      // last punch of the day wins).
       try {
         const existing = await Attendance.findOne({
           employee_id: employee._id,
@@ -246,24 +271,21 @@ async function handleDataPush(req, res) {
         });
 
         if (!existing) {
-          // First punch for this day → create as present
           await Attendance.create({
             shop_id: device.shop_id,
             employee_id: employee._id,
             date: dateStr,
             status: 'present',
-            locked: false, // ADMS records remain unlocked so check-out can update them
+            locked: false,
             source: 'essl_m20',
-            check_in_time: parsed.punch_type === 'check_in' ? parsed.punch_time : undefined,
-            check_out_time: parsed.punch_type === 'check_out' ? parsed.punch_time : undefined,
+            check_in_time: parsed.punch_time,
           });
         } else {
-          // Update check-in / check-out times on existing record
           const update = { source: 'essl_m20' };
-          if (parsed.punch_type === 'check_in' && !existing.check_in_time) {
+          // First punch ever for this day filled check_in; everything after is check_out.
+          if (!existing.check_in_time) {
             update.check_in_time = parsed.punch_time;
-          }
-          if (parsed.punch_type === 'check_out') {
+          } else {
             update.check_out_time = parsed.punch_time;
           }
           await Attendance.findByIdAndUpdate(existing._id, { $set: update });
@@ -272,7 +294,8 @@ async function handleDataPush(req, res) {
         // Mark punch log as processed
         await EsslPunchLog.findByIdAndUpdate(punchLog._id, { processed: true });
 
-        // Feed into HR daily attendance system (non-blocking)
+        // Feed into HR daily attendance system (non-blocking).
+        // overridePunchType=null lets processPunch decide via its state machine.
         processPunch(
           device.shop_id.toString(),
           employee._id.toString(),
@@ -363,12 +386,47 @@ async function getDevicesForShop(shopId) {
  * Returns recent raw punch logs for a shop. verify_type is excluded.
  */
 async function getPunchLogsForShop(shopId, limit = 100) {
-  return EsslPunchLog.find({ shop_id: shopId })
+  const logs = await EsslPunchLog.find({ shop_id: shopId })
     .select('-verify_type -raw_line -__v')
     .sort({ punch_time: -1 })
     .limit(limit)
-    .populate('employee_id', 'employee_name mobile_number device_pin')
+    .populate('employee_id', 'employee_name name mobile_number device_pin')
     .lean();
+
+  // Compute the resolved punch type per (employee, date) by punch order.
+  // Odd-indexed punch = check_in, even-indexed = check_out (1st, 3rd, 5th... in,
+  // 2nd, 4th, 6th... out).  This matches the HR state machine.
+  // We need to scan ALL punches for each (employee, day) appearing in the
+  // returned slice, so build the day-keys first then fetch the full day.
+  const dayKeys = new Set();
+  for (const l of logs) {
+    if (!l.employee_id?._id) continue;
+    const d = formatIST(l.punch_time, 'YYYY-MM-DD');
+    dayKeys.add(`${l.employee_id._id}|${d}`);
+  }
+
+  const indexByLogId = new Map();
+  for (const key of dayKeys) {
+    const [empId, date] = key.split('|');
+    const dayStart = require('moment-timezone').tz(date, 'YYYY-MM-DD', 'Asia/Kolkata').startOf('day').toDate();
+    const dayEnd   = require('moment-timezone').tz(date, 'YYYY-MM-DD', 'Asia/Kolkata').endOf('day').toDate();
+    const allDay = await EsslPunchLog.find({
+      shop_id: shopId,
+      employee_id: empId,
+      punch_time: { $gte: dayStart, $lte: dayEnd },
+    }).sort({ punch_time: 1 }).select('_id punch_time').lean();
+    allDay.forEach((p, idx) => {
+      indexByLogId.set(p._id.toString(), idx % 2 === 0 ? 'check_in' : 'check_out');
+    });
+  }
+
+  return logs.map(l => ({
+    ...l,
+    // Resolved type used by the UI; falls back to device's claim for unlinked PINs.
+    punch_type: l.employee_id?._id
+      ? (indexByLogId.get(l._id.toString()) || l.punch_type)
+      : l.punch_type,
+  }));
 }
 
 module.exports = {
