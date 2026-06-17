@@ -40,8 +40,17 @@ export default function MobileNavigation({
   setActiveView,
   profileImage,
   profileName,
+  useEsslAttendance = false,
 }) {
   const [isMenuOpen, setIsMenuOpen] = useState(false)
+
+  // Filter out attendance if eSSL device is managing it
+  const visibleNavItems = NAV_ITEMS.filter(
+    (item) => !(useEsslAttendance && item.id === "attendance")
+  )
+  const visibleBottomTabs = BOTTOM_TABS.filter(
+    (tab) => !(useEsslAttendance && tab.id === "attendance")
+  )
 
   const go = (id) => {
     setActiveView(id)
@@ -179,7 +188,7 @@ export default function MobileNavigation({
             Workspace
           </p>
           <ul className="space-y-1">
-            {NAV_ITEMS.map((item) => {
+            {visibleNavItems.map((item) => {
               const Icon = item.icon
               const active = activeView === item.id
               return (
@@ -230,8 +239,8 @@ export default function MobileNavigation({
 
       {/* Bottom nav */}
       <nav className="fixed bottom-0 left-0 right-0 z-10 border-t border-slate-200 bg-white/95 backdrop-blur">
-        <div className="grid grid-cols-5">
-          {BOTTOM_TABS.map((tab) => {
+        <div className={`grid grid-cols-${visibleBottomTabs.length}`}>
+          {visibleBottomTabs.map((tab) => {
             const Icon = tab.icon
             const active = activeView === tab.id
             return (

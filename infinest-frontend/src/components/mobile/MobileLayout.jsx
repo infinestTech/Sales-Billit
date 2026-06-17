@@ -20,6 +20,7 @@ export default function MobileLayout({ shopId, isLimitReached, setIsLimitReached
   const [activeView, setActiveView] = useState("records")
   const [profileImage, setProfileImage] = useState(PLACEHOLDER_AVATAR)
   const [profileName, setProfileName] = useState("User")
+  const [useEsslAttendance, setUseEsslAttendance] = useState(false)
   const { features } = usePlanFeatures()
 
   useEffect(() => {
@@ -49,6 +50,27 @@ export default function MobileLayout({ shopId, isLimitReached, setIsLimitReached
     fetchProfile()
   }, [])
 
+  // Fetch attendance source (eSSL or built-in)
+  useEffect(() => {
+    const fetchAttendanceSource = async () => {
+      const token = localStorage.getItem("token")
+      if (!token) return
+      try {
+        const res = await fetch(
+          `${process.env.NEXT_PUBLIC_API_URL_BILLIT}/api/dashboard/attendance-source`,
+          { headers: { Authorization: `Bearer ${token}` } }
+        )
+        if (res.ok) {
+          const data = await res.json()
+          setUseEsslAttendance(data.useEsslAttendance === true)
+        }
+      } catch (err) {
+        console.error("Failed to fetch attendance source:", err)
+      }
+    }
+    fetchAttendanceSource()
+  }, [])
+
   const renderActiveView = () => {
     switch (activeView) {
       case "records":
@@ -68,6 +90,20 @@ export default function MobileLayout({ shopId, isLimitReached, setIsLimitReached
       case "stock":
         return <MobileStock shopId={shopId} />
       case "attendance":
+        // When eSSL is active, this tab is hidden; guard against direct access
+        if (useEsslAttendance) {
+          return (
+            <div className="flex flex-col items-center justify-center min-h-[60vh] gap-3 p-6 text-center">
+              <div className="rounded-full bg-indigo-100 p-4">
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-8 w-8 text-indigo-600"><path d="M12 2a10 10 0 0 0-6.88 17.25"/><path d="M12 2a10 10 0 0 1 6.88 17.25"/><path d="M12 8v4l3 3"/><circle cx="12" cy="12" r="1"/></svg>
+              </div>
+              <p className="font-semibold text-slate-700">Biometric Device Active</p>
+              <p className="text-sm text-slate-500">
+                Attendance is managed by the eSSL M20 biometric device. Contact your shop admin for attendance records.
+              </p>
+            </div>
+          )
+        }
         return <MobileAttendance shopId={shopId} />
       case "expenses":
         return <MobileExpenses shopId={shopId} />
@@ -93,6 +129,7 @@ export default function MobileLayout({ shopId, isLimitReached, setIsLimitReached
         profileName={profileName}
         features={features}
         shopId={shopId}
+        useEsslAttendance={useEsslAttendance}
       />
       <div className="pb-20">{renderActiveView()}</div>
     </div>

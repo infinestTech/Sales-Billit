@@ -2006,4 +2006,132 @@ router.patch('/shop-settings/revenue-visibility', shopAdminAuth, async (req, res
     }
 });
 
+// ==============================
+// 📡 eSSL M20 Attendance Settings
+// ==============================
+const { EsslDevice, EsslPunchLog } = require('../models/mongoModels');
+const { getDevicesForShop, getPunchLogsForShop } = require('../controllers/admsController');
+
+// GET current eSSL settings for shop
+router.get('/shop-settings/essl', shopAdminAuth, async (req, res) => {
+    try {
+        const shop = await Shop.findById(req.shopId).select('use_essl_attendance essl_device_serial shop_name');
+        if (!shop) return res.status(404).json({ success: false, message: 'Shop not found' });
+
+        const devices = await getDevicesForShop(req.shopId);
+        res.json({
+            success: true,
+            useEsslAttendance: shop.use_essl_attendance || false,
+            esslDeviceSerial: shop.essl_device_serial || null,
+            devices,
+        });
+    } catch (error) {
+        console.error('Get eSSL settings error:', error);
+        res.status(500).json({ success: false, message: 'Failed to get eSSL settings' });
+    }
+});
+
+// PATCH toggle eSSL attendance & set device serial
+router.patch('/shop-settings/essl', shopAdminAuth, async (req, res) => {
+    try {
+        const { useEsslAttendance, esslDeviceSerial } = req.body;
+
+        if (typeof useEsslAttendance !== 'boolean') {
+            return res.status(400).json({ success: false, message: 'useEsslAttendance must be a boolean' });
+        }
+
+        const updateData = { use_essl_attendance: useEsslAttendance };
+
+        // Validate & link device serial when enabling
+        if (useEsslAttendance) {
+            if (!esslDeviceSerial || typeof esslDeviceSerial !== 'string') {
+                return res.status(400).json({ success: false, message: 'esslDeviceSerial is required when enabling eSSL attendance' });
+            }
+            const serialSanitised = esslDeviceSerial.trim().slice(0, 64);
+            updateData.essl_device_serial = serialSanitised;
+
+            // Link device to this shop if it exists
+            await EsslDevice.findOneAndUpdate(
+                { device_serial: serialSanitised },
+                { $set: { shop_id: req.shopId, is_active: true, last_activity: 'Linked to shop via admin portal' } },
+                { upsert: true, new: true }
+            );
+        } else {
+            // Deactivate device link when disabling — fetch current serial from DB first
+            const currentShop = await Shop.findById(req.shopId).select('essl_device_serial').lean();
+            if (currentShop?.essl_device_serial) {
+                await EsslDevice.findOneAndUpdate(
+                    { device_serial: currentShop.essl_device_serial },
+                    { $set: { is_active: false, last_activity: 'Unlinked from shop via admin portal' } }
+                );
+            }
+        }
+
+        const shop = await Shop.findByIdAndUpdate(req.shopId, updateData, { new: true });
+        if (!shop) return res.status(404).json({ success: false, message: 'Shop not found' });
+
+        res.json({
+            success: true,
+            message: `eSSL attendance ${useEsslAttendance ? 'enabled' : 'disabled'}`,
+            useEsslAttendance: shop.use_essl_attendance,
+            esslDeviceSerial: shop.essl_device_serial || null,
+        });
+    } catch (error) {
+        console.error('Toggle eSSL settings error:', error);
+        res.status(500).json({ success: false, message: 'Failed to update eSSL settings' });
+    }
+});
+
+// GET recent ADMS punch logs for current shop (admin audit view)
+router.get('/essl/punch-logs', shopAdminAuth, async (req, res) => {
+    try {
+        const limit = Math.min(parseInt(req.query.limit) || 100, 500);
+        const logs = await getPunchLogsForShop(req.shopId, limit);
+        res.json({ success: true, logs });
+    } catch (error) {
+        console.error('Get punch logs error:', error);
+        res.status(500).json({ success: false, message: 'Failed to get punch logs' });
+    }
+});
+
+// GET registered devices for this shop
+router.get('/essl/devices', shopAdminAuth, async (req, res) => {
+    try {
+        const devices = await getDevicesForShop(req.shopId);
+        res.json({ success: true, devices });
+    } catch (error) {
+        console.error('Get eSSL devices error:', error);
+        res.status(500).json({ success: false, message: 'Failed to get devices' });
+    }
+});
+
+// PATCH employee device_pin — map an employee to their eSSL device PIN
+router.patch('/essl/employee-pin', shopAdminAuth, async (req, res) => {
+    try {
+        const { employee_id, device_pin } = req.body;
+        if (!employee_id) return res.status(400).json({ success: false, message: 'employee_id required' });
+
+        // Validate pin: digits only, 1-10 chars, or empty string to clear
+        if (device_pin !== '' && device_pin !== null && device_pin !== undefined) {
+            if (!/^\d{1,10}$/.test(String(device_pin).trim())) {
+                return res.status(400).json({ success: false, message: 'device_pin must be numeric (1-10 digits)' });
+            }
+        }
+
+        const { Employee } = require('../models/mongoModels');
+        const mongoose = require('mongoose');
+        const employee = await Employee.findOne({ _id: new mongoose.Types.ObjectId(employee_id), shop_id: req.shopId });
+        if (!employee) return res.status(404).json({ success: false, message: 'Employee not found' });
+
+        employee.device_pin = device_pin ? String(device_pin).trim() : undefined;
+        await employee.save();
+
+        res.json({ success: true, message: 'Device PIN updated', device_pin: employee.device_pin || null });
+    } catch (error) {
+        console.error('Update employee device pin error:', error);
+        res.status(500).json({ success: false, message: 'Failed to update device PIN' });
+    }
+});
+
 module.exports = router;
+

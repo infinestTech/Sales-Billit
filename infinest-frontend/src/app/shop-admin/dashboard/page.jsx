@@ -15,6 +15,9 @@ import {
 } from 'recharts';
 import MobileDashboard from '@/components/shop-admin/MobileDashboard';
 import SalaryManagement from '@/components/shop-admin/SalaryManagement';
+import EsslDeviceSettings from '@/components/shop-admin/EsslDeviceSettings';
+import EmployeeManagement from '@/components/shop-admin/EmployeeManagement';
+import AttendanceManagement from '@/components/shop-admin/AttendanceManagement';
 import * as XLSX from 'xlsx';
 
 export default function ShopAdminDashboard() {
@@ -1395,8 +1398,10 @@ export default function ShopAdminDashboard() {
             <nav className="flex-1 px-4 py-6 space-y-2">
               {[
                 { id: 'overview', label: 'Overview', icon: TrendingUp },
-                { id: 'employees', label: 'Employees', icon: Users },
-                { id: 'salary', label: 'Salary Management', icon: DollarSign },
+                { id: 'hr-employees', label: 'HR — Employees', icon: Users },
+                { id: 'hr-attendance', label: 'HR — Attendance', icon: CheckCircle },
+                { id: 'salary', label: 'HR — Salary', icon: DollarSign },
+                { id: 'employees', label: 'Users (Legacy)', icon: Users },
                 { id: 'revenue', label: 'Revenue', icon: DollarSign },
                 { id: 'report', label: 'Financial Report', icon: AlertCircle }
               ].map((tab) => {
@@ -1438,8 +1443,10 @@ export default function ShopAdminDashboard() {
           <nav className="flex-1 px-2 py-6 space-y-3">
             {[
               { id: 'overview', icon: TrendingUp },
-              { id: 'employees', icon: Users },
+              { id: 'hr-employees', icon: Users },
+              { id: 'hr-attendance', icon: CheckCircle },
               { id: 'salary', icon: DollarSign },
+              { id: 'employees', icon: Users },
               { id: 'revenue', icon: DollarSign },
               { id: 'report', icon: AlertCircle }
             ].map((tab) => {
@@ -1540,6 +1547,20 @@ export default function ShopAdminDashboard() {
                   />
                 </button>
               </div>
+            </div>
+
+            {/* eSSL M20 Biometric Attendance Settings */}
+            <div className="bg-white border border-gray-200 rounded-xl p-6 shadow-sm">
+              <h3 className="text-gray-900 font-semibold text-lg mb-1 flex items-center gap-2">
+                <span className="inline-flex items-center justify-center rounded-lg bg-indigo-100 p-1.5">
+                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-5 w-5 text-indigo-600"><path d="M12 2a10 10 0 0 0-6.88 17.25" /><path d="M12 2a10 10 0 0 1 6.88 17.25" /><path d="M12 8v4l3 3" /><circle cx="12" cy="12" r="1" /></svg>
+                </span>
+                Biometric Attendance Device
+              </h3>
+              <p className="text-gray-500 text-sm mb-4">
+                Connect an eSSL M20 device to automatically capture employee attendance via fingerprint / face recognition.
+              </p>
+              <EsslDeviceSettings shopId={currentShopId} employees={employees} />
             </div>
 
             {/* Secondary Stats */}
@@ -2182,6 +2203,14 @@ export default function ShopAdminDashboard() {
               </div>
             )}
           </div>
+        )}
+
+        {activeTab === 'hr-employees' && (
+          <EmployeeManagement shopId={currentShopId} />
+        )}
+
+        {activeTab === 'hr-attendance' && (
+          <AttendanceManagement shopId={currentShopId} />
         )}
 
         {activeTab === 'salary' && (

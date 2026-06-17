@@ -2,935 +2,327 @@
 import React, { useState, useEffect } from "react";
 import axios from "axios";
 import {
-  DollarSign,
-  Settings,
-  Calculator,
-  FileText,
-  Download,
-  CheckCircle,
-  XCircle,
-  Clock,
-  Edit2,
-  Save,
-  X,
-  Users,
+  DollarSign, Calculator, FileText, CheckCircle,
+  XCircle, Clock, Users, AlertCircle, RefreshCw,
+  Eye
 } from "lucide-react";
 
-const SalaryManagement = ({ shopId }) => {
-  const [activeTab, setActiveTab] = useState("overview");
+const API_URL = process.env.NEXT_PUBLIC_API_URL_BILLIT || "http://localhost:8000";
+
+const STATUS = {
+  DRAFT:     { label: "Draft",     color: "bg-gray-100 text-gray-700" },
+  FINALIZED: { label: "Finalized", color: "bg-blue-100 text-blue-700" },
+  PAID:      { label: "Paid",      color: "bg-green-100 text-green-700" },
+};
+
+export default function SalaryManagement({ shopId }) {
+  const [activeTab, setActiveTab] = useState("records");
   const [employees, setEmployees] = useState([]);
-  const [salaryConfig, setSalaryConfig] = useState(null);
-  const [salaryRecords, setSalaryRecords] = useState([]);
-  const [selectedMonth, setSelectedMonth] = useState("");
+  const [records, setRecords] = useState([]);
+  const [summary, setSummary] = useState(null);
+  const [selectedRecord, setSelectedRecord] = useState(null);
   const [loading, setLoading] = useState(false);
-  const [editingEmployee, setEditingEmployee] = useState(null);
-  const [editingSalary, setEditingSalary] = useState("");
-  const [editingConfig, setEditingConfig] = useState(false);
-  const [configForm, setConfigForm] = useState({
-    permission_deduction_percentage: 10,
-    hours_per_day: 8,
+  const [actionMsg, setActionMsg] = useState(null);
+  const [selectedMonth, setSelectedMonth] = useState(() => {
+    const n = new Date();
+    return `${n.getFullYear()}-${String(n.getMonth() + 1).padStart(2, "0")}`;
   });
-  // Attendance sheet filters
-  const [selectedEmployee, setSelectedEmployee] = useState("");
-  const [attendanceData, setAttendanceData] = useState(null);
+  const [genEmployeeId, setGenEmployeeId] = useState("");
+  const [generating, setGenerating] = useState(false);
 
-  // Initialize current month
-  useEffect(() => {
-    const now = new Date();
-    const year = now.getFullYear();
-    const month = String(now.getMonth() + 1).padStart(2, "0");
-    setSelectedMonth(`${year}-${month}`);
-  }, []);
+  const token = () => localStorage.getItem("shopAdminToken");
+  const headers = () => ({ Authorization: `Bearer ${token()}` });
+  const [month, year] = selectedMonth.split("-").map(Number);
 
-  // Fetch salary configuration
-  useEffect(() => {
-    if (shopId) {
-      fetchSalaryConfig();
-      fetchEmployees();
-    }
-  }, [shopId]);
-
-  // Fetch salary records when month changes
-  useEffect(() => {
-    if (selectedMonth && shopId) {
-      fetchSalaryRecords();
-    }
-  }, [selectedMonth, shopId]);
-
-  const fetchSalaryConfig = async () => {
-    try {
-      const token = localStorage.getItem("shopAdminToken");
-      const API_URL = process.env.NEXT_PUBLIC_API_URL_BILLIT || 'http://localhost:8000';
-      const response = await axios.get(
-        `${API_URL}/api/shop-admin/salary/config`,
-        {
-          params: { shop_id: shopId },
-          headers: { Authorization: `Bearer ${token}` },
-        }
-      );
-      if (response.data.success) {
-        setSalaryConfig(response.data.config);
-        setConfigForm({
-          permission_deduction_percentage:
-            response.data.config.permission_deduction_percentage,
-          hours_per_day: response.data.config.hours_per_day || 8,
-        });
-      }
-    } catch (error) {
-      console.error("Error fetching salary config:", error);
-    }
-  };
+  useEffect(() => { if (shopId) fetchEmployees(); }, [shopId]);
+  useEffect(() => { if (shopId && activeTab === "records") fetchSalaryReport(); }, [selectedMonth, shopId, activeTab]);
 
   const fetchEmployees = async () => {
     try {
-      const token = localStorage.getItem("shopAdminToken");
-      const API_URL = process.env.NEXT_PUBLIC_API_URL_BILLIT || 'http://localhost:8000';
-      const response = await axios.get(
-        `${API_URL}/api/shop-admin/employees`,
-        {
-          params: { shop_id: shopId },
-          headers: { Authorization: `Bearer ${token}` },
-        }
-      );
-      if (response.data.success) {
-        setEmployees(response.data.employees);
-      }
-    } catch (error) {
-      console.error("Error fetching employees:", error);
-    }
+      const res = await axios.get(`${API_URL}/api/employees`, { headers: headers(), params: { shopId, isActive: true } });
+      if (res.data.success) setEmployees(res.data.data || []);
+    } catch (_) {}
   };
 
-  const fetchSalaryRecords = async () => {
+  const fetchSalaryReport = async () => {
+    setLoading(true); setActionMsg(null);
     try {
-      setLoading(true);
-      const token = localStorage.getItem("shopAdminToken");
-      const API_URL = process.env.NEXT_PUBLIC_API_URL_BILLIT || 'http://localhost:8000';
-      const response = await axios.get(
-        `${API_URL}/api/shop-admin/salary/records`,
-        {
-          params: { shop_id: shopId, month: selectedMonth },
-          headers: { Authorization: `Bearer ${token}` },
-        }
-      );
-      if (response.data.success) {
-        setSalaryRecords(response.data.records);
-      }
-    } catch (error) {
-      console.error("Error fetching salary records:", error);
-    } finally {
-      setLoading(false);
-    }
+      const res = await axios.get(`${API_URL}/api/salary/report`, { headers: headers(), params: { shopId, month, year } });
+      if (res.data.success) { setRecords(res.data.data || []); setSummary(res.data.summary || null); }
+    } catch (_) { setRecords([]); }
+    finally { setLoading(false); }
   };
 
-  const fetchAttendanceSheet = async (employeeId) => {
+  const handleGenerate = async () => {
+    if (!genEmployeeId) return;
+    setGenerating(true); setActionMsg(null);
     try {
-      setLoading(true);
-      const token = localStorage.getItem("shopAdminToken");
-      const API_URL = process.env.NEXT_PUBLIC_API_URL_BILLIT || 'http://localhost:8000';
-      
-      if (!selectedMonth) return;
-      
-      const [year, month] = selectedMonth.split('-');
-      const daysInMonth = new Date(year, month, 0).getDate();
-      
-      // Fetch attendance for the month
-      const response = await axios.get(
-        `${API_URL}/api/shop-admin/employee-attendance`,
-        {
-          params: { 
-            shop_id: shopId, 
-            employee_id: employeeId,
-            from_date: `${selectedMonth}-01`,
-            to_date: `${selectedMonth}-${String(daysInMonth).padStart(2, '0')}`
-          },
-          headers: { Authorization: `Bearer ${token}` },
-        }
-      );
-      
-      if (response.data.success) {
-        // Get employee details
-        const employee = employees.find(e => e._id === employeeId);
-        
-        // Generate daily records
-        const dailyRecords = [];
-        for (let day = 1; day <= daysInMonth; day++) {
-          const dateStr = `${selectedMonth}-${String(day).padStart(2, '0')}`;
-          const attendanceRecord = response.data.attendance.dailyRecords?.find(r => r.date === dateStr);
-          const permissionRecord = response.data.attendance.permissions?.find(p => p.date === dateStr);
-          
-          dailyRecords.push({
-            date: dateStr,
-            day: day,
-            status: attendanceRecord?.status || '-',
-            permissionHours: permissionRecord?.duration_hours || 0
-          });
-        }
-        
-        // Calculate totals
-        const totalPresent = dailyRecords.filter(r => r.status === 'present').length;
-        const totalAbsent = dailyRecords.filter(r => r.status === 'absent').length;
-        const totalPermissionHours = dailyRecords.reduce((sum, r) => sum + (r.permissionHours || 0), 0);
-        
-        const baseSalary = totalPresent * (employee?.daily_salary || 0);
-        const hourlyRate = (employee?.daily_salary || 0) / (salaryConfig?.hours_per_day || 8);
-        const permissionDeduction = totalPermissionHours * hourlyRate * ((salaryConfig?.permission_deduction_percentage || 10) / 100);
-        const netSalary = baseSalary - permissionDeduction;
-        
-        setAttendanceData({
-          employee: employee,
-          dailyRecords: dailyRecords,
-          summary: {
-            totalPresent,
-            totalAbsent,
-            totalPermissionHours: totalPermissionHours.toFixed(2),
-            baseSalary: baseSalary.toFixed(2),
-            permissionDeduction: permissionDeduction.toFixed(2),
-            netSalary: netSalary.toFixed(2)
-          }
-        });
-      }
-    } catch (error) {
-      console.error("Error fetching attendance sheet:", error);
-    } finally {
-      setLoading(false);
-    }
+      const res = await axios.post(`${API_URL}/api/salary/generate`, { employeeId: genEmployeeId, month, year }, { headers: headers() });
+      setActionMsg({ success: `Salary generated. Net: ₹${res.data.data?.netSalary?.toLocaleString() || 0}` });
+      fetchSalaryReport();
+    } catch (err) { setActionMsg({ error: err.response?.data?.message || "Generation failed" }); }
+    finally { setGenerating(false); }
   };
 
-  const handleUpdateConfig = async () => {
+  const handleGenerateBulk = async () => {
+    setGenerating(true); setActionMsg(null);
     try {
-      const token = localStorage.getItem("shopAdminToken");
-      const API_URL = process.env.NEXT_PUBLIC_API_URL_BILLIT || 'http://localhost:8000';
-      const response = await axios.put(
-        `${API_URL}/api/shop-admin/salary/config`,
-        {
-          shop_id: shopId,
-          ...configForm,
-        },
-        {
-          headers: { Authorization: `Bearer ${token}` },
-        }
-      );
-      if (response.data.success) {
-        setSalaryConfig(response.data.config);
-        setEditingConfig(false);
-        alert("Configuration updated successfully!");
-      }
-    } catch (error) {
-      console.error("Error updating config:", error);
-      alert("Failed to update configuration");
-    }
+      const res = await axios.post(`${API_URL}/api/salary/generate-bulk`, { shopId, month, year }, { headers: headers() });
+      const r = res.data.result;
+      setActionMsg({ success: `Bulk generated: ${r.success.length} success, ${r.failed.length} failed` });
+      fetchSalaryReport();
+    } catch (err) { setActionMsg({ error: err.response?.data?.message || "Bulk generation failed" }); }
+    finally { setGenerating(false); }
   };
 
-  const handleUpdateEmployeeSalary = async (employeeId) => {
+  const handleFinalize = async (employeeId) => {
     try {
-      const token = localStorage.getItem("shopAdminToken");
-      const API_URL = process.env.NEXT_PUBLIC_API_URL_BILLIT || 'http://localhost:8000';
-      const response = await axios.put(
-        `${API_URL}/api/shop-admin/salary/employee/${employeeId}/daily-salary`,
-        {
-          daily_salary: parseFloat(editingSalary),
-        },
-        {
-          headers: { Authorization: `Bearer ${token}` },
-        }
-      );
-      if (response.data.success) {
-        setEmployees((prev) =>
-          prev.map((emp) =>
-            emp._id === employeeId
-              ? { ...emp, daily_salary: parseFloat(editingSalary) }
-              : emp
-          )
-        );
-        setEditingEmployee(null);
-        setEditingSalary("");
-        alert("Daily salary updated successfully!");
-      }
-    } catch (error) {
-      console.error("Error updating salary:", error);
-      alert("Failed to update salary");
-    }
+      await axios.patch(`${API_URL}/api/salary/${employeeId}/finalize`, { month, year }, { headers: headers() });
+      fetchSalaryReport();
+      if (selectedRecord?.employeeId === employeeId) fetchRecord(employeeId);
+    } catch (err) { setActionMsg({ error: err.response?.data?.message || "Finalize failed" }); }
   };
 
-  const handleCalculateSalary = async (employeeId) => {
+  const handleMarkPaid = async (employeeId) => {
     try {
-      setLoading(true);
-      const token = localStorage.getItem("shopAdminToken");
-      const API_URL = process.env.NEXT_PUBLIC_API_URL_BILLIT || 'http://localhost:8000';
-      const response = await axios.post(
-        `${API_URL}/api/shop-admin/salary/calculate`,
-        {
-          shop_id: shopId,
-          employee_id: employeeId,
-          month: selectedMonth,
-        },
-        {
-          headers: { Authorization: `Bearer ${token}` },
-        }
-      );
-      if (response.data.success) {
-        alert(`Salary calculated successfully! Net: ₹${response.data.calculation.netSalary}`);
-        fetchSalaryRecords();
-      }
-    } catch (error) {
-      console.error("Error calculating salary:", error);
-      alert(error.response?.data?.message || "Failed to calculate salary");
-    } finally {
-      setLoading(false);
-    }
+      await axios.patch(`${API_URL}/api/salary/${employeeId}/mark-paid`, { month, year }, { headers: headers() });
+      fetchSalaryReport();
+      if (selectedRecord?.employeeId === employeeId) fetchRecord(employeeId);
+    } catch (err) { setActionMsg({ error: err.response?.data?.message || "Mark paid failed" }); }
   };
 
-  const handleCalculateAllSalaries = async () => {
-    if (!confirm("Calculate salaries for all employees this month?")) return;
-
+  const fetchRecord = async (employeeId) => {
     try {
-      setLoading(true);
-      const token = localStorage.getItem("shopAdminToken");
-      const API_URL = process.env.NEXT_PUBLIC_API_URL_BILLIT || 'http://localhost:8000';
-      const response = await axios.post(
-        `${API_URL}/api/shop-admin/salary/calculate-all`,
-        {
-          shop_id: shopId,
-          month: selectedMonth,
-        },
-        {
-          headers: { Authorization: `Bearer ${token}` },
-        }
-      );
-      if (response.data.success) {
-        alert(response.data.message);
-        fetchSalaryRecords();
-      }
-    } catch (error) {
-      console.error("Error calculating salaries:", error);
-      alert("Failed to calculate salaries");
-    } finally {
-      setLoading(false);
-    }
+      const res = await axios.get(`${API_URL}/api/salary/${employeeId}`, { headers: headers(), params: { month, year } });
+      if (res.data.success) setSelectedRecord(res.data.data);
+    } catch (_) {}
   };
 
-  const handleUpdatePaymentStatus = async (recordId, status, paidAmount) => {
-    try {
-      const token = localStorage.getItem("shopAdminToken");
-      const API_URL = process.env.NEXT_PUBLIC_API_URL_BILLIT || 'http://localhost:8000';
-      const response = await axios.put(
-        `${API_URL}/api/shop-admin/salary/record/${recordId}/payment`,
-        {
-          payment_status: status,
-          paid_amount: paidAmount,
-        },
-        {
-          headers: { Authorization: `Bearer ${token}` },
-        }
-      );
-      if (response.data.success) {
-        fetchSalaryRecords();
-        alert("Payment status updated!");
-      }
-    } catch (error) {
-      console.error("Error updating payment:", error);
-      alert("Failed to update payment");
-    }
-  };
+  const fmtMin = (m) => { if (!m) return "0 min"; const h = Math.floor(m/60), mn = m%60; return h>0?`${h}h ${mn}m`:`${mn}m`; };
 
-  const getPaymentStatusBadge = (status) => {
-    const styles = {
-      paid: "bg-green-100 text-green-800 border-green-200",
-      partial: "bg-yellow-100 text-yellow-800 border-yellow-200",
-      unpaid: "bg-red-100 text-red-800 border-red-200",
-    };
-    const icons = {
-      paid: <CheckCircle className="w-3 h-3" />,
-      partial: <Clock className="w-3 h-3" />,
-      unpaid: <XCircle className="w-3 h-3" />,
-    };
-    return (
-      <span
-        className={`inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium border ${styles[status]}`}
-      >
-        {icons[status]}
-        {status.toUpperCase()}
-      </span>
-    );
-  };
+  const TAB = ({ id, label, icon: Icon }) => (
+    <button onClick={() => setActiveTab(id)}
+      className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition ${activeTab===id?"bg-green-600 text-white":"bg-white text-gray-600 hover:bg-gray-100 border border-gray-200"}`}>
+      <Icon className="h-4 w-4"/>{label}
+    </button>
+  );
 
   return (
-    <div className="w-full bg-white rounded-lg shadow-md">
-      {/* Header */}
-      <div className="border-b border-gray-200 p-6">
-        <h2 className="text-2xl font-bold text-gray-800 flex items-center gap-2">
-          <DollarSign className="w-6 h-6 text-blue-600" />
-          Salary Management
-        </h2>
-      </div>
-
-      {/* Tabs */}
-      <div className="border-b border-gray-200">
-        <div className="flex gap-4 px-6">
-          {[
-            { id: "overview", label: "Overview", icon: FileText },
-            { id: "employees", label: "Employee Salaries", icon: DollarSign },
-            { id: "records", label: "Salary Records", icon: Calculator },
-            { id: "settings", label: "Settings", icon: Settings },
-          ].map((tab) => (
-            <button
-              key={tab.id}
-              onClick={() => setActiveTab(tab.id)}
-              className={`flex items-center gap-2 px-4 py-3 font-medium transition-colors ${
-                activeTab === tab.id
-                  ? "text-blue-600 border-b-2 border-blue-600"
-                  : "text-gray-600 hover:text-gray-800"
-              }`}
-            >
-              <tab.icon className="w-4 h-4" />
-              {tab.label}
-            </button>
-          ))}
+    <div className="space-y-4">
+      <div className="bg-white rounded-xl border border-gray-200 p-4">
+        <div className="flex items-center justify-between mb-3">
+          <h2 className="text-xl font-bold text-gray-800">Salary Management</h2>
+          <div className="flex items-center gap-2">
+            <label className="text-sm font-medium text-gray-600">Month</label>
+            <input type="month" value={selectedMonth} onChange={(e)=>setSelectedMonth(e.target.value)}
+              className="px-3 py-2 border border-gray-300 rounded-lg text-sm text-gray-900 bg-white focus:outline-none focus:ring-2 focus:ring-green-500"/>
+          </div>
+        </div>
+        <div className="flex gap-2 flex-wrap">
+          <TAB id="records" label="Salary Records" icon={FileText}/>
+          <TAB id="generate" label="Generate Salary" icon={Calculator}/>
         </div>
       </div>
 
-      {/* Content */}
-      <div className="p-6">
-        {/* Overview Tab - Attendance Sheet */}
-        {activeTab === "overview" && (
-          <div>
-            <div className="mb-6 flex items-center gap-4 flex-wrap">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Select Month
-                </label>
-                <input
-                  type="month"
-                  value={selectedMonth}
-                  onChange={(e) => {
-                    setSelectedMonth(e.target.value);
-                    setSelectedEmployee("");
-                    setAttendanceData(null);
-                  }}
-                  className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 text-gray-900 bg-white"
-                />
-              </div>
-              
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Select Employee
-                </label>
-                <select
-                  value={selectedEmployee}
-                  onChange={(e) => {
-                    setSelectedEmployee(e.target.value);
-                    if (e.target.value) {
-                      fetchAttendanceSheet(e.target.value);
-                    } else {
-                      setAttendanceData(null);
-                    }
-                  }}
-                  className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 text-gray-900 bg-white min-w-[200px]"
-                >
-                  <option value="">-- Select Employee --</option>
-                  {employees.map((emp) => (
-                    <option key={emp._id} value={emp._id}>
-                      {emp.employee_name}
-                    </option>
-                  ))}
-                </select>
-              </div>
+      {actionMsg?.success && (
+        <div className="flex items-center gap-2 p-3 bg-green-50 border border-green-200 rounded-lg text-green-700 text-sm">
+          <CheckCircle className="h-4 w-4 shrink-0"/>{actionMsg.success}
+        </div>
+      )}
+      {actionMsg?.error && (
+        <div className="flex items-center gap-2 p-3 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm">
+          <AlertCircle className="h-4 w-4 shrink-0"/>{actionMsg.error}
+        </div>
+      )}
 
-              <div className="flex-1"></div>
-              
-              <button
-                onClick={handleCalculateAllSalaries}
-                disabled={loading}
-                className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-gray-400 flex items-center gap-2"
-              >
-                <Calculator className="w-4 h-4" />
-                Calculate All Salaries
+      {activeTab==="records" && (
+        <div className="space-y-4">
+          {summary && (
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+              {[
+                {label:"Total Employees", val:summary.totalEmployees, color:"text-gray-700 border-gray-200"},
+                {label:"Total Gross", val:`₹${summary.totalGross?.toLocaleString()}`, color:"text-green-700 border-green-200 bg-green-50"},
+                {label:"Total Deductions", val:`₹${summary.totalDeductions?.toLocaleString()}`, color:"text-red-700 border-red-200 bg-red-50"},
+                {label:"Total Net Payable", val:`₹${summary.totalNetSalary?.toLocaleString()}`, color:"text-blue-700 border-blue-200 bg-blue-50"},
+              ].map(({label,val,color})=>(
+                <div key={label} className={`rounded-xl border p-4 bg-white ${color}`}>
+                  <div className="text-xs font-medium mb-1 opacity-70">{label}</div>
+                  <div className="text-2xl font-bold">{val}</div>
+                </div>
+              ))}
+            </div>
+          )}
+          {summary && (
+            <div className="bg-white rounded-xl border border-gray-200 p-4">
+              <h4 className="text-sm font-semibold text-gray-700 mb-3">Deduction Breakdown</h4>
+              <div className="grid grid-cols-3 gap-3 text-sm">
+                <div className="bg-red-50 rounded-lg p-3"><div className="text-xs text-red-600 font-medium mb-1">Absence</div><div className="text-lg font-bold text-red-700">₹{summary.totalAbsenceDeduction?.toLocaleString()}</div></div>
+                <div className="bg-blue-50 rounded-lg p-3"><div className="text-xs text-blue-600 font-medium mb-1">Permission Hrs</div><div className="text-lg font-bold text-blue-700">₹{summary.totalPermissionDeduction?.toLocaleString()}</div></div>
+                <div className="bg-orange-50 rounded-lg p-3"><div className="text-xs text-orange-600 font-medium mb-1">Late Entry</div><div className="text-lg font-bold text-orange-700">₹{summary.totalLateDeduction?.toLocaleString()}</div></div>
+              </div>
+            </div>
+          )}
+          <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+            <div className="flex items-center justify-between px-4 py-3 border-b border-gray-200 bg-gray-50">
+              <span className="text-sm font-semibold text-gray-700">{records.length} records</span>
+              <button onClick={fetchSalaryReport} className="flex items-center gap-1 px-3 py-1.5 text-sm text-green-700 hover:bg-green-50 rounded-lg transition">
+                <RefreshCw className="h-3.5 w-3.5"/>Refresh
               </button>
             </div>
-
-            {loading && (
-              <div className="text-center py-8">
-                <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
-                <p className="text-gray-600 mt-2">Loading...</p>
+            {loading ? (
+              <div className="p-12 text-center"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-green-600 mx-auto"/></div>
+            ) : records.length===0 ? (
+              <div className="p-12 text-center">
+                <DollarSign className="h-12 w-12 text-gray-300 mx-auto mb-3"/>
+                <p className="text-gray-500 mb-1">No salary records for this month.</p>
+                <p className="text-xs text-gray-400">Go to "Generate Salary" to create records.</p>
               </div>
-            )}
-
-            {!loading && selectedEmployee && attendanceData && (
-              <div>
-                {/* Employee Info Header */}
-                <div className="bg-gradient-to-r from-blue-50 to-indigo-50 rounded-lg p-6 mb-6 border border-blue-200">
-                  <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-                    <div>
-                      <div className="text-sm text-gray-600 font-medium">Employee Name</div>
-                      <div className="text-lg font-bold text-gray-900">{attendanceData.employee?.employee_name}</div>
-                    </div>
-                    <div>
-                      <div className="text-sm text-gray-600 font-medium">Mobile Number</div>
-                      <div className="text-lg font-bold text-gray-900">{attendanceData.employee?.mobile_number}</div>
-                    </div>
-                    <div>
-                      <div className="text-sm text-gray-600 font-medium">Daily Wage</div>
-                      <div className="text-lg font-bold text-green-600">₹{attendanceData.employee?.daily_salary || 0}</div>
-                    </div>
-                    <div>
-                      <div className="text-sm text-gray-600 font-medium">Period</div>
-                      <div className="text-lg font-bold text-gray-900">
-                        {new Date(selectedMonth + '-01').toLocaleDateString('en-IN', { month: 'long', year: 'numeric' })}
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Attendance Sheet Table */}
-                <div className="bg-white rounded-lg border border-gray-200 overflow-hidden mb-6">
-                  <div className="overflow-x-auto">
-                    <table className="w-full">
-                      <thead className="bg-gray-50 border-b border-gray-200">
-                        <tr>
-                          <th className="px-4 py-3 text-left text-xs font-bold text-gray-700 uppercase">Date</th>
-                          <th className="px-4 py-3 text-left text-xs font-bold text-gray-700 uppercase">Day</th>
-                          <th className="px-4 py-3 text-center text-xs font-bold text-gray-700 uppercase">Status</th>
-                          <th className="px-4 py-3 text-center text-xs font-bold text-gray-700 uppercase">Permission (Hrs)</th>
-                          <th className="px-4 py-3 text-right text-xs font-bold text-gray-700 uppercase">Wage</th>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead className="bg-gray-50 border-b border-gray-200">
+                    <tr>{["Employee","Present","Absent","Late","Permission","Gross","Deductions","Net Pay","Status","Actions"].map(h=>(
+                      <th key={h} className="px-3 py-3 text-left text-xs font-semibold text-gray-600">{h}</th>
+                    ))}</tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-100">
+                    {records.map(rec=>{
+                      const st=STATUS[rec.status]||STATUS.DRAFT;
+                      return (
+                        <tr key={rec._id} className="hover:bg-gray-50 transition">
+                          <td className="px-3 py-3"><div className="font-medium text-gray-900">{rec.employee?.name||rec.employeeId}</div><div className="text-xs text-gray-500">{rec.employeeId}</div></td>
+                          <td className="px-3 py-3 text-green-700 font-semibold">{rec.presentDays}</td>
+                          <td className="px-3 py-3 text-red-700 font-semibold">{rec.absentDays}</td>
+                          <td className="px-3 py-3 text-orange-600">{rec.lateDays}</td>
+                          <td className="px-3 py-3 text-blue-600 text-xs">{fmtMin(rec.totalPermissionMinutes)}</td>
+                          <td className="px-3 py-3 text-gray-700">₹{rec.grossSalary?.toLocaleString()}</td>
+                          <td className="px-3 py-3 text-red-600">−₹{rec.totalDeductions?.toLocaleString()}</td>
+                          <td className="px-3 py-3 font-bold text-green-700">₹{rec.netSalary?.toLocaleString()}</td>
+                          <td className="px-3 py-3"><span className={`px-2 py-0.5 rounded-full text-xs font-semibold ${st.color}`}>{st.label}</span></td>
+                          <td className="px-3 py-3">
+                            <div className="flex items-center gap-1">
+                              <button onClick={()=>fetchRecord(rec.employeeId)} className="p-1.5 text-blue-600 hover:bg-blue-50 rounded transition" title="View slip"><Eye className="h-4 w-4"/></button>
+                              {rec.status==="DRAFT" && <button onClick={()=>handleFinalize(rec.employeeId)} className="px-2 py-1 text-xs bg-blue-600 hover:bg-blue-700 text-white rounded transition">Finalize</button>}
+                              {rec.status==="FINALIZED" && <button onClick={()=>handleMarkPaid(rec.employeeId)} className="px-2 py-1 text-xs bg-green-600 hover:bg-green-700 text-white rounded transition">Mark Paid</button>}
+                            </div>
+                          </td>
                         </tr>
-                      </thead>
-                      <tbody className="divide-y divide-gray-200">
-                        {attendanceData.dailyRecords.map((record, idx) => (
-                          <tr key={idx} className={`hover:bg-gray-50 ${record.status === 'present' ? 'bg-green-50/30' : record.status === 'absent' ? 'bg-red-50/30' : ''}`}>
-                            <td className="px-4 py-3 text-sm text-gray-900">
-                              {new Date(record.date).toLocaleDateString('en-IN', { day: '2-digit', month: 'short' })}
-                            </td>
-                            <td className="px-4 py-3 text-sm text-gray-600">
-                              {new Date(record.date).toLocaleDateString('en-IN', { weekday: 'short' })}
-                            </td>
-                            <td className="px-4 py-3 text-center">
-                              {record.status === 'present' && (
-                                <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
-                                  <CheckCircle className="w-3 h-3 mr-1" />
-                                  Present
-                                </span>
-                              )}
-                              {record.status === 'absent' && (
-                                <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800">
-                                  <XCircle className="w-3 h-3 mr-1" />
-                                  Absent
-                                </span>
-                              )}
-                              {record.status === '-' && (
-                                <span className="text-gray-400 text-sm">-</span>
-                              )}
-                            </td>
-                            <td className="px-4 py-3 text-center">
-                              {record.permissionHours > 0 ? (
-                                <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-orange-100 text-orange-800">
-                                  <Clock className="w-3 h-3 mr-1" />
-                                  {record.permissionHours}h
-                                </span>
-                              ) : (
-                                <span className="text-gray-400">-</span>
-                              )}
-                            </td>
-                            <td className="px-4 py-3 text-right text-sm font-medium">
-                              {record.status === 'present' ? (
-                                <span className="text-green-600">₹{attendanceData.employee?.daily_salary || 0}</span>
-                              ) : (
-                                <span className="text-gray-400">₹0</span>
-                              )}
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                </div>
-
-                {/* Summary Section */}
-                <div className="bg-gradient-to-r from-gray-50 to-gray-100 rounded-lg p-6 border border-gray-300">
-                  <h4 className="text-lg font-bold text-gray-800 mb-4">Payment Summary</h4>
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                    <div>
-                      <div className="space-y-2">
-                        <div className="flex justify-between items-center">
-                          <span className="text-sm text-gray-600">Total Present Days:</span>
-                          <span className="text-lg font-bold text-green-600">{attendanceData.summary.totalPresent}</span>
-                        </div>
-                        <div className="flex justify-between items-center">
-                          <span className="text-sm text-gray-600">Total Absent Days:</span>
-                          <span className="text-lg font-bold text-red-600">{attendanceData.summary.totalAbsent}</span>
-                        </div>
-                        <div className="flex justify-between items-center">
-                          <span className="text-sm text-gray-600">Permission Hours:</span>
-                          <span className="text-lg font-bold text-orange-600">{attendanceData.summary.totalPermissionHours}h</span>
-                        </div>
-                      </div>
-                    </div>
-                    
-                    <div>
-                      <div className="space-y-2">
-                        <div className="flex justify-between items-center">
-                          <span className="text-sm text-gray-600">Base Payment:</span>
-                          <span className="text-lg font-bold text-blue-600">₹{attendanceData.summary.baseSalary}</span>
-                        </div>
-                        <div className="flex justify-between items-center">
-                          <span className="text-sm text-gray-600">Permission Deduction:</span>
-                          <span className="text-lg font-bold text-red-600">-₹{attendanceData.summary.permissionDeduction}</span>
-                        </div>
-                      </div>
-                    </div>
-                    
-                    <div className="bg-green-100 rounded-lg p-4 border-2 border-green-300">
-                      <div className="text-center">
-                        <div className="text-sm text-green-700 font-medium mb-1">NET PAYMENT</div>
-                        <div className="text-3xl font-bold text-green-700">₹{attendanceData.summary.netSalary}</div>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {!loading && !selectedEmployee && (
-              <div className="text-center py-12 bg-gray-50 rounded-lg border-2 border-dashed border-gray-300">
-                <Users className="h-12 w-12 text-gray-400 mx-auto mb-3" />
-                <p className="text-gray-600 text-lg">Please select an employee to view their attendance sheet</p>
+                      );
+                    })}
+                  </tbody>
+                </table>
               </div>
             )}
           </div>
-        )}
+        </div>
+      )}
 
-        {/* Employee Salaries Tab */}
-        {activeTab === "employees" && (
-          <div>
-            <h3 className="text-lg font-semibold text-gray-800 mb-4">
-              Set Daily Wage Rates
-            </h3>
-            <p className="text-sm text-gray-600 mb-4">
-              Configure daily wage for each employee. This is the base pay per working day.
-            </p>
-            <div className="overflow-x-auto">
-              <table className="w-full">
-                <thead className="bg-gray-50">
-                  <tr>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                      Employee Name
-                    </th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                      Mobile
-                    </th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                      Daily Wage (₹/day)
-                    </th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                      Actions
-                    </th>
-                  </tr>
-                </thead>
-                <tbody className="bg-white divide-y divide-gray-200">
-                  {employees.map((employee) => (
-                    <tr key={employee._id} className="hover:bg-gray-50">
-                      <td className="px-4 py-3 font-medium text-gray-900">
-                        {employee.employee_name}
-                      </td>
-                      <td className="px-4 py-3 text-sm text-gray-600">
-                        {employee.mobile_number}
-                      </td>
-                      <td className="px-4 py-3">
-                        {editingEmployee === employee._id ? (
-                          <input
-                            type="number"
-                            value={editingSalary}
-                            onChange={(e) => setEditingSalary(e.target.value)}
-                            className="w-32 px-3 py-1 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 text-gray-900 bg-white"
-                            placeholder="Enter amount"
-                            autoFocus
-                          />
-                        ) : (
-                          <span className="font-semibold text-gray-900">
-                            ₹{employee.daily_salary || 0}
-                          </span>
-                        )}
-                      </td>
-                      <td className="px-4 py-3">
-                        {editingEmployee === employee._id ? (
-                          <div className="flex gap-2">
-                            <button
-                              onClick={() =>
-                                handleUpdateEmployeeSalary(employee._id)
-                              }
-                              className="px-3 py-1 bg-green-600 text-white rounded hover:bg-green-700 flex items-center gap-1"
-                            >
-                              <Save className="w-3 h-3" />
-                              Save
-                            </button>
-                            <button
-                              onClick={() => {
-                                setEditingEmployee(null);
-                                setEditingSalary("");
-                              }}
-                              className="px-3 py-1 bg-gray-300 text-gray-700 rounded hover:bg-gray-400 flex items-center gap-1"
-                            >
-                              <X className="w-3 h-3" />
-                              Cancel
-                            </button>
-                          </div>
-                        ) : (
-                          <button
-                            onClick={() => {
-                              setEditingEmployee(employee._id);
-                              setEditingSalary(employee.daily_salary || "");
-                            }}
-                            className="px-3 py-1 bg-blue-600 text-white rounded hover:bg-blue-700 flex items-center gap-1"
-                          >
-                            <Edit2 className="w-3 h-3" />
-                            Edit
-                          </button>
-                        )}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+      {activeTab==="generate" && (
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="bg-white rounded-xl border border-gray-200 p-6 shadow-sm space-y-4">
+            <h3 className="font-bold text-gray-800 flex items-center gap-2"><Calculator className="h-5 w-5 text-green-600"/>Generate for One Employee</h3>
+            <p className="text-sm text-gray-500">Reads attendance for the month and computes salary with all deductions per employee policy.</p>
+            <div>
+              <label className="block text-xs font-medium text-gray-600 mb-1">Employee</label>
+              <select value={genEmployeeId} onChange={(e)=>setGenEmployeeId(e.target.value)}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white text-gray-900 focus:outline-none focus:ring-2 focus:ring-green-500">
+                <option value="">— Select Employee —</option>
+                {employees.map(e=><option key={e.employeeId} value={e.employeeId}>{e.name} ({e.employeeId})</option>)}
+              </select>
             </div>
+            <div className="bg-gray-50 rounded-lg p-3 text-xs text-gray-500">
+              Month: <span className="font-semibold text-gray-700">{new Date(selectedMonth+"-01").toLocaleString("en-IN",{month:"long",year:"numeric"})}</span>
+            </div>
+            <button onClick={handleGenerate} disabled={!genEmployeeId||generating}
+              className="w-full py-2.5 bg-green-600 hover:bg-green-700 disabled:bg-gray-300 text-white rounded-lg font-medium text-sm transition flex items-center justify-center gap-2">
+              {generating?<div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"/>:<Calculator className="h-4 w-4"/>}
+              Calculate & Save
+            </button>
           </div>
-        )}
+          <div className="bg-white rounded-xl border border-gray-200 p-6 shadow-sm space-y-4">
+            <h3 className="font-bold text-gray-800 flex items-center gap-2"><Users className="h-5 w-5 text-blue-600"/>Bulk Generate (All Employees)</h3>
+            <p className="text-sm text-gray-500">Generates salary records for all active employees in one click.</p>
+            <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 text-xs text-blue-700">
+              <p className="font-semibold mb-1">What this does:</p>
+              <ul className="list-disc list-inside space-y-0.5">
+                <li>Reads each employee's attendance for the month</li>
+                <li>Computes net salary with all deductions</li>
+                <li>Creates DRAFT records (won't overwrite PAID)</li>
+              </ul>
+            </div>
+            <p className="text-xs text-gray-500">Active employees: <span className="font-semibold text-gray-700">{employees.length}</span></p>
+            <button onClick={handleGenerateBulk} disabled={generating||employees.length===0}
+              className="w-full py-2.5 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-300 text-white rounded-lg font-medium text-sm transition flex items-center justify-center gap-2">
+              {generating?<div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"/>:<Users className="h-4 w-4"/>}
+              Generate for All ({employees.length})
+            </button>
+          </div>
+        </div>
+      )}
 
-        {/* Salary Records Tab */}
-        {activeTab === "records" && (
-          <div>
-            <div className="mb-6 flex items-center gap-4">
+      {selectedRecord && (
+        <div className="fixed inset-0 bg-black bg-opacity-40 z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-lg w-full max-h-[90vh] flex flex-col overflow-hidden">
+            <div className="bg-gradient-to-r from-green-600 to-emerald-600 px-6 py-4 flex items-center justify-between">
+              <h3 className="text-white font-bold text-lg">Salary Slip</h3>
+              <button onClick={()=>setSelectedRecord(null)} className="text-white hover:bg-white hover:bg-opacity-20 p-1.5 rounded-lg transition"><XCircle className="h-5 w-5"/></button>
+            </div>
+            <div className="overflow-y-auto flex-1 p-6 space-y-4">
+              <div className="flex items-start justify-between">
+                <div>
+                  <div className="font-bold text-xl text-gray-900">{selectedRecord.employee?.name||selectedRecord.employeeId}</div>
+                  <div className="text-sm text-gray-500">{selectedRecord.employee?.department} · {selectedRecord.employee?.designation}</div>
+                  <div className="text-xs text-gray-400 mt-1">ID: {selectedRecord.employeeId}</div>
+                </div>
+                <div className="text-right">
+                  <div className="text-sm text-gray-500">{new Date(selectedRecord.year,selectedRecord.month-1).toLocaleString("en-IN",{month:"long",year:"numeric"})}</div>
+                  <span className={`mt-1 inline-block px-2 py-0.5 rounded-full text-xs font-semibold ${STATUS[selectedRecord.status]?.color}`}>{STATUS[selectedRecord.status]?.label}</span>
+                </div>
+              </div>
+              <div className="bg-gray-50 rounded-xl p-4 grid grid-cols-3 gap-3 text-center text-sm">
+                <div><div className="text-green-600 font-bold text-xl">{selectedRecord.presentDays}</div><div className="text-gray-500 text-xs">Present</div></div>
+                <div><div className="text-red-600 font-bold text-xl">{selectedRecord.absentDays}</div><div className="text-gray-500 text-xs">Absent</div></div>
+                <div><div className="text-yellow-600 font-bold text-xl">{selectedRecord.halfDays}</div><div className="text-gray-500 text-xs">Half Day</div></div>
+                <div><div className="text-blue-600 font-bold text-xl">{selectedRecord.paidLeaveDays}</div><div className="text-gray-500 text-xs">Paid Leave</div></div>
+                <div><div className="text-orange-600 font-bold text-xl">{selectedRecord.lateDays}</div><div className="text-gray-500 text-xs">Late Days</div></div>
+                <div><div className="text-purple-600 font-bold text-sm">{fmtMin(selectedRecord.totalPermissionMinutes)}</div><div className="text-gray-500 text-xs">Permission</div></div>
+              </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Filter by Month
-                </label>
-                <input
-                  type="month"
-                  value={selectedMonth}
-                  onChange={(e) => setSelectedMonth(e.target.value)}
-                  className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 text-gray-900 bg-white"
-                />
-              </div>
-            </div>
-
-            <div className="overflow-x-auto">
-              <table className="w-full">
-                <thead className="bg-gray-50">
-                  <tr>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                      Employee
-                    </th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                      Attendance
-                    </th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                      Permission Hrs
-                    </th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                      Base Salary
-                    </th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                      Deductions
-                    </th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                      Net Salary
-                    </th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                      Payment Status
-                    </th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                      Actions
-                    </th>
-                  </tr>
-                </thead>
-                <tbody className="bg-white divide-y divide-gray-200">
-                  {salaryRecords.map((record) => (
-                    <tr key={record._id} className="hover:bg-gray-50">
-                      <td className="px-4 py-3">
-                        <div className="font-medium text-gray-900">
-                          {record.employee_id?.employee_name}
-                        </div>
-                        <div className="text-xs text-gray-500">
-                          Daily: ₹{record.daily_salary_rate}
-                        </div>
-                      </td>
-                      <td className="px-4 py-3 text-sm">
-                        <div className="text-green-600 font-medium">
-                          {record.present_days} Present
-                        </div>
-                        <div className="text-red-600 text-xs">
-                          {record.absent_days} Absent
-                        </div>
-                      </td>
-                      <td className="px-4 py-3 text-sm text-gray-900">
-                        {record.total_permission_hours.toFixed(1)} hrs
-                      </td>
-                      <td className="px-4 py-3 text-sm font-medium text-gray-900">
-                        ₹{record.base_salary.toFixed(2)}
-                      </td>
-                      <td className="px-4 py-3 text-sm text-red-600 font-medium">
-                        -₹{record.total_deductions.toFixed(2)}
-                      </td>
-                      <td className="px-4 py-3 text-sm font-bold text-green-600">
-                        ₹{record.net_salary.toFixed(2)}
-                      </td>
-                      <td className="px-4 py-3">
-                        {getPaymentStatusBadge(record.payment_status)}
-                      </td>
-                      <td className="px-4 py-3">
-                        {record.payment_status !== "paid" && (
-                          <button
-                            onClick={() =>
-                              handleUpdatePaymentStatus(
-                                record._id,
-                                "paid",
-                                record.net_salary
-                              )
-                            }
-                            className="px-3 py-1 bg-green-600 text-white rounded hover:bg-green-700 text-xs flex items-center gap-1"
-                          >
-                            <CheckCircle className="w-3 h-3" />
-                            Mark Paid
-                          </button>
-                        )}
-                      </td>
-                    </tr>
+                <div className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Earnings</div>
+                <div className="space-y-1">
+                  {selectedRecord.earnings?.map((e,i)=>(
+                    <div key={i} className="flex justify-between text-sm"><span className="text-gray-700">{e.name}</span><span className="font-medium text-green-700">₹{e.amount?.toLocaleString()}</span></div>
                   ))}
-                </tbody>
-              </table>
-            </div>
-          </div>
-        )}
-
-        {/* Settings Tab */}
-        {activeTab === "settings" && (
-          <div>
-            <h3 className="text-lg font-semibold text-gray-800 mb-4">
-              Daily Wage Configuration
-            </h3>
-            <p className="text-sm text-gray-600 mb-4">
-              Configure settings for daily wage calculations and permission hour deductions
-            </p>
-            <div className="max-w-2xl">
-              <div className="bg-gray-50 p-6 rounded-lg border border-gray-200">
-                <div className="mb-4">
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Permission Deduction Percentage (%)
-                  </label>
-                  {editingConfig ? (
-                    <input
-                      type="number"
-                      min="0"
-                      max="100"
-                      value={configForm.permission_deduction_percentage}
-                      onChange={(e) =>
-                        setConfigForm({
-                          ...configForm,
-                          permission_deduction_percentage: parseFloat(
-                            e.target.value
-                          ),
-                        })
-                      }
-                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 text-gray-900 bg-white"
-                    />
-                  ) : (
-                    <div className="text-2xl font-bold text-blue-600">
-                      {salaryConfig?.permission_deduction_percentage || 0}%
-                    </div>
-                  )}
-                  <p className="text-xs text-gray-500 mt-1">
-                    Percentage of hourly salary to deduct for permission hours
-                  </p>
-                </div>
-
-                <div className="mb-6">
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Hours Per Day
-                  </label>
-                  {editingConfig ? (
-                    <input
-                      type="number"
-                      min="6"
-                      max="12"
-                      step="0.5"
-                      value={configForm.hours_per_day}
-                      onChange={(e) =>
-                        setConfigForm({
-                          ...configForm,
-                          hours_per_day: parseFloat(e.target.value),
-                        })
-                      }
-                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 text-gray-900 bg-white"
-                    />
-                  ) : (
-                    <div className="text-2xl font-bold text-blue-600">
-                      {salaryConfig?.hours_per_day || 8} hours
-                    </div>
-                  )}
-                  <p className="text-xs text-gray-500 mt-1">
-                    Standard working hours per day (used for hourly rate calculation)
-                  </p>
-                </div>
-
-                <div className="flex gap-2">
-                  {editingConfig ? (
-                    <>
-                      <button
-                        onClick={handleUpdateConfig}
-                        className="px-6 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 flex items-center gap-2"
-                      >
-                        <Save className="w-4 h-4" />
-                        Save Changes
-                      </button>
-                      <button
-                        onClick={() => {
-                          setEditingConfig(false);
-                          setConfigForm({
-                            permission_deduction_percentage:
-                              salaryConfig?.permission_deduction_percentage || 10,
-                          hours_per_day:
-                            salaryConfig?.hours_per_day || 8,
-                          });
-                        }}
-                        className="px-6 py-2 bg-gray-300 text-gray-700 rounded-lg hover:bg-gray-400 flex items-center gap-2"
-                      >
-                        <X className="w-4 h-4" />
-                        Cancel
-                      </button>
-                    </>
-                  ) : (
-                    <button
-                      onClick={() => setEditingConfig(true)}
-                      className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 flex items-center gap-2"
-                    >
-                      <Edit2 className="w-4 h-4" />
-                      Edit Configuration
-                    </button>
-                  )}
+                  <div className="flex justify-between text-sm font-bold border-t border-gray-200 pt-1 mt-1"><span className="text-gray-800">Total Earnings</span><span className="text-green-700">₹{selectedRecord.totalEarnings?.toLocaleString()}</span></div>
                 </div>
               </div>
-
-              <div className="mt-6 p-4 bg-blue-50 rounded-lg border border-blue-200">
-                <h4 className="font-semibold text-blue-800 mb-2">
-                  💡 Daily Wage Calculation Method
-                </h4>
-                <ul className="text-sm text-blue-700 space-y-1">
-                  <li>• <strong>Daily Wage System:</strong> Employees are paid based on daily rates</li>
-                  <li>• Base Payment = Days Worked × Daily Wage Rate</li>
-                  <li>
-                    • Hourly Rate = Daily Wage ÷ Hours Per Day ({salaryConfig?.hours_per_day || 8} hours)
-                  </li>
-                  <li>
-                    • Permission Deduction = Permission Hours × Hourly Rate ×
-                    (Deduction % ÷ 100)
-                  </li>
-                  <li>• Net Payment = Base Payment - Total Deductions</li>
-                </ul>
+              {selectedRecord.deductions?.length>0 && (
+                <div>
+                  <div className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Deductions</div>
+                  <div className="space-y-1">
+                    {selectedRecord.deductions?.map((d,i)=>(
+                      <div key={i} className="flex justify-between text-sm">
+                        <div><span className="text-gray-700">{d.name}</span>{d.reason&&<div className="text-xs text-gray-400">{d.reason}</div>}</div>
+                        <span className="font-medium text-red-600">−₹{d.amount?.toLocaleString()}</span>
+                      </div>
+                    ))}
+                    <div className="flex justify-between text-sm font-bold border-t border-gray-200 pt-1 mt-1"><span className="text-gray-800">Total Deductions</span><span className="text-red-600">−₹{selectedRecord.totalDeductions?.toLocaleString()}</span></div>
+                  </div>
+                </div>
+              )}
+              <div className="bg-gradient-to-r from-green-50 to-emerald-50 border border-green-200 rounded-xl p-4 flex justify-between items-center">
+                <span className="font-bold text-gray-800 text-lg">Net Pay</span>
+                <span className="font-bold text-green-700 text-2xl">₹{selectedRecord.netSalary?.toLocaleString()}</span>
               </div>
             </div>
+            <div className="px-6 py-4 border-t border-gray-200 flex gap-2">
+              {selectedRecord.status==="DRAFT" && <button onClick={()=>handleFinalize(selectedRecord.employeeId)} className="flex-1 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium transition">Finalize</button>}
+              {selectedRecord.status==="FINALIZED" && <button onClick={()=>handleMarkPaid(selectedRecord.employeeId)} className="flex-1 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg text-sm font-medium transition">Mark as Paid</button>}
+              <button onClick={()=>setSelectedRecord(null)} className="flex-1 py-2 bg-gray-200 hover:bg-gray-300 text-gray-700 rounded-lg text-sm font-medium transition">Close</button>
+            </div>
           </div>
-        )}
-      </div>
+        </div>
+      )}
     </div>
   );
-};
-
-export default SalaryManagement;
+}

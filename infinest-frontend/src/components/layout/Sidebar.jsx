@@ -16,6 +16,7 @@ export function AppSidebar({ sidebarOpen, setSidebarOpen, role }) {
   const [isHovered, setIsHovered] = useState(false)
   const [shopId, setShopId] = useState(null)
   const [revenueVisible, setRevenueVisible] = useState(true)
+  const [useEsslAttendance, setUseEsslAttendance] = useState(false)
 
   useEffect(() => {
     const fetchProfile = async () => {
@@ -39,6 +40,19 @@ export function AppSidebar({ sidebarOpen, setSidebarOpen, role }) {
           }
         } catch (rvErr) {
           console.error("Failed to check revenue visibility:", rvErr);
+        }
+
+        // Fetch eSSL attendance source
+        try {
+          const esslRes = await fetch(`${process.env.NEXT_PUBLIC_API_URL_BILLIT}/api/dashboard/attendance-source`, {
+            headers: { Authorization: `Bearer ${token}` }
+          });
+          if (esslRes.ok) {
+            const esslData = await esslRes.json();
+            setUseEsslAttendance(esslData.useEsslAttendance === true);
+          }
+        } catch (esslErr) {
+          console.error("Failed to check attendance source:", esslErr);
         }
 
         const res = await authApi.get("/profile/get", {
@@ -141,7 +155,7 @@ export function AppSidebar({ sidebarOpen, setSidebarOpen, role }) {
     ...(revenueVisible ? [{ title: "Analytics Dashboard", url: "/analytics", icon: BarChart3, featureKey: "analytics_dashboard_enabled" }] : []),
     ...(role === "admin" ? [{ title: "Admin Dashboard", url: "/admin-dashboard", icon: Shield }] : []),
     { title: "Service Inventory", url: "/product", icon: Package, featureKey: "product_inventory_enabled" },
-     { title: "Attendance", url: "/attendance", icon: CalendarCheck },
+     ...(useEsslAttendance ? [] : [{ title: "Attendance", url: "/attendance", icon: CalendarCheck }]),
     { title: "Expenses", url: "/todayexpenses", icon: Receipt, featureKey: "expense_tracker_enabled" },
   ]
 

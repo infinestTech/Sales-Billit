@@ -61,6 +61,9 @@ const shopSchema = new mongoose.Schema({
   address: { type: String },
   owner_name: { type: String }, // ✅ new field for MySQL name
   revenue_visible_to_users: { type: Boolean, default: true }, // Toggle: show/hide revenue & analytics for regular users
+  // eSSL M20 Biometric Attendance Integration
+  use_essl_attendance: { type: Boolean, default: false }, // When true, use ADMS device; hide built-in attendance
+  essl_device_serial: { type: String, trim: true }, // Registered device serial number (SN)
   created_at: { type: Date, default: Date.now }
 });
 
@@ -384,6 +387,7 @@ const employeeSchema = new mongoose.Schema({
   address: { type: String, default: '' },
   blood_group: { type: String, default: '' },
   daily_salary: { type: Number, default: 0 }, // Fixed salary per day
+  device_pin: { type: String, trim: true }, // PIN assigned on eSSL M20 device (numeric string, e.g. "1", "42")
   created_at: { type: Date, default: Date.now }
 });
 
@@ -401,6 +405,9 @@ const attendanceSchema = new mongoose.Schema({
   date: { type: String, required: true }, // Store as YYYY-MM-DD string for simplicity
   status: { type: String, enum: ['present', 'absent'], required: true },
   locked: { type: Boolean, default: true }, // once marked true, prevents changes
+  source: { type: String, enum: ['manual', 'essl_m20'], default: 'manual' }, // origin of this record
+  check_in_time: { type: Date }, // populated when source is essl_m20
+  check_out_time: { type: Date }, // populated when source is essl_m20
   created_at: { type: Date, default: Date.now }
 });
 
@@ -462,6 +469,43 @@ const salaryConfigSchema = new mongoose.Schema({
   updated_at: { type: Date, default: Date.now }
 });
 
+// ==============================
+// 📡 eSSL Device Schema
+// Registered ADMS devices per shop
+// ==============================
+const esslDeviceSchema = new mongoose.Schema({
+  shop_id: { type: mongoose.Schema.Types.ObjectId, ref: 'Shop', required: true },
+  device_serial: { type: String, required: true, trim: true, unique: true }, // Hardware SN
+  device_name: { type: String, trim: true, default: 'eSSL M20' },
+  firmware_version: { type: String, trim: true },
+  last_seen: { type: Date }, // Last heartbeat/connection timestamp
+  last_activity: { type: String }, // Description of last action
+  is_active: { type: Boolean, default: true },
+  created_at: { type: Date, default: Date.now }
+});
+esslDeviceSchema.index({ shop_id: 1 });
+esslDeviceSchema.index({ device_serial: 1 }, { unique: true });
+
+// ==============================
+// 🕐 eSSL Punch Log Schema
+// Raw punch records received from ADMS device before processing
+// ==============================
+const esslPunchLogSchema = new mongoose.Schema({
+  shop_id: { type: mongoose.Schema.Types.ObjectId, ref: 'Shop', required: true },
+  device_serial: { type: String, required: true, trim: true },
+  device_pin: { type: String, required: true, trim: true }, // Pin from device
+  employee_id: { type: mongoose.Schema.Types.ObjectId, ref: 'Employee' }, // Resolved after match
+  punch_time: { type: Date, required: true }, // Parsed from device DateTime field
+  punch_type: { type: String, enum: ['check_in', 'check_out', 'break_out', 'break_in', 'overtime_in', 'overtime_out', 'unknown'], default: 'unknown' },
+  verify_type: { type: Number }, // 1=FP, 4=PW, 15=Face — stored for audit, never exposed externally
+  raw_line: { type: String }, // Original raw ATTLOG line (for debugging)
+  processed: { type: Boolean, default: false }, // Whether this created an Attendance record
+  created_at: { type: Date, default: Date.now }
+});
+esslPunchLogSchema.index({ shop_id: 1, punch_time: -1 });
+esslPunchLogSchema.index({ device_serial: 1, punch_time: -1 });
+esslPunchLogSchema.index({ employee_id: 1, punch_time: -1 });
+
 // Index removed - already unique on shop_id in schema definition
 
 // ==============================
@@ -522,10 +566,12 @@ const ShopAdmin = mongoose.model("ShopAdmin", shopAdminSchema);
 const Supplier = mongoose.model("Supplier", supplierSchema);
 const SalaryConfig = mongoose.model("SalaryConfig", salaryConfigSchema);
 const SalaryRecord = mongoose.model("SalaryRecord", salaryRecordSchema);
+const EsslDevice = mongoose.model("EsslDevice", esslDeviceSchema);
+const EsslPunchLog = mongoose.model("EsslPunchLog", esslPunchLogSchema);
 
 module.exports = {
   Role, User, Manager, Branch, Shop, Dealer, Customer, Notification, Mobile, Technician,
   PlanCategory, Plan, DailySummary, Expense, ProductHistory, Product,
   MobileBrand, MobileIssue, AdminSale, SupplierHistory, Employee, Attendance, ShopAdmin, Permission, Supplier,
-  SalaryConfig, SalaryRecord
+  SalaryConfig, SalaryRecord, EsslDevice, EsslPunchLog
 };
