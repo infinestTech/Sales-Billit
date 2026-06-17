@@ -421,13 +421,20 @@ const employeeSchema = new mongoose.Schema({
   // Permission policy
   permission_policy: {
     max_hours_per_month: { type: Number, default: 2 },
-    deduction_type: { type: String, enum: ['PROPORTIONAL', 'FIXED'], default: 'PROPORTIONAL' },
+    // PROPORTIONAL = deduct hourly rate of excess hours
+    // PER_HOUR     = deduct fixed ₹ per excess hour
+    // NONE         = no deduction
+    deduction_type: { type: String, enum: ['PROPORTIONAL', 'PER_HOUR', 'NONE', 'FIXED'], default: 'PROPORTIONAL' },
     deduction_amount_per_hour: { type: Number, default: 0 }
   },
   // Late policy
   late_policy: {
     grace_period_minutes: { type: Number, default: 15 },
-    deduction_type: { type: String, enum: ['PROPORTIONAL', 'FIXED'], default: 'PROPORTIONAL' },
+    // PROPORTIONAL      = deduct per-minute hourly rate of late minutes
+    // FIXED_PER_LATE    = deduct fixed ₹ per late entry
+    // HALF_DAY_AFTER_N  = convert to half-day after N late entries
+    // NONE              = no deduction
+    deduction_type: { type: String, enum: ['PROPORTIONAL', 'FIXED_PER_LATE', 'HALF_DAY_AFTER_N', 'NONE', 'FIXED'], default: 'PROPORTIONAL' },
     deduction_amount_per_late: { type: Number, default: 0 },
     half_day_after_n_lates: { type: Number, default: 3 }
   },

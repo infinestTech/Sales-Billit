@@ -42,17 +42,26 @@ const admsLimiter = rateLimit({
 const textBodyParser = express.text({ type: '*/*', limit: '512kb' });
 
 // ── Routes ─────────────────────────────────────────────────────────────────────
+// NOTE: Older eSSL/ZKTeco firmwares (iClock Proxy) call /iclock/cdata.aspx
+// while newer ones use /iclock/cdata.  We accept BOTH forms so any firmware works.
+//
+// Express 5 path-to-regexp uses {} for optional segments. The pattern
+// "/cdata{.aspx}" matches both /cdata and /cdata.aspx.
 
 // Handshake / heartbeat  — GET ?SN=<serial>&options=all
-router.get('/cdata', admsLimiter, handleHandshake);
+router.get(['/cdata', '/cdata.aspx'], admsLimiter, handleHandshake);
 
-// Attendance data push   — POST ?SN=<serial>&table=ATTLOG
-router.post('/cdata', admsLimiter, textBodyParser, handleDataPush);
+// Attendance data push   — POST ?SN=<serial>&table=ATTLOG | OPERLOG
+router.post(['/cdata', '/cdata.aspx'], admsLimiter, textBodyParser, handleDataPush);
 
 // Command polling        — GET ?SN=<serial>
-router.get('/getrequest', admsLimiter, handleGetRequest);
+router.get(['/getrequest', '/getrequest.aspx'], admsLimiter, handleGetRequest);
 
 // Command acknowledgment — POST ?SN=<serial>
-router.post('/devicecmd', admsLimiter, express.text({ type: '*/*' }), handleDeviceCmd);
+router.post(['/devicecmd', '/devicecmd.aspx'], admsLimiter, express.text({ type: '*/*' }), handleDeviceCmd);
+
+// Legacy/optional endpoints some firmwares hit — acknowledge so they stop retrying
+router.all(['/fdata', '/fdata.aspx', '/edata', '/edata.aspx', '/querydata', '/querydata.aspx'],
+    admsLimiter, textBodyParser, (req, res) => res.status(200).send('OK\n'));
 
 module.exports = router;

@@ -605,13 +605,30 @@ function calculateSalary(employee, attendanceSummary, year, monthNum) {
   const lateCount = attendanceSummary.lateEntries || 0;
   let lateDeduction = 0;
   const lp = employee.late_policy;
-  if (lp) {
-    if (lp.deduction_type === 'FIXED') {
-      lateDeduction = lateCount * (lp.deduction_amount_per_late || 0);
-    } else {
-      // Proportional: each late = half day deduction for every N lates
-      const halfDays = Math.floor(lateCount / (lp.half_day_after_n_lates || 3));
-      lateDeduction = halfDays * dailyRate * 0.5;
+  if (lp && lateCount > 0) {
+    switch (lp.deduction_type) {
+      case 'NONE':
+        lateDeduction = 0;
+        break;
+      case 'FIXED_PER_LATE':
+      case 'FIXED': // legacy alias
+        lateDeduction = lateCount * (lp.deduction_amount_per_late || 0);
+        break;
+      case 'HALF_DAY_AFTER_N': {
+        const n = lp.half_day_after_n_lates || 3;
+        const halfDays = Math.floor(lateCount / n);
+        lateDeduction = halfDays * dailyRate * 0.5;
+        break;
+      }
+      case 'PROPORTIONAL':
+      default: {
+        // proportional: each late entry costs (lateMinutes / shiftMinutes) of dailyRate.
+        // We don't have the per-day late minutes in summary, so approximate by half-day after N rule.
+        const n = lp.half_day_after_n_lates || 3;
+        const halfDays = Math.floor(lateCount / n);
+        lateDeduction = halfDays * dailyRate * 0.5;
+        break;
+      }
     }
   }
 
@@ -622,11 +639,20 @@ function calculateSalary(employee, attendanceSummary, year, monthNum) {
   const pp = employee.permission_policy;
   if (pp && permHours > (pp.max_hours_per_month || 0)) {
     const excessHours = permHours - (pp.max_hours_per_month || 0);
-    if (pp.deduction_type === 'FIXED') {
-      permDeduction = excessHours * (pp.deduction_amount_per_hour || 0);
-    } else {
-      const hourlyRate = gross / (workingDays * (employee.shift?.working_hours || 8));
-      permDeduction = excessHours * hourlyRate;
+    switch (pp.deduction_type) {
+      case 'NONE':
+        permDeduction = 0;
+        break;
+      case 'PER_HOUR':
+      case 'FIXED': // legacy alias
+        permDeduction = excessHours * (pp.deduction_amount_per_hour || 0);
+        break;
+      case 'PROPORTIONAL':
+      default: {
+        const hourlyRate = gross / (workingDays * (employee.shift?.working_hours || 8));
+        permDeduction = excessHours * hourlyRate;
+        break;
+      }
     }
   }
 
