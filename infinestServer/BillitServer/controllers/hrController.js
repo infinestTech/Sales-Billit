@@ -511,6 +511,8 @@ function calculateSalary(employee, attendanceSummary, year, monthNum) {
 
   return {
     gross_salary: gross,
+    earned_base: Math.round(earnedBase * 100) / 100,
+    total_earnings: Math.round(totalEarnings * 100) / 100,
     total_working_days: workingDays,
     present_days: presentDays,
     absent_days: attendanceSummary.absent,
@@ -523,6 +525,83 @@ function calculateSalary(employee, attendanceSummary, year, monthNum) {
     other_deductions: Math.round(totalDeductions * 100) / 100,
     net_salary: Math.round(netSalary * 100) / 100,
     pay_components_snapshot: components.map(c => ({ name: c.name, type: c.type, calculation_type: c.calculation_type, value: c.value })),
+  };
+}
+
+/** Convert a HrSalaryRecord DB document/lean object to camelCase for frontend */
+function mapSalaryToFrontend(rec) {
+  const r = rec.toObject ? rec.toObject() : rec;
+  const gross = r.gross_salary || 0;
+  const workingDays = r.total_working_days || 1;
+  const presentDays = (r.present_days || 0) + (r.half_day_count || 0) * 0.5;
+
+  // Compute earned_base if not stored (backward compat)
+  const earnedBase = (r.earned_base != null && r.earned_base > 0)
+    ? r.earned_base
+    : (workingDays > 0 ? (gross / workingDays) * presentDays : 0);
+
+  // Build earnings / deductions arrays from snapshot
+  const earningComponents = (r.pay_components_snapshot || []).filter(c => c.type === 'EARNING');
+  const deductionComponents = (r.pay_components_snapshot || []).filter(c => c.type === 'DEDUCTION');
+
+  const earnings = [
+    { name: 'Earned Base', amount: Math.round(earnedBase * 100) / 100 },
+    ...earningComponents.map(c => ({
+      name: c.name,
+      amount: Math.round((c.calculation_type === 'PERCENTAGE' ? (gross * c.value) / 100 : c.value) * 100) / 100,
+    })),
+  ];
+  const totalEarnings = earnings.reduce((s, e) => s + e.amount, 0);
+
+  const deductions = [
+    ...deductionComponents.map(c => ({
+      name: c.name,
+      amount: Math.round((c.calculation_type === 'PERCENTAGE' ? (gross * c.value) / 100 : c.value) * 100) / 100,
+    })),
+  ];
+  if (r.late_deduction > 0) {
+    deductions.push({ name: 'Late Entry Deduction', reason: `${r.total_late_entries} late entries`, amount: r.late_deduction });
+  }
+  if (r.permission_deduction > 0) {
+    deductions.push({ name: 'Permission Hours Deduction', amount: r.permission_deduction });
+  }
+  const totalDeductions = deductions.reduce((s, d) => s + d.amount, 0);
+
+  // Resolve populated employee_id
+  const empRaw = r.employee_id;
+  const employee = (empRaw && typeof empRaw === 'object' && !empRaw.toString)
+    ? {
+        name: empRaw.name || empRaw.employee_name || '',
+        department: empRaw.department || '',
+        designation: empRaw.designation || '',
+      }
+    : null;
+
+  const employeeId = empRaw?._id ? empRaw._id.toString() : (empRaw ? empRaw.toString() : null);
+
+  return {
+    _id: r._id,
+    employeeId,
+    employee,
+    month: r.month_number,    // frontend does: new Date(year, month - 1)
+    year: r.year,
+    status: r.status || 'DRAFT',
+    // Attendance
+    presentDays: r.present_days || 0,
+    absentDays: r.absent_days || 0,
+    halfDays: r.half_day_count || 0,
+    paidLeaveDays: r.leave_days || 0,
+    lateDays: r.total_late_entries || 0,
+    totalPermissionMinutes: r.total_permission_minutes || 0,
+    // Salary breakdown
+    grossSalary: gross,
+    earnings,
+    totalEarnings: Math.round(totalEarnings * 100) / 100,
+    deductions,
+    totalDeductions: Math.round(totalDeductions * 100) / 100,
+    netSalary: r.net_salary || 0,
+    paidAt: r.paid_at || null,
+    paidAmount: r.paid_amount || 0,
   };
 }
 
@@ -571,7 +650,10 @@ async function generateSalary(req, res) {
       { upsert: true, new: true }
     );
 
-    return res.json({ success: true, data: record });
+    const populated = await HrSalaryRecord.findById(record._id)
+      .populate('employee_id', 'name employee_name department designation')
+      .lean();
+    return res.json({ success: true, data: mapSalaryToFrontend(populated) });
   } catch (err) {
     console.error('[HR generateSalary]', err);
     return res.status(500).json({ success: false, message: 'Failed to generate salary' });
@@ -610,13 +692,19 @@ async function generateBulkSalary(req, res) {
           { $set: { shop_id: shopId, year: yearNum, month_number: monthNum, ...calc, status: 'DRAFT', updated_at: new Date() } },
           { upsert: true, new: true }
         );
-        results.push({ employeeId: emp._id, success: true, netSalary: record.net_salary });
+        results.push({ employeeId: emp._id.toString(), name: emp.name || emp.employee_name, success: true, netSalary: record.net_salary });
       } catch (e) {
-        results.push({ employeeId: emp._id, success: false, error: e.message });
+        results.push({ employeeId: emp._id.toString(), name: emp.name || emp.employee_name, success: false, error: e.message });
       }
     }
 
-    return res.json({ success: true, results, generated: results.filter(r => r.success).length });
+    const successList = results.filter(r => r.success);
+    const failedList = results.filter(r => !r.success);
+    return res.json({
+      success: true,
+      result: { success: successList, failed: failedList },
+      generated: successList.length,
+    });
   } catch (err) {
     console.error('[HR generateBulkSalary]', err);
     return res.status(500).json({ success: false, message: 'Failed to generate bulk salary' });
@@ -632,13 +720,33 @@ async function getSalaryReport(req, res) {
     const records = await HrSalaryRecord.find({ shop_id: shopId, month: monthStr })
       .populate('employee_id', 'name employee_name department designation gross_salary')
       .lean();
+
+    const totalGross = records.reduce((s, r) => s + (r.gross_salary || 0), 0);
+    const totalNetSalary = records.reduce((s, r) => s + (r.net_salary || 0), 0);
+    const totalLateDeduction = records.reduce((s, r) => s + (r.late_deduction || 0), 0);
+    const totalPermissionDeduction = records.reduce((s, r) => s + (r.permission_deduction || 0), 0);
+    const totalOtherDeductions = records.reduce((s, r) => s + (r.other_deductions || 0), 0);
+    const totalAbsenceDeduction = records.reduce((s, r) => {
+      const wd = r.total_working_days || 1;
+      const pd = (r.present_days || 0) + (r.half_day_count || 0) * 0.5;
+      const eb = r.earned_base != null && r.earned_base > 0
+        ? r.earned_base
+        : (wd > 0 ? (r.gross_salary || 0) / wd * pd : 0);
+      return s + Math.max(0, (r.gross_salary || 0) - eb);
+    }, 0);
+
     const summary = {
       totalEmployees: records.length,
-      totalNet: records.reduce((s, r) => s + r.net_salary, 0),
+      totalGross,
+      totalNetSalary,
+      totalDeductions: totalAbsenceDeduction + totalLateDeduction + totalPermissionDeduction + totalOtherDeductions,
+      totalAbsenceDeduction: Math.round(totalAbsenceDeduction * 100) / 100,
+      totalLateDeduction: Math.round(totalLateDeduction * 100) / 100,
+      totalPermissionDeduction: Math.round(totalPermissionDeduction * 100) / 100,
       paid: records.filter(r => r.status === 'PAID').length,
       pending: records.filter(r => r.status !== 'PAID').length,
     };
-    return res.json({ success: true, data: records, summary });
+    return res.json({ success: true, data: records.map(mapSalaryToFrontend), summary });
   } catch (err) {
     console.error('[HR getSalaryReport]', err);
     return res.status(500).json({ success: false, message: 'Failed to fetch salary report' });
@@ -653,9 +761,9 @@ async function getSalaryRecord(req, res) {
     if (!month || !year) return res.status(400).json({ success: false, message: 'month and year required' });
     const monthStr = `${year}-${String(month).padStart(2, '0')}`;
     const record = await HrSalaryRecord.findOne({ employee_id: toObjectId(employeeId), month: monthStr, shop_id: shopId })
-      .populate('employee_id').lean();
+      .populate('employee_id', 'name employee_name department designation').lean();
     if (!record) return res.status(404).json({ success: false, message: 'Salary record not found. Generate it first.' });
-    return res.json({ success: true, data: record });
+    return res.json({ success: true, data: mapSalaryToFrontend(record) });
   } catch (err) {
     return res.status(500).json({ success: false, message: 'Failed to fetch salary record' });
   }

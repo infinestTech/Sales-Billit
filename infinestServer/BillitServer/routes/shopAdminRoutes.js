@@ -2105,6 +2105,75 @@ router.get('/essl/devices', shopAdminAuth, async (req, res) => {
     }
 });
 
+// GET detailed device connection status + debug info
+router.get('/essl/device-status', shopAdminAuth, async (req, res) => {
+    try {
+        const { EsslDevice, EsslPunchLog } = require('../models/mongoModels');
+        const mongoose = require('mongoose');
+        const shopId = req.shopId;
+        const shop = await Shop.findById(shopId);
+        const esslSerial = shop?.essl_device_serial || null;
+
+        // Find the registered device
+        const device = esslSerial
+            ? await EsslDevice.findOne({ device_serial: esslSerial }).lean()
+            : await EsslDevice.findOne({ shop_id: shopId }).sort({ created_at: -1 }).lean();
+
+        // Last punch log for this shop
+        const lastPunch = await EsslPunchLog.findOne({ shop_id: shopId })
+            .sort({ punch_time: -1 }).lean();
+
+        // Total punches today
+        const todayStr = new Date().toISOString().slice(0, 10);
+        const todayPunches = await EsslPunchLog.countDocuments({
+            shop_id: shopId,
+            punch_time: { $gte: new Date(todayStr + 'T00:00:00.000Z') },
+        });
+
+        // Online check: last_seen within 5 minutes
+        const ONLINE_THRESHOLD_MS = 5 * 60 * 1000;
+        const lastSeenMs = device?.last_seen ? Date.now() - new Date(device.last_seen).getTime() : null;
+        const isOnline = lastSeenMs !== null && lastSeenMs < ONLINE_THRESHOLD_MS;
+        const hasEverConnected = !!device?.last_seen;
+
+        // ADMS server URL that must be configured in the device
+        const admsServerUrl = process.env.ADMS_SERVER_URL || 'http://billit.infinestech.com/iclock/';
+
+        res.json({
+            success: true,
+            deviceRegistered: !!device,
+            isOnline,
+            hasEverConnected,
+            deviceSerial: device?.device_serial || esslSerial || null,
+            deviceName: device?.device_name || null,
+            lastSeen: device?.last_seen || null,
+            lastSeenMsAgo: lastSeenMs,
+            lastActivity: device?.last_activity || null,
+            lastPunch: lastPunch ? {
+                time: lastPunch.punch_time,
+                pin: lastPunch.device_pin,
+                type: lastPunch.punch_type,
+            } : null,
+            todayPunchCount: todayPunches,
+            // Debug / setup info
+            debug: {
+                admsServerUrl,
+                requiredConfig: {
+                    'ADMS Server Address': admsServerUrl,
+                    'Server Port': '80 (HTTP — NOT HTTPS)',
+                    'Device Serial': device?.device_serial || esslSerial || '(not set)',
+                },
+                tip: hasEverConnected
+                    ? 'Device has connected before. If showing offline, check network or ADMS config.'
+                    : 'Device has NEVER connected. Configure the ADMS server URL in the eSSL device settings.',
+            },
+        });
+    } catch (error) {
+        console.error('Get eSSL device status error:', error);
+        res.status(500).json({ success: false, message: 'Failed to get device status' });
+    }
+});
+
 // PATCH employee device_pin — map an employee to their eSSL device PIN
 router.patch('/essl/employee-pin', shopAdminAuth, async (req, res) => {
     try {

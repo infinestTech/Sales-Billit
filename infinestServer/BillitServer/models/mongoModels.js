@@ -500,6 +500,8 @@ const hrSalaryRecordSchema = new mongoose.Schema({
   total_permission_minutes: { type: Number, default: 0 },
   // Salary
   gross_salary: { type: Number, default: 0 },
+  earned_base: { type: Number, default: 0 },       // gross * (presentDays / workingDays)
+  total_earnings: { type: Number, default: 0 },   // sum of EARNING pay components
   pay_components_snapshot: [{ name: String, type: String, calculation_type: String, value: Number }],
   late_deduction: { type: Number, default: 0 },
   permission_deduction: { type: Number, default: 0 },
