@@ -22,6 +22,11 @@ const app = express(); // ✅ MOVE THIS TO THE TOP
 const webhookRoutes = require("./routes/webhookRoutes");
 app.use("/api", webhookRoutes);
 
+// ✅ ADMS routes MUST also be mounted before express.json() so raw text bodies work
+// The eSSL M20 device pushes plain-text attendance data, not JSON.
+const admsRoutes = require("./routes/admsRoutes");
+app.use("/iclock", admsRoutes);
+
 app.use(express.json());
 // app.use(cors({
 //  origin: [

@@ -301,4 +301,23 @@ router.get("/mobile-summary", authenticateToken, async (req, res) => {
   }
 })
 
+// Lightweight endpoint so the regular-user app can check the shop's attendance source
+router.get("/attendance-source", authenticateToken, async (req, res) => {
+  try {
+    const shopId = req.user.shop_id
+    if (!shopId) return res.status(400).json({ error: "Shop ID is required" })
+    const mongoose = require('mongoose')
+    const shopObjectId = mongoose.Types.ObjectId.isValid(shopId)
+      ? new mongoose.Types.ObjectId(shopId)
+      : shopId
+    const shop = await Shop.findById(shopObjectId).select('use_essl_attendance').lean()
+    res.json({
+      useEsslAttendance: shop?.use_essl_attendance === true
+    })
+  } catch (error) {
+    console.error("Attendance source check error:", error)
+    res.status(500).json({ error: "Failed to check attendance source" })
+  }
+})
+
 module.exports = router
