@@ -2189,15 +2189,93 @@ router.patch('/essl/employee-pin', shopAdminAuth, async (req, res) => {
             }
         }
 
-        const { Employee } = require('../models/mongoModels');
+        const { Employee, EsslPunchLog, Attendance } = require('../models/mongoModels');
         const mongoose = require('mongoose');
         const employee = await Employee.findOne({ _id: new mongoose.Types.ObjectId(employee_id), shop_id: req.shopId });
         if (!employee) return res.status(404).json({ success: false, message: 'Employee not found' });
 
-        employee.device_pin = device_pin ? String(device_pin).trim() : undefined;
+        const newPin = device_pin ? String(device_pin).trim() : undefined;
+
+        // Prevent the same PIN being assigned to two employees in the same shop
+        if (newPin) {
+            const conflict = await Employee.findOne({
+                shop_id: req.shopId,
+                device_pin: newPin,
+                _id: { $ne: employee._id },
+            });
+            if (conflict) {
+                return res.status(409).json({
+                    success: false,
+                    message: `PIN ${newPin} is already assigned to ${conflict.name || conflict.employee_name}`,
+                });
+            }
+        }
+
+        employee.device_pin = newPin;
         await employee.save();
 
-        res.json({ success: true, message: 'Device PIN updated', device_pin: employee.device_pin || null });
+        // ── Backfill historical unmapped punches for this PIN ──────────────────
+        let backfilled = 0;
+        if (newPin) {
+            const { processPunch } = require('../controllers/hrController');
+            const unmapped = await EsslPunchLog.find({
+                shop_id: req.shopId,
+                device_pin: newPin,
+                employee_id: { $in: [null, undefined] },
+            }).sort({ punch_time: 1 }).lean();
+
+            for (const log of unmapped) {
+                try {
+                    // Link the punch log
+                    await EsslPunchLog.updateOne(
+                        { _id: log._id },
+                        { $set: { employee_id: employee._id, processed: true } },
+                    );
+
+                    // Upsert legacy Attendance for that date
+                    const dateStr = new Date(log.punch_time).toISOString().slice(0, 10);
+                    const existing = await Attendance.findOne({ employee_id: employee._id, date: dateStr });
+                    if (!existing) {
+                        await Attendance.create({
+                            shop_id: req.shopId,
+                            employee_id: employee._id,
+                            date: dateStr,
+                            status: 'present',
+                            locked: false,
+                            source: 'essl_m20',
+                            check_in_time: log.punch_type === 'check_in' ? log.punch_time : undefined,
+                            check_out_time: log.punch_type === 'check_out' ? log.punch_time : undefined,
+                        });
+                    } else {
+                        const update = { source: 'essl_m20' };
+                        if (log.punch_type === 'check_in' && !existing.check_in_time) update.check_in_time = log.punch_time;
+                        if (log.punch_type === 'check_out') update.check_out_time = log.punch_time;
+                        await Attendance.findByIdAndUpdate(existing._id, { $set: update });
+                    }
+
+                    // Feed into HR daily attendance (state machine + summary)
+                    await processPunch(
+                        req.shopId.toString(),
+                        employee._id.toString(),
+                        'ESSL_M20',
+                        null,
+                        new Date(log.punch_time),
+                    );
+                    backfilled++;
+                } catch (e) {
+                    console.error('[PIN backfill] punch error:', e.message);
+                }
+            }
+        }
+
+        res.json({
+            success: true,
+            message: backfilled > 0
+                ? `Device PIN updated. ${backfilled} historical punch(es) linked to this employee.`
+                : 'Device PIN updated.',
+            device_pin: employee.device_pin || null,
+            backfilled,
+        });
     } catch (error) {
         console.error('Update employee device pin error:', error);
         res.status(500).json({ success: false, message: 'Failed to update device PIN' });

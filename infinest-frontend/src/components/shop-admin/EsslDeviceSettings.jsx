@@ -60,6 +60,9 @@ export default function EsslDeviceSettings({ shopId, employees = [] }) {
   const [showPinManager, setShowPinManager] = useState(false);
   const [pinEdits, setPinEdits] = useState({}); // { employeeId: pin }
   const [savingPin, setSavingPin] = useState(null);
+  // Local cache of saved PINs (so the UI shows the new value even if parent
+  // doesn't refresh the employees prop after a save).
+  const [pinSavedMap, setPinSavedMap] = useState({}); // { employeeId: "1" }
 
   const getAuthHeaders = () => {
     const token = localStorage.getItem("shopAdminToken");
@@ -180,6 +183,7 @@ export default function EsslDeviceSettings({ shopId, employees = [] }) {
     const pin = pinEdits[employeeId];
     if (pin === undefined) return;
     setSavingPin(employeeId);
+    setError(null);
     try {
       const res = await axios.patch(
         `${API_URL}/api/shop-admin/essl/employee-pin`,
@@ -187,13 +191,19 @@ export default function EsslDeviceSettings({ shopId, employees = [] }) {
         getAuthHeaders()
       );
       if (res.data.success) {
-        setSuccessMsg(`PIN updated for employee.`);
+        setSuccessMsg(res.data.message || `PIN updated.`);
+        // Cache the new value locally so the row immediately shows the saved PIN
+        setPinSavedMap((prev) => ({ ...prev, [employeeId]: pin }));
         // Clear edit state
         setPinEdits((prev) => {
           const next = { ...prev };
           delete next[employeeId];
           return next;
         });
+        // If historical punches were backfilled, refresh the logs view
+        if (res.data.backfilled > 0) {
+          fetchPunchLogs();
+        }
       }
     } catch (err) {
       setError(err.response?.data?.message || "Failed to update PIN.");
@@ -494,13 +504,27 @@ export default function EsslDeviceSettings({ shopId, employees = [] }) {
 
           {showPinManager && (
             <div className="border-t border-slate-100 px-5 pb-5">
-              <p className="py-3 text-xs text-slate-500">
-                Assign each employee the same numeric PIN that is programmed on the eSSL device.
-                The PIN links biometric punches to employees in Fixel.
-              </p>
+              <div className="py-3 text-xs text-slate-600 space-y-1">
+                <p>
+                  <span className="font-semibold text-slate-800">What is a Device PIN?</span>{" "}
+                  It is the numeric User ID that the eSSL M20 assigns to a person
+                  when their fingerprint is enrolled (the numbers shown next to
+                  &ldquo;User2&rdquo;, &ldquo;User3&rdquo; on the device&rsquo;s
+                  &ldquo;All Users&rdquo; screen — typically 1, 2, 3, …).
+                </p>
+                <p>
+                  Enter the same number here for the corresponding Fixel employee
+                  so every fingerprint punch is linked to the right person.
+                  Any existing unmapped punches for that PIN will be{" "}
+                  <span className="font-semibold">linked automatically</span>{" "}
+                  when you save.
+                </p>
+              </div>
               <div className="space-y-2">
                 {employees.map((emp) => {
-                  const currentPin = pinEdits[emp._id] !== undefined ? pinEdits[emp._id] : (emp.device_pin || "");
+                  const savedPin = pinSavedMap[emp._id] ?? emp.device_pin ?? "";
+                  const currentPin =
+                    pinEdits[emp._id] !== undefined ? pinEdits[emp._id] : savedPin;
                   const isDirty = pinEdits[emp._id] !== undefined;
                   return (
                     <div key={emp._id} className="flex items-center gap-3 rounded-lg bg-slate-50 px-3 py-2.5">
@@ -512,18 +536,23 @@ export default function EsslDeviceSettings({ shopId, employees = [] }) {
                           {emp.mobile_number || emp.phone_number}
                         </p>
                       </div>
+                      {savedPin && !isDirty && (
+                        <span className="hidden sm:inline-flex items-center gap-1 rounded-md bg-emerald-100 px-2 py-0.5 text-[11px] font-medium text-emerald-700">
+                          Saved PIN: {savedPin}
+                        </span>
+                      )}
                       <input
                         type="text"
                         inputMode="numeric"
                         pattern="\d*"
                         maxLength={10}
-                        placeholder="PIN"
+                        placeholder={savedPin ? `Current: ${savedPin}` : "Enter PIN"}
                         value={currentPin}
                         onChange={(e) => {
                           const val = e.target.value.replace(/\D/g, "").slice(0, 10);
                           setPinEdits((prev) => ({ ...prev, [emp._id]: val }));
                         }}
-                        className="w-24 rounded-lg border border-slate-300 px-2 py-1.5 text-center text-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                        className="w-28 rounded-lg border border-slate-300 bg-white px-2 py-1.5 text-center text-sm font-semibold text-slate-900 placeholder:text-slate-400 placeholder:font-normal focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
                       />
                       <button
                         onClick={() => handleSavePin(emp._id)}
