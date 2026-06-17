@@ -158,21 +158,34 @@ async function handleHandshake(req, res) {
     device.last_seen = new Date();
     device.last_activity = 'Heartbeat';
     if (req.query.pushver) device.firmware_version = req.query.pushver;
+    // Persist the current ATTLOG stamp so we don't re-send all history on reconnect.
+    // We advance the stamp AFTER each successful push (see handleDataPush).
     await device.save();
 
-    // Respond with configuration
-    // ATTLOGStamp=0 tells the device to send ALL records; in production you would
-    // track the highest stamp and send that value so the device only sends new records.
+    // Respond with configuration.
+    //
+    // TimeZone=0  ← tell the device the server is UTC+0.
+    //   The iClock Proxy firmware ADDS the TimeZone value to the device's local
+    //   display time before putting it in the ATTLOG.  If we set TimeZone=5.5
+    //   (IST offset), the device adds another 5.5 h on top of its already-IST
+    //   clock, giving IST+11h which is totally wrong.  With TimeZone=0 the
+    //   firmware sends the raw device-clock value (IST), which our parser then
+    //   correctly interprets as Asia/Kolkata.
+    //
+    // ATTLOGStamp — use last_seen epoch so the device only sends NEW records
+    //   after every reconnect instead of replaying the entire history.
+    //   On first connection (no stamp) we use 0 to get all-time history once.
+    const attlogStamp = device.attlog_stamp || 0;
     const response = [
       `GET OPTION FROM:${sn}`,
-      'ATTLOGStamp=0',
-      'OperLogStamp=0',
+      `ATTLOGStamp=${attlogStamp}`,
+      'OperLogStamp=9999',
       'ErrorDelay=30',
       'Delay=10',
       'TransTimes=00:00;14:05',
       'TransInterval=1',
-      'TransFlag=TransData AttLog OpLog EnrollUser',
-      'TimeZone=5.5',
+      'TransFlag=TransData AttLog',
+      'TimeZone=0',
       'Realtime=1',
       'Encrypt=0',
     ].join('\n') + '\n';
@@ -311,9 +324,15 @@ async function handleDataPush(req, res) {
       }
     }
 
-    // Update device activity
+    // Update device activity and advance the ATTLOG stamp so the device won't
+    // re-send the same records on the next push.  We use the epoch (seconds)
+    // of the last accepted punch as the new stamp.
     device.last_seen = new Date();
     device.last_activity = `Received ${accepted} punch(es)`;
+    if (accepted > 0) {
+      // Stamp = seconds since Unix epoch of "now" (device uses this as a cursor).
+      device.attlog_stamp = Math.floor(Date.now() / 1000);
+    }
     await device.save();
 
     // ADMS protocol response: "OK\n<number_accepted>"
