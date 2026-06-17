@@ -67,7 +67,7 @@ export default function AttendanceManagement({ shopId }) {
 
   const fetchEmployees = async () => {
     try {
-      const res = await axios.get(`${API_URL}/api/employees`, {
+      const res = await axios.get(`${API_URL}/api/shop-admin/hr/employees`, {
         headers: headers(),
         params: { shopId, isActive: true },
       });
@@ -79,7 +79,7 @@ export default function AttendanceManagement({ shopId }) {
   const fetchDailyAttendance = async () => {
     setLoading(true);
     try {
-      const res = await axios.get(`${API_URL}/api/attendance/daily`, {
+      const res = await axios.get(`${API_URL}/api/shop-admin/hr/attendance/daily`, {
         headers: headers(),
         params: { date: dailyDate, shopId },
       });
@@ -98,7 +98,7 @@ export default function AttendanceManagement({ shopId }) {
     setPunchMsg(null);
     try {
       const res = await axios.post(
-        `${API_URL}/api/attendance/punch`,
+        `${API_URL}/api/shop-admin/hr/attendance/punch`,
         { employeeId: punchEmployeeId, source: "SOFTWARE" },
         { headers: headers() }
       );
@@ -125,7 +125,7 @@ export default function AttendanceManagement({ shopId }) {
     setLoading(true);
     try {
       const [year, month] = monthlyMonth.split("-");
-      const res = await axios.get(`${API_URL}/api/attendance/${monthlyEmployeeId}/monthly`, {
+      const res = await axios.get(`${API_URL}/api/shop-admin/hr/attendance/${monthlyEmployeeId}/monthly`, {
         headers: headers(),
         params: { month, year },
       });
@@ -147,7 +147,7 @@ export default function AttendanceManagement({ shopId }) {
     setManualMsg(null);
     try {
       await axios.post(
-        `${API_URL}/api/attendance/manual`,
+        `${API_URL}/api/shop-admin/hr/attendance/manual`,
         { employeeId: manualEmpId, date: manualDate, status: manualStatus, leaveType: manualLeaveType },
         { headers: headers() }
       );
@@ -165,7 +165,7 @@ export default function AttendanceManagement({ shopId }) {
     setLoading(true);
     try {
       const [year, month] = reportMonth.split("-");
-      const res = await axios.get(`${API_URL}/api/attendance/report`, {
+      const res = await axios.get(`${API_URL}/api/shop-admin/hr/attendance/report`, {
         headers: headers(),
         params: { shopId, month, year },
       });

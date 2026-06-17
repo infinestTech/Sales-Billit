@@ -24,6 +24,7 @@
 const crypto = require('crypto');
 const { EsslDevice, EsslPunchLog, Employee, Attendance, Shop } = require('../models/mongoModels');
 const { formatIST } = require('../utils/dateHelper');
+const { processPunch } = require('./hrController');
 
 // ─── helpers ──────────────────────────────────────────────────────────────────
 
@@ -270,6 +271,16 @@ async function handleDataPush(req, res) {
 
         // Mark punch log as processed
         await EsslPunchLog.findByIdAndUpdate(punchLog._id, { processed: true });
+
+        // Feed into HR daily attendance system (non-blocking)
+        processPunch(
+          device.shop_id.toString(),
+          employee._id.toString(),
+          'ESSL_M20',
+          null,
+          parsed.punch_time,
+        ).catch(err => console.error('[ADMS] HR processPunch error:', err.message));
+
         accepted++;
       } catch (dbErr) {
         console.error('[ADMS push] DB error for punch:', dbErr.message);
