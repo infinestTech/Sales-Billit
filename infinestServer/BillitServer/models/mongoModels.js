@@ -612,6 +612,9 @@ const esslDeviceSchema = new mongoose.Schema({
   last_seen: { type: Date }, // Last heartbeat/connection timestamp
   last_activity: { type: String }, // Description of last action
   is_active: { type: Boolean, default: true },
+  // Cursor returned to the device as ATTLOGStamp so it only sends new records.
+  // Starts at 0 (send all history on first connection), updated after each push.
+  attlog_stamp: { type: Number, default: 0 },
   created_at: { type: Date, default: Date.now }
 });
 esslDeviceSchema.index({ shop_id: 1 });
