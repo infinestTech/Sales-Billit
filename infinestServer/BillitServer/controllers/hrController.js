@@ -16,7 +16,33 @@ function todayIST() {
 }
 
 function toObjectId(id) {
-  return mongoose.Types.ObjectId.isValid(id) ? new mongoose.Types.ObjectId(id) : id;
+  if (!id) return null;
+  if (id instanceof mongoose.Types.ObjectId) return id;
+  return mongoose.Types.ObjectId.isValid(id) ? new mongoose.Types.ObjectId(String(id)) : null;
+}
+
+/**
+ * Resolve the active shop id from the request, in priority order:
+ *   1. req.shopId (set by shopAdminAuth middleware)
+ *   2. req.query.shopId / req.query.shop_id
+ *   3. req.body.shopId  / req.body.shop_id
+ * Returns a valid ObjectId or null.
+ */
+function getShopId(req) {
+  const raw = req.shopId
+    || req.query?.shopId || req.query?.shop_id
+    || req.body?.shopId  || req.body?.shop_id;
+  return toObjectId(raw);
+}
+
+/** Send a 401 response when shop context is missing — happens if middleware was skipped */
+function requireShop(req, res) {
+  const shopId = getShopId(req);
+  if (!shopId) {
+    res.status(401).json({ success: false, message: 'Shop context missing. Please log in again.' });
+    return null;
+  }
+  return shopId;
 }
 
 /** Parse "HH:MM" string into {h, m} */
@@ -148,7 +174,7 @@ function mapDbToFrontend(emp) {
 
 async function listEmployees(req, res) {
   try {
-    const shopId = toObjectId(req.shopId || req.query.shopId);
+    const shopId = requireShop(req, res); if (!shopId) return;
     const isActive = req.query.isActive;
     const query = { shop_id: shopId };
     if (isActive === 'true') query.is_active = true;
@@ -163,9 +189,8 @@ async function listEmployees(req, res) {
 
 async function createEmployee(req, res) {
   try {
-    const shopId = toObjectId(req.shopId || req.body.shopId);
+    const shopId = requireShop(req, res); if (!shopId) return;
     const data = mapFormToDb(req.body, shopId);
-    // Require at least a name
     if (!data.name && !data.employee_name) {
       return res.status(400).json({ success: false, message: 'Employee name is required' });
     }
@@ -179,45 +204,86 @@ async function createEmployee(req, res) {
 
 async function updateEmployee(req, res) {
   try {
-    const shopId = toObjectId(req.shopId);
-    const { id } = req.params;
-    const emp = await Employee.findOne({ _id: toObjectId(id), shop_id: shopId });
-    if (!emp) return res.status(404).json({ success: false, message: 'Employee not found' });
+    const shopId = requireShop(req, res); if (!shopId) return;
+    const empOid = toObjectId(req.params.id);
+    if (!empOid) return res.status(400).json({ success: false, message: 'Invalid employee id' });
+    const emp = await Employee.findOne({ _id: empOid, shop_id: shopId });
+    if (!emp) {
+      console.warn('[HR updateEmployee] not found', { id: req.params.id, shopId: String(shopId) });
+      return res.status(404).json({ success: false, message: 'Employee not found' });
+    }
     const updates = mapFormToDb(req.body, shopId);
+    // Don't overwrite created_at or _id
+    delete updates._id;
     Object.assign(emp, updates);
     await emp.save();
     return res.json({ success: true, data: mapDbToFrontend(emp) });
   } catch (err) {
     console.error('[HR updateEmployee]', err);
-    return res.status(500).json({ success: false, message: 'Failed to update employee' });
+    return res.status(500).json({ success: false, message: err.message || 'Failed to update employee' });
   }
 }
 
 async function deactivateEmployee(req, res) {
   try {
+    const shopId = requireShop(req, res); if (!shopId) return;
+    const empOid = toObjectId(req.params.id);
+    if (!empOid) return res.status(400).json({ success: false, message: 'Invalid employee id' });
     const emp = await Employee.findOneAndUpdate(
-      { _id: toObjectId(req.params.id), shop_id: toObjectId(req.shopId) },
+      { _id: empOid, shop_id: shopId },
       { is_active: false },
       { new: true }
     );
-    if (!emp) return res.status(404).json({ success: false, message: 'Employee not found' });
-    return res.json({ success: true, message: 'Employee deactivated' });
+    if (!emp) {
+      console.warn('[HR deactivateEmployee] not found', { id: req.params.id, shopId: String(shopId) });
+      return res.status(404).json({ success: false, message: 'Employee not found' });
+    }
+    return res.json({ success: true, message: 'Employee deactivated', data: mapDbToFrontend(emp) });
   } catch (err) {
+    console.error('[HR deactivateEmployee]', err);
     return res.status(500).json({ success: false, message: 'Failed to deactivate employee' });
   }
 }
 
 async function reactivateEmployee(req, res) {
   try {
+    const shopId = requireShop(req, res); if (!shopId) return;
+    const empOid = toObjectId(req.params.id);
+    if (!empOid) return res.status(400).json({ success: false, message: 'Invalid employee id' });
     const emp = await Employee.findOneAndUpdate(
-      { _id: toObjectId(req.params.id), shop_id: toObjectId(req.shopId) },
+      { _id: empOid, shop_id: shopId },
       { is_active: true },
       { new: true }
     );
     if (!emp) return res.status(404).json({ success: false, message: 'Employee not found' });
-    return res.json({ success: true, message: 'Employee reactivated' });
+    return res.json({ success: true, message: 'Employee reactivated', data: mapDbToFrontend(emp) });
   } catch (err) {
+    console.error('[HR reactivateEmployee]', err);
     return res.status(500).json({ success: false, message: 'Failed to reactivate employee' });
+  }
+}
+
+/**
+ * Hard delete — also removes attendance & salary records for this employee.
+ * Use deactivate for soft delete; this is irreversible.
+ */
+async function deleteEmployee(req, res) {
+  try {
+    const shopId = requireShop(req, res); if (!shopId) return;
+    const empOid = toObjectId(req.params.id);
+    if (!empOid) return res.status(400).json({ success: false, message: 'Invalid employee id' });
+    const emp = await Employee.findOne({ _id: empOid, shop_id: shopId });
+    if (!emp) return res.status(404).json({ success: false, message: 'Employee not found' });
+    await Promise.all([
+      Employee.deleteOne({ _id: empOid, shop_id: shopId }),
+      HrPunch.deleteMany({ employee_id: empOid }),
+      HrDailyAttendance.deleteMany({ employee_id: empOid }),
+      HrSalaryRecord.deleteMany({ employee_id: empOid }),
+    ]);
+    return res.json({ success: true, message: 'Employee and related records deleted' });
+  } catch (err) {
+    console.error('[HR deleteEmployee]', err);
+    return res.status(500).json({ success: false, message: 'Failed to delete employee' });
   }
 }
 
@@ -227,46 +293,79 @@ async function reactivateEmployee(req, res) {
  * Process a punch event — works for both SOFTWARE and ESSL_M20 sources.
  * Returns the resulting punch record and updated daily summary.
  *
- * Punch type resolution:
- *   No daily record yet          → CHECK_IN
- *   Has CHECK_IN, no open PERM   → PERMISSION_OUT (temporary leave)
- *   Has open PERMISSION_OUT      → PERMISSION_IN (returning from permission)
- *   Explicit check-out request   → CHECK_OUT
+ * Auto-detected punch type rules:
+ *   No punches today                          → CHECK_IN
+ *   Last punch = CHECK_IN, time before shift end - 30 min  → PERMISSION_OUT
+ *   Last punch = CHECK_IN, time past shift end - 30 min    → CHECK_OUT
+ *   Last punch = PERMISSION_OUT               → PERMISSION_IN
+ *   Last punch = PERMISSION_IN, past shift end → CHECK_OUT
+ *   Last punch = PERMISSION_IN, before shift end → PERMISSION_OUT
+ *   Last punch = CHECK_OUT                    → CHECK_IN (re-entry / next shift)
+ *
+ * Idempotency: identical (employee, source) punches within 30 seconds are ignored.
  */
 async function processPunch(shopId, employeeId, source, overridePunchType, punchTimeOverride) {
   const shopOid = toObjectId(shopId);
   const empOid = toObjectId(employeeId);
-  const now = punchTimeOverride || new Date();
+  if (!shopOid || !empOid) throw new Error('Invalid shopId or employeeId');
+  const now = punchTimeOverride ? new Date(punchTimeOverride) : new Date();
   const dateStr = formatIST(now, 'YYYY-MM-DD');
 
   const employee = await Employee.findOne({ _id: empOid, shop_id: shopOid }).lean();
   if (!employee) throw new Error('Employee not found');
 
+  // Idempotency check — skip duplicate punches from same source within 30 seconds
+  const recent = await HrPunch.findOne({
+    employee_id: empOid,
+    source,
+    punch_time: { $gte: new Date(now.getTime() - 30_000), $lte: new Date(now.getTime() + 30_000) },
+  }).lean();
+  if (recent) {
+    return { punch: recent, punchType: recent.punch_type, duplicate: true, message: 'Duplicate punch ignored' };
+  }
+
   // Get today's punches
   const todayPunches = await HrPunch.find({ employee_id: empOid, date: dateStr }).sort({ punch_time: 1 }).lean();
   const daily = await HrDailyAttendance.findOne({ employee_id: empOid, date: dateStr });
 
-  let punchType = overridePunchType;
+  // Shift boundaries
+  const shiftStart = employee.shift?.start_time || '09:00';
+  const shiftEnd   = employee.shift?.end_time   || '18:00';
+  const shiftEndDate = todayAt(shiftEnd, now);
+  const earliestCheckoutDate = new Date(shiftEndDate.getTime() - 30 * 60_000); // 30 min before shift end
 
+  let punchType = overridePunchType;
   if (!punchType) {
     if (todayPunches.length === 0) {
       punchType = 'CHECK_IN';
     } else {
       const lastPunch = todayPunches[todayPunches.length - 1];
-      if (lastPunch.punch_type === 'PERMISSION_OUT') {
-        punchType = 'PERMISSION_IN';
-      } else {
-        punchType = 'PERMISSION_OUT';
+      switch (lastPunch.punch_type) {
+        case 'CHECK_IN':
+          punchType = now >= earliestCheckoutDate ? 'CHECK_OUT' : 'PERMISSION_OUT';
+          break;
+        case 'PERMISSION_OUT':
+          punchType = 'PERMISSION_IN';
+          break;
+        case 'PERMISSION_IN':
+          punchType = now >= earliestCheckoutDate ? 'CHECK_OUT' : 'PERMISSION_OUT';
+          break;
+        case 'CHECK_OUT':
+          // Already checked out today — treat next punch as re-entry
+          punchType = 'CHECK_IN';
+          break;
+        default:
+          punchType = 'CHECK_IN';
       }
     }
   }
 
-  // Check for late entry on CHECK_IN
+  // Late detection (CHECK_IN only)
   let isLate = false;
   let lateMinutes = 0;
   if (punchType === 'CHECK_IN') {
-    const graceMinutes = employee.late_policy?.grace_period_minutes ?? employee.shift?.grace_period_minutes ?? 15;
-    const shiftStart = employee.shift?.start_time || '09:00';
+    const graceMinutes = employee.late_policy?.grace_period_minutes
+      ?? employee.shift?.grace_period_minutes ?? 15;
     const { h, m } = parseTime(shiftStart);
     const shiftStartDate = new Date(now.getFullYear(), now.getMonth(), now.getDate(), h, m + graceMinutes, 0, 0);
     if (now > shiftStartDate) {
@@ -287,30 +386,49 @@ async function processPunch(shopId, employeeId, source, overridePunchType, punch
     late_minutes: lateMinutes,
   });
 
-  // Update or create daily attendance summary
-  const allPunches = [...todayPunches, { punch_type: punchType, punch_time: now, is_late: isLate, late_minutes: lateMinutes }];
+  // Recompute daily summary from ALL punches (including the new one)
+  const allPunches = [...todayPunches, punch.toObject ? punch.toObject() : punch];
+  const checkIn  = allPunches.find(p => p.punch_type === 'CHECK_IN');
+  const checkOut = [...allPunches].reverse().find(p => p.punch_type === 'CHECK_OUT');
 
-  const checkIn = allPunches.find(p => p.punch_type === 'CHECK_IN');
-  const checkOut = allPunches.filter(p => p.punch_type === 'CHECK_OUT').pop();
-
-  // Calculate total permission minutes from PERMISSION_OUT/IN pairs
+  // Total permission minutes from OUT/IN pairs
   let totalPermissionMinutes = 0;
   let permOut = null;
   for (const p of allPunches) {
     if (p.punch_type === 'PERMISSION_OUT') permOut = p;
-    if (p.punch_type === 'PERMISSION_IN' && permOut) {
+    else if (p.punch_type === 'PERMISSION_IN' && permOut) {
       totalPermissionMinutes += Math.floor((new Date(p.punch_time) - new Date(permOut.punch_time)) / 60000);
       permOut = null;
     }
   }
 
+  // Working hours (CHECK_OUT - CHECK_IN - permission minutes)
+  let workedMinutes = 0;
+  if (checkIn && checkOut) {
+    workedMinutes = Math.floor((new Date(checkOut.punch_time) - new Date(checkIn.punch_time)) / 60000)
+                  - totalPermissionMinutes;
+    workedMinutes = Math.max(0, workedMinutes);
+  }
+  const requiredMinutes = (employee.shift?.working_hours || 8) * 60;
+
+  // Status: HALF_DAY when checked-out and worked < 50% of required hours, else PRESENT
+  let status = 'ABSENT';
+  if (checkIn) {
+    if (checkOut && workedMinutes < requiredMinutes * 0.5) status = 'HALF_DAY';
+    else status = 'PRESENT';
+  }
+
+  const aggregatedLate     = allPunches.some(p => p.is_late);
+  const maxLateMinutesToday = allPunches.reduce((mx, p) => Math.max(mx, p.late_minutes || 0), 0);
+
   const dailyUpdate = {
-    status: checkIn ? 'PRESENT' : 'ABSENT',
+    status,
     check_in_time: checkIn?.punch_time,
     check_out_time: checkOut?.punch_time,
-    is_late: isLate || (daily?.is_late ?? false),
-    late_minutes: Math.max(lateMinutes, daily?.late_minutes ?? 0),
+    is_late: aggregatedLate,
+    late_minutes: maxLateMinutesToday,
     total_permission_minutes: totalPermissionMinutes,
+    total_worked_minutes: workedMinutes,
     source,
     updated_at: new Date(),
   };
@@ -327,13 +445,15 @@ async function processPunch(shopId, employeeId, source, overridePunchType, punch
     isLate,
     lateMinutes,
     totalPermissionMinutes,
+    workedMinutes,
+    status,
     message: `${punchType.replace('_', ' ')} recorded at ${now.toLocaleTimeString('en-IN')}`,
   };
 }
 
 async function softwarePunch(req, res) {
   try {
-    const shopId = req.shopId;
+    const shopId = requireShop(req, res); if (!shopId) return;
     const { employeeId, source = 'SOFTWARE', punchType } = req.body;
     if (!employeeId) return res.status(400).json({ success: false, message: 'employeeId required' });
     const result = await processPunch(shopId, employeeId, source, punchType || null, null);
@@ -346,7 +466,7 @@ async function softwarePunch(req, res) {
 
 async function manualMark(req, res) {
   try {
-    const shopId = toObjectId(req.shopId);
+    const shopId = requireShop(req, res); if (!shopId) return;
     const { employeeId, date, status, leaveType, notes } = req.body;
     if (!employeeId || !date || !status) {
       return res.status(400).json({ success: false, message: 'employeeId, date and status required' });
@@ -355,8 +475,10 @@ async function manualMark(req, res) {
     if (!validStatuses.includes(status)) {
       return res.status(400).json({ success: false, message: `status must be one of: ${validStatuses.join(', ')}` });
     }
+    const empOid = toObjectId(employeeId);
+    if (!empOid) return res.status(400).json({ success: false, message: 'Invalid employeeId' });
     const rec = await HrDailyAttendance.findOneAndUpdate(
-      { employee_id: toObjectId(employeeId), date },
+      { employee_id: empOid, date },
       { $set: { shop_id: shopId, status, source: 'MANUAL', notes: notes || leaveType || '', updated_at: new Date() } },
       { upsert: true, new: true }
     );
@@ -369,13 +491,12 @@ async function manualMark(req, res) {
 
 async function getDailyAttendance(req, res) {
   try {
-    const shopId = toObjectId(req.shopId || req.query.shopId);
+    const shopId = requireShop(req, res); if (!shopId) return;
     const date = req.query.date || todayIST();
     const records = await HrDailyAttendance.find({ shop_id: shopId, date })
       .populate('employee_id', 'name employee_name phone mobile_number department designation shift')
       .lean();
-    // Enrich with today's punches
-    const empIds = records.map(r => r.employee_id?._id);
+    const empIds = records.map(r => r.employee_id?._id).filter(Boolean);
     const punches = await HrPunch.find({ shop_id: shopId, date, employee_id: { $in: empIds } }).lean();
     const punchMap = {};
     punches.forEach(p => {
@@ -397,14 +518,16 @@ async function getDailyAttendance(req, res) {
 
 async function getMonthlyAttendance(req, res) {
   try {
-    const shopId = toObjectId(req.shopId);
+    const shopId = requireShop(req, res); if (!shopId) return;
     const { id: employeeId } = req.params;
     const { month, year } = req.query;
     if (!month || !year) return res.status(400).json({ success: false, message: 'month and year required' });
+    const empOid = toObjectId(employeeId);
+    if (!empOid) return res.status(400).json({ success: false, message: 'Invalid employeeId' });
     const monthStr = `${year}-${String(month).padStart(2, '0')}`;
     const records = await HrDailyAttendance.find({
       shop_id: shopId,
-      employee_id: toObjectId(employeeId),
+      employee_id: empOid,
       date: { $regex: `^${monthStr}` }
     }).sort({ date: 1 }).lean();
 
@@ -425,7 +548,7 @@ async function getMonthlyAttendance(req, res) {
 
 async function getAttendanceReport(req, res) {
   try {
-    const shopId = toObjectId(req.shopId || req.query.shopId);
+    const shopId = requireShop(req, res); if (!shopId) return;
     const { month, year } = req.query;
     if (!month || !year) return res.status(400).json({ success: false, message: 'month and year required' });
     const monthStr = `${year}-${String(month).padStart(2, '0')}`;
@@ -607,7 +730,7 @@ function mapSalaryToFrontend(rec) {
 
 async function generateSalary(req, res) {
   try {
-    const shopId = toObjectId(req.shopId);
+    const shopId = requireShop(req, res); if (!shopId) return;
     const { employeeId, month, year } = req.body;
     if (!employeeId || !month || !year) {
       return res.status(400).json({ success: false, message: 'employeeId, month and year required' });
@@ -662,7 +785,7 @@ async function generateSalary(req, res) {
 
 async function generateBulkSalary(req, res) {
   try {
-    const shopId = toObjectId(req.shopId || req.body.shopId);
+    const shopId = requireShop(req, res); if (!shopId) return;
     const { month, year } = req.body;
     if (!month || !year) return res.status(400).json({ success: false, message: 'month and year required' });
 
@@ -713,7 +836,7 @@ async function generateBulkSalary(req, res) {
 
 async function getSalaryReport(req, res) {
   try {
-    const shopId = toObjectId(req.shopId || req.query.shopId);
+    const shopId = requireShop(req, res); if (!shopId) return;
     const { month, year } = req.query;
     if (!month || !year) return res.status(400).json({ success: false, message: 'month and year required' });
     const monthStr = `${year}-${String(month).padStart(2, '0')}`;
@@ -755,7 +878,7 @@ async function getSalaryReport(req, res) {
 
 async function getSalaryRecord(req, res) {
   try {
-    const shopId = toObjectId(req.shopId);
+    const shopId = requireShop(req, res); if (!shopId) return;
     const { id: employeeId } = req.params;
     const { month, year } = req.query;
     if (!month || !year) return res.status(400).json({ success: false, message: 'month and year required' });
@@ -771,7 +894,7 @@ async function getSalaryRecord(req, res) {
 
 async function finalizeSalary(req, res) {
   try {
-    const shopId = toObjectId(req.shopId);
+    const shopId = requireShop(req, res); if (!shopId) return;
     const { id: employeeId } = req.params;
     const { month, year } = req.body;
     const monthStr = `${year}-${String(month).padStart(2, '0')}`;
@@ -789,7 +912,7 @@ async function finalizeSalary(req, res) {
 
 async function markSalaryPaid(req, res) {
   try {
-    const shopId = toObjectId(req.shopId);
+    const shopId = requireShop(req, res); if (!shopId) return;
     const { id: employeeId } = req.params;
     const { month, year, paidAmount } = req.body;
     const monthStr = `${year}-${String(month).padStart(2, '0')}`;
@@ -807,7 +930,7 @@ async function markSalaryPaid(req, res) {
 
 module.exports = {
   // Employee
-  listEmployees, createEmployee, updateEmployee, deactivateEmployee, reactivateEmployee,
+  listEmployees, createEmployee, updateEmployee, deactivateEmployee, reactivateEmployee, deleteEmployee,
   // Attendance
   processPunch, softwarePunch, manualMark, getDailyAttendance, getMonthlyAttendance, getAttendanceReport,
   // Salary

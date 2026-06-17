@@ -472,6 +472,7 @@ const hrDailyAttendanceSchema = new mongoose.Schema({
   is_late: { type: Boolean, default: false },
   late_minutes: { type: Number, default: 0 },
   total_permission_minutes: { type: Number, default: 0 },
+  total_worked_minutes: { type: Number, default: 0 },
   source: { type: String, enum: ['SOFTWARE', 'ESSL_M20', 'MANUAL'], default: 'SOFTWARE' },
   notes: { type: String },
   created_at: { type: Date, default: Date.now },

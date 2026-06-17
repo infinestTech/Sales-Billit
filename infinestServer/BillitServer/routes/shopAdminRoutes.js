@@ -61,10 +61,12 @@ const shopAdminAuth = async (req, res, next) => {
         }
 
         req.shopAdmin = shopAdmin;
-        // Use current_shop_id if set, otherwise use first shop or from query param
-        const requestedShopId = req.query.shop_id || req.body.shop_id;
+        // Use current_shop_id if set, otherwise use first shop or from query/body param.
+        // Accept both snake_case (shop_id) and camelCase (shopId) for compatibility.
+        const requestedShopId = req.query.shop_id || req.query.shopId
+            || req.body.shop_id || req.body.shopId;
         let shopId;
-        if (requestedShopId && shopAdmin.shop_ids.some(shop => shop._id.toString() === requestedShopId)) {
+        if (requestedShopId && shopAdmin.shop_ids.some(shop => shop._id.toString() === String(requestedShopId))) {
             shopId = requestedShopId;
         } else {
             shopId = shopAdmin.current_shop_id?._id || shopAdmin.shop_ids[0]?._id;
@@ -2202,8 +2204,80 @@ router.patch('/essl/employee-pin', shopAdminAuth, async (req, res) => {
     }
 });
 
+// GET list of unlinked (auto-registered) devices — for "claim" UX
+router.get('/essl/unlinked-devices', shopAdminAuth, async (req, res) => {
+    try {
+        const { EsslDevice } = require('../models/mongoModels');
+        const devices = await EsslDevice.find({ shop_id: null })
+            .sort({ last_seen: -1 })
+            .limit(50)
+            .lean();
+        res.json({ success: true, devices });
+    } catch (error) {
+        console.error('Get unlinked devices error:', error);
+        res.status(500).json({ success: false, message: 'Failed to get unlinked devices' });
+    }
+});
+
+// POST link an unassigned device to current shop (set shop_id + activate)
+router.post('/essl/link-device', shopAdminAuth, async (req, res) => {
+    try {
+        const { device_serial, device_name } = req.body;
+        if (!device_serial) return res.status(400).json({ success: false, message: 'device_serial required' });
+
+        const { EsslDevice } = require('../models/mongoModels');
+        const device = await EsslDevice.findOne({ device_serial: String(device_serial).trim() });
+        if (!device) return res.status(404).json({ success: false, message: 'Device not found. Make sure it has connected at least once.' });
+
+        if (device.shop_id && device.shop_id.toString() !== req.shopId.toString()) {
+            return res.status(409).json({ success: false, message: 'Device already linked to a different shop.' });
+        }
+
+        device.shop_id = req.shopId;
+        device.is_active = true;
+        if (device_name) device.device_name = String(device_name).trim();
+        device.last_activity = 'Linked to shop';
+        await device.save();
+
+        // Also persist the serial on the shop record for quick access
+        await Shop.findByIdAndUpdate(req.shopId, { $set: { essl_device_serial: device.device_serial } });
+
+        res.json({ success: true, message: 'Device linked successfully', device });
+    } catch (error) {
+        console.error('Link device error:', error);
+        res.status(500).json({ success: false, message: 'Failed to link device' });
+    }
+});
+
+// POST unlink — set shop_id=null and deactivate (admin can move device to another shop)
+router.post('/essl/unlink-device', shopAdminAuth, async (req, res) => {
+    try {
+        const { device_serial } = req.body;
+        if (!device_serial) return res.status(400).json({ success: false, message: 'device_serial required' });
+
+        const { EsslDevice } = require('../models/mongoModels');
+        const device = await EsslDevice.findOne({ device_serial: String(device_serial).trim(), shop_id: req.shopId });
+        if (!device) return res.status(404).json({ success: false, message: 'Device not found in this shop' });
+
+        device.shop_id = null;
+        device.is_active = false;
+        device.last_activity = 'Unlinked from shop';
+        await device.save();
+
+        await Shop.findByIdAndUpdate(req.shopId, { $unset: { essl_device_serial: '' } });
+
+        res.json({ success: true, message: 'Device unlinked' });
+    } catch (error) {
+        console.error('Unlink device error:', error);
+        res.status(500).json({ success: false, message: 'Failed to unlink device' });
+    }
+});
+
 // ── HR Routes (employee CRUD, attendance punch, salary calculation) ───────────
 const hrController = require('../controllers/hrController');
+
+// 🔐 Apply shopAdminAuth to ALL /hr/* routes (otherwise req.shopId is undefined)
+router.use('/hr', shopAdminAuth);
 
 // Employee CRUD
 router.get('/hr/employees',                       hrController.listEmployees);
@@ -2211,6 +2285,7 @@ router.post('/hr/employees',                      hrController.createEmployee);
 router.put('/hr/employees/:id',                   hrController.updateEmployee);
 router.patch('/hr/employees/:id/deactivate',      hrController.deactivateEmployee);
 router.patch('/hr/employees/:id/reactivate',      hrController.reactivateEmployee);
+router.delete('/hr/employees/:id',                hrController.deleteEmployee);
 
 // Attendance
 router.get('/hr/attendance/daily',                hrController.getDailyAttendance);
