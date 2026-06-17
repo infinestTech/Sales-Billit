@@ -14,6 +14,9 @@ import {
   ChevronDown,
   ChevronUp,
   User,
+  Activity,
+  Info,
+  Zap,
 } from "lucide-react";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL_BILLIT || "http://localhost:8000";
@@ -47,6 +50,11 @@ export default function EsslDeviceSettings({ shopId, employees = [] }) {
   const [punchLogs, setPunchLogs] = useState([]);
   const [logsLoading, setLogsLoading] = useState(false);
   const [showLogs, setShowLogs] = useState(false);
+
+  // Live device status (polled every 30s)
+  const [deviceStatus, setDeviceStatus] = useState(null);
+  const [statusLoading, setStatusLoading] = useState(false);
+  const [showDebug, setShowDebug] = useState(false);
 
   // Employee PIN mapping state
   const [showPinManager, setShowPinManager] = useState(false);
@@ -98,6 +106,31 @@ export default function EsslDeviceSettings({ shopId, employees = [] }) {
 
   useEffect(() => {
     if (shopId) fetchSettings();
+  }, [shopId]);
+
+  // Live device status polling — starts when eSSL is enabled
+  const fetchDeviceStatus = async () => {
+    try {
+      setStatusLoading(true);
+      const token = localStorage.getItem("shopAdminToken");
+      const res = await axios.get(`${API_URL}/api/shop-admin/essl/device-status`, {
+        headers: { Authorization: `Bearer ${token}` },
+        params: { shop_id: shopId },
+      });
+      if (res.data.success) setDeviceStatus(res.data);
+    } catch (err) {
+      console.error("Fetch device status error:", err);
+    } finally {
+      setStatusLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (!shopId) return;
+    fetchDeviceStatus();
+    // Poll every 30 seconds when the component is mounted
+    const interval = setInterval(fetchDeviceStatus, 30_000);
+    return () => clearInterval(interval);
   }, [shopId]);
 
   useEffect(() => {
@@ -295,6 +328,104 @@ export default function EsslDeviceSettings({ shopId, employees = [] }) {
           </div>
         )}
       </div>
+
+      {/* ── Live Connection Status ─────────────────────────────────── */}
+      {(() => {
+        const ds = deviceStatus;
+        if (!ds) return null;
+        const { isOnline, hasEverConnected, deviceRegistered } = ds;
+        const bgColor = isOnline
+          ? "bg-green-50 border-green-300"
+          : hasEverConnected
+          ? "bg-yellow-50 border-yellow-300"
+          : "bg-slate-50 border-slate-200";
+        const dotColor = isOnline ? "bg-green-500" : hasEverConnected ? "bg-yellow-400" : "bg-slate-400";
+        const label = isOnline ? "Online" : hasEverConnected ? "Disconnected" : "Waiting for first connection";
+        const labelColor = isOnline ? "text-green-700" : hasEverConnected ? "text-yellow-700" : "text-slate-500";
+        return (
+          <div className={`rounded-xl border-2 ${bgColor} p-4`}>
+            <div className="flex items-center justify-between mb-3">
+              <div className="flex items-center gap-2.5">
+                {/* Pulsing dot when online */}
+                <span className="relative flex h-3 w-3">
+                  {isOnline && (
+                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75" />
+                  )}
+                  <span className={`relative inline-flex rounded-full h-3 w-3 ${dotColor}`} />
+                </span>
+                <span className={`text-sm font-bold ${labelColor}`}>{label}</span>
+              </div>
+              <button
+                onClick={fetchDeviceStatus}
+                disabled={statusLoading}
+                className="flex items-center gap-1 px-2 py-1 text-xs text-slate-500 hover:bg-white hover:text-slate-700 rounded-lg transition"
+              >
+                <RefreshCw className={`h-3 w-3 ${statusLoading ? "animate-spin" : ""}`} />
+                Refresh
+              </button>
+            </div>
+
+            <div className="grid grid-cols-2 md:grid-cols-3 gap-3 text-xs">
+              <div className="bg-white rounded-lg px-3 py-2">
+                <div className="text-slate-400 mb-0.5">Device SN</div>
+                <div className="font-semibold text-slate-700 truncate">{ds.deviceSerial || "—"}</div>
+              </div>
+              <div className="bg-white rounded-lg px-3 py-2">
+                <div className="text-slate-400 mb-0.5">Last Seen</div>
+                <div className="font-semibold text-slate-700">
+                  {ds.lastSeen ? formatRelativeTime(ds.lastSeen) : "Never"}
+                </div>
+              </div>
+              <div className="bg-white rounded-lg px-3 py-2">
+                <div className="text-slate-400 mb-0.5">Punches Today</div>
+                <div className="font-semibold text-slate-700">{ds.todayPunchCount ?? 0}</div>
+              </div>
+              {ds.lastPunch && (
+                <div className="bg-white rounded-lg px-3 py-2 col-span-2">
+                  <div className="text-slate-400 mb-0.5">Last Punch</div>
+                  <div className="font-semibold text-slate-700">
+                    PIN {ds.lastPunch.pin} · {ds.lastPunch.type} ·{" "}
+                    {new Date(ds.lastPunch.time).toLocaleString("en-IN", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" })}
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Debug / Setup section */}
+            {!isOnline && (
+              <div className="mt-3">
+                <button
+                  onClick={() => setShowDebug((v) => !v)}
+                  className="flex items-center gap-1.5 text-xs text-slate-500 hover:text-slate-700 transition"
+                >
+                  <Info className="h-3.5 w-3.5" />
+                  {showDebug ? "Hide" : "Show"} setup &amp; debug info
+                </button>
+                {showDebug && ds.debug && (
+                  <div className="mt-2 rounded-lg bg-white border border-slate-200 p-3 space-y-2">
+                    <p className="text-xs font-semibold text-amber-700 flex items-center gap-1">
+                      <Zap className="h-3.5 w-3.5" />
+                      {ds.debug.tip}
+                    </p>
+                    <div>
+                      <p className="text-xs font-semibold text-slate-600 mb-1">Configure these in the device (ADMS settings):</p>
+                      {Object.entries(ds.debug.requiredConfig || {}).map(([k, v]) => (
+                        <div key={k} className="flex justify-between py-0.5 border-b border-slate-50 text-xs">
+                          <span className="text-slate-500">{k}</span>
+                          <code className="font-mono font-semibold text-indigo-700 bg-indigo-50 px-1.5 rounded">{v}</code>
+                        </div>
+                      ))}
+                    </div>
+                    <p className="text-xs text-slate-400">
+                      On the eSSL M20: <strong>Menu → Cloud Settings → Server Address</strong>. Enter the URL above. Port must be <strong>80 (HTTP)</strong>.
+                    </p>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        );
+      })()}
 
       {/* ── Registered devices ─────────────────────────────────────── */}
       {isEnabled && settings.devices && settings.devices.length > 0 && (
