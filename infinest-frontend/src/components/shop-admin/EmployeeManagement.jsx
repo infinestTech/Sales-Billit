@@ -97,6 +97,35 @@ function PayComponentRow({ comp, index, onChange, onRemove }) {
   );
 }
 
+// ── Extracted to module level so React never remounts them on re-renders ──────
+function Section({ id, label, icon: Icon, expanded, onToggle, children }) {
+  return (
+    <div className="border border-gray-200 rounded-xl overflow-hidden mb-4">
+      <button
+        type="button"
+        onClick={() => onToggle(id)}
+        className="w-full flex items-center justify-between px-4 py-3 bg-gray-50 hover:bg-gray-100 transition"
+      >
+        <span className="flex items-center gap-2 font-semibold text-gray-700 text-sm">
+          <Icon className="h-4 w-4 text-green-600" />
+          {label}
+        </span>
+        {expanded ? <ChevronUp className="h-4 w-4 text-gray-500" /> : <ChevronDown className="h-4 w-4 text-gray-500" />}
+      </button>
+      {expanded && <div className="p-4 space-y-3">{children}</div>}
+    </div>
+  );
+}
+
+function Field({ label, children, half }) {
+  return (
+    <div className={half ? "col-span-1" : ""}>
+      <label className="block text-xs font-medium text-gray-600 mb-1">{label}</label>
+      {children}
+    </div>
+  );
+}
+
 export default function EmployeeManagement({ shopId }) {
   const [employees, setEmployees] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -273,30 +302,6 @@ export default function EmployeeManagement({ shopId }) {
     }
   };
 
-  const Section = ({ id, label, icon: Icon, children }) => (
-    <div className="border border-gray-200 rounded-xl overflow-hidden mb-4">
-      <button
-        type="button"
-        onClick={() => toggleSection(id)}
-        className="w-full flex items-center justify-between px-4 py-3 bg-gray-50 hover:bg-gray-100 transition"
-      >
-        <span className="flex items-center gap-2 font-semibold text-gray-700 text-sm">
-          <Icon className="h-4 w-4 text-green-600" />
-          {label}
-        </span>
-        {expandedSections[id] ? <ChevronUp className="h-4 w-4 text-gray-500" /> : <ChevronDown className="h-4 w-4 text-gray-500" />}
-      </button>
-      {expandedSections[id] && <div className="p-4 space-y-3">{children}</div>}
-    </div>
-  );
-
-  const Field = ({ label, children, half }) => (
-    <div className={half ? "col-span-1" : ""}>
-      <label className="block text-xs font-medium text-gray-600 mb-1">{label}</label>
-      {children}
-    </div>
-  );
-
   const inp = "w-full px-3 py-2 border border-gray-300 rounded-lg text-sm text-gray-900 bg-white focus:outline-none focus:ring-2 focus:ring-green-500";
   const sel = "w-full px-3 py-2 border border-gray-300 rounded-lg text-sm text-gray-900 bg-white focus:outline-none focus:ring-2 focus:ring-green-500";
 
@@ -438,7 +443,7 @@ export default function EmployeeManagement({ shopId }) {
 
             <form onSubmit={handleSubmit} className="flex-1 overflow-y-auto px-6 py-4 space-y-0">
               {/* Personal Info */}
-              <Section id="personal" label="Personal Information" icon={Users}>
+              <Section id="personal" label="Personal Information" icon={Users} expanded={expandedSections.personal} onToggle={toggleSection}>
                 <div className="grid grid-cols-2 gap-3">
                   <Field label="Employee ID *">
                     <input required className={inp} value={form.employeeId} onChange={(e) => setField("employeeId", e.target.value)} disabled={!!editingId} placeholder="EMP001" />
@@ -473,7 +478,7 @@ export default function EmployeeManagement({ shopId }) {
               </Section>
 
               {/* Pay Details */}
-              <Section id="pay" label="Pay Details" icon={DollarSign}>
+              <Section id="pay" label="Pay Details" icon={DollarSign} expanded={expandedSections.pay} onToggle={toggleSection}>
                 <div className="grid grid-cols-2 gap-3">
                   <Field label="Gross Salary (₹/month) *">
                     <input required type="number" min="0" className={inp} value={form.grossSalary} onChange={(e) => setField("grossSalary", e.target.value)} placeholder="20000" />
@@ -485,7 +490,7 @@ export default function EmployeeManagement({ shopId }) {
               </Section>
 
               {/* Pay Components */}
-              <Section id="payComponents" label="Pay Components (Earnings & Deductions)" icon={Settings}>
+              <Section id="payComponents" label="Pay Components (Earnings & Deductions)" icon={Settings} expanded={expandedSections.payComponents} onToggle={toggleSection}>
                 <p className="text-xs text-gray-500 mb-2">Configure individual earnings (Basic, HRA) and deductions (PF, ESI). Leave empty to use gross salary as-is.</p>
                 <div className="space-y-2">
                   {form.payComponents.map((comp, i) => (
@@ -498,7 +503,7 @@ export default function EmployeeManagement({ shopId }) {
               </Section>
 
               {/* Shift */}
-              <Section id="shift" label="Shift & Working Hours" icon={Clock}>
+              <Section id="shift" label="Shift & Working Hours" icon={Clock} expanded={expandedSections.shift} onToggle={toggleSection}>
                 <div className="grid grid-cols-2 gap-3">
                   <Field label="Shift Name">
                     <input className={inp} value={form.shift.name} onChange={(e) => setField("shift.name", e.target.value)} placeholder="General / Morning / Night" />
@@ -541,7 +546,7 @@ export default function EmployeeManagement({ shopId }) {
               </Section>
 
               {/* Policies */}
-              <Section id="policies" label="Permission & Late Entry Policies" icon={AlertCircle}>
+              <Section id="policies" label="Permission & Late Entry Policies" icon={AlertCircle} expanded={expandedSections.policies} onToggle={toggleSection}>
                 <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 mb-3">
                   <p className="text-xs font-semibold text-blue-700 mb-2 flex items-center gap-1"><Clock className="h-3 w-3" /> Permission Hours Policy</p>
                   <div className="grid grid-cols-2 gap-3">
