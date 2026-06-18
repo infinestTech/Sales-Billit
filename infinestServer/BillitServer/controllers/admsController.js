@@ -112,6 +112,33 @@ function verifyDeviceSignature(sn, signature) {
   return crypto.timingSafeEqual(Buffer.from(expected, 'hex'), Buffer.from(signature, 'hex'));
 }
 
+// Re-sync the device clock at most this often.  The device polls getrequest
+// every ~10 s; sending the sync command on every poll would be wasteful, so
+// we throttle to once every TIME_SYNC_INTERVAL_MS.
+const TIME_SYNC_INTERVAL_MS = 5 * 60 * 1000; // 5 minutes
+
+/**
+ * Encode a Date as the ZK/eSSL "DateTime" packed integer used by the
+ * `SET OPTION DateTime=` command.
+ *
+ *   encoded = ((Y - 2000) * 12 * 31 + (M - 1) * 31 + (D - 1)) * 86400
+ *           + h * 3600 + m * 60 + s
+ *
+ * We compute the value from the IST wall-clock components so the device's
+ * displayed clock matches Asia/Kolkata regardless of where the server runs.
+ */
+function encodeZkDateTime(date) {
+  const m = moment(date).tz(IST_TZ);
+  const Y = m.year();
+  const M = m.month() + 1;
+  const D = m.date();
+  const h = m.hour();
+  const min = m.minute();
+  const s = m.second();
+  return ((Y - 2000) * 12 * 31 + (M - 1) * 31 + (D - 1)) * 86400
+       + h * 3600 + min * 60 + s;
+}
+
 // ─── Handshake / Heartbeat ─────────────────────────────────────────────────────
 
 /**
@@ -164,11 +191,6 @@ async function handleHandshake(req, res) {
 
     // Respond with configuration.
     //
-    // Date=<IST>  ← CRITICAL: explicitly sync the device clock to current IST.
-    //   Without this the eSSL M20 auto-syncs from Hetzner NTP (UTC+0/UTC+2)
-    //   and its display clock shifts to European time.  Providing Date= forces
-    //   the device to set its RTC to our IST wall-clock on every heartbeat.
-    //
     // TimeZone=0  ← tell the device the server is UTC+0.
     //   The iClock Proxy firmware ADDS the TimeZone value to the device's local
     //   display time before putting it in the ATTLOG.  If we set TimeZone=5.5
@@ -180,8 +202,12 @@ async function handleHandshake(req, res) {
     // ATTLOGStamp — use last_seen epoch so the device only sends NEW records
     //   after every reconnect instead of replaying the entire history.
     //   On first connection (no stamp) we use 0 to get all-time history once.
+    //
+    // NOTE: The actual device clock is set via a SET OPTION DateTime command
+    //   pushed through /iclock/getrequest (see handleGetRequest).  The eSSL
+    //   M20 firmware ignores any Date= field placed inside this handshake
+    //   response, so the time sync MUST go through the command queue.
     const attlogStamp = device.attlog_stamp || 0;
-    const istNow = moment().tz(IST_TZ).format('YYYY-MM-DD HH:mm:ss');
     const response = [
       `GET OPTION FROM:${sn}`,
       `ATTLOGStamp=${attlogStamp}`,
@@ -192,7 +218,6 @@ async function handleHandshake(req, res) {
       'TransInterval=1',
       'TransFlag=TransData AttLog',
       'TimeZone=0',
-      `Date=${istNow}`,
       'Realtime=1',
       'Encrypt=0',
     ].join('\n') + '\n';
@@ -355,9 +380,17 @@ async function handleDataPush(req, res) {
 /**
  * GET /iclock/getrequest?SN=<serial>
  *
- * Device polls for pending commands. Currently we have no command queue,
- * so we always respond with an empty OK. This handler is present for
- * protocol completeness and future extensibility (e.g., time sync, reboot).
+ * Device polls for pending commands every `Delay` seconds (we configure 10s).
+ * We use this channel to push a `SET OPTION DateTime=<encoded>` command
+ * periodically so the device clock stays synced to IST.  The eSSL M20 will
+ * otherwise drift to its NTP source (UTC on Hetzner) and the on-screen time
+ * and incoming ATTLOG timestamps will be wrong by 5h30m.
+ *
+ * Protocol response format (one command per line):
+ *   C:<cmdId>:<command>
+ *
+ * Device executes the command, then POSTs the result to /iclock/devicecmd
+ * with `ID=<cmdId>&Return=<retval>&CMD=<original_cmd>`.
  */
 async function handleGetRequest(req, res) {
   try {
@@ -365,12 +398,32 @@ async function handleGetRequest(req, res) {
     if (!sn) return res.status(400).send('ERROR: Missing SN\n');
 
     const device = await EsslDevice.findOne({ device_serial: sn });
-    if (device) {
-      device.last_seen = new Date();
-      await device.save();
+    if (!device) {
+      // Unknown device — nothing to push, but acknowledge so it stops retrying.
+      return res.status(200).send('OK\n');
     }
 
-    // No pending commands
+    device.last_seen = new Date();
+
+    // Decide whether to push a time-sync command on this poll.
+    const lastSync = device.last_time_sync ? device.last_time_sync.getTime() : 0;
+    const dueForSync = (Date.now() - lastSync) >= TIME_SYNC_INTERVAL_MS;
+
+    if (dueForSync) {
+      const encoded = encodeZkDateTime(new Date());
+      // cmdId must be unique per device; epoch millis is sufficient.
+      const cmdId = Date.now();
+      // Mark sync as done BEFORE sending so we don't queue duplicates
+      // if the device polls again before ACK'ing.
+      device.last_time_sync = new Date();
+      device.last_activity = `Time sync pushed (DateTime=${encoded})`;
+      await device.save();
+
+      const cmd = `C:${cmdId}:SET OPTION DateTime=${encoded}\n`;
+      return res.status(200).send(cmd);
+    }
+
+    await device.save();
     return res.status(200).send('OK\n');
   } catch (err) {
     console.error('[ADMS getrequest] Error:', err);
@@ -384,12 +437,35 @@ async function handleGetRequest(req, res) {
  * POST /iclock/devicecmd?SN=<serial>
  *
  * Device acknowledges a command previously returned by getrequest.
+ * Body format: ID=<cmdId>&Return=<retval>&CMD=<original_cmd>
+ * A non-zero / negative Return value usually means the command failed.
  */
 async function handleDeviceCmd(req, res) {
   try {
     const sn = (req.query.SN || '').trim();
     if (!sn) return res.status(400).send('ERROR: Missing SN\n');
-    // Acknowledge
+
+    const body = typeof req.body === 'string' ? req.body : (req.body?.toString?.() || '');
+    // Best-effort parse — devices send a single line of urlencoded-ish pairs.
+    const params = Object.fromEntries(
+      body.split('&').map(p => {
+        const idx = p.indexOf('=');
+        return idx === -1 ? [p, ''] : [p.slice(0, idx), p.slice(idx + 1)];
+      })
+    );
+    const retval = parseInt(params.Return, 10);
+    const cmd = (params.CMD || '').toUpperCase();
+
+    // If a time-sync command failed, clear last_time_sync so we retry on the
+    // next poll instead of waiting another full interval.
+    if (cmd.includes('SET OPTION DATETIME') && Number.isFinite(retval) && retval < 0) {
+      await EsslDevice.updateOne(
+        { device_serial: sn },
+        { $set: { last_time_sync: null, last_activity: `Time sync FAILED (Return=${retval})` } }
+      );
+      console.warn(`[ADMS devicecmd] Time sync failed on SN=${sn}, Return=${retval}`);
+    }
+
     return res.status(200).send('OK\n');
   } catch (err) {
     console.error('[ADMS devicecmd] Error:', err);
