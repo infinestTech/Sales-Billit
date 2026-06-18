@@ -273,9 +273,18 @@ async function handleDataPush(req, res) {
     let accepted = 0;
     let skipped = 0;
 
+    // Per-device time correction (minutes) applied to every parsed punch.
+    // Lets admins fix devices whose firmware refuses to accept our SET OPTION
+    // DateTime command and keeps sending UTC/wrong-TZ timestamps.
+    const offsetMs = (device.time_offset_minutes || 0) * 60 * 1000;
+
     for (const line of lines) {
       const parsed = parseAttLogLine(line);
       if (!parsed) { skipped++; continue; }
+
+      if (offsetMs !== 0) {
+        parsed.punch_time = new Date(parsed.punch_time.getTime() + offsetMs);
+      }
 
       const employee = pinMap[parsed.device_pin] || null;
 
