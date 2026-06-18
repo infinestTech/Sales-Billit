@@ -6,8 +6,11 @@
  */
 
 const mongoose = require('mongoose');
+const moment = require('moment-timezone');
 const { Employee, HrPunch, HrDailyAttendance, HrSalaryRecord } = require('../models/mongoModels');
 const { formatIST } = require('../utils/dateHelper');
+
+const IST_TZ = 'Asia/Kolkata';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -51,11 +54,13 @@ function parseTime(timeStr) {
   return { h: h || 0, m: m || 0 };
 }
 
-/** Get today's date as Date at a given HH:MM (local server time treated as IST) */
+/** Get a Date representing the given HH:MM on the same IST calendar day as referenceDate. */
 function todayAt(timeStr, referenceDate) {
-  const base = referenceDate ? new Date(referenceDate) : new Date();
+  const base = referenceDate
+    ? moment(referenceDate).tz(IST_TZ)
+    : moment().tz(IST_TZ);
   const { h, m } = parseTime(timeStr);
-  return new Date(base.getFullYear(), base.getMonth(), base.getDate(), h, m, 0, 0);
+  return base.clone().startOf('day').hours(h).minutes(m).seconds(0).milliseconds(0).toDate();
 }
 
 /** Get number of working days in a month for an employee */

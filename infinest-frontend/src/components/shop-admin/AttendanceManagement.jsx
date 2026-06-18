@@ -24,7 +24,7 @@ export default function AttendanceManagement({ shopId }) {
   const [loading, setLoading] = useState(false);
 
   // Daily view state
-  const [dailyDate, setDailyDate] = useState(() => new Date().toISOString().split("T")[0]);
+  const [dailyDate, setDailyDate] = useState(() => new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Kolkata" }));
   const [dailyRecords, setDailyRecords] = useState([]);
 
   // Software punch state
@@ -34,24 +34,24 @@ export default function AttendanceManagement({ shopId }) {
 
   // Monthly view state
   const [monthlyEmployeeId, setMonthlyEmployeeId] = useState("");
-  const [monthlyMonth, setMonthlyMonth] = useState(() => {
-    const n = new Date(); return `${n.getFullYear()}-${String(n.getMonth() + 1).padStart(2, "0")}`;
-  });
+  const [monthlyMonth, setMonthlyMonth] = useState(() =>
+    new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Kolkata" }).slice(0, 7)
+  );
   const [monthlyRecords, setMonthlyRecords] = useState([]);
   const [monthlySummary, setMonthlySummary] = useState(null);
 
   // Manual attendance state
   const [manualEmpId, setManualEmpId] = useState("");
-  const [manualDate, setManualDate] = useState(() => new Date().toISOString().split("T")[0]);
+  const [manualDate, setManualDate] = useState(() => new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Kolkata" }));
   const [manualStatus, setManualStatus] = useState("PRESENT");
   const [manualLeaveType, setManualLeaveType] = useState("");
   const [manualMsg, setManualMsg] = useState(null);
   const [savingManual, setSavingManual] = useState(false);
 
   // Monthly report state
-  const [reportMonth, setReportMonth] = useState(() => {
-    const n = new Date(); return `${n.getFullYear()}-${String(n.getMonth() + 1).padStart(2, "0")}`;
-  });
+  const [reportMonth, setReportMonth] = useState(() =>
+    new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Kolkata" }).slice(0, 7)
+  );
   const [reportData, setReportData] = useState(null);
 
   const token = () => localStorage.getItem("shopAdminToken");
@@ -181,7 +181,7 @@ export default function AttendanceManagement({ shopId }) {
   const getEmployeeName = (id) => employees.find((e) => e.employeeId === id)?.name || id;
 
   const fmtTime = (d) =>
-    d ? new Date(d).toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit", hour12: true }) : "—";
+    d ? new Date(d).toLocaleTimeString("en-IN", { timeZone: "Asia/Kolkata", hour: "2-digit", minute: "2-digit", hour12: true }) : "—";
 
   const fmtMin = (m) => {
     if (!m) return "0 min";

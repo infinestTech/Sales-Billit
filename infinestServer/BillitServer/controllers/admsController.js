@@ -164,6 +164,11 @@ async function handleHandshake(req, res) {
 
     // Respond with configuration.
     //
+    // Date=<IST>  ← CRITICAL: explicitly sync the device clock to current IST.
+    //   Without this the eSSL M20 auto-syncs from Hetzner NTP (UTC+0/UTC+2)
+    //   and its display clock shifts to European time.  Providing Date= forces
+    //   the device to set its RTC to our IST wall-clock on every heartbeat.
+    //
     // TimeZone=0  ← tell the device the server is UTC+0.
     //   The iClock Proxy firmware ADDS the TimeZone value to the device's local
     //   display time before putting it in the ATTLOG.  If we set TimeZone=5.5
@@ -176,6 +181,7 @@ async function handleHandshake(req, res) {
     //   after every reconnect instead of replaying the entire history.
     //   On first connection (no stamp) we use 0 to get all-time history once.
     const attlogStamp = device.attlog_stamp || 0;
+    const istNow = moment().tz(IST_TZ).format('YYYY-MM-DD HH:mm:ss');
     const response = [
       `GET OPTION FROM:${sn}`,
       `ATTLOGStamp=${attlogStamp}`,
@@ -186,6 +192,7 @@ async function handleHandshake(req, res) {
       'TransInterval=1',
       'TransFlag=TransData AttLog',
       'TimeZone=0',
+      `Date=${istNow}`,
       'Realtime=1',
       'Encrypt=0',
     ].join('\n') + '\n';
