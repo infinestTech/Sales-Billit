@@ -615,6 +615,10 @@ const esslDeviceSchema = new mongoose.Schema({
   // Cursor returned to the device as ATTLOGStamp so it only sends new records.
   // Starts at 0 (send all history on first connection), updated after each push.
   attlog_stamp: { type: Number, default: 0 },
+  // Last time we successfully pushed a SET OPTION DateTime command to the
+  // device.  We re-sync periodically so the device clock cannot drift away
+  // from IST (e.g. if it auto-syncs from a non-IST NTP server).
+  last_time_sync: { type: Date },
   created_at: { type: Date, default: Date.now }
 });
 esslDeviceSchema.index({ shop_id: 1 });
