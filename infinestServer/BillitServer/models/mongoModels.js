@@ -619,6 +619,11 @@ const esslDeviceSchema = new mongoose.Schema({
   // device.  We re-sync periodically so the device clock cannot drift away
   // from IST (e.g. if it auto-syncs from a non-IST NTP server).
   last_time_sync: { type: Date },
+  // Compensation offset (in minutes) added to every incoming punch_time.
+  // Use this when the device firmware refuses to honor the SET OPTION DateTime
+  // command and keeps reporting timestamps in the wrong timezone.  Example:
+  // device reports UTC but we want IST  →  set to 330  (5 h 30 m).
+  time_offset_minutes: { type: Number, default: 0 },
   created_at: { type: Date, default: Date.now }
 });
 esslDeviceSchema.index({ shop_id: 1 });
