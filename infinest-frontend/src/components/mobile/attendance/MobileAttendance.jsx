@@ -9,12 +9,9 @@ import {
   RefreshCw,
   CheckCircle2,
   XCircle,
-  Clock,
   UserPlus,
   Phone,
   Users,
-  Play,
-  Square,
 } from "lucide-react"
 import api from "@/components/api"
 import BottomSheet from "../records/BottomSheet"
@@ -108,36 +105,6 @@ export default function MobileAttendance({ shopId: shopIdProp }) {
         logError("Failed to mark attendance", err, shopId)
         logAndNotify("Failed to mark attendance", "error", shopId)
       }
-    }
-  }
-
-  const startPermission = async (employeeId) => {
-    try {
-      const token = localStorage.getItem("token")
-      await api.post(
-        "/api/employees/permission/start",
-        { shop_id: shopId, employee_id: employeeId, date },
-        { headers: { Authorization: `Bearer ${token}` } }
-      )
-      await fetchData()
-    } catch (err) {
-      logError("Failed to start permission", err, shopId)
-      logAndNotify("Failed to start permission", "error", shopId)
-    }
-  }
-
-  const endPermission = async (employeeId) => {
-    try {
-      const token = localStorage.getItem("token")
-      await api.post(
-        "/api/employees/permission/end",
-        { shop_id: shopId, employee_id: employeeId, date },
-        { headers: { Authorization: `Bearer ${token}` } }
-      )
-      await fetchData()
-    } catch (err) {
-      logError("Failed to end permission", err, shopId)
-      logAndNotify("Failed to end permission", "error", shopId)
     }
   }
 
@@ -236,8 +203,6 @@ export default function MobileAttendance({ shopId: shopIdProp }) {
               employee={e}
               isToday={isToday}
               onMark={mark}
-              onStartPerm={startPermission}
-              onEndPerm={endPermission}
             />
           ))}
         </ul>
@@ -309,21 +274,8 @@ function Pill({ label, value, tone }) {
   )
 }
 
-function fmtDuration(seconds) {
-  if (!seconds || seconds <= 0) return "00:00"
-  const h = Math.floor(seconds / 3600)
-  const m = Math.floor((seconds % 3600) / 60)
-  const s = seconds % 60
-  if (h > 0) return `${h}h ${m}m`
-  if (m > 0) return `${m}m ${s}s`
-  return `${s}s`
-}
-
-function EmployeeCard({ employee, isToday, onMark, onStartPerm, onEndPerm }) {
+function EmployeeCard({ employee, isToday, onMark }) {
   const status = employee.attendance?.status
-  const perm = employee.attendance?.permission || {}
-  const permActive = perm.startedAt && !perm.endedAt
-  const permDuration = perm.totalSeconds || 0
 
   return (
     <li className="rounded-xl border border-gray-100 bg-white p-3 shadow-sm">
@@ -348,13 +300,6 @@ function EmployeeCard({ employee, isToday, onMark, onStartPerm, onEndPerm }) {
               </span>
             )}
           </div>
-          {(permActive || permDuration > 0) && (
-            <div className="mt-1.5 inline-flex items-center gap-1 rounded-full bg-amber-50 px-2 py-0.5 text-[11px] font-medium text-amber-700">
-              <Clock className="h-3 w-3" />
-              Perm: {fmtDuration(permDuration)}
-              {permActive && " · active"}
-            </div>
-          )}
         </div>
       </div>
 
@@ -382,28 +327,6 @@ function EmployeeCard({ employee, isToday, onMark, onStartPerm, onEndPerm }) {
           >
             <XCircle className="h-4 w-4" /> Absent
           </button>
-          {status === "present" && (
-            <button
-              onClick={() =>
-                permActive ? onEndPerm(employee._id) : onStartPerm(employee._id)
-              }
-              className={`col-span-2 flex items-center justify-center gap-1 rounded-lg border py-2 text-xs font-semibold ${
-                permActive
-                  ? "border-amber-200 bg-amber-50 text-amber-700"
-                  : "border-gray-200 bg-white text-gray-700"
-              }`}
-            >
-              {permActive ? (
-                <>
-                  <Square className="h-4 w-4" /> End permission
-                </>
-              ) : (
-                <>
-                  <Play className="h-4 w-4" /> Start permission
-                </>
-              )}
-            </button>
-          )}
         </div>
       )}
     </li>

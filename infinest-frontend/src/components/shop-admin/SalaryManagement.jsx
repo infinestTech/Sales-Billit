@@ -98,8 +98,6 @@ export default function SalaryManagement({ shopId }) {
     } catch (_) {}
   };
 
-  const fmtMin = (m) => { if (!m) return "0 min"; const h = Math.floor(m/60), mn = m%60; return h>0?`${h}h ${mn}m`:`${mn}m`; };
-
   const TAB = ({ id, label, icon: Icon }) => (
     <button onClick={() => setActiveTab(id)}
       className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition ${activeTab===id?"bg-green-600 text-white":"bg-white text-gray-600 hover:bg-gray-100 border border-gray-200"}`}>
@@ -141,25 +139,15 @@ export default function SalaryManagement({ shopId }) {
             <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
               {[
                 {label:"Total Employees", val:summary.totalEmployees, color:"text-gray-700 border-gray-200"},
-                {label:"Total Gross", val:`₹${summary.totalGross?.toLocaleString()}`, color:"text-green-700 border-green-200 bg-green-50"},
-                {label:"Total Deductions", val:`₹${summary.totalDeductions?.toLocaleString()}`, color:"text-red-700 border-red-200 bg-red-50"},
-                {label:"Total Net Payable", val:`₹${summary.totalNetSalary?.toLocaleString()}`, color:"text-blue-700 border-blue-200 bg-blue-50"},
+                {label:"Total Earned", val:`₹${(summary.totalEarned||0).toLocaleString()}`, color:"text-green-700 border-green-200 bg-green-50"},
+                {label:"Late Deductions", val:`₹${(summary.totalLateDeduction||0).toLocaleString()}`, color:"text-orange-700 border-orange-200 bg-orange-50"},
+                {label:"Total Net Payable", val:`₹${(summary.totalNetSalary||0).toLocaleString()}`, color:"text-blue-700 border-blue-200 bg-blue-50"},
               ].map(({label,val,color})=>(
                 <div key={label} className={`rounded-xl border p-4 bg-white ${color}`}>
                   <div className="text-xs font-medium mb-1 opacity-70">{label}</div>
                   <div className="text-2xl font-bold">{val}</div>
                 </div>
               ))}
-            </div>
-          )}
-          {summary && (
-            <div className="bg-white rounded-xl border border-gray-200 p-4">
-              <h4 className="text-sm font-semibold text-gray-700 mb-3">Deduction Breakdown</h4>
-              <div className="grid grid-cols-3 gap-3 text-sm">
-                <div className="bg-red-50 rounded-lg p-3"><div className="text-xs text-red-600 font-medium mb-1">Absence</div><div className="text-lg font-bold text-red-700">₹{summary.totalAbsenceDeduction?.toLocaleString()}</div></div>
-                <div className="bg-blue-50 rounded-lg p-3"><div className="text-xs text-blue-600 font-medium mb-1">Permission Hrs</div><div className="text-lg font-bold text-blue-700">₹{summary.totalPermissionDeduction?.toLocaleString()}</div></div>
-                <div className="bg-orange-50 rounded-lg p-3"><div className="text-xs text-orange-600 font-medium mb-1">Late Entry</div><div className="text-lg font-bold text-orange-700">₹{summary.totalLateDeduction?.toLocaleString()}</div></div>
-              </div>
             </div>
           )}
           <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
@@ -181,7 +169,7 @@ export default function SalaryManagement({ shopId }) {
               <div className="overflow-x-auto">
                 <table className="w-full text-sm">
                   <thead className="bg-gray-50 border-b border-gray-200">
-                    <tr>{["Employee","Present","Absent","Late","Permission","Gross","Deductions","Net Pay","Status","Actions"].map(h=>(
+                    <tr>{["Employee","Present","Absent","Late","Earned","Late Deduction","Net Pay","Status","Actions"].map(h=>(
                       <th key={h} className="px-3 py-3 text-left text-xs font-semibold text-gray-600">{h}</th>
                     ))}</tr>
                   </thead>
@@ -194,10 +182,9 @@ export default function SalaryManagement({ shopId }) {
                           <td className="px-3 py-3 text-green-700 font-semibold">{rec.presentDays}</td>
                           <td className="px-3 py-3 text-red-700 font-semibold">{rec.absentDays}</td>
                           <td className="px-3 py-3 text-orange-600">{rec.lateDays}</td>
-                          <td className="px-3 py-3 text-blue-600 text-xs">{fmtMin(rec.totalPermissionMinutes)}</td>
-                          <td className="px-3 py-3 text-gray-700">₹{rec.grossSalary?.toLocaleString()}</td>
-                          <td className="px-3 py-3 text-red-600">−₹{rec.totalDeductions?.toLocaleString()}</td>
-                          <td className="px-3 py-3 font-bold text-green-700">₹{rec.netSalary?.toLocaleString()}</td>
+                          <td className="px-3 py-3 text-gray-700">₹{(rec.earnedBase||0).toLocaleString()}</td>
+                          <td className="px-3 py-3 text-red-600">−₹{(rec.lateDeduction||0).toLocaleString()}</td>
+                          <td className="px-3 py-3 font-bold text-green-700">₹{(rec.netSalary||0).toLocaleString()}</td>
                           <td className="px-3 py-3"><span className={`px-2 py-0.5 rounded-full text-xs font-semibold ${st.color}`}>{st.label}</span></td>
                           <td className="px-3 py-3">
                             <div className="flex items-center gap-1">
@@ -282,10 +269,7 @@ export default function SalaryManagement({ shopId }) {
               <div className="bg-gray-50 rounded-xl p-4 grid grid-cols-3 gap-3 text-center text-sm">
                 <div><div className="text-green-600 font-bold text-xl">{selectedRecord.presentDays}</div><div className="text-gray-500 text-xs">Present</div></div>
                 <div><div className="text-red-600 font-bold text-xl">{selectedRecord.absentDays}</div><div className="text-gray-500 text-xs">Absent</div></div>
-                <div><div className="text-yellow-600 font-bold text-xl">{selectedRecord.halfDays}</div><div className="text-gray-500 text-xs">Half Day</div></div>
-                <div><div className="text-blue-600 font-bold text-xl">{selectedRecord.paidLeaveDays}</div><div className="text-gray-500 text-xs">Paid Leave</div></div>
                 <div><div className="text-orange-600 font-bold text-xl">{selectedRecord.lateDays}</div><div className="text-gray-500 text-xs">Late Days</div></div>
-                <div><div className="text-purple-600 font-bold text-sm">{fmtMin(selectedRecord.totalPermissionMinutes)}</div><div className="text-gray-500 text-xs">Permission</div></div>
               </div>
               <div>
                 <div className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Earnings</div>

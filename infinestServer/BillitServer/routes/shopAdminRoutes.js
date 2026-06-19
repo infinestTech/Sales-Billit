@@ -403,76 +403,41 @@ router.get('/employees', shopAdminAuth, async (req, res) => {
     }
 });
 
-// Get employee attendance details with filtering
+// Get employee attendance details with filtering (uses new HR daily attendance store)
 router.get('/employee-attendance', shopAdminAuth, async (req, res) => {
     try {
         const { employee_id, from_date, to_date } = req.query;
-
-        console.log('📊 Fetching attendance for employee:', employee_id);
 
         if (!employee_id) {
             return res.status(400).json({ success: false, message: 'Employee ID is required' });
         }
 
-        // Convert employee_id to ObjectId for proper MongoDB query
         const mongoose = require('mongoose');
+        const { HrDailyAttendance } = require('../models/mongoModels');
         const employeeObjectId = new mongoose.Types.ObjectId(employee_id);
 
-        // Build query - fetch ALL data if no date filters, otherwise apply date range
-        let attendanceQuery = { employee_id: employeeObjectId };
-        let permissionQuery = { employee_id: employeeObjectId };
+        const query = { employee_id: employeeObjectId };
         let startDate, endDate;
-
         if (from_date && to_date) {
             startDate = from_date;
             endDate = to_date;
-            attendanceQuery.date = { $gte: startDate, $lte: endDate };
-            permissionQuery.date = { $gte: startDate, $lte: endDate };
-            console.log('📅 Filtering by date range:', { startDate, endDate });
-        } else {
-            console.log('📅 Fetching ALL attendance records (no date filter)');
+            query.date = { $gte: startDate, $lte: endDate };
         }
 
-        // Fetch attendance records
-        const attendanceRecords = await Attendance.find(attendanceQuery).sort({ date: -1 });
+        const records = await HrDailyAttendance.find(query).sort({ date: -1 });
 
-        console.log('✅ Found attendance records:', attendanceRecords.length);
-
-        // Fetch permission records
-        const { Permission } = require('../models/mongoModels');
-        const permissions = await Permission.find(permissionQuery).sort({ date: -1 });
-
-        console.log('✅ Found permission records:', permissions.length);
-
-        // Calculate statistics
-        const totalDays = attendanceRecords.length;
-        const presentDays = attendanceRecords.filter(a => a.status === 'present').length;
-        const absentDays = attendanceRecords.filter(a => a.status === 'absent').length;
+        const totalDays = records.length;
+        const presentDays = records.filter(r => r.status === 'PRESENT' || r.status === 'LATE').length;
+        const absentDays = records.filter(r => r.status === 'ABSENT').length;
+        const lateDays = records.filter(r => r.status === 'LATE').length;
         const attendanceRate = totalDays > 0 ? ((presentDays / totalDays) * 100).toFixed(1) : 0;
+        const totalLateMinutes = records.reduce((sum, r) => sum + (r.late_minutes || 0), 0);
 
-        // Calculate total permission hours
-        const totalPermissionSeconds = permissions.reduce((sum, p) => sum + (p.duration_seconds || 0), 0);
-        const totalPermissionHours = (totalPermissionSeconds / 3600).toFixed(1);
-
-        // Format daily records with permission info
-        const dailyRecords = attendanceRecords.map(record => {
-            const dayPermissions = permissions.filter(p => p.date === record.date);
-            const dayPermissionSeconds = dayPermissions.reduce((sum, p) => sum + (p.duration_seconds || 0), 0);
-            const dayPermissionHours = (dayPermissionSeconds / 3600).toFixed(1);
-
-            return {
-                date: record.date,
-                status: record.status,
-                permissionHours: parseFloat(dayPermissionHours)
-            };
-        });
-
-        // Format permission details
-        const permissionDetails = permissions.map(p => ({
-            date: p.date,
-            start_time: p.start_time ? new Date(p.start_time).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' }) : 'N/A',
-            end_time: p.end_time ? new Date(p.end_time).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' }) : null,
-            duration_hours: (p.duration_seconds / 3600).toFixed(1)
+        const dailyRecords = records.map(r => ({
+            date: r.date,
+            status: (r.status || '').toLowerCase(),
+            lateMinutes: r.late_minutes || 0,
+            workingHours: r.working_hours || 0
         }));
 
         res.json({
@@ -481,11 +446,10 @@ router.get('/employee-attendance', shopAdminAuth, async (req, res) => {
                 totalDays,
                 presentDays,
                 absentDays,
+                lateDays,
                 attendanceRate: parseFloat(attendanceRate),
-                totalPermissionHours: parseFloat(totalPermissionHours),
-                permissionCount: permissions.length,
+                totalLateMinutes,
                 dailyRecords,
-                permissions: permissionDetails,
                 dateRange: from_date && to_date ? { from: startDate, to: endDate } : null
             }
         });
@@ -510,8 +474,7 @@ router.delete('/employees/:employeeId', shopAdminAuth, async (req, res) => {
         // Delete employee and all related records
         await Promise.all([
             Employee.deleteOne({ _id: employeeId }),
-            Attendance.deleteMany({ employee_id: employeeId }),
-            require('../models/mongoModels').Permission.deleteMany({ employee_id: employeeId })
+            Attendance.deleteMany({ employee_id: employeeId })
         ]);
 
         res.json({ success: true, message: 'Employee deleted successfully' });
@@ -708,19 +671,19 @@ router.get('/analytics/revenue', shopAdminAuth, async (req, res) => {
             { $sort: { "_id.date": 1 } }
         ]);
 
-        // Daily Wage Expenses (only include PAID salaries from SalaryRecord)
-        const { SalaryRecord } = require('../models/mongoModels');
+        // Daily Wage Expenses (only include PAID salaries from HrSalaryRecord)
+        const { HrSalaryRecord } = require('../models/mongoModels');
         
         // Get paid salary records for the date range
         const startMonth = `${startDate.getFullYear()}-${String(startDate.getMonth() + 1).padStart(2, '0')}`;
         const endMonth = `${endDate.getFullYear()}-${String(endDate.getMonth() + 1).padStart(2, '0')}`;
         
-        const paidSalaryRecords = await SalaryRecord.find({
+        const paidSalaryRecords = await HrSalaryRecord.find({
             shop_id: req.shopId,
-            payment_status: 'paid',
-            payment_date: { $exists: true, $ne: null },
+            status: 'PAID',
+            paid_at: { $exists: true, $ne: null },
             $or: [
-                { payment_date: { $gte: startDate, $lte: endDate } },
+                { paid_at: { $gte: startDate, $lte: endDate } },
                 { month: { $gte: startMonth, $lte: endMonth } }
             ]
         });
@@ -729,9 +692,9 @@ router.get('/analytics/revenue', shopAdminAuth, async (req, res) => {
         const dailyWageExpensesByDate = {};
         
         paidSalaryRecords.forEach(record => {
-            // Use payment_date for expense tracking (when the salary was actually paid)
-            if (record.payment_date) {
-                const paymentDate = new Date(record.payment_date);
+            // Use paid_at for expense tracking (when the salary was actually paid)
+            if (record.paid_at) {
+                const paymentDate = new Date(record.paid_at);
                 const year = paymentDate.getFullYear();
                 const month = String(paymentDate.getMonth() + 1).padStart(2, '0');
                 const day = String(paymentDate.getDate()).padStart(2, '0');
@@ -2379,6 +2342,10 @@ router.post('/hr/salary/generate-bulk',           hrController.generateBulkSalar
 router.patch('/hr/salary/:id/finalize',           hrController.finalizeSalary);
 router.patch('/hr/salary/:id/mark-paid',          hrController.markSalaryPaid);
 router.get('/hr/salary/:id',                      hrController.getSalaryRecord);
+
+// HR shop-level settings (duplicate punch window, lunch threshold/duration)
+router.get('/hr/settings',                        hrController.getHrSettings);
+router.patch('/hr/settings',                      hrController.updateHrSettings);
 
 module.exports = router;
 

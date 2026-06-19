@@ -117,44 +117,6 @@ export default function Attendance({ shopId }) {
 		}
 	};
 
-	const formatDuration = (seconds) => {
-		if (!seconds || seconds <= 0) return '00:00:00';
-		const hrs = Math.floor(seconds / 3600);
-		const mins = Math.floor((seconds % 3600) / 60);
-		const secs = seconds % 60;
-		return `${String(hrs).padStart(2,'0')}:${String(mins).padStart(2,'0')}:${String(secs).padStart(2,'0')}`;
-	};
-
-	const startPermission = async (employeeId) => {
-		try {
-			const token = localStorage.getItem('token');
-			const res = await api.post('/api/employees/permission/start', { shop_id: shopId, employee_id: employeeId, date: attendanceDate }, { headers: { Authorization: `Bearer ${token}` } });
-			if (res.data?.success) {
-				await fetchEmployees();
-			} else {
-				alert(res.data?.message || 'Failed to start permission');
-			}
-		} catch (err) {
-			console.error('startPermission error:', err);
-			alert(err.response?.data?.message || 'Error starting permission');
-		}
-	};
-
-	const endPermission = async (employeeId) => {
-		try {
-			const token = localStorage.getItem('token');
-			const res = await api.post('/api/employees/permission/end', { shop_id: shopId, employee_id: employeeId, date: attendanceDate }, { headers: { Authorization: `Bearer ${token}` } });
-			if (res.data?.success) {
-				await fetchEmployees();
-			} else {
-				alert(res.data?.message || 'Failed to end permission');
-			}
-		} catch (err) {
-			console.error('endPermission error:', err);
-			alert(err.response?.data?.message || 'Error ending permission');
-		}
-	};
-
 	return (
 		<div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50 p-6">
 			{/* Header Section */}
@@ -289,12 +251,6 @@ export default function Attendance({ shopId }) {
 											<th className="px-6 py-4 text-center text-xs font-bold text-slate-700 uppercase tracking-wider">
 												 Attendance Status
 											</th>
-											<th className="px-6 py-4 text-center text-xs font-bold text-slate-700 uppercase tracking-wider">
-												Permission 
-											</th>
-									<th className="px-6 py-4 text-center text-xs font-bold text-slate-700 uppercase tracking-wider">
-										Permission Time
-									</th>
 								</tr>
 							</thead>
 							<tbody className="divide-y divide-slate-100">
@@ -379,21 +335,6 @@ export default function Attendance({ shopId }) {
 														</button>
 													</div>
 													)}
-											</td>
-											<td className="px-6 py-4 whitespace-nowrap text-center">
-												{/* Permission start/end button */}
-												{emp.permissionSummary?.active ? (
-													<button onClick={() => isTodaySelected && endPermission(emp._id)} disabled={!isTodaySelected} className={`inline-flex items-center gap-2 px-3 py-1.5 text-sm rounded-lg ${isTodaySelected ? 'bg-orange-500 text-white hover:bg-orange-600' : 'bg-slate-200 text-slate-500 cursor-not-allowed'}`}>End</button>
-												) : (
-													<button onClick={() => isTodaySelected && startPermission(emp._id)} disabled={!isTodaySelected} className={`inline-flex items-center gap-2 px-3 py-1.5 text-sm rounded-lg ${isTodaySelected ? 'bg-indigo-600 text-white hover:bg-indigo-700' : 'bg-slate-200 text-slate-500 cursor-not-allowed'}`}>Start</button>
-												)}
-											</td>
-											<td className="px-6 py-4 whitespace-nowrap text-center">
-												{emp.permissionSummary?.totalSeconds ? (
-													<span className="text-sm font-medium text-slate-700">{formatDuration(emp.permissionSummary.totalSeconds)}</span>
-												) : (
-													<span className="text-slate-400 italic text-sm">00:00:00</span>
-												)}
 											</td>
 										</tr>
 									);
