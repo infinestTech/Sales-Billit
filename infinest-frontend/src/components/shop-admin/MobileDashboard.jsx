@@ -13,6 +13,9 @@ import {
   CartesianGrid, Tooltip, Legend, ResponsiveContainer
 } from 'recharts';
 import MobileSalaryManagement from './mobile/MobileSalaryManagement';
+import MobileEmployeeManagement from './mobile/MobileEmployeeManagement';
+import MobileAttendanceManagement from './mobile/MobileAttendanceManagement';
+import MobileEsslDeviceSettings from './mobile/MobileEsslDeviceSettings';
 import * as XLSX from 'xlsx';
 
 export default function MobileDashboard({
@@ -38,6 +41,7 @@ export default function MobileDashboard({
   handleSwitchShop
 }) {
   const [activeTab, setActiveTab] = useState('overview');
+  const [hrSubTab, setHrSubTab] = useState('employees'); // employees | attendance | essl
   const [showMobileMenu, setShowMobileMenu] = useState(false);
   const [showShopSelector, setShowShopSelector] = useState(false);
   const [showFilters, setShowFilters] = useState(false);
@@ -975,8 +979,42 @@ export default function MobileDashboard({
           </div>
         )}
 
-        {/* Employees Tab */}
+        {/* HR Tab — Employees / Attendance / eSSL sub-sections */}
         {activeTab === 'employees' && (
+          <div className="space-y-3">
+            {/* Sub-tabs */}
+            <div className="bg-white rounded-lg border border-gray-200 p-2 sticky top-0 z-10">
+              <div className="flex gap-1 overflow-x-auto">
+                {[
+                  { id: 'employees',  label: 'Employees',  icon: Users },
+                  { id: 'attendance', label: 'Attendance', icon: Calendar },
+                  { id: 'essl',       label: 'eSSL Device', icon: BarChart3 },
+                ].map((t) => {
+                  const Icon = t.icon;
+                  return (
+                    <button
+                      key={t.id}
+                      onClick={() => setHrSubTab(t.id)}
+                      className={`flex items-center gap-1 px-3 py-1.5 rounded-md text-xs font-medium whitespace-nowrap transition ${
+                        hrSubTab === t.id ? 'bg-green-600 text-white' : 'bg-gray-50 text-gray-600'
+                      }`}
+                    >
+                      <Icon className="h-3.5 w-3.5" />
+                      {t.label}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            {hrSubTab === 'employees'  && <MobileEmployeeManagement  shopId={currentShopId} />}
+            {hrSubTab === 'attendance' && <MobileAttendanceManagement shopId={currentShopId} />}
+            {hrSubTab === 'essl'       && <MobileEsslDeviceSettings   shopId={currentShopId} employees={employees} />}
+          </div>
+        )}
+
+        {/* Legacy Employees Tab (deprecated, kept hidden) */}
+        {false && activeTab === 'employees_legacy' && (
           <div className="space-y-4">
             {!selectedEmployee ? (
               <div className="space-y-3">
@@ -1601,7 +1639,7 @@ export default function MobileDashboard({
             }`}
           >
             <Users className="h-5 w-5 mb-1" />
-            <span className="text-xs font-medium">Employees</span>
+            <span className="text-xs font-medium">HR</span>
           </button>
           <button
             onClick={() => setActiveTab('revenue')}

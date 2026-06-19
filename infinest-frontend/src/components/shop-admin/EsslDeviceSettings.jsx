@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import axios from "axios";
 import {
   Fingerprint,
@@ -222,6 +222,39 @@ export default function EsslDeviceSettings({ shopId, employees = [] }) {
     if (hrs < 24) return `${hrs}h ago`;
     return `${Math.floor(hrs / 24)}d ago`;
   };
+
+  // Mark punches as duplicate when the same employee/PIN has another punch
+  // within DUPLICATE_WINDOW_MIN minutes of an earlier accepted punch.
+  const DUPLICATE_WINDOW_MIN = 60;
+  const duplicateIds = useMemo(() => {
+    const dupSet = new Set();
+    if (!Array.isArray(punchLogs) || punchLogs.length === 0) return dupSet;
+    // Group by employee key, then sort each group chronologically.
+    const groups = new Map();
+    for (const log of punchLogs) {
+      const key = log.employee_id?._id || log.employee_id || `pin:${log.device_pin}`;
+      if (!groups.has(key)) groups.set(key, []);
+      groups.get(key).push(log);
+    }
+    for (const [, list] of groups) {
+      list.sort(
+        (a, b) => new Date(a.punch_time).getTime() - new Date(b.punch_time).getTime()
+      );
+      let lastAcceptedTime = null;
+      for (const log of list) {
+        const t = new Date(log.punch_time).getTime();
+        if (
+          lastAcceptedTime !== null &&
+          t - lastAcceptedTime < DUPLICATE_WINDOW_MIN * 60_000
+        ) {
+          dupSet.add(log._id);
+        } else {
+          lastAcceptedTime = t;
+        }
+      }
+    }
+    return dupSet;
+  }, [punchLogs]);
 
   const punchTypeLabel = (type) => {
     const map = {
@@ -598,6 +631,15 @@ export default function EsslDeviceSettings({ shopId, employees = [] }) {
                 <p className="p-5 text-sm text-slate-400">No punch records received yet.</p>
               ) : (
                 <div className="overflow-x-auto">
+                  {duplicateIds.size > 0 && (
+                    <div className="flex items-center gap-2 px-4 py-2 bg-amber-50 border-b border-amber-100 text-xs text-amber-700">
+                      <AlertCircle className="h-3.5 w-3.5" />
+                      <span>
+                        <strong>{duplicateIds.size}</strong> duplicate punch
+                        {duplicateIds.size === 1 ? "" : "es"} detected (same employee within {DUPLICATE_WINDOW_MIN} minutes) — shown greyed-out and ignored.
+                      </span>
+                    </div>
+                  )}
                   <table className="w-full text-sm">
                     <thead>
                       <tr className="border-b border-slate-100 bg-slate-50 text-xs font-medium text-slate-500">
@@ -608,11 +650,21 @@ export default function EsslDeviceSettings({ shopId, employees = [] }) {
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-50">
-                      {punchLogs.map((log) => (
-                        <tr key={log._id} className="hover:bg-slate-50 transition-colors">
+                      {punchLogs.map((log) => {
+                        const isDup = duplicateIds.has(log._id);
+                        return (
+                        <tr
+                          key={log._id}
+                          className={`transition-colors ${
+                            isDup
+                              ? "bg-slate-50/70 hover:bg-slate-100 text-slate-400"
+                              : "hover:bg-slate-50"
+                          }`}
+                          title={isDup ? `Duplicate — within ${DUPLICATE_WINDOW_MIN} min of a previous punch by the same employee ` : undefined}
+                        >
                           <td className="px-4 py-2.5">
                             {log.employee_id ? (
-                              <span className="font-medium text-slate-800">
+                              <span className={`font-medium ${isDup ? "text-slate-500 line-through decoration-slate-300" : "text-slate-800"}`}>
                                 {log.employee_id.employee_name}
                               </span>
                             ) : (
@@ -624,7 +676,9 @@ export default function EsslDeviceSettings({ shopId, employees = [] }) {
                           <td className="px-4 py-2.5">
                             <span
                               className={`rounded-full px-2 py-0.5 text-xs font-medium ${
-                                log.punch_type === "check_in"
+                                isDup
+                                  ? "bg-slate-100 text-slate-400 line-through decoration-slate-300"
+                                  : log.punch_type === "check_in"
                                   ? "bg-green-100 text-green-700"
                                   : log.punch_type === "check_out"
                                   ? "bg-red-100 text-red-700"
@@ -633,6 +687,11 @@ export default function EsslDeviceSettings({ shopId, employees = [] }) {
                             >
                               {punchTypeLabel(log.punch_type)}
                             </span>
+                            {isDup && (
+                              <span className="ml-2 inline-flex items-center gap-1 rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-semibold text-amber-700">
+                                <AlertCircle className="h-3 w-3" /> Duplicate
+                              </span>
+                            )}
                           </td>
                           <td className="px-4 py-2.5 text-slate-600 text-xs">
                             {new Date(log.punch_time).toLocaleString("en-IN", {
@@ -644,7 +703,11 @@ export default function EsslDeviceSettings({ shopId, employees = [] }) {
                             })}
                           </td>
                           <td className="px-4 py-2.5">
-                            {log.processed ? (
+                            {isDup ? (
+                              <span className="inline-flex items-center gap-1 text-xs text-slate-400">
+                                <AlertCircle className="h-3 w-3" /> Ignored
+                              </span>
+                            ) : log.processed ? (
                               <span className="inline-flex items-center gap-1 text-xs text-green-600">
                                 <CheckCircle className="h-3 w-3" /> Processed
                               </span>
@@ -655,7 +718,8 @@ export default function EsslDeviceSettings({ shopId, employees = [] }) {
                             )}
                           </td>
                         </tr>
-                      ))}
+                        );
+                      })}
                     </tbody>
                   </table>
                   <div className="px-4 py-3 border-t border-slate-100">

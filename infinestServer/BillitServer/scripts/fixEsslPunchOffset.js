@@ -67,9 +67,9 @@ async function main() {
     process.exit(1);
   }
 
-  const mongoUri = process.env.MONGO_URI || process.env.MONGODB_URI;
+  const mongoUri = process.env.BILLIT_MONGO_URI || process.env.MONGO_URI || process.env.MONGODB_URI;
   if (!mongoUri) {
-    console.error('Error: MONGO_URI / MONGODB_URI not set in .env');
+    console.error('Error: BILLIT_MONGO_URI / MONGO_URI / MONGODB_URI not set in .env');
     process.exit(1);
   }
 
