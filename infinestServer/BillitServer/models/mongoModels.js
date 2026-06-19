@@ -64,6 +64,15 @@ const shopSchema = new mongoose.Schema({
   // eSSL M20 Biometric Attendance Integration
   use_essl_attendance: { type: Boolean, default: false }, // When true, use ADMS device; hide built-in attendance
   essl_device_serial: { type: String, trim: true }, // Registered device serial number (SN)
+  // HR / attendance behaviour — editable from the shop-admin portal
+  hr_settings: {
+    // Any punch within this many minutes of the previous accepted punch is treated as a duplicate.
+    duplicate_punch_window_minutes: { type: Number, default: 180 },
+    // Any check-out after this time of day is treated as the start of lunch.
+    lunch_threshold_time: { type: String, default: '12:00' }, // HH:MM (24h)
+    // Fixed lunch duration in minutes; punches inside this window after LUNCH_OUT are ignored.
+    lunch_break_minutes: { type: Number, default: 30 }
+  },
   created_at: { type: Date, default: Date.now }
 });
 
@@ -387,60 +396,37 @@ const employeeSchema = new mongoose.Schema({
   mobile_number: { type: String, trim: true },
   address: { type: String, default: '' },
   blood_group: { type: String, default: '' },
+  // Day-wise wage — employee earns this amount for each day they are present.
   daily_salary: { type: Number, default: 0 },
   device_pin: { type: String, trim: true }, // eSSL M20 biometric PIN
 
-  // ── Corporate HR fields ──────────────────────────────────────────────
+  // ── HR fields ────────────────────────────────────────────────────────
   is_active: { type: Boolean, default: true },
-  // Basic info
-  name: { type: String, trim: true },           // display name (may mirror employee_name)
-  phone: { type: String, trim: true },          // mirrors mobile_number
+  name: { type: String, trim: true },
+  phone: { type: String, trim: true },
   email: { type: String, trim: true, lowercase: true },
   joining_date: { type: Date },
   department: { type: String, trim: true },
   designation: { type: String, trim: true },
-  // Salary
-  gross_salary: { type: Number, default: 0 },   // monthly gross
-  pay_components: [{
-    name: { type: String, required: true },
-    type: { type: String, enum: ['EARNING', 'DEDUCTION'], default: 'EARNING' },
-    calculation_type: { type: String, enum: ['FIXED', 'PERCENTAGE'], default: 'FIXED' },
-    value: { type: Number, default: 0 },
-    is_active: { type: Boolean, default: true }
-  }],
-  // Shift
+
+  // Shift — working_hours is auto-derived from start/end at read time, not stored as truth.
   shift: {
     name: { type: String, default: 'General' },
-    start_time: { type: String, default: '09:00' },   // HH:MM
-    end_time: { type: String, default: '18:00' },
-    working_hours: { type: Number, default: 8 },
+    start_time: { type: String, default: '09:00' }, // HH:MM 24h — reporting time
+    end_time: { type: String, default: '18:00' },   // HH:MM 24h
     grace_period_minutes: { type: Number, default: 15 }
   },
   working_days_per_week: { type: Number, default: 6 },
-  weekly_off: [{ type: String }],                     // e.g. ['SUN']
-  // Permission policy
-  permission_policy: {
-    max_hours_per_month: { type: Number, default: 2 },
-    // PROPORTIONAL = deduct hourly rate of excess hours
-    // PER_HOUR     = deduct fixed ₹ per excess hour
-    // NONE         = no deduction
-    deduction_type: { type: String, enum: ['PROPORTIONAL', 'PER_HOUR', 'NONE', 'FIXED'], default: 'PROPORTIONAL' },
-    deduction_amount_per_hour: { type: Number, default: 0 }
-  },
-  // Late policy
+  weekly_off: [{ type: String }], // e.g. ['SUN']
+
+  // Late entry policy — single rule: ₹ deducted per hour late (proportional).
   late_policy: {
     grace_period_minutes: { type: Number, default: 15 },
-    // PROPORTIONAL      = deduct per-minute hourly rate of late minutes
-    // FIXED_PER_LATE    = deduct fixed ₹ per late entry
-    // HALF_DAY_AFTER_N  = convert to half-day after N late entries
-    // NONE              = no deduction
-    deduction_type: { type: String, enum: ['PROPORTIONAL', 'FIXED_PER_LATE', 'HALF_DAY_AFTER_N', 'NONE', 'FIXED'], default: 'PROPORTIONAL' },
-    deduction_amount_per_late: { type: Number, default: 0 },
-    half_day_after_n_lates: { type: Number, default: 3 }
+    deduction_per_hour: { type: Number, default: 0 } // ₹ per hour late, prorated by minute
   },
-  paid_leaves_per_year: { type: Number, default: 12 },
+
   created_at: { type: Date, default: Date.now }
-});
+}, { minimize: false, strict: false });
 
 // Index for shop queries
 employeeSchema.index({ shop_id: 1 });
@@ -448,7 +434,7 @@ employeeSchema.index({ shop_id: 1, is_active: 1 });
 
 // ==============================
 // 🕐 HR Attendance Punch Log
-// Records every individual punch event (check-in, permission-out, etc.)
+// Records every individual punch event (check-in, lunch-out, lunch-in, check-out, duplicate)
 // Works for both SOFTWARE punches and eSSL M20 device punches.
 // ==============================
 const hrPunchSchema = new mongoose.Schema({
@@ -456,7 +442,9 @@ const hrPunchSchema = new mongoose.Schema({
   employee_id: { type: mongoose.Schema.Types.ObjectId, ref: 'Employee', required: true },
   date: { type: String, required: true }, // YYYY-MM-DD
   punch_time: { type: Date, required: true },
-  punch_type: { type: String, enum: ['CHECK_IN', 'CHECK_OUT', 'PERMISSION_OUT', 'PERMISSION_IN'], required: true },
+  // CHECK_IN -> LUNCH_OUT -> LUNCH_IN -> CHECK_OUT. DUPLICATE entries are
+  // recorded for audit but do not influence the daily summary.
+  punch_type: { type: String, enum: ['CHECK_IN', 'CHECK_OUT', 'LUNCH_OUT', 'LUNCH_IN', 'DUPLICATE'], required: true },
   source: { type: String, enum: ['SOFTWARE', 'ESSL_M20', 'MANUAL'], default: 'SOFTWARE' },
   is_late: { type: Boolean, default: false },
   late_minutes: { type: Number, default: 0 },
@@ -473,12 +461,15 @@ const hrDailyAttendanceSchema = new mongoose.Schema({
   shop_id: { type: mongoose.Schema.Types.ObjectId, ref: 'Shop', required: true },
   employee_id: { type: mongoose.Schema.Types.ObjectId, ref: 'Employee', required: true },
   date: { type: String, required: true }, // YYYY-MM-DD
-  status: { type: String, enum: ['PRESENT', 'ABSENT', 'HALF_DAY', 'LEAVE', 'HOLIDAY', 'PERMISSION'], default: 'ABSENT' },
+  status: { type: String, enum: ['PRESENT', 'ABSENT', 'LEAVE', 'HOLIDAY'], default: 'ABSENT' },
   check_in_time: { type: Date },
   check_out_time: { type: Date },
+  lunch_out_time: { type: Date },
+  lunch_in_time: { type: Date },
   is_late: { type: Boolean, default: false },
   late_minutes: { type: Number, default: 0 },
-  total_permission_minutes: { type: Number, default: 0 },
+  late_deduction: { type: Number, default: 0 }, // ₹ deducted for lateness on this day
+  lunch_minutes: { type: Number, default: 0 },
   total_worked_minutes: { type: Number, default: 0 },
   source: { type: String, enum: ['SOFTWARE', 'ESSL_M20', 'MANUAL'], default: 'SOFTWARE' },
   notes: { type: String },
@@ -502,18 +493,13 @@ const hrSalaryRecordSchema = new mongoose.Schema({
   total_working_days: { type: Number, default: 0 },
   present_days: { type: Number, default: 0 },
   absent_days: { type: Number, default: 0 },
-  half_day_count: { type: Number, default: 0 },
   leave_days: { type: Number, default: 0 },
   total_late_entries: { type: Number, default: 0 },
-  total_permission_minutes: { type: Number, default: 0 },
-  // Salary
-  gross_salary: { type: Number, default: 0 },
-  earned_base: { type: Number, default: 0 },       // gross * (presentDays / workingDays)
-  total_earnings: { type: Number, default: 0 },   // sum of EARNING pay components
-  pay_components_snapshot: [{ name: String, type: String, calculation_type: String, value: Number }],
+  total_late_minutes: { type: Number, default: 0 },
+  // Salary — earned = daily_salary × present_days, late = sum of per-day late deductions
+  daily_salary: { type: Number, default: 0 },
+  earned_base: { type: Number, default: 0 },
   late_deduction: { type: Number, default: 0 },
-  permission_deduction: { type: Number, default: 0 },
-  other_deductions: { type: Number, default: 0 },
   net_salary: { type: Number, default: 0 },
   // Payment
   status: { type: String, enum: ['DRAFT', 'FINALIZED', 'PAID'], default: 'DRAFT' },
@@ -522,7 +508,7 @@ const hrSalaryRecordSchema = new mongoose.Schema({
   notes: { type: String },
   created_at: { type: Date, default: Date.now },
   updated_at: { type: Date, default: Date.now }
-});
+}, { strict: false });
 hrSalaryRecordSchema.index({ employee_id: 1, month: 1 }, { unique: true });
 hrSalaryRecordSchema.index({ shop_id: 1, month: 1 });
 hrSalaryRecordSchema.index({ shop_id: 1, status: 1 });
@@ -567,38 +553,6 @@ const shopAdminSchema = new mongoose.Schema({
 
 // Index for faster lookups
 shopAdminSchema.index({ username: 1, is_active: 1 });
-
-// ==============================
-// ⏱️ Permission Schema
-// Records start/end permission sessions per employee per date
-// ==============================
-const permissionSchema = new mongoose.Schema({
-  shop_id: { type: mongoose.Schema.Types.ObjectId, ref: 'Shop', required: true, index: true },
-  employee_id: { type: mongoose.Schema.Types.ObjectId, ref: 'Employee', required: true, index: true },
-  date: { type: String, required: true, index: true }, // YYYY-MM-DD
-  start_time: { type: Date, required: true },
-  end_time: { type: Date },
-  duration_seconds: { type: Number, default: 0 },
-  created_at: { type: Date, default: Date.now }
-});
-
-permissionSchema.index({ employee_id: 1, date: 1 });
-
-// ==============================
-// 💰 Salary Configuration Schema
-// Stores daily wage settings per shop
-// ==============================
-const salaryConfigSchema = new mongoose.Schema({
-  shop_id: { type: mongoose.Schema.Types.ObjectId, ref: 'Shop', required: true, unique: true },
-  permission_deduction_percentage: { type: Number, default: 10, min: 0, max: 100 }, // % deduction per permission hour
-  // Always daily_rate - this is a daily wage system
-  salary_calculation_method: { type: String, enum: ['daily_rate'], default: 'daily_rate' },
-  // Hours per day for hourly rate calculation
-  hours_per_day: { type: Number, default: 8, min: 6, max: 12 },
-  updated_by: { type: String }, // admin username who last updated
-  created_at: { type: Date, default: Date.now },
-  updated_at: { type: Date, default: Date.now }
-});
 
 // ==============================
 // 📡 eSSL Device Schema
@@ -651,52 +605,6 @@ esslPunchLogSchema.index({ employee_id: 1, punch_time: -1 });
 
 // Index removed - already unique on shop_id in schema definition
 
-// ==============================
-// 💵 Salary Record Schema
-// Period-based salary records for employees (calculated for a month/period)
-// ==============================
-const salaryRecordSchema = new mongoose.Schema({
-  shop_id: { type: mongoose.Schema.Types.ObjectId, ref: 'Shop', required: true },
-  employee_id: { type: mongoose.Schema.Types.ObjectId, ref: 'Employee', required: true },
-  month: { type: String, required: true }, // Format: YYYY-MM
-  year: { type: Number, required: true },
-  month_number: { type: Number, required: true }, // 1-12
-  
-  // Attendance summary
-  total_days_in_month: { type: Number, required: true },
-  present_days: { type: Number, default: 0 },
-  absent_days: { type: Number, default: 0 },
-  
-  // Permission summary
-  total_permission_hours: { type: Number, default: 0 },
-  permission_deduction_amount: { type: Number, default: 0 },
-  
-  // Salary calculation
-  daily_salary_rate: { type: Number, default: 0 }, // Employee's daily rate at time of calculation
-  base_salary: { type: Number, default: 0 }, // present_days * daily_rate
-  total_deductions: { type: Number, default: 0 }, // permission deductions
-  net_salary: { type: Number, default: 0 }, // base_salary - total_deductions
-  
-  // Payment tracking
-  paid_amount: { type: Number, default: 0 },
-  payment_status: { type: String, enum: ['unpaid', 'partial', 'paid'], default: 'unpaid' },
-  payment_date: { type: Date },
-  payment_method: { type: String },
-  payment_notes: { type: String },
-  
-  // Metadata
-  calculated_at: { type: Date, default: Date.now },
-  calculated_by: { type: String }, // admin username
-  locked: { type: Boolean, default: false }, // Lock after payment
-  created_at: { type: Date, default: Date.now },
-  updated_at: { type: Date, default: Date.now }
-});
-
-// Compound index - one record per employee per month
-salaryRecordSchema.index({ employee_id: 1, month: 1 }, { unique: true });
-salaryRecordSchema.index({ shop_id: 1, month: 1 });
-salaryRecordSchema.index({ shop_id: 1, payment_status: 1 });
-
 const AdminSale = mongoose.model('AdminSale', adminSaleSchema);
 const Expense = mongoose.model("Expense", expenseSchema);
 const DailySummary = mongoose.model("DailySummary", dailySummarySchema);
@@ -704,11 +612,8 @@ const MobileBrand = mongoose.model("MobileBrand", mobileBrandSchema);
 const MobileIssue = mongoose.model("MobileIssue", mobileIssueSchema);
 const Employee = mongoose.model("Employee", employeeSchema);
 const Attendance = mongoose.model("Attendance", attendanceSchema);
-const Permission = mongoose.model("Permission", permissionSchema);
 const ShopAdmin = mongoose.model("ShopAdmin", shopAdminSchema);
 const Supplier = mongoose.model("Supplier", supplierSchema);
-const SalaryConfig = mongoose.model("SalaryConfig", salaryConfigSchema);
-const SalaryRecord = mongoose.model("SalaryRecord", salaryRecordSchema);
 const EsslDevice = mongoose.model("EsslDevice", esslDeviceSchema);
 const EsslPunchLog = mongoose.model("EsslPunchLog", esslPunchLogSchema);
 const HrPunch = mongoose.model("HrPunch", hrPunchSchema);
@@ -718,6 +623,6 @@ const HrSalaryRecord = mongoose.model("HrSalaryRecord", hrSalaryRecordSchema);
 module.exports = {
   Role, User, Manager, Branch, Shop, Dealer, Customer, Notification, Mobile, Technician,
   PlanCategory, Plan, DailySummary, Expense, ProductHistory, Product,
-  MobileBrand, MobileIssue, AdminSale, SupplierHistory, Employee, Attendance, ShopAdmin, Permission, Supplier,
-  SalaryConfig, SalaryRecord, EsslDevice, EsslPunchLog, HrPunch, HrDailyAttendance, HrSalaryRecord
+  MobileBrand, MobileIssue, AdminSale, SupplierHistory, Employee, Attendance, ShopAdmin, Supplier,
+  EsslDevice, EsslPunchLog, HrPunch, HrDailyAttendance, HrSalaryRecord
 };

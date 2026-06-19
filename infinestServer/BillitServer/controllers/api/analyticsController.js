@@ -27,7 +27,7 @@ exports.getAnalyticsData = async (req, res) => {
     const startDate = subtractTimeIST(daysAgo, 'days');
 
     // Fetch all relevant data in parallel
-    const { SalaryRecord } = require("../../models/mongoModels");
+    const { HrSalaryRecord } = require("../../models/mongoModels");
     
     const [mobiles, expenses, products, customers, dealers, technicians, salaryRecords] = await Promise.all([
       Mobile.find({ shop_id }).lean(),
@@ -36,7 +36,7 @@ exports.getAnalyticsData = async (req, res) => {
       Customer.find({ shop_id }).lean(),
       Dealer.find({ shop_id }).lean(),
       Technician.find({ shop_id }).lean(),
-      SalaryRecord.find({ shop_id, payment_status: 'paid', payment_date: { $exists: true, $ne: null } }).lean(),
+      HrSalaryRecord.find({ shop_id, status: 'PAID', paid_at: { $exists: true, $ne: null } }).lean(),
     ]);
 
     // Filter data for the time range
@@ -49,7 +49,7 @@ exports.getAnalyticsData = async (req, res) => {
     );
     
     const salaryRecordsInRange = salaryRecords.filter(salary =>
-      salary.payment_date && new Date(salary.payment_date) >= startDate && new Date(salary.payment_date) <= now
+      salary.paid_at && new Date(salary.paid_at) >= startDate && new Date(salary.paid_at) <= now
     );
 
     const customersInRange = customers.filter(customer => 
@@ -126,8 +126,8 @@ exports.getAnalyticsData = async (req, res) => {
     
     // Process daily wage expenses (from paid salary records)
     salaryRecordsInRange.forEach(salary => {
-      if (salary.payment_date) {
-        const dateKey = getISTDateKey(new Date(salary.payment_date));
+      if (salary.paid_at) {
+        const dateKey = getISTDateKey(new Date(salary.paid_at));
         if (dailyWageExpensesByDate[dateKey] !== undefined) {
           dailyWageExpensesByDate[dateKey] += salary.paid_amount || 0;
           if (revenueByDate[dateKey]) {

@@ -20,36 +20,15 @@ async function listTodayAttendance(req, res) {
     const employees = await Employee.find({ shop_id: shopId }).lean();
     const employeeIds = employees.map(e => e._id);
     const attendanceRecords = await Attendance.find({ employee_id: { $in: employeeIds }, date }).lean();
-    // fetch permissions for the date and aggregate
-    const { Permission } = require('../../models/mongoModels');
-    const permissionRecords = await Permission.find({ employee_id: { $in: employeeIds }, date }).lean();
 
     const attendanceMap = {};
     attendanceRecords.forEach(r => { attendanceMap[r.employee_id.toString()] = r; });
 
-    // build permission map per employee: total seconds and whether active
-    const permissionMap = {};
-    permissionRecords.forEach(p => {
-      const key = p.employee_id.toString();
-      if (!permissionMap[key]) permissionMap[key] = { totalSeconds: 0, active: false, activeStartedAt: null };
-      if (p.duration_seconds && p.duration_seconds > 0) permissionMap[key].totalSeconds += p.duration_seconds;
-      if (!p.end_time) {
-        permissionMap[key].active = true;
-        permissionMap[key].activeStartedAt = p.start_time;
-      }
-    });
-
     const merged = employees.map(e => {
       const rec = attendanceMap[e._id.toString()];
-      const perm = permissionMap[e._id.toString()] || { totalSeconds: 0, active: false, activeStartedAt: null };
       return {
         ...e,
-        attendance: rec ? { status: rec.status, locked: rec.locked, created_at: rec.created_at } : null,
-        permissionSummary: {
-          totalSeconds: perm.totalSeconds,
-          active: perm.active,
-          activeStartedAt: perm.activeStartedAt
-        }
+        attendance: rec ? { status: rec.status, locked: rec.locked, created_at: rec.created_at } : null
       };
     });
 

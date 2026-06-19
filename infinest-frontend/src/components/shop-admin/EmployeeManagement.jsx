@@ -3,9 +3,8 @@ import React, { useState, useEffect } from "react";
 import axios from "axios";
 import {
   Users, Plus, Edit2, Save, X, ChevronDown, ChevronUp,
-  Trash2, ToggleLeft, ToggleRight, Clock, DollarSign,
-  AlertCircle, CheckCircle, Briefcase, Phone, Mail,
-  MapPin, Calendar, Fingerprint, Settings
+  ToggleLeft, ToggleRight, Clock, DollarSign,
+  AlertCircle, CheckCircle,
 } from "lucide-react";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL_BILLIT || "http://localhost:8000";
@@ -16,21 +15,12 @@ const defaultShift = {
   name: "General",
   startTime: "09:00",
   endTime: "18:00",
-  workingHours: 8,
   gracePeriodMinutes: 15,
-};
-
-const defaultPermissionPolicy = {
-  maxHoursPerMonth: 2,
-  deductionType: "PROPORTIONAL",
-  deductionAmountPerHour: 0,
 };
 
 const defaultLatePolicy = {
   gracePeriodMinutes: 15,
-  deductionType: "PROPORTIONAL",
-  deductionAmountPerLate: 0,
-  halfDayAfterNLates: 3,
+  deductionPerHour: 0,
 };
 
 const emptyForm = {
@@ -43,58 +33,21 @@ const emptyForm = {
   joiningDate: "",
   department: "",
   designation: "",
-  grossSalary: "",
-  payComponents: [],
+  dailySalary: "",
   shift: { ...defaultShift },
   workingDaysPerWeek: 6,
   weeklyOff: ["SUN"],
-  permissionPolicy: { ...defaultPermissionPolicy },
   latePolicy: { ...defaultLatePolicy },
-  paidLeavesPerYear: 12,
 };
 
-function PayComponentRow({ comp, index, onChange, onRemove }) {
-  return (
-    <div className="flex items-center gap-2 bg-gray-50 p-2 rounded-lg border border-gray-200">
-      <input
-        className="flex-1 px-2 py-1.5 border border-gray-300 rounded text-sm text-gray-900 bg-white"
-        placeholder="Name (e.g. Basic, PF)"
-        value={comp.name}
-        onChange={(e) => onChange(index, "name", e.target.value)}
-      />
-      <select
-        className="px-2 py-1.5 border border-gray-300 rounded text-sm bg-white text-gray-900"
-        value={comp.type}
-        onChange={(e) => onChange(index, "type", e.target.value)}
-      >
-        <option value="EARNING">Earning</option>
-        <option value="DEDUCTION">Deduction</option>
-      </select>
-      <select
-        className="px-2 py-1.5 border border-gray-300 rounded text-sm bg-white text-gray-900"
-        value={comp.calculationType}
-        onChange={(e) => onChange(index, "calculationType", e.target.value)}
-      >
-        <option value="FIXED">Fixed ₹</option>
-        <option value="PERCENTAGE">% of Gross</option>
-      </select>
-      <input
-        type="number"
-        min="0"
-        className="w-24 px-2 py-1.5 border border-gray-300 rounded text-sm text-gray-900 bg-white"
-        placeholder={comp.calculationType === "PERCENTAGE" ? "%" : "₹"}
-        value={comp.value}
-        onChange={(e) => onChange(index, "value", e.target.value)}
-      />
-      <button
-        type="button"
-        onClick={() => onRemove(index)}
-        className="text-red-500 hover:text-red-700 p-1"
-      >
-        <X className="h-4 w-4" />
-      </button>
-    </div>
-  );
+// Auto-derive working hours/day from shift start/end (HH:MM)
+function computeWorkingHours(start, end) {
+  if (!start || !end) return 0;
+  const [sh, sm] = start.split(":").map(Number);
+  const [eh, em] = end.split(":").map(Number);
+  let mins = (eh * 60 + em) - (sh * 60 + sm);
+  if (mins < 0) mins += 24 * 60;
+  return Math.round((mins / 60) * 100) / 100;
 }
 
 // ── Extracted to module level so React never remounts them on re-renders ──────
@@ -136,7 +89,7 @@ export default function EmployeeManagement({ shopId }) {
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
   const [expandedSections, setExpandedSections] = useState({
-    personal: true, pay: true, shift: false, policies: false, payComponents: false,
+    personal: true, pay: true, shift: false, policies: false,
   });
   const [showInactive, setShowInactive] = useState(false);
 
@@ -181,27 +134,6 @@ export default function EmployeeManagement({ shopId }) {
     });
   };
 
-  const handlePayCompChange = (index, key, value) => {
-    const comps = [...form.payComponents];
-    comps[index] = { ...comps[index], [key]: value };
-    setForm((prev) => ({ ...prev, payComponents: comps }));
-  };
-
-  const addPayComp = () => {
-    setForm((prev) => ({
-      ...prev,
-      payComponents: [
-        ...prev.payComponents,
-        { name: "", type: "EARNING", calculationType: "FIXED", value: 0, isActive: true },
-      ],
-    }));
-  };
-
-  const removePayComp = (index) => {
-    const comps = form.payComponents.filter((_, i) => i !== index);
-    setForm((prev) => ({ ...prev, payComponents: comps }));
-  };
-
   const handleWeeklyOff = (day) => {
     const arr = form.weeklyOff.includes(day)
       ? form.weeklyOff.filter((d) => d !== day)
@@ -210,12 +142,17 @@ export default function EmployeeManagement({ shopId }) {
   };
 
   const openCreateForm = () => {
-    setForm({ ...emptyForm, shift: { ...defaultShift }, permissionPolicy: { ...defaultPermissionPolicy }, latePolicy: { ...defaultLatePolicy }, weeklyOff: ["SUN"], payComponents: [] });
+    setForm({
+      ...emptyForm,
+      shift: { ...defaultShift },
+      latePolicy: { ...defaultLatePolicy },
+      weeklyOff: ["SUN"],
+    });
     setEditingId(null);
     setError("");
     setSuccess("");
     setShowForm(true);
-    setExpandedSections({ personal: true, pay: true, shift: true, policies: true, payComponents: true });
+    setExpandedSections({ personal: true, pay: true, shift: true, policies: true });
   };
 
   const openEditForm = (emp) => {
@@ -229,20 +166,25 @@ export default function EmployeeManagement({ shopId }) {
       joiningDate: emp.joiningDate ? emp.joiningDate.split("T")[0] : "",
       department: emp.department || "",
       designation: emp.designation || "",
-      grossSalary: emp.grossSalary || "",
-      payComponents: emp.payComponents || [],
-      shift: emp.shift || { ...defaultShift },
+      dailySalary: emp.dailySalary ?? "",
+      shift: {
+        name: emp.shift?.name || "General",
+        startTime: emp.shift?.startTime || "09:00",
+        endTime: emp.shift?.endTime || "18:00",
+        gracePeriodMinutes: emp.shift?.gracePeriodMinutes ?? 15,
+      },
       workingDaysPerWeek: emp.workingDaysPerWeek || 6,
       weeklyOff: emp.weeklyOff || ["SUN"],
-      permissionPolicy: emp.permissionPolicy || { ...defaultPermissionPolicy },
-      latePolicy: emp.latePolicy || { ...defaultLatePolicy },
-      paidLeavesPerYear: emp.paidLeavesPerYear || 12,
+      latePolicy: {
+        gracePeriodMinutes: emp.latePolicy?.gracePeriodMinutes ?? 15,
+        deductionPerHour: emp.latePolicy?.deductionPerHour ?? 0,
+      },
     });
     setEditingId(emp.employeeId);
     setError("");
     setSuccess("");
     setShowForm(true);
-    setExpandedSections({ personal: true, pay: true, shift: true, policies: true, payComponents: true });
+    setExpandedSections({ personal: true, pay: true, shift: true, policies: true });
   };
 
   const handleSubmit = async (e) => {
@@ -253,26 +195,18 @@ export default function EmployeeManagement({ shopId }) {
     try {
       const payload = {
         ...form,
-        grossSalary: Number(form.grossSalary),
+        dailySalary: Number(form.dailySalary),
         workingDaysPerWeek: Number(form.workingDaysPerWeek),
-        paidLeavesPerYear: Number(form.paidLeavesPerYear),
         shift: {
-          ...form.shift,
-          workingHours: Number(form.shift.workingHours),
+          name: form.shift.name,
+          startTime: form.shift.startTime,
+          endTime: form.shift.endTime,
           gracePeriodMinutes: Number(form.shift.gracePeriodMinutes),
         },
-        permissionPolicy: {
-          ...form.permissionPolicy,
-          maxHoursPerMonth: Number(form.permissionPolicy.maxHoursPerMonth),
-          deductionAmountPerHour: Number(form.permissionPolicy.deductionAmountPerHour),
-        },
         latePolicy: {
-          ...form.latePolicy,
           gracePeriodMinutes: Number(form.latePolicy.gracePeriodMinutes),
-          deductionAmountPerLate: Number(form.latePolicy.deductionAmountPerLate),
-          halfDayAfterNLates: Number(form.latePolicy.halfDayAfterNLates),
+          deductionPerHour: Number(form.latePolicy.deductionPerHour),
         },
-        payComponents: form.payComponents.map((c) => ({ ...c, value: Number(c.value) })),
         shopId,
       };
 
@@ -303,7 +237,8 @@ export default function EmployeeManagement({ shopId }) {
   };
 
   const inp = "w-full px-3 py-2 border border-gray-300 rounded-lg text-sm text-gray-900 bg-white focus:outline-none focus:ring-2 focus:ring-green-500";
-  const sel = "w-full px-3 py-2 border border-gray-300 rounded-lg text-sm text-gray-900 bg-white focus:outline-none focus:ring-2 focus:ring-green-500";
+
+  const computedHours = computeWorkingHours(form.shift.startTime, form.shift.endTime);
 
   return (
     <div className="space-y-4">
@@ -360,7 +295,7 @@ export default function EmployeeManagement({ shopId }) {
             <table className="w-full text-sm">
               <thead className="bg-gray-50 border-b border-gray-200">
                 <tr>
-                  {["ID", "Name", "Department", "Designation", "Shift", "Gross Salary", "Joining Date", "Status", "Actions"].map((h) => (
+                  {["ID", "Name", "Department", "Designation", "Shift", "Daily Salary", "Joining Date", "Status", "Actions"].map((h) => (
                     <th key={h} className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wide">
                       {h}
                     </th>
@@ -384,7 +319,8 @@ export default function EmployeeManagement({ shopId }) {
                       <div className="text-xs text-gray-500">{emp.shift?.workingHours}h/day</div>
                     </td>
                     <td className="px-4 py-3 font-semibold text-green-700">
-                      ₹{(emp.grossSalary || 0).toLocaleString()}
+                      ₹{(emp.dailySalary || 0).toLocaleString()}
+                      <span className="block text-[10px] font-normal text-gray-500">per day</span>
                     </td>
                     <td className="px-4 py-3 text-gray-600">
                       {emp.joiningDate ? new Date(emp.joiningDate).toLocaleDateString("en-IN") : "—"}
@@ -480,26 +416,13 @@ export default function EmployeeManagement({ shopId }) {
               {/* Pay Details */}
               <Section id="pay" label="Pay Details" icon={DollarSign} expanded={expandedSections.pay} onToggle={toggleSection}>
                 <div className="grid grid-cols-2 gap-3">
-                  <Field label="Gross Salary (₹/month) *">
-                    <input required type="number" min="0" className={inp} value={form.grossSalary} onChange={(e) => setField("grossSalary", e.target.value)} placeholder="20000" />
-                  </Field>
-                  <Field label="Paid Leaves Per Year">
-                    <input type="number" min="0" className={inp} value={form.paidLeavesPerYear} onChange={(e) => setField("paidLeavesPerYear", e.target.value)} />
+                  <Field label="Daily Salary (₹/day) *">
+                    <input required type="number" min="0" className={inp} value={form.dailySalary} onChange={(e) => setField("dailySalary", e.target.value)} placeholder="e.g. 1000" />
                   </Field>
                 </div>
-              </Section>
-
-              {/* Pay Components */}
-              <Section id="payComponents" label="Pay Components (Earnings & Deductions)" icon={Settings} expanded={expandedSections.payComponents} onToggle={toggleSection}>
-                <p className="text-xs text-gray-500 mb-2">Configure individual earnings (Basic, HRA) and deductions (PF, ESI). Leave empty to use gross salary as-is.</p>
-                <div className="space-y-2">
-                  {form.payComponents.map((comp, i) => (
-                    <PayComponentRow key={i} comp={comp} index={i} onChange={handlePayCompChange} onRemove={removePayComp} />
-                  ))}
-                </div>
-                <button type="button" onClick={addPayComp} className="mt-2 flex items-center gap-1 text-sm text-green-600 hover:text-green-800 font-medium">
-                  <Plus className="h-4 w-4" /> Add Component
-                </button>
+                <p className="text-xs text-gray-500">
+                  Employees earn this amount for each PRESENT day. There is no monthly base salary and no paid leaves.
+                </p>
               </Section>
 
               {/* Shift */}
@@ -508,8 +431,8 @@ export default function EmployeeManagement({ shopId }) {
                   <Field label="Shift Name">
                     <input className={inp} value={form.shift.name} onChange={(e) => setField("shift.name", e.target.value)} placeholder="General / Morning / Night" />
                   </Field>
-                  <Field label="Working Hours / Day *">
-                    <input required type="number" min="1" max="24" className={inp} value={form.shift.workingHours} onChange={(e) => setField("shift.workingHours", e.target.value)} />
+                  <Field label="Working Hours / Day (auto)">
+                    <input readOnly className={`${inp} bg-gray-100 cursor-not-allowed`} value={`${computedHours} h`} />
                   </Field>
                   <Field label="Shift Start Time *">
                     <input required type="time" className={inp} value={form.shift.startTime} onChange={(e) => setField("shift.startTime", e.target.value)} />
@@ -545,52 +468,25 @@ export default function EmployeeManagement({ shopId }) {
                 </div>
               </Section>
 
-              {/* Policies */}
-              <Section id="policies" label="Permission & Late Entry Policies" icon={AlertCircle} expanded={expandedSections.policies} onToggle={toggleSection}>
-                <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 mb-3">
-                  <p className="text-xs font-semibold text-blue-700 mb-2 flex items-center gap-1"><Clock className="h-3 w-3" /> Permission Hours Policy</p>
-                  <div className="grid grid-cols-2 gap-3">
-                    <Field label="Max Permission (hrs/month)">
-                      <input type="number" min="0" step="0.5" className={inp} value={form.permissionPolicy.maxHoursPerMonth} onChange={(e) => setField("permissionPolicy.maxHoursPerMonth", e.target.value)} />
-                    </Field>
-                    <Field label="Deduction Type">
-                      <select className={sel} value={form.permissionPolicy.deductionType} onChange={(e) => setField("permissionPolicy.deductionType", e.target.value)}>
-                        <option value="PROPORTIONAL">Proportional (auto)</option>
-                        <option value="PER_HOUR">Fixed per hour</option>
-                        <option value="NONE">No deduction</option>
-                      </select>
-                    </Field>
-                    {form.permissionPolicy.deductionType === "PER_HOUR" && (
-                      <Field label="Deduction ₹ per excess hour">
-                        <input type="number" min="0" className={inp} value={form.permissionPolicy.deductionAmountPerHour} onChange={(e) => setField("permissionPolicy.deductionAmountPerHour", e.target.value)} />
-                      </Field>
-                    )}
-                  </div>
-                </div>
-                <div className="bg-orange-50 border border-orange-200 rounded-lg p-3">
-                  <p className="text-xs font-semibold text-orange-700 mb-2 flex items-center gap-1"><AlertCircle className="h-3 w-3" /> Late Entry Policy</p>
+              {/* Late Entry Policy */}
+              <Section id="policies" label="Late Entry Policy" icon={AlertCircle} expanded={expandedSections.policies} onToggle={toggleSection}>
+                <div className="bg-orange-50 border border-orange-200 rounded-lg p-3 space-y-3">
+                  <p className="text-xs text-orange-700">
+                    Late = check-in after shift start + grace. Deduction is prorated per minute from the per-hour rate below, capped at one day's salary.
+                  </p>
                   <div className="grid grid-cols-2 gap-3">
                     <Field label="Late Grace Period (minutes)">
                       <input type="number" min="0" className={inp} value={form.latePolicy.gracePeriodMinutes} onChange={(e) => setField("latePolicy.gracePeriodMinutes", e.target.value)} />
                     </Field>
-                    <Field label="Deduction Type">
-                      <select className={sel} value={form.latePolicy.deductionType} onChange={(e) => setField("latePolicy.deductionType", e.target.value)}>
-                        <option value="PROPORTIONAL">Proportional (per min)</option>
-                        <option value="FIXED_PER_LATE">Fixed per late day</option>
-                        <option value="HALF_DAY_AFTER_N">Half-day after N lates</option>
-                        <option value="NONE">No deduction</option>
-                      </select>
+                    <Field label="Deduction ₹ per hour late *">
+                      <input
+                        type="number" min="0"
+                        className={inp}
+                        value={form.latePolicy.deductionPerHour}
+                        onChange={(e) => setField("latePolicy.deductionPerHour", e.target.value)}
+                        placeholder="e.g. 100"
+                      />
                     </Field>
-                    {form.latePolicy.deductionType === "FIXED_PER_LATE" && (
-                      <Field label="Deduction ₹ per late">
-                        <input type="number" min="0" className={inp} value={form.latePolicy.deductionAmountPerLate} onChange={(e) => setField("latePolicy.deductionAmountPerLate", e.target.value)} />
-                      </Field>
-                    )}
-                    {form.latePolicy.deductionType === "HALF_DAY_AFTER_N" && (
-                      <Field label="Convert to half-day after N lates">
-                        <input type="number" min="1" className={inp} value={form.latePolicy.halfDayAfterNLates} onChange={(e) => setField("latePolicy.halfDayAfterNLates", e.target.value)} />
-                      </Field>
-                    )}
                   </div>
                 </div>
               </Section>

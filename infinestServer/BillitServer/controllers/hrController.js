@@ -1,16 +1,26 @@
 'use strict';
 /**
- * HR Controller
- * Handles employee management, attendance punch tracking, and salary calculation.
- * Works for both eSSL M20 biometric punches and software (manual) punches.
+ * HR Controller — day-wise wage system.
+ *
+ * Punch flow per employee per day:
+ *   CHECK_IN  → LUNCH_OUT (after lunch threshold) → LUNCH_IN → CHECK_OUT
+ *
+ * Any punch within `duplicate_punch_window_minutes` of the last accepted
+ * non-lunch punch (or within `lunch_break_minutes` after LUNCH_OUT) is stored
+ * with type=DUPLICATE and does not advance the state machine.
+ *
+ * Salary = daily_salary × present_days − Σ(per-day late deduction)
+ *          per-day late deduction = (late_minutes / 60) × late_policy.deduction_per_hour
+ *          (capped at one day's salary so a single late day cannot go negative).
  */
 
 const mongoose = require('mongoose');
 const moment = require('moment-timezone');
-const { Employee, HrPunch, HrDailyAttendance, HrSalaryRecord } = require('../models/mongoModels');
+const { Shop, Employee, HrPunch, HrDailyAttendance, HrSalaryRecord } = require('../models/mongoModels');
 const { formatIST } = require('../utils/dateHelper');
 
 const IST_TZ = 'Asia/Kolkata';
+const DAY_NAMES = ['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT'];
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -24,13 +34,6 @@ function toObjectId(id) {
   return mongoose.Types.ObjectId.isValid(id) ? new mongoose.Types.ObjectId(String(id)) : null;
 }
 
-/**
- * Resolve the active shop id from the request, in priority order:
- *   1. req.shopId (set by shopAdminAuth middleware)
- *   2. req.query.shopId / req.query.shop_id
- *   3. req.body.shopId  / req.body.shop_id
- * Returns a valid ObjectId or null.
- */
 function getShopId(req) {
   const raw = req.shopId
     || req.query?.shopId || req.query?.shop_id
@@ -38,7 +41,6 @@ function getShopId(req) {
   return toObjectId(raw);
 }
 
-/** Send a 401 response when shop context is missing — happens if middleware was skipped */
 function requireShop(req, res) {
   const shopId = getShopId(req);
   if (!shopId) {
@@ -48,41 +50,55 @@ function requireShop(req, res) {
   return shopId;
 }
 
-/** Parse "HH:MM" string into {h, m} */
 function parseTime(timeStr) {
   const [h, m] = (timeStr || '09:00').split(':').map(Number);
   return { h: h || 0, m: m || 0 };
 }
 
-/** Get a Date representing the given HH:MM on the same IST calendar day as referenceDate. */
+/** Compute auto working hours per day from start and end HH:MM strings. */
+function computeWorkingHours(startStr, endStr) {
+  const s = parseTime(startStr);
+  const e = parseTime(endStr);
+  let mins = (e.h * 60 + e.m) - (s.h * 60 + s.m);
+  if (mins < 0) mins += 24 * 60; // shift crosses midnight
+  return Math.round((mins / 60) * 100) / 100;
+}
+
+/** Same calendar day (IST) as referenceDate, at the given HH:MM. */
 function todayAt(timeStr, referenceDate) {
-  const base = referenceDate
-    ? moment(referenceDate).tz(IST_TZ)
-    : moment().tz(IST_TZ);
+  const base = referenceDate ? moment(referenceDate).tz(IST_TZ) : moment().tz(IST_TZ);
   const { h, m } = parseTime(timeStr);
   return base.clone().startOf('day').hours(h).minutes(m).seconds(0).milliseconds(0).toDate();
 }
 
-/** Get number of working days in a month for an employee */
+/** Working days in a month for the employee's weekly off. */
 function workingDaysInMonth(year, monthNum, weeklyOff = ['SUN']) {
-  const dayNames = ['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT'];
   const daysInMonth = new Date(year, monthNum, 0).getDate();
   let count = 0;
   for (let d = 1; d <= daysInMonth; d++) {
-    const dayName = dayNames[new Date(year, monthNum - 1, d).getDay()];
+    const dayName = DAY_NAMES[new Date(year, monthNum - 1, d).getDay()];
     if (!weeklyOff.includes(dayName)) count++;
   }
   return count;
 }
 
-/** Map frontend camelCase employee form to DB snake_case */
+async function getShopHrSettings(shopId) {
+  const shop = await Shop.findById(shopId).select('hr_settings').lean();
+  const defaults = {
+    duplicate_punch_window_minutes: 180,
+    lunch_threshold_time: '12:00',
+    lunch_break_minutes: 30,
+  };
+  return { ...defaults, ...(shop?.hr_settings || {}) };
+}
+
+// ─── Form ↔ DB mappers ────────────────────────────────────────────────────────
+
 function mapFormToDb(form, shopId) {
-  return {
+  const out = {
     shop_id: shopId,
-    // Legacy compat
     employee_name: form.name || form.employee_name,
     mobile_number: form.phone || form.mobile_number,
-    // HR fields
     is_active: form.isActive !== undefined ? form.isActive : true,
     name: form.name,
     phone: form.phone,
@@ -91,85 +107,55 @@ function mapFormToDb(form, shopId) {
     joining_date: form.joiningDate ? new Date(form.joiningDate) : undefined,
     department: form.department,
     designation: form.designation,
-    gross_salary: Number(form.grossSalary) || 0,
-    pay_components: (form.payComponents || []).map(c => ({
-      name: c.name,
-      type: c.type,
-      calculation_type: c.calculationType,
-      value: Number(c.value) || 0,
-      is_active: c.isActive !== false,
-    })),
+    daily_salary: Number(form.dailySalary ?? form.daily_salary) || 0,
     shift: form.shift ? {
-      name: form.shift.name,
-      start_time: form.shift.startTime,
-      end_time: form.shift.endTime,
-      working_hours: Number(form.shift.workingHours) || 8,
-      grace_period_minutes: Number(form.shift.gracePeriodMinutes) || 15,
+      name: form.shift.name || 'General',
+      start_time: form.shift.startTime || form.shift.start_time || '09:00',
+      end_time: form.shift.endTime || form.shift.end_time || '18:00',
+      grace_period_minutes: Number(form.shift.gracePeriodMinutes ?? form.shift.grace_period_minutes ?? 15),
     } : undefined,
-    working_days_per_week: Number(form.workingDaysPerWeek) || 6,
-    weekly_off: form.weeklyOff || ['SUN'],
-    permission_policy: form.permissionPolicy ? {
-      max_hours_per_month: Number(form.permissionPolicy.maxHoursPerMonth) || 2,
-      deduction_type: form.permissionPolicy.deductionType || 'PROPORTIONAL',
-      deduction_amount_per_hour: Number(form.permissionPolicy.deductionAmountPerHour) || 0,
-    } : undefined,
+    working_days_per_week: Number(form.workingDaysPerWeek ?? form.working_days_per_week) || 6,
+    weekly_off: form.weeklyOff || form.weekly_off || ['SUN'],
     late_policy: form.latePolicy ? {
-      grace_period_minutes: Number(form.latePolicy.gracePeriodMinutes) || 15,
-      deduction_type: form.latePolicy.deductionType || 'PROPORTIONAL',
-      deduction_amount_per_late: Number(form.latePolicy.deductionAmountPerLate) || 0,
-      half_day_after_n_lates: Number(form.latePolicy.halfDayAfterNLates) || 3,
+      grace_period_minutes: Number(form.latePolicy.gracePeriodMinutes ?? form.latePolicy.grace_period_minutes ?? 15),
+      deduction_per_hour: Number(form.latePolicy.deductionPerHour ?? form.latePolicy.deduction_per_hour) || 0,
     } : undefined,
-    paid_leaves_per_year: Number(form.paidLeavesPerYear) || 12,
-    // device_pin is set separately via eSSL panel; map esslDeviceUserId if provided
     device_pin: form.esslDeviceUserId || form.device_pin,
   };
+  return out;
 }
 
-/** Map DB employee document to frontend camelCase format */
 function mapDbToFrontend(emp) {
   const e = emp.toObject ? emp.toObject() : emp;
+  const shift = e.shift || {};
+  const startTime = shift.start_time || '09:00';
+  const endTime = shift.end_time || '18:00';
   return {
     _id: e._id,
-    employeeId: e._id,          // frontend uses employeeId
+    employeeId: e._id,
     shopId: e.shop_id,
     isActive: e.is_active !== false,
     name: e.name || e.employee_name || '',
     phone: e.phone || e.mobile_number || '',
     email: e.email || '',
     address: e.address || '',
-    bloodGroup: e.blood_group || '',
     joiningDate: e.joining_date,
     department: e.department || '',
     designation: e.designation || '',
-    grossSalary: e.gross_salary || e.daily_salary || 0,
-    payComponents: (e.pay_components || []).map(c => ({
-      name: c.name,
-      type: c.type,
-      calculationType: c.calculation_type,
-      value: c.value,
-      isActive: c.is_active,
-    })),
-    shift: e.shift ? {
-      name: e.shift.name,
-      startTime: e.shift.start_time,
-      endTime: e.shift.end_time,
-      workingHours: e.shift.working_hours,
-      gracePeriodMinutes: e.shift.grace_period_minutes,
-    } : { name: 'General', startTime: '09:00', endTime: '18:00', workingHours: 8, gracePeriodMinutes: 15 },
+    dailySalary: e.daily_salary || 0,
+    shift: {
+      name: shift.name || 'General',
+      startTime,
+      endTime,
+      workingHours: computeWorkingHours(startTime, endTime),
+      gracePeriodMinutes: shift.grace_period_minutes ?? 15,
+    },
     workingDaysPerWeek: e.working_days_per_week || 6,
     weeklyOff: e.weekly_off || ['SUN'],
-    permissionPolicy: e.permission_policy ? {
-      maxHoursPerMonth: e.permission_policy.max_hours_per_month,
-      deductionType: e.permission_policy.deduction_type,
-      deductionAmountPerHour: e.permission_policy.deduction_amount_per_hour,
-    } : { maxHoursPerMonth: 2, deductionType: 'PROPORTIONAL', deductionAmountPerHour: 0 },
-    latePolicy: e.late_policy ? {
-      gracePeriodMinutes: e.late_policy.grace_period_minutes,
-      deductionType: e.late_policy.deduction_type,
-      deductionAmountPerLate: e.late_policy.deduction_amount_per_late,
-      halfDayAfterNLates: e.late_policy.half_day_after_n_lates,
-    } : { gracePeriodMinutes: 15, deductionType: 'PROPORTIONAL', deductionAmountPerLate: 0, halfDayAfterNLates: 3 },
-    paidLeavesPerYear: e.paid_leaves_per_year || 12,
+    latePolicy: {
+      gracePeriodMinutes: e.late_policy?.grace_period_minutes ?? 15,
+      deductionPerHour: e.late_policy?.deduction_per_hour ?? 0,
+    },
     esslDeviceUserId: e.device_pin || '',
     createdAt: e.created_at,
   };
@@ -199,6 +185,9 @@ async function createEmployee(req, res) {
     if (!data.name && !data.employee_name) {
       return res.status(400).json({ success: false, message: 'Employee name is required' });
     }
+    if (!(data.daily_salary > 0)) {
+      return res.status(400).json({ success: false, message: 'Daily salary must be greater than zero' });
+    }
     const emp = await Employee.create(data);
     return res.status(201).json({ success: true, data: mapDbToFrontend(emp) });
   } catch (err) {
@@ -213,12 +202,8 @@ async function updateEmployee(req, res) {
     const empOid = toObjectId(req.params.id);
     if (!empOid) return res.status(400).json({ success: false, message: 'Invalid employee id' });
     const emp = await Employee.findOne({ _id: empOid, shop_id: shopId });
-    if (!emp) {
-      console.warn('[HR updateEmployee] not found', { id: req.params.id, shopId: String(shopId) });
-      return res.status(404).json({ success: false, message: 'Employee not found' });
-    }
+    if (!emp) return res.status(404).json({ success: false, message: 'Employee not found' });
     const updates = mapFormToDb(req.body, shopId);
-    // Don't overwrite created_at or _id
     delete updates._id;
     Object.assign(emp, updates);
     await emp.save();
@@ -239,10 +224,7 @@ async function deactivateEmployee(req, res) {
       { is_active: false },
       { new: true }
     );
-    if (!emp) {
-      console.warn('[HR deactivateEmployee] not found', { id: req.params.id, shopId: String(shopId) });
-      return res.status(404).json({ success: false, message: 'Employee not found' });
-    }
+    if (!emp) return res.status(404).json({ success: false, message: 'Employee not found' });
     return res.json({ success: true, message: 'Employee deactivated', data: mapDbToFrontend(emp) });
   } catch (err) {
     console.error('[HR deactivateEmployee]', err);
@@ -268,10 +250,6 @@ async function reactivateEmployee(req, res) {
   }
 }
 
-/**
- * Hard delete — also removes attendance & salary records for this employee.
- * Use deactivate for soft delete; this is irreversible.
- */
 async function deleteEmployee(req, res) {
   try {
     const shopId = requireShop(req, res); if (!shopId) return;
@@ -292,94 +270,143 @@ async function deleteEmployee(req, res) {
   }
 }
 
-// ─── Attendance Punch Logic ───────────────────────────────────────────────────
+// ─── Punch state machine ──────────────────────────────────────────────────────
 
 /**
- * Process a punch event — works for both SOFTWARE and ESSL_M20 sources.
- * Returns the resulting punch record and updated daily summary.
- *
- * Auto-detected punch type rules:
- *   No punches today                          → CHECK_IN
- *   Last punch = CHECK_IN, time before shift end - 30 min  → PERMISSION_OUT
- *   Last punch = CHECK_IN, time past shift end - 30 min    → CHECK_OUT
- *   Last punch = PERMISSION_OUT               → PERMISSION_IN
- *   Last punch = PERMISSION_IN, past shift end → CHECK_OUT
- *   Last punch = PERMISSION_IN, before shift end → PERMISSION_OUT
- *   Last punch = CHECK_OUT                    → CHECK_IN (re-entry / next shift)
- *
- * Idempotency: identical (employee, source) punches within 30 seconds are ignored.
+ * Decide the next punch type given today's prior punches and shop HR settings.
+ * Returns one of: CHECK_IN, LUNCH_OUT, LUNCH_IN, CHECK_OUT, DUPLICATE.
  */
-async function processPunch(shopId, employeeId, source, overridePunchType, punchTimeOverride) {
+function decidePunchType(now, todayPunches, hrSettings) {
+  const dupWinMs = (hrSettings.duplicate_punch_window_minutes || 180) * 60_000;
+  const lunchBreakMs = (hrSettings.lunch_break_minutes || 30) * 60_000;
+
+  // Ignore previous DUPLICATE entries when looking at "last accepted" state.
+  const accepted = todayPunches.filter(p => p.punch_type !== 'DUPLICATE');
+
+  if (accepted.length === 0) return 'CHECK_IN';
+  const last = accepted[accepted.length - 1];
+  const delta = now.getTime() - new Date(last.punch_time).getTime();
+
+  if (last.punch_type === 'CHECK_OUT') return 'DUPLICATE';
+
+  if (last.punch_type === 'CHECK_IN') {
+    if (delta < dupWinMs) return 'DUPLICATE';
+    const lunchThreshold = todayAt(hrSettings.lunch_threshold_time || '12:00', now);
+    const hadLunchToday = accepted.some(p => p.punch_type === 'LUNCH_OUT');
+    if (!hadLunchToday && now >= lunchThreshold) return 'LUNCH_OUT';
+    return 'CHECK_OUT';
+  }
+
+  if (last.punch_type === 'LUNCH_OUT') {
+    if (delta < lunchBreakMs) return 'DUPLICATE';
+    return 'LUNCH_IN';
+  }
+
+  if (last.punch_type === 'LUNCH_IN') {
+    if (delta < dupWinMs) return 'DUPLICATE';
+    return 'CHECK_OUT';
+  }
+
+  return 'DUPLICATE';
+}
+
+/**
+ * Recompute the daily summary from the full set of accepted punches.
+ */
+function buildDailySummary(employee, punches, hrSettings) {
+  const accepted = punches.filter(p => p.punch_type !== 'DUPLICATE')
+    .sort((a, b) => new Date(a.punch_time) - new Date(b.punch_time));
+
+  const checkIn  = accepted.find(p => p.punch_type === 'CHECK_IN');
+  const checkOut = [...accepted].reverse().find(p => p.punch_type === 'CHECK_OUT');
+  const lunchOut = accepted.find(p => p.punch_type === 'LUNCH_OUT');
+  const lunchIn  = accepted.find(p => p.punch_type === 'LUNCH_IN');
+
+  let lunchMinutes = 0;
+  if (lunchOut && lunchIn) {
+    lunchMinutes = Math.max(0, Math.floor(
+      (new Date(lunchIn.punch_time) - new Date(lunchOut.punch_time)) / 60_000
+    ));
+  } else if (lunchOut && !lunchIn) {
+    // assume default lunch break if employee hasn't punched back yet
+    lunchMinutes = hrSettings.lunch_break_minutes || 30;
+  }
+
+  let workedMinutes = 0;
+  if (checkIn && checkOut) {
+    workedMinutes = Math.max(0,
+      Math.floor((new Date(checkOut.punch_time) - new Date(checkIn.punch_time)) / 60_000) - lunchMinutes
+    );
+  }
+
+  let isLate = false;
+  let lateMinutes = 0;
+  let lateDeduction = 0;
+  if (checkIn) {
+    const graceMin = employee.late_policy?.grace_period_minutes
+      ?? employee.shift?.grace_period_minutes ?? 15;
+    const shiftStart = todayAt(employee.shift?.start_time || '09:00', checkIn.punch_time);
+    const lateGraceMs = shiftStart.getTime() + graceMin * 60_000;
+    if (new Date(checkIn.punch_time).getTime() > lateGraceMs) {
+      isLate = true;
+      // late_minutes is measured from the actual shift start (not from grace end)
+      lateMinutes = Math.floor((new Date(checkIn.punch_time).getTime() - shiftStart.getTime()) / 60_000);
+      const perHour = employee.late_policy?.deduction_per_hour || 0;
+      const dailySalary = employee.daily_salary || 0;
+      lateDeduction = Math.min(dailySalary, Math.round((lateMinutes / 60) * perHour));
+    }
+  }
+
+  const status = checkIn ? 'PRESENT' : 'ABSENT';
+
+  return {
+    status,
+    check_in_time:  checkIn?.punch_time,
+    check_out_time: checkOut?.punch_time,
+    lunch_out_time: lunchOut?.punch_time,
+    lunch_in_time:  lunchIn?.punch_time,
+    lunch_minutes:  lunchMinutes,
+    total_worked_minutes: workedMinutes,
+    is_late: isLate,
+    late_minutes: lateMinutes,
+    late_deduction: lateDeduction,
+  };
+}
+
+/**
+ * Public entry point: record a punch and refresh the daily summary.
+ */
+async function processPunch(shopId, employeeId, source, _overridePunchType, punchTimeOverride) {
   const shopOid = toObjectId(shopId);
-  const empOid = toObjectId(employeeId);
+  const empOid  = toObjectId(employeeId);
   if (!shopOid || !empOid) throw new Error('Invalid shopId or employeeId');
+
   const now = punchTimeOverride ? new Date(punchTimeOverride) : new Date();
   const dateStr = formatIST(now, 'YYYY-MM-DD');
 
   const employee = await Employee.findOne({ _id: empOid, shop_id: shopOid }).lean();
   if (!employee) throw new Error('Employee not found');
 
-  // Idempotency check — skip duplicate punches from same source within 30 seconds
-  const recent = await HrPunch.findOne({
-    employee_id: empOid,
-    source,
-    punch_time: { $gte: new Date(now.getTime() - 30_000), $lte: new Date(now.getTime() + 30_000) },
-  }).lean();
-  if (recent) {
-    return { punch: recent, punchType: recent.punch_type, duplicate: true, message: 'Duplicate punch ignored' };
-  }
+  const hrSettings = await getShopHrSettings(shopOid);
 
-  // Get today's punches
-  const todayPunches = await HrPunch.find({ employee_id: empOid, date: dateStr }).sort({ punch_time: 1 }).lean();
-  const daily = await HrDailyAttendance.findOne({ employee_id: empOid, date: dateStr });
+  const todayPunches = await HrPunch.find({ employee_id: empOid, date: dateStr })
+    .sort({ punch_time: 1 }).lean();
 
-  // Shift boundaries
-  const shiftStart = employee.shift?.start_time || '09:00';
-  const shiftEnd   = employee.shift?.end_time   || '18:00';
-  const shiftEndDate = todayAt(shiftEnd, now);
-  const earliestCheckoutDate = new Date(shiftEndDate.getTime() - 30 * 60_000); // 30 min before shift end
+  const punchType = decidePunchType(now, todayPunches, hrSettings);
 
-  let punchType = overridePunchType;
-  if (!punchType) {
-    if (todayPunches.length === 0) {
-      punchType = 'CHECK_IN';
-    } else {
-      const lastPunch = todayPunches[todayPunches.length - 1];
-      switch (lastPunch.punch_type) {
-        case 'CHECK_IN':
-          punchType = now >= earliestCheckoutDate ? 'CHECK_OUT' : 'PERMISSION_OUT';
-          break;
-        case 'PERMISSION_OUT':
-          punchType = 'PERMISSION_IN';
-          break;
-        case 'PERMISSION_IN':
-          punchType = now >= earliestCheckoutDate ? 'CHECK_OUT' : 'PERMISSION_OUT';
-          break;
-        case 'CHECK_OUT':
-          // Already checked out today — treat next punch as re-entry
-          punchType = 'CHECK_IN';
-          break;
-        default:
-          punchType = 'CHECK_IN';
-      }
-    }
-  }
-
-  // Late detection (CHECK_IN only)
+  // For CHECK_IN, compute lateness on the punch record itself for audit.
   let isLate = false;
   let lateMinutes = 0;
   if (punchType === 'CHECK_IN') {
-    const graceMinutes = employee.late_policy?.grace_period_minutes
+    const graceMin = employee.late_policy?.grace_period_minutes
       ?? employee.shift?.grace_period_minutes ?? 15;
-    const { h, m } = parseTime(shiftStart);
-    const shiftStartDate = new Date(now.getFullYear(), now.getMonth(), now.getDate(), h, m + graceMinutes, 0, 0);
-    if (now > shiftStartDate) {
+    const shiftStart = todayAt(employee.shift?.start_time || '09:00', now);
+    if (now.getTime() > shiftStart.getTime() + graceMin * 60_000) {
       isLate = true;
-      lateMinutes = Math.floor((now - shiftStartDate) / 60000);
+      lateMinutes = Math.floor((now.getTime() - shiftStart.getTime()) / 60_000);
     }
   }
 
-  // Save punch log
   const punch = await HrPunch.create({
     shop_id: shopOid,
     employee_id: empOid,
@@ -391,67 +418,32 @@ async function processPunch(shopId, employeeId, source, overridePunchType, punch
     late_minutes: lateMinutes,
   });
 
-  // Recompute daily summary from ALL punches (including the new one)
+  // If this punch was a duplicate we do NOT change the daily summary.
+  if (punchType === 'DUPLICATE') {
+    return {
+      punch, punchType, duplicate: true,
+      message: 'Duplicate punch ignored — already recorded recently.',
+    };
+  }
+
   const allPunches = [...todayPunches, punch.toObject ? punch.toObject() : punch];
-  const checkIn  = allPunches.find(p => p.punch_type === 'CHECK_IN');
-  const checkOut = [...allPunches].reverse().find(p => p.punch_type === 'CHECK_OUT');
-
-  // Total permission minutes from OUT/IN pairs
-  let totalPermissionMinutes = 0;
-  let permOut = null;
-  for (const p of allPunches) {
-    if (p.punch_type === 'PERMISSION_OUT') permOut = p;
-    else if (p.punch_type === 'PERMISSION_IN' && permOut) {
-      totalPermissionMinutes += Math.floor((new Date(p.punch_time) - new Date(permOut.punch_time)) / 60000);
-      permOut = null;
-    }
-  }
-
-  // Working hours (CHECK_OUT - CHECK_IN - permission minutes)
-  let workedMinutes = 0;
-  if (checkIn && checkOut) {
-    workedMinutes = Math.floor((new Date(checkOut.punch_time) - new Date(checkIn.punch_time)) / 60000)
-                  - totalPermissionMinutes;
-    workedMinutes = Math.max(0, workedMinutes);
-  }
-  const requiredMinutes = (employee.shift?.working_hours || 8) * 60;
-
-  // Status: HALF_DAY when checked-out and worked < 50% of required hours, else PRESENT
-  let status = 'ABSENT';
-  if (checkIn) {
-    if (checkOut && workedMinutes < requiredMinutes * 0.5) status = 'HALF_DAY';
-    else status = 'PRESENT';
-  }
-
-  const aggregatedLate     = allPunches.some(p => p.is_late);
-  const maxLateMinutesToday = allPunches.reduce((mx, p) => Math.max(mx, p.late_minutes || 0), 0);
-
-  const dailyUpdate = {
-    status,
-    check_in_time: checkIn?.punch_time,
-    check_out_time: checkOut?.punch_time,
-    is_late: aggregatedLate,
-    late_minutes: maxLateMinutesToday,
-    total_permission_minutes: totalPermissionMinutes,
-    total_worked_minutes: workedMinutes,
-    source,
-    updated_at: new Date(),
-  };
+  const summary = buildDailySummary(employee, allPunches, hrSettings);
 
   await HrDailyAttendance.findOneAndUpdate(
     { employee_id: empOid, date: dateStr },
-    { $set: { shop_id: shopOid, ...dailyUpdate } },
+    { $set: { shop_id: shopOid, ...summary, source, updated_at: new Date() } },
     { upsert: true, new: true }
   );
 
   return {
     punch,
     punchType,
-    isLate,
-    lateMinutes,
-    totalPermissionMinutes,
-    workedMinutes,
-    status,
+    isLate: summary.is_late,
+    lateMinutes: summary.late_minutes,
+    lateDeduction: summary.late_deduction,
+    lunchMinutes: summary.lunch_minutes,
+    workedMinutes: summary.total_worked_minutes,
+    status: summary.status,
     message: `${punchType.replace('_', ' ')} recorded at ${now.toLocaleTimeString('en-IN')}`,
   };
 }
@@ -459,15 +451,17 @@ async function processPunch(shopId, employeeId, source, overridePunchType, punch
 async function softwarePunch(req, res) {
   try {
     const shopId = requireShop(req, res); if (!shopId) return;
-    const { employeeId, source = 'SOFTWARE', punchType } = req.body;
+    const { employeeId, source = 'SOFTWARE' } = req.body;
     if (!employeeId) return res.status(400).json({ success: false, message: 'employeeId required' });
-    const result = await processPunch(shopId, employeeId, source, punchType || null, null);
+    const result = await processPunch(shopId, employeeId, source, null, null);
     return res.json({ success: true, ...result });
   } catch (err) {
     console.error('[HR softwarePunch]', err);
     return res.status(500).json({ success: false, message: err.message || 'Punch failed' });
   }
 }
+
+// ─── Manual marking ───────────────────────────────────────────────────────────
 
 async function manualMark(req, res) {
   try {
@@ -476,9 +470,9 @@ async function manualMark(req, res) {
     if (!employeeId || !date || !status) {
       return res.status(400).json({ success: false, message: 'employeeId, date and status required' });
     }
-    const validStatuses = ['PRESENT', 'ABSENT', 'HALF_DAY', 'LEAVE', 'HOLIDAY'];
-    if (!validStatuses.includes(status)) {
-      return res.status(400).json({ success: false, message: `status must be one of: ${validStatuses.join(', ')}` });
+    const valid = ['PRESENT', 'ABSENT', 'LEAVE', 'HOLIDAY'];
+    if (!valid.includes(status)) {
+      return res.status(400).json({ success: false, message: `status must be one of: ${valid.join(', ')}` });
     }
     const empOid = toObjectId(employeeId);
     if (!empOid) return res.status(400).json({ success: false, message: 'Invalid employeeId' });
@@ -494,6 +488,37 @@ async function manualMark(req, res) {
   }
 }
 
+// ─── Attendance queries ───────────────────────────────────────────────────────
+
+function attendanceToFrontend(rec, employee) {
+  const r = rec.toObject ? rec.toObject() : rec;
+  return {
+    _id: r._id,
+    employeeId: employee?._id || r.employee_id,
+    employee: employee ? {
+      _id: employee._id,
+      name: employee.name || employee.employee_name || '',
+      department: employee.department || '',
+      designation: employee.designation || '',
+    } : r.employee_id,
+    date: r.date,
+    status: r.status,
+    firstPunchTime: r.check_in_time,
+    lastPunchTime:  r.check_out_time,
+    checkInTime:    r.check_in_time,
+    checkOutTime:   r.check_out_time,
+    lunchOutTime:   r.lunch_out_time,
+    lunchInTime:    r.lunch_in_time,
+    lunchMinutes:   r.lunch_minutes || 0,
+    isLate:         !!r.is_late,
+    lateMinutes:    r.late_minutes || 0,
+    lateDeduction:  r.late_deduction || 0,
+    totalWorkMinutes: r.total_worked_minutes || 0,
+    source: r.source,
+    notes: r.notes,
+  };
+}
+
 async function getDailyAttendance(req, res) {
   try {
     const shopId = requireShop(req, res); if (!shopId) return;
@@ -506,13 +531,18 @@ async function getDailyAttendance(req, res) {
     const punchMap = {};
     punches.forEach(p => {
       const key = p.employee_id.toString();
-      if (!punchMap[key]) punchMap[key] = [];
-      punchMap[key].push(p);
+      (punchMap[key] = punchMap[key] || []).push(p);
     });
     const data = records.map(r => ({
-      ...r,
-      employee: r.employee_id,
-      punches: punchMap[r.employee_id?._id?.toString()] || [],
+      ...attendanceToFrontend(r, r.employee_id),
+      punches: (punchMap[r.employee_id?._id?.toString()] || []).map(p => ({
+        _id: p._id,
+        time: p.punch_time,
+        type: p.punch_type,
+        source: p.source,
+        isLate: p.is_late,
+        lateMinutes: p.late_minutes,
+      })),
     }));
     return res.json({ success: true, data, date });
   } catch (err) {
@@ -539,12 +569,18 @@ async function getMonthlyAttendance(req, res) {
     const summary = {
       present: records.filter(r => r.status === 'PRESENT').length,
       absent: records.filter(r => r.status === 'ABSENT').length,
-      halfDay: records.filter(r => r.status === 'HALF_DAY').length,
       leave: records.filter(r => r.status === 'LEAVE').length,
-      lateEntries: records.filter(r => r.is_late).length,
-      totalPermissionMinutes: records.reduce((s, r) => s + (r.total_permission_minutes || 0), 0),
+      lateDays: records.filter(r => r.is_late).length,
+      totalLateMinutes: records.reduce((s, r) => s + (r.late_minutes || 0), 0),
+      totalLateDeduction: records.reduce((s, r) => s + (r.late_deduction || 0), 0),
+      totalLunchMinutes: records.reduce((s, r) => s + (r.lunch_minutes || 0), 0),
+      totalWorkedMinutes: records.reduce((s, r) => s + (r.total_worked_minutes || 0), 0),
     };
-    return res.json({ success: true, data: records, summary });
+    return res.json({
+      success: true,
+      data: records.map(r => attendanceToFrontend(r)),
+      summary,
+    });
   } catch (err) {
     console.error('[HR getMonthlyAttendance]', err);
     return res.status(500).json({ success: false, message: 'Failed to fetch monthly attendance' });
@@ -563,8 +599,7 @@ async function getAttendanceReport(req, res) {
     const recMap = {};
     records.forEach(r => {
       const key = r.employee_id.toString();
-      if (!recMap[key]) recMap[key] = [];
-      recMap[key].push(r);
+      (recMap[key] = recMap[key] || []).push(r);
     });
 
     const data = employees.map(emp => {
@@ -573,11 +608,12 @@ async function getAttendanceReport(req, res) {
         employee: mapDbToFrontend(emp),
         present: empRecords.filter(r => r.status === 'PRESENT').length,
         absent: empRecords.filter(r => r.status === 'ABSENT').length,
-        halfDay: empRecords.filter(r => r.status === 'HALF_DAY').length,
         leave: empRecords.filter(r => r.status === 'LEAVE').length,
         lateEntries: empRecords.filter(r => r.is_late).length,
-        totalPermissionMinutes: empRecords.reduce((s, r) => s + (r.total_permission_minutes || 0), 0),
-        records: empRecords,
+        totalLateMinutes: empRecords.reduce((s, r) => s + (r.late_minutes || 0), 0),
+        totalLateDeduction: empRecords.reduce((s, r) => s + (r.late_deduction || 0), 0),
+        totalLunchMinutes: empRecords.reduce((s, r) => s + (r.lunch_minutes || 0), 0),
+        records: empRecords.map(r => attendanceToFrontend(r)),
       };
     });
     return res.json({ success: true, data });
@@ -587,141 +623,47 @@ async function getAttendanceReport(req, res) {
   }
 }
 
-// ─── Salary Calculation ───────────────────────────────────────────────────────
+// ─── Salary calc ──────────────────────────────────────────────────────────────
 
-function calculateSalary(employee, attendanceSummary, year, monthNum) {
-  const gross = employee.gross_salary || 0;
-  const workingDays = workingDaysInMonth(year, monthNum, employee.weekly_off || ['SUN']);
-  const presentDays = attendanceSummary.present + (attendanceSummary.halfDay * 0.5);
-  const dailyRate = workingDays > 0 ? gross / workingDays : 0;
-  const earnedBase = dailyRate * presentDays;
-
-  // Pay components
-  const components = (employee.pay_components || []).filter(c => c.is_active !== false);
-  let totalEarnings = 0;
-  let totalDeductions = 0;
-  components.forEach(c => {
-    const amt = c.calculation_type === 'PERCENTAGE' ? (gross * c.value) / 100 : c.value;
-    if (c.type === 'EARNING') totalEarnings += amt;
-    else totalDeductions += amt;
-  });
-
-  // Late deductions
-  const lateCount = attendanceSummary.lateEntries || 0;
-  let lateDeduction = 0;
-  const lp = employee.late_policy;
-  if (lp && lateCount > 0) {
-    switch (lp.deduction_type) {
-      case 'NONE':
-        lateDeduction = 0;
-        break;
-      case 'FIXED_PER_LATE':
-      case 'FIXED': // legacy alias
-        lateDeduction = lateCount * (lp.deduction_amount_per_late || 0);
-        break;
-      case 'HALF_DAY_AFTER_N': {
-        const n = lp.half_day_after_n_lates || 3;
-        const halfDays = Math.floor(lateCount / n);
-        lateDeduction = halfDays * dailyRate * 0.5;
-        break;
-      }
-      case 'PROPORTIONAL':
-      default: {
-        // proportional: each late entry costs (lateMinutes / shiftMinutes) of dailyRate.
-        // We don't have the per-day late minutes in summary, so approximate by half-day after N rule.
-        const n = lp.half_day_after_n_lates || 3;
-        const halfDays = Math.floor(lateCount / n);
-        lateDeduction = halfDays * dailyRate * 0.5;
-        break;
-      }
-    }
-  }
-
-  // Permission deductions
-  const permMinutes = attendanceSummary.totalPermissionMinutes || 0;
-  const permHours = permMinutes / 60;
-  let permDeduction = 0;
-  const pp = employee.permission_policy;
-  if (pp && permHours > (pp.max_hours_per_month || 0)) {
-    const excessHours = permHours - (pp.max_hours_per_month || 0);
-    switch (pp.deduction_type) {
-      case 'NONE':
-        permDeduction = 0;
-        break;
-      case 'PER_HOUR':
-      case 'FIXED': // legacy alias
-        permDeduction = excessHours * (pp.deduction_amount_per_hour || 0);
-        break;
-      case 'PROPORTIONAL':
-      default: {
-        const hourlyRate = gross / (workingDays * (employee.shift?.working_hours || 8));
-        permDeduction = excessHours * hourlyRate;
-        break;
-      }
-    }
-  }
-
-  const netSalary = Math.max(0, earnedBase + totalEarnings - totalDeductions - lateDeduction - permDeduction);
-
+async function buildMonthlyAttendanceSummary(empOid, monthStr) {
+  const records = await HrDailyAttendance.find({
+    employee_id: empOid,
+    date: { $regex: `^${monthStr}` }
+  }).lean();
   return {
-    gross_salary: gross,
-    earned_base: Math.round(earnedBase * 100) / 100,
-    total_earnings: Math.round(totalEarnings * 100) / 100,
-    total_working_days: workingDays,
-    present_days: presentDays,
-    absent_days: attendanceSummary.absent,
-    half_day_count: attendanceSummary.halfDay || 0,
-    leave_days: attendanceSummary.leave || 0,
-    total_late_entries: lateCount,
-    total_permission_minutes: permMinutes,
-    late_deduction: Math.round(lateDeduction * 100) / 100,
-    permission_deduction: Math.round(permDeduction * 100) / 100,
-    other_deductions: Math.round(totalDeductions * 100) / 100,
-    net_salary: Math.round(netSalary * 100) / 100,
-    pay_components_snapshot: components.map(c => ({ name: c.name, type: c.type, calculation_type: c.calculation_type, value: c.value })),
+    records,
+    present_days: records.filter(r => r.status === 'PRESENT').length,
+    absent_days:  records.filter(r => r.status === 'ABSENT').length,
+    leave_days:   records.filter(r => r.status === 'LEAVE').length,
+    total_late_entries: records.filter(r => r.is_late).length,
+    total_late_minutes: records.reduce((s, r) => s + (r.late_minutes || 0), 0),
+    total_late_deduction: records.reduce((s, r) => s + (r.late_deduction || 0), 0),
   };
 }
 
-/** Convert a HrSalaryRecord DB document/lean object to camelCase for frontend */
+function calculateSalary(employee, summary, year, monthNum) {
+  const daily = employee.daily_salary || 0;
+  const workingDays = workingDaysInMonth(year, monthNum, employee.weekly_off || ['SUN']);
+  const earnedBase = Math.round(daily * summary.present_days * 100) / 100;
+  const lateDeduction = Math.round(summary.total_late_deduction * 100) / 100;
+  const netSalary = Math.max(0, Math.round((earnedBase - lateDeduction) * 100) / 100);
+
+  return {
+    daily_salary: daily,
+    total_working_days: workingDays,
+    present_days: summary.present_days,
+    absent_days: summary.absent_days,
+    leave_days: summary.leave_days,
+    total_late_entries: summary.total_late_entries,
+    total_late_minutes: summary.total_late_minutes,
+    earned_base: earnedBase,
+    late_deduction: lateDeduction,
+    net_salary: netSalary,
+  };
+}
+
 function mapSalaryToFrontend(rec) {
   const r = rec.toObject ? rec.toObject() : rec;
-  const gross = r.gross_salary || 0;
-  const workingDays = r.total_working_days || 1;
-  const presentDays = (r.present_days || 0) + (r.half_day_count || 0) * 0.5;
-
-  // Compute earned_base if not stored (backward compat)
-  const earnedBase = (r.earned_base != null && r.earned_base > 0)
-    ? r.earned_base
-    : (workingDays > 0 ? (gross / workingDays) * presentDays : 0);
-
-  // Build earnings / deductions arrays from snapshot
-  const earningComponents = (r.pay_components_snapshot || []).filter(c => c.type === 'EARNING');
-  const deductionComponents = (r.pay_components_snapshot || []).filter(c => c.type === 'DEDUCTION');
-
-  const earnings = [
-    { name: 'Earned Base', amount: Math.round(earnedBase * 100) / 100 },
-    ...earningComponents.map(c => ({
-      name: c.name,
-      amount: Math.round((c.calculation_type === 'PERCENTAGE' ? (gross * c.value) / 100 : c.value) * 100) / 100,
-    })),
-  ];
-  const totalEarnings = earnings.reduce((s, e) => s + e.amount, 0);
-
-  const deductions = [
-    ...deductionComponents.map(c => ({
-      name: c.name,
-      amount: Math.round((c.calculation_type === 'PERCENTAGE' ? (gross * c.value) / 100 : c.value) * 100) / 100,
-    })),
-  ];
-  if (r.late_deduction > 0) {
-    deductions.push({ name: 'Late Entry Deduction', reason: `${r.total_late_entries} late entries`, amount: r.late_deduction });
-  }
-  if (r.permission_deduction > 0) {
-    deductions.push({ name: 'Permission Hours Deduction', amount: r.permission_deduction });
-  }
-  const totalDeductions = deductions.reduce((s, d) => s + d.amount, 0);
-
-  // Resolve populated employee_id
   const empRaw = r.employee_id;
   const employee = (empRaw && typeof empRaw === 'object' && !empRaw.toString)
     ? {
@@ -730,29 +672,37 @@ function mapSalaryToFrontend(rec) {
         designation: empRaw.designation || '',
       }
     : null;
-
   const employeeId = empRaw?._id ? empRaw._id.toString() : (empRaw ? empRaw.toString() : null);
+
+  const earnings = [{ name: 'Earned (Daily × Present)', amount: r.earned_base || 0 }];
+  const deductions = [];
+  if ((r.late_deduction || 0) > 0) {
+    deductions.push({
+      name: 'Late Entry Deduction',
+      amount: r.late_deduction,
+      reason: `${r.total_late_entries || 0} late day(s), ${r.total_late_minutes || 0} late minutes`,
+    });
+  }
 
   return {
     _id: r._id,
     employeeId,
     employee,
-    month: r.month_number,    // frontend does: new Date(year, month - 1)
+    month: r.month_number,
     year: r.year,
     status: r.status || 'DRAFT',
-    // Attendance
     presentDays: r.present_days || 0,
     absentDays: r.absent_days || 0,
-    halfDays: r.half_day_count || 0,
-    paidLeaveDays: r.leave_days || 0,
+    leaveDays: r.leave_days || 0,
     lateDays: r.total_late_entries || 0,
-    totalPermissionMinutes: r.total_permission_minutes || 0,
-    // Salary breakdown
-    grossSalary: gross,
+    totalLateMinutes: r.total_late_minutes || 0,
+    dailySalary: r.daily_salary || 0,
+    earnedBase: r.earned_base || 0,
     earnings,
-    totalEarnings: Math.round(totalEarnings * 100) / 100,
+    totalEarnings: r.earned_base || 0,
     deductions,
-    totalDeductions: Math.round(totalDeductions * 100) / 100,
+    totalDeductions: r.late_deduction || 0,
+    lateDeduction: r.late_deduction || 0,
     netSalary: r.net_salary || 0,
     paidAt: r.paid_at || null,
     paidAmount: r.paid_amount || 0,
@@ -767,30 +717,19 @@ async function generateSalary(req, res) {
       return res.status(400).json({ success: false, message: 'employeeId, month and year required' });
     }
     const monthNum = parseInt(month);
-    const yearNum = parseInt(year);
+    const yearNum  = parseInt(year);
     const monthStr = `${yearNum}-${String(monthNum).padStart(2, '0')}`;
+    const empOid   = toObjectId(employeeId);
+    if (!empOid) return res.status(400).json({ success: false, message: 'Invalid employeeId' });
 
-    const employee = await Employee.findOne({ _id: toObjectId(employeeId), shop_id: shopId }).lean();
+    const employee = await Employee.findOne({ _id: empOid, shop_id: shopId }).lean();
     if (!employee) return res.status(404).json({ success: false, message: 'Employee not found' });
 
-    const records = await HrDailyAttendance.find({
-      employee_id: toObjectId(employeeId),
-      date: { $regex: `^${monthStr}` }
-    }).lean();
-
-    const summary = {
-      present: records.filter(r => r.status === 'PRESENT').length,
-      absent: records.filter(r => r.status === 'ABSENT').length,
-      halfDay: records.filter(r => r.status === 'HALF_DAY').length,
-      leave: records.filter(r => r.status === 'LEAVE').length,
-      lateEntries: records.filter(r => r.is_late).length,
-      totalPermissionMinutes: records.reduce((s, r) => s + (r.total_permission_minutes || 0), 0),
-    };
-
-    const calc = calculateSalary(employee, summary, yearNum, monthNum);
+    const summary = await buildMonthlyAttendanceSummary(empOid, monthStr);
+    const calc    = calculateSalary(employee, summary, yearNum, monthNum);
 
     const record = await HrSalaryRecord.findOneAndUpdate(
-      { employee_id: toObjectId(employeeId), month: monthStr },
+      { employee_id: empOid, month: monthStr },
       {
         $set: {
           shop_id: shopId,
@@ -819,31 +758,28 @@ async function generateBulkSalary(req, res) {
     const shopId = requireShop(req, res); if (!shopId) return;
     const { month, year } = req.body;
     if (!month || !year) return res.status(400).json({ success: false, message: 'month and year required' });
+    const monthNum = parseInt(month);
+    const yearNum  = parseInt(year);
+    const monthStr = `${yearNum}-${String(monthNum).padStart(2, '0')}`;
 
     const employees = await Employee.find({ shop_id: shopId, is_active: true }).lean();
     const results = [];
-
     for (const emp of employees) {
       try {
-        const monthNum = parseInt(month);
-        const yearNum = parseInt(year);
-        const monthStr = `${yearNum}-${String(monthNum).padStart(2, '0')}`;
-        const records = await HrDailyAttendance.find({
-          employee_id: emp._id,
-          date: { $regex: `^${monthStr}` }
-        }).lean();
-        const summary = {
-          present: records.filter(r => r.status === 'PRESENT').length,
-          absent: records.filter(r => r.status === 'ABSENT').length,
-          halfDay: records.filter(r => r.status === 'HALF_DAY').length,
-          leave: records.filter(r => r.status === 'LEAVE').length,
-          lateEntries: records.filter(r => r.is_late).length,
-          totalPermissionMinutes: records.reduce((s, r) => s + (r.total_permission_minutes || 0), 0),
-        };
-        const calc = calculateSalary(emp, summary, yearNum, monthNum);
-        const record = await HrSalaryRecord.findOneAndUpdate(
+        const summary = await buildMonthlyAttendanceSummary(emp._id, monthStr);
+        const calc    = calculateSalary(emp, summary, yearNum, monthNum);
+        const record  = await HrSalaryRecord.findOneAndUpdate(
           { employee_id: emp._id, month: monthStr },
-          { $set: { shop_id: shopId, year: yearNum, month_number: monthNum, ...calc, status: 'DRAFT', updated_at: new Date() } },
+          {
+            $set: {
+              shop_id: shopId,
+              year: yearNum,
+              month_number: monthNum,
+              ...calc,
+              status: 'DRAFT',
+              updated_at: new Date(),
+            }
+          },
           { upsert: true, new: true }
         );
         results.push({ employeeId: emp._id.toString(), name: emp.name || emp.employee_name, success: true, netSalary: record.net_salary });
@@ -851,9 +787,8 @@ async function generateBulkSalary(req, res) {
         results.push({ employeeId: emp._id.toString(), name: emp.name || emp.employee_name, success: false, error: e.message });
       }
     }
-
     const successList = results.filter(r => r.success);
-    const failedList = results.filter(r => !r.success);
+    const failedList  = results.filter(r => !r.success);
     return res.json({
       success: true,
       result: { success: successList, failed: failedList },
@@ -872,31 +807,19 @@ async function getSalaryReport(req, res) {
     if (!month || !year) return res.status(400).json({ success: false, message: 'month and year required' });
     const monthStr = `${year}-${String(month).padStart(2, '0')}`;
     const records = await HrSalaryRecord.find({ shop_id: shopId, month: monthStr })
-      .populate('employee_id', 'name employee_name department designation gross_salary')
+      .populate('employee_id', 'name employee_name department designation daily_salary')
       .lean();
 
-    const totalGross = records.reduce((s, r) => s + (r.gross_salary || 0), 0);
-    const totalNetSalary = records.reduce((s, r) => s + (r.net_salary || 0), 0);
+    const totalEarned = records.reduce((s, r) => s + (r.earned_base || 0), 0);
     const totalLateDeduction = records.reduce((s, r) => s + (r.late_deduction || 0), 0);
-    const totalPermissionDeduction = records.reduce((s, r) => s + (r.permission_deduction || 0), 0);
-    const totalOtherDeductions = records.reduce((s, r) => s + (r.other_deductions || 0), 0);
-    const totalAbsenceDeduction = records.reduce((s, r) => {
-      const wd = r.total_working_days || 1;
-      const pd = (r.present_days || 0) + (r.half_day_count || 0) * 0.5;
-      const eb = r.earned_base != null && r.earned_base > 0
-        ? r.earned_base
-        : (wd > 0 ? (r.gross_salary || 0) / wd * pd : 0);
-      return s + Math.max(0, (r.gross_salary || 0) - eb);
-    }, 0);
+    const totalNetSalary = records.reduce((s, r) => s + (r.net_salary || 0), 0);
 
     const summary = {
       totalEmployees: records.length,
-      totalGross,
-      totalNetSalary,
-      totalDeductions: totalAbsenceDeduction + totalLateDeduction + totalPermissionDeduction + totalOtherDeductions,
-      totalAbsenceDeduction: Math.round(totalAbsenceDeduction * 100) / 100,
+      totalEarned: Math.round(totalEarned * 100) / 100,
       totalLateDeduction: Math.round(totalLateDeduction * 100) / 100,
-      totalPermissionDeduction: Math.round(totalPermissionDeduction * 100) / 100,
+      totalDeductions: Math.round(totalLateDeduction * 100) / 100,
+      totalNetSalary: Math.round(totalNetSalary * 100) / 100,
       paid: records.filter(r => r.status === 'PAID').length,
       pending: records.filter(r => r.status !== 'PAID').length,
     };
@@ -914,8 +837,11 @@ async function getSalaryRecord(req, res) {
     const { month, year } = req.query;
     if (!month || !year) return res.status(400).json({ success: false, message: 'month and year required' });
     const monthStr = `${year}-${String(month).padStart(2, '0')}`;
-    const record = await HrSalaryRecord.findOne({ employee_id: toObjectId(employeeId), month: monthStr, shop_id: shopId })
-      .populate('employee_id', 'name employee_name department designation').lean();
+    const record = await HrSalaryRecord.findOne({
+      employee_id: toObjectId(employeeId), month: monthStr, shop_id: shopId
+    })
+      .populate('employee_id', 'name employee_name department designation')
+      .lean();
     if (!record) return res.status(404).json({ success: false, message: 'Salary record not found. Generate it first.' });
     return res.json({ success: true, data: mapSalaryToFrontend(record) });
   } catch (err) {
@@ -959,6 +885,62 @@ async function markSalaryPaid(req, res) {
   }
 }
 
+// ─── HR shop-level settings ───────────────────────────────────────────────────
+
+async function getHrSettings(req, res) {
+  try {
+    const shopId = requireShop(req, res); if (!shopId) return;
+    const settings = await getShopHrSettings(shopId);
+    return res.json({
+      success: true,
+      data: {
+        duplicatePunchWindowMinutes: settings.duplicate_punch_window_minutes,
+        lunchThresholdTime: settings.lunch_threshold_time,
+        lunchBreakMinutes: settings.lunch_break_minutes,
+      },
+    });
+  } catch (err) {
+    console.error('[HR getHrSettings]', err);
+    return res.status(500).json({ success: false, message: 'Failed to fetch HR settings' });
+  }
+}
+
+async function updateHrSettings(req, res) {
+  try {
+    const shopId = requireShop(req, res); if (!shopId) return;
+    const { duplicatePunchWindowMinutes, lunchThresholdTime, lunchBreakMinutes } = req.body;
+    const update = {};
+    if (duplicatePunchWindowMinutes !== undefined) {
+      const v = Number(duplicatePunchWindowMinutes);
+      if (!(v >= 0 && v <= 24 * 60)) return res.status(400).json({ success: false, message: 'duplicatePunchWindowMinutes must be 0–1440' });
+      update['hr_settings.duplicate_punch_window_minutes'] = v;
+    }
+    if (lunchThresholdTime !== undefined) {
+      if (!/^\d{2}:\d{2}$/.test(String(lunchThresholdTime))) return res.status(400).json({ success: false, message: 'lunchThresholdTime must be HH:MM' });
+      update['hr_settings.lunch_threshold_time'] = String(lunchThresholdTime);
+    }
+    if (lunchBreakMinutes !== undefined) {
+      const v = Number(lunchBreakMinutes);
+      if (!(v >= 0 && v <= 240)) return res.status(400).json({ success: false, message: 'lunchBreakMinutes must be 0–240' });
+      update['hr_settings.lunch_break_minutes'] = v;
+    }
+    await Shop.findByIdAndUpdate(shopId, { $set: update });
+    const settings = await getShopHrSettings(shopId);
+    return res.json({
+      success: true,
+      message: 'HR settings updated',
+      data: {
+        duplicatePunchWindowMinutes: settings.duplicate_punch_window_minutes,
+        lunchThresholdTime: settings.lunch_threshold_time,
+        lunchBreakMinutes: settings.lunch_break_minutes,
+      },
+    });
+  } catch (err) {
+    console.error('[HR updateHrSettings]', err);
+    return res.status(500).json({ success: false, message: 'Failed to update HR settings' });
+  }
+}
+
 module.exports = {
   // Employee
   listEmployees, createEmployee, updateEmployee, deactivateEmployee, reactivateEmployee, deleteEmployee,
@@ -966,4 +948,6 @@ module.exports = {
   processPunch, softwarePunch, manualMark, getDailyAttendance, getMonthlyAttendance, getAttendanceReport,
   // Salary
   generateSalary, generateBulkSalary, getSalaryReport, getSalaryRecord, finalizeSalary, markSalaryPaid,
+  // Settings
+  getHrSettings, updateHrSettings,
 };

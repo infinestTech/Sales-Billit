@@ -1138,8 +1138,8 @@ export default function MobileDashboard({
                       </div>
                       <div className="bg-white rounded-lg p-3 shadow-sm border border-gray-200">
                         <AlertCircle className="h-5 w-5 text-orange-600 mb-1" />
-                        <div className="text-xs text-gray-600">Permission</div>
-                        <div className="text-xl font-bold text-gray-900">{displayAttendance.totalPermissionHours}h</div>
+                        <div className="text-xs text-gray-600">Late</div>
+                        <div className="text-xl font-bold text-gray-900">{displayAttendance.lateDays || 0}</div>
                       </div>
                     </div>
 
@@ -1163,9 +1163,9 @@ export default function MobileDashboard({
                                     Absent
                                   </span>
                                 )}
-                                {record.permissionHours > 0 && (
+                                {record.lateMinutes > 0 && (
                                   <span className="px-2 py-1 bg-orange-100 text-orange-700 rounded text-xs font-semibold">
-                                    {record.permissionHours}h
+                                    {record.lateMinutes}m late
                                   </span>
                                 )}
                               </div>

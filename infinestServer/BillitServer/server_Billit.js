@@ -178,7 +178,6 @@ const authRoutes = require('./routes/authRoutes');
 const dashboardRoutes = require('./routes/dashboard');
 const mobileDashboardFullRoutes = require('./routes/mobile-dashboard-full');
 const paymentRoutes = require('./routes/payment');
-const salaryRoutes = require('./routes/salaryRoutes');
 
 // ✅ Mount Routes After `app` is declared
 app.use('/api/dashboard', dashboardRoutes);
@@ -188,7 +187,6 @@ app.use('/api', subscriptionPageRoutes);
 app.use('/api', userSyncRoutes);
 app.use('/api', authRoutes);
 app.use('/api', paymentRoutes);
-app.use('/api/shop-admin/salary', salaryRoutes);
 
 
 // 🏁 Start Server

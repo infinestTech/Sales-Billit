@@ -4,7 +4,7 @@ import axios from "axios";
 import {
   Clock, CheckCircle, XCircle, AlertCircle, Calendar,
   User, Users, LogIn, LogOut, RefreshCw, Filter,
-  ArrowRight, Download, ChevronLeft, ChevronRight, Edit2
+  ArrowRight, Download, ChevronLeft, ChevronRight, Edit2, Settings, Save
 } from "lucide-react";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL_BILLIT || "http://localhost:8000";
@@ -12,10 +12,24 @@ const API_URL = process.env.NEXT_PUBLIC_API_URL_BILLIT || "http://localhost:8000
 const STATUS_LABELS = {
   PRESENT: { label: "Present", color: "bg-green-100 text-green-700" },
   ABSENT: { label: "Absent", color: "bg-red-100 text-red-700" },
-  HALF_DAY: { label: "Half Day", color: "bg-yellow-100 text-yellow-700" },
   LEAVE: { label: "Leave", color: "bg-blue-100 text-blue-700" },
   HOLIDAY: { label: "Holiday", color: "bg-purple-100 text-purple-700" },
-  WEEKLY_OFF: { label: "Weekly Off", color: "bg-gray-100 text-gray-600" },
+};
+
+const PUNCH_STYLE = {
+  CHECK_IN:  "bg-green-100 text-green-700",
+  CHECK_OUT: "bg-red-100 text-red-700",
+  LUNCH_OUT: "bg-amber-100 text-amber-700",
+  LUNCH_IN:  "bg-emerald-100 text-emerald-700",
+  DUPLICATE: "bg-gray-100 text-gray-500",
+};
+
+const PUNCH_LABEL = {
+  CHECK_IN:  "IN",
+  CHECK_OUT: "OUT",
+  LUNCH_OUT: "LUNCH OUT",
+  LUNCH_IN:  "LUNCH IN",
+  DUPLICATE: "DUPLICATE",
 };
 
 export default function AttendanceManagement({ shopId }) {
@@ -54,6 +68,16 @@ export default function AttendanceManagement({ shopId }) {
   );
   const [reportData, setReportData] = useState(null);
 
+  // HR settings state
+  const [hrSettings, setHrSettings] = useState({
+    duplicatePunchWindowMinutes: 180,
+    lunchThresholdTime: "12:00",
+    lunchBreakMinutes: 30,
+  });
+  const [hrSettingsLoading, setHrSettingsLoading] = useState(false);
+  const [hrSettingsSaving, setHrSettingsSaving] = useState(false);
+  const [hrSettingsMsg, setHrSettingsMsg] = useState(null);
+
   const token = () => localStorage.getItem("shopAdminToken");
   const headers = () => ({ Authorization: `Bearer ${token()}` });
 
@@ -64,6 +88,10 @@ export default function AttendanceManagement({ shopId }) {
   useEffect(() => {
     if (shopId && activeTab === "daily") fetchDailyAttendance();
   }, [dailyDate, shopId, activeTab]);
+
+  useEffect(() => {
+    if (shopId && activeTab === "settings") fetchHrSettings();
+  }, [shopId, activeTab]);
 
   const fetchEmployees = async () => {
     try {
@@ -107,7 +135,9 @@ export default function AttendanceManagement({ shopId }) {
         type: d.punchType,
         isLate: d.isLate,
         late: d.lateMinutes,
-        permMin: d.totalPermissionMinutes,
+        lateDeduction: d.lateDeduction,
+        lunchMin: d.lunchMinutes,
+        workedMin: d.workedMinutes,
         status: d.status,
         msg: d.message,
       });
@@ -176,8 +206,49 @@ export default function AttendanceManagement({ shopId }) {
       setLoading(false);
     }
   };
+  // ── HR Settings ──────────────────────────────────────────────────────────────────────
+  const fetchHrSettings = async () => {
+    setHrSettingsLoading(true); setHrSettingsMsg(null);
+    try {
+      const res = await axios.get(`${API_URL}/api/shop-admin/hr/settings`, {
+        headers: headers(), params: { shopId },
+      });
+      if (res.data.success && res.data.data) {
+        setHrSettings({
+          duplicatePunchWindowMinutes: res.data.data.duplicatePunchWindowMinutes ?? 180,
+          lunchThresholdTime: res.data.data.lunchThresholdTime ?? "12:00",
+          lunchBreakMinutes: res.data.data.lunchBreakMinutes ?? 30,
+        });
+      }
+    } catch (err) {
+      setHrSettingsMsg({ error: err.response?.data?.message || "Failed to load settings" });
+    } finally { setHrSettingsLoading(false); }
+  };
 
-  // ── Helpers ──────────────────────────────────────────────────────────────────
+  const saveHrSettings = async () => {
+    const dpw = Number(hrSettings.duplicatePunchWindowMinutes);
+    const lbm = Number(hrSettings.lunchBreakMinutes);
+    const ltt = String(hrSettings.lunchThresholdTime || "");
+    if (!Number.isFinite(dpw) || dpw < 0 || dpw > 1440) {
+      setHrSettingsMsg({ error: "Duplicate-punch window must be 0–1440 minutes." }); return;
+    }
+    if (!Number.isFinite(lbm) || lbm < 0 || lbm > 240) {
+      setHrSettingsMsg({ error: "Lunch break must be 0–240 minutes." }); return;
+    }
+    if (!/^([01]\d|2[0-3]):[0-5]\d$/.test(ltt)) {
+      setHrSettingsMsg({ error: "Lunch threshold time must be HH:MM (24-hour)." }); return;
+    }
+    setHrSettingsSaving(true); setHrSettingsMsg(null);
+    try {
+      const res = await axios.patch(`${API_URL}/api/shop-admin/hr/settings`,
+        { shopId, duplicatePunchWindowMinutes: dpw, lunchThresholdTime: ltt, lunchBreakMinutes: lbm },
+        { headers: headers() });
+      if (res.data.success) setHrSettingsMsg({ success: "HR settings saved." });
+    } catch (err) {
+      setHrSettingsMsg({ error: err.response?.data?.message || "Save failed" });
+    } finally { setHrSettingsSaving(false); }
+  };
+  // ── Helpers ───────────────────────────────────────────────────────────────────
   const getEmployeeName = (id) => employees.find((e) => e.employeeId === id)?.name || id;
 
   const fmtTime = (d) =>
@@ -212,6 +283,7 @@ export default function AttendanceManagement({ shopId }) {
           <TAB id="monthly" label="Employee Monthly" icon={User} />
           <TAB id="manual" label="Manual Mark" icon={Edit2} />
           <TAB id="report" label="Monthly Report" icon={Users} />
+          <TAB id="settings" label="HR Settings" icon={Settings} />
         </div>
       </div>
 
@@ -250,7 +322,7 @@ export default function AttendanceManagement({ shopId }) {
               <table className="w-full text-sm">
                 <thead className="bg-gray-50 border-b border-gray-200">
                   <tr>
-                    {["Employee", "First In", "Last Out", "Status", "Late", "Permission Hrs", "Work Hrs", "Punches"].map((h) => (
+                    {["Employee", "First In", "Last Out", "Status", "Late", "Lunch", "Work Hrs", "Punches"].map((h) => (
                       <th key={h} className="px-4 py-3 text-left text-xs font-semibold text-gray-600">{h}</th>
                     ))}
                   </tr>
@@ -281,8 +353,8 @@ export default function AttendanceManagement({ shopId }) {
                           )}
                         </td>
                         <td className="px-4 py-3">
-                          {rec.totalPermissionMinutes > 0 ? (
-                            <span className="text-blue-600 text-xs font-semibold">{fmtMin(rec.totalPermissionMinutes)}</span>
+                          {rec.lunchMinutes > 0 ? (
+                            <span className="text-amber-600 text-xs font-semibold">{fmtMin(rec.lunchMinutes)}</span>
                           ) : (
                             <span className="text-gray-400 text-xs">—</span>
                           )}
@@ -293,9 +365,10 @@ export default function AttendanceManagement({ shopId }) {
                             {rec.punches?.map((p, i) => (
                               <span
                                 key={i}
-                                className={`px-1.5 py-0.5 rounded text-xs font-semibold ${p.type === "IN" ? "bg-green-100 text-green-700" : "bg-red-100 text-red-700"}`}
+                                className={`px-1.5 py-0.5 rounded text-xs font-semibold ${PUNCH_STYLE[p.type] || "bg-gray-100 text-gray-700"}`}
+                                title={p.type}
                               >
-                                {p.type} {fmtTime(p.time)}
+                                {PUNCH_LABEL[p.type] || p.type} {fmtTime(p.time)}
                               </span>
                             ))}
                           </div>
@@ -319,7 +392,7 @@ export default function AttendanceManagement({ shopId }) {
               Employee Punch
             </h3>
             <p className="text-sm text-gray-500 mb-4">
-              Employee punches IN on first tap. Subsequent taps alternate OUT (permission) → IN (return) → OUT (end of day).
+              First punch = CHECK IN. After the duplicate window, next punch becomes LUNCH OUT (if after lunch threshold) or CHECK OUT. After lunch break duration, returning punch = LUNCH IN. Final punch of the day = CHECK OUT.
             </p>
 
             <div className="space-y-3">
@@ -350,26 +423,46 @@ export default function AttendanceManagement({ shopId }) {
               </button>
             </div>
 
-            {punchMsg && !punchMsg.error && (
-              <div className={`mt-4 p-4 rounded-xl border ${punchMsg.type === "IN" ? "bg-green-50 border-green-200" : "bg-blue-50 border-blue-200"}`}>
-                <div className={`font-bold text-lg flex items-center gap-2 ${punchMsg.type === "IN" ? "text-green-700" : "text-blue-700"}`}>
-                  {punchMsg.type === "IN" ? <LogIn className="h-5 w-5" /> : <LogOut className="h-5 w-5" />}
-                  Punched {punchMsg.type}
+            {punchMsg && !punchMsg.error && (() => {
+              const t = punchMsg.type;
+              const isIn = t === "CHECK_IN" || t === "LUNCH_IN";
+              const isOut = t === "CHECK_OUT" || t === "LUNCH_OUT";
+              const isDup = t === "DUPLICATE";
+              const panelClass = isDup
+                ? "bg-gray-50 border-gray-300"
+                : isIn
+                  ? "bg-green-50 border-green-200"
+                  : "bg-red-50 border-red-200";
+              const titleClass = isDup ? "text-gray-700" : isIn ? "text-green-700" : "text-red-700";
+              return (
+                <div className={`mt-4 p-4 rounded-xl border ${panelClass}`}>
+                  <div className={`font-bold text-lg flex items-center gap-2 ${titleClass}`}>
+                    {isDup ? <AlertCircle className="h-5 w-5" /> : isIn ? <LogIn className="h-5 w-5" /> : <LogOut className="h-5 w-5" />}
+                    {PUNCH_LABEL[t] || t?.replace("_", " ")}
+                  </div>
+                  <p className="text-sm mt-1 text-gray-700">{punchMsg.msg}</p>
+                  {punchMsg.isLate && (
+                    <div className="mt-2 flex items-center gap-1 text-orange-600 text-sm font-semibold">
+                      <AlertCircle className="h-4 w-4" /> Late by {fmtMin(punchMsg.late)}
+                      {punchMsg.lateDeduction > 0 && (
+                        <span className="ml-2 text-orange-700">(− ₹{punchMsg.lateDeduction})</span>
+                      )}
+                    </div>
+                  )}
+                  {punchMsg.lunchMin > 0 && (
+                    <div className="mt-1 text-amber-700 text-sm">
+                      Lunch break: {fmtMin(punchMsg.lunchMin)}
+                    </div>
+                  )}
+                  {punchMsg.workedMin > 0 && (
+                    <div className="mt-1 text-gray-600 text-sm">
+                      Worked so far: {fmtMin(punchMsg.workedMin)}
+                    </div>
+                  )}
+                  <div className="mt-2 text-xs text-gray-500">Status: {punchMsg.status}</div>
                 </div>
-                <p className={`text-sm mt-1 ${punchMsg.type === "IN" ? "text-green-600" : "text-blue-600"}`}>{punchMsg.msg}</p>
-                {punchMsg.isLate && (
-                  <div className="mt-2 flex items-center gap-1 text-orange-600 text-sm font-semibold">
-                    <AlertCircle className="h-4 w-4" /> Late by {fmtMin(punchMsg.late)}
-                  </div>
-                )}
-                {punchMsg.permMin > 0 && (
-                  <div className="mt-1 text-blue-600 text-sm">
-                    Permission accumulated: {fmtMin(punchMsg.permMin)}
-                  </div>
-                )}
-                <div className="mt-2 text-xs text-gray-500">Status: {punchMsg.status}</div>
-              </div>
-            )}
+              );
+            })()}
             {punchMsg?.error && (
               <div className="mt-4 p-4 bg-red-50 border border-red-200 rounded-xl text-red-700 text-sm">
                 <AlertCircle className="h-4 w-4 inline mr-1" /> {punchMsg.error}
@@ -419,7 +512,7 @@ export default function AttendanceManagement({ shopId }) {
               {[
                 { label: "Present", val: monthlySummary.present, color: "text-green-700 bg-green-50 border-green-200" },
                 { label: "Absent", val: monthlySummary.absent, color: "text-red-700 bg-red-50 border-red-200" },
-                { label: "Half Day", val: monthlySummary.halfDay, color: "text-yellow-700 bg-yellow-50 border-yellow-200" },
+                { label: "Leave", val: monthlySummary.leave, color: "text-blue-700 bg-blue-50 border-blue-200" },
                 { label: "Late Days", val: monthlySummary.lateDays, color: "text-orange-700 bg-orange-50 border-orange-200" },
               ].map(({ label, val, color }) => (
                 <div key={label} className={`rounded-xl border p-4 ${color}`}>
@@ -427,13 +520,21 @@ export default function AttendanceManagement({ shopId }) {
                   <div className="text-3xl font-bold">{val}</div>
                 </div>
               ))}
-              <div className="col-span-2 md:col-span-2 rounded-xl border border-blue-200 bg-blue-50 p-4 text-blue-700">
-                <div className="text-xs font-medium mb-1">Total Permission</div>
-                <div className="text-2xl font-bold">{fmtMin(monthlySummary.totalPermissionMinutes)}</div>
-              </div>
-              <div className="col-span-2 md:col-span-2 rounded-xl border border-orange-200 bg-orange-50 p-4 text-orange-700">
-                <div className="text-xs font-medium mb-1">Total Late</div>
+              <div className="rounded-xl border border-orange-200 bg-orange-50 p-4 text-orange-700">
+                <div className="text-xs font-medium mb-1">Total Late Time</div>
                 <div className="text-2xl font-bold">{fmtMin(monthlySummary.totalLateMinutes)}</div>
+              </div>
+              <div className="rounded-xl border border-orange-300 bg-orange-50 p-4 text-orange-800">
+                <div className="text-xs font-medium mb-1">Total Late Deduction</div>
+                <div className="text-2xl font-bold">₹{(monthlySummary.totalLateDeduction || 0).toLocaleString()}</div>
+              </div>
+              <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-amber-700">
+                <div className="text-xs font-medium mb-1">Total Lunch Time</div>
+                <div className="text-2xl font-bold">{fmtMin(monthlySummary.totalLunchMinutes)}</div>
+              </div>
+              <div className="rounded-xl border border-gray-200 bg-gray-50 p-4 text-gray-700">
+                <div className="text-xs font-medium mb-1">Total Worked</div>
+                <div className="text-2xl font-bold">{fmtMin(monthlySummary.totalWorkedMinutes)}</div>
               </div>
             </div>
           )}
@@ -443,7 +544,7 @@ export default function AttendanceManagement({ shopId }) {
               <table className="w-full text-sm">
                 <thead className="bg-gray-50 border-b border-gray-200">
                   <tr>
-                    {["Date", "First In", "Last Out", "Status", "Late", "Permission", "Work Time", "Punches"].map((h) => (
+                    {["Date", "First In", "Last Out", "Status", "Late", "Lunch", "Work Time", "Punches"].map((h) => (
                       <th key={h} className="px-3 py-3 text-left text-xs font-semibold text-gray-600">{h}</th>
                     ))}
                   </tr>
@@ -469,8 +570,8 @@ export default function AttendanceManagement({ shopId }) {
                           )}
                         </td>
                         <td className="px-3 py-2">
-                          {rec.totalPermissionMinutes > 0 ? (
-                            <span className="text-blue-600 text-xs">{fmtMin(rec.totalPermissionMinutes)}</span>
+                          {rec.lunchMinutes > 0 ? (
+                            <span className="text-amber-600 text-xs">{fmtMin(rec.lunchMinutes)}</span>
                           ) : "—"}
                         </td>
                         <td className="px-3 py-2 text-gray-600 text-xs">{fmtMin(rec.totalWorkMinutes)}</td>
@@ -600,7 +701,7 @@ export default function AttendanceManagement({ shopId }) {
                 <table className="w-full text-sm">
                   <thead className="bg-gray-50 border-b border-gray-200">
                     <tr>
-                      {["Employee", "Department", "Present", "Absent", "Half Day", "Leave", "Late Days", "Late Time", "Permission Time"].map((h) => (
+                      {["Employee", "Department", "Present", "Absent", "Leave", "Late Days", "Late Time", "Late Deduction", "Lunch Time"].map((h) => (
                         <th key={h} className="px-4 py-3 text-left text-xs font-semibold text-gray-600">{h}</th>
                       ))}
                     </tr>
@@ -615,15 +716,15 @@ export default function AttendanceManagement({ shopId }) {
                         <td className="px-4 py-3 text-gray-600">{row.employee?.department || "—"}</td>
                         <td className="px-4 py-3 font-semibold text-green-700">{row.present}</td>
                         <td className="px-4 py-3 font-semibold text-red-700">{row.absent}</td>
-                        <td className="px-4 py-3 text-yellow-700">{row.halfDay}</td>
                         <td className="px-4 py-3 text-blue-700">{row.leave}</td>
                         <td className="px-4 py-3">
-                          {row.lateDays > 0 ? (
-                            <span className="text-orange-600 font-semibold">{row.lateDays}</span>
+                          {row.lateEntries > 0 ? (
+                            <span className="text-orange-600 font-semibold">{row.lateEntries}</span>
                           ) : "0"}
                         </td>
                         <td className="px-4 py-3 text-orange-600 text-xs">{fmtMin(row.totalLateMinutes)}</td>
-                        <td className="px-4 py-3 text-blue-600 text-xs">{fmtMin(row.totalPermissionMinutes)}</td>
+                        <td className="px-4 py-3 text-orange-700 text-xs">₹{(row.totalLateDeduction || 0).toLocaleString()}</td>
+                        <td className="px-4 py-3 text-amber-600 text-xs">{fmtMin(row.totalLunchMinutes)}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -638,6 +739,82 @@ export default function AttendanceManagement({ shopId }) {
               <p className="text-gray-500">No attendance records for this period.</p>
             </div>
           )}
+        </div>
+      )}
+
+      {/* ── HR Settings ─────────────────────────────────────────────────────────────────────── */}
+      {activeTab === "settings" && (
+        <div className="space-y-4">
+          <div className="bg-white rounded-xl border border-gray-200 p-6 max-w-2xl">
+            <div className="flex items-start gap-3 mb-4">
+              <Settings className="h-5 w-5 text-green-600 mt-0.5" />
+              <div>
+                <h3 className="text-base font-bold text-gray-800">Punch & Lunch Rules</h3>
+                <p className="text-xs text-gray-500">Controls duplicate-punch protection and lunch-break detection used by Software Punch and eSSL devices.</p>
+              </div>
+            </div>
+
+            {hrSettingsMsg?.success && (
+              <div className="flex items-center gap-2 p-3 mb-3 bg-green-50 border border-green-200 rounded-lg text-green-700 text-sm">
+                <CheckCircle className="h-4 w-4 shrink-0" />{hrSettingsMsg.success}
+              </div>
+            )}
+            {hrSettingsMsg?.error && (
+              <div className="flex items-center gap-2 p-3 mb-3 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm">
+                <AlertCircle className="h-4 w-4 shrink-0" />{hrSettingsMsg.error}
+              </div>
+            )}
+
+            {hrSettingsLoading ? (
+              <div className="p-8 text-center"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-green-600 mx-auto" /></div>
+            ) : (
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Duplicate-Punch Window (minutes)</label>
+                  <input
+                    type="number" min={0} max={1440}
+                    value={hrSettings.duplicatePunchWindowMinutes}
+                    onChange={(e) => setHrSettings(s => ({ ...s, duplicatePunchWindowMinutes: e.target.value }))}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm text-gray-900 bg-white focus:outline-none focus:ring-2 focus:ring-green-500"
+                  />
+                  <p className="text-xs text-gray-500 mt-1">Any punch within this window after the previous accepted punch is treated as a duplicate. Default: 180 (3 hours).</p>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Lunch Threshold Time (HH:MM, 24-hour)</label>
+                  <input
+                    type="time"
+                    value={hrSettings.lunchThresholdTime}
+                    onChange={(e) => setHrSettings(s => ({ ...s, lunchThresholdTime: e.target.value }))}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm text-gray-900 bg-white focus:outline-none focus:ring-2 focus:ring-green-500"
+                  />
+                  <p className="text-xs text-gray-500 mt-1">A checkout after this time is treated as the start of lunch. Default: 12:00.</p>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Lunch Break (minutes)</label>
+                  <input
+                    type="number" min={0} max={240}
+                    value={hrSettings.lunchBreakMinutes}
+                    onChange={(e) => setHrSettings(s => ({ ...s, lunchBreakMinutes: e.target.value }))}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm text-gray-900 bg-white focus:outline-none focus:ring-2 focus:ring-green-500"
+                  />
+                  <p className="text-xs text-gray-500 mt-1">The first punch after this many minutes from lunch-out is treated as lunch-in. Default: 30.</p>
+                </div>
+
+                <div className="flex justify-end pt-2">
+                  <button
+                    onClick={saveHrSettings}
+                    disabled={hrSettingsSaving}
+                    className="flex items-center gap-2 px-4 py-2 bg-green-600 hover:bg-green-700 disabled:bg-gray-300 text-white rounded-lg text-sm font-medium transition"
+                  >
+                    {hrSettingsSaving ? <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white" /> : <Save className="h-4 w-4" />}
+                    Save Settings
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
         </div>
       )}
     </div>
