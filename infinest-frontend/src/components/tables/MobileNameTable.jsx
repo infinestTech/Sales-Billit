@@ -104,6 +104,17 @@ const MobileNameTable = ({ mobileData, setMobileData, onRevenueUpdate, hideActio
     const mobile = currentMobileData[index]
     const globalIndex = indexOfFirstItem + index
 
+    // Block marking as Delivered until a paid amount has been entered
+    if (field === "delivered" && !mobile.delivered) {
+      const paid = Number(mobile.paid_amount) || 0
+      if (paid <= 0) {
+        if (typeof window !== "undefined") {
+          window.alert("Please enter the Paid Amount before marking this device as Delivered.")
+        }
+        return
+      }
+    }
+
 
 
 

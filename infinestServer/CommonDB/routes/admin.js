@@ -842,6 +842,26 @@ router.get('/shops/whatsapp', adminAuth, async (req, res) => {
     }
 });
 
+router.get('/shops/:shopId/whatsapp/logs', adminAuth, async (req, res) => {
+    try {
+        const billitResp = await axios.get(
+            `${process.env.BILLIT_SERVER_URL}/api/admin/shops/${req.params.shopId}/whatsapp/logs`,
+            {
+                headers: { 'x-internal-key': process.env.INTERNAL_API_KEY },
+                params: req.query,
+                timeout: 8000,
+            }
+        );
+        return res.json(billitResp.data);
+    } catch (err) {
+        console.error('Admin proxy /shops/:id/whatsapp/logs error:', err.response?.data || err.message);
+        return res.status(err.response?.status || 500).json({
+            message: 'Failed to load WhatsApp logs',
+            error: err.response?.data || err.message,
+        });
+    }
+});
+
 router.patch('/shops/:shopId/whatsapp', adminAuth, async (req, res) => {
     try {
         const billitResp = await axios.patch(
