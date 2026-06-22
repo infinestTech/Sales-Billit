@@ -153,6 +153,10 @@ const MobileNameTable = ({ mobileData, setMobileData, onRevenueUpdate, hideActio
 
       setMobileData(updatedData)
     } catch (error) {
+      const msg = error.response?.data?.error || `Failed to update ${field}`
+      window.dispatchEvent(new CustomEvent("show-notification-toast", {
+        detail: { message: msg, type: "error" }
+      }))
       console.error(`Failed to toggle ${field}:`, error.message)
     }
   }
