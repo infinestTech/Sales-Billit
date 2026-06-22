@@ -367,6 +367,7 @@ export default function CreateRecordForm({ shopId, isLimitReached, setIsLimitRea
             disabled={isLimitReached} 
             onBillNumberChange={handleBillNumberChange}
             onRegenerateBillNumber={generateSequentialBillNumber}
+            shopId={shopId}
           />
         ) : (
           <DealerForm
