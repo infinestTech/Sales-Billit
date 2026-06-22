@@ -78,6 +78,7 @@ const getTodayRecords = async (req, res) => {
           mobileNumber: c.mobile_number,
           billNo: c.bill_no || "N/A",
           balanceAmount: c.balance_amount ?? 0,
+          estimatedCost: c.estimated_cost ?? 0,
           createdAt: c.created_at,
           customerType: "Customer",
           mobiles: mobilesByCustomer[c._id]
@@ -90,6 +91,7 @@ const getTodayRecords = async (req, res) => {
           mobileNumber: d.mobile_number,
           billNo: d.bill_no || "N/A",
           balanceAmount: d.balance_amount ?? 0,
+          estimatedCost: d.estimated_cost ?? 0,
           createdAt: d.created_at,
           customerType: "Dealer",
           mobiles: mobilesByDealer[d._id]
