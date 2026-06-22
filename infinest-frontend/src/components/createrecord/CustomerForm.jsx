@@ -62,7 +62,10 @@ export default function CustomerForm({ formData, setFormData, disabled, onBillNu
     } else if (name === "mobileNumber") {
       // Clear existing selection when user edits the number
       setSelectedExisting(null)
-      setFormData((prev) => ({ ...prev, mobileNumber: value, clientName: selectedExisting ? "" : prev.clientName }))
+      setFormData((prev) => {
+        const { existingCustomerId: _dropped, ...rest } = prev
+        return { ...rest, mobileNumber: value, clientName: selectedExisting ? "" : prev.clientName }
+      })
       // Debounce search
       clearTimeout(debounceRef.current)
       debounceRef.current = setTimeout(() => searchCustomers(value), 400)
@@ -77,6 +80,7 @@ export default function CustomerForm({ formData, setFormData, disabled, onBillNu
       ...prev,
       clientName: customer.clientName,
       mobileNumber: customer.mobileNumber,
+      existingCustomerId: customer.id,
     }))
     setSuggestions([])
     setShowDropdown(false)
@@ -85,8 +89,10 @@ export default function CustomerForm({ formData, setFormData, disabled, onBillNu
   const handleCreateNew = () => {
     setSelectedExisting(null)
     setShowDropdown(false)
-    // Keep the typed mobile number, clear name so user fills it fresh
-    setFormData((prev) => ({ ...prev, clientName: "" }))
+    setFormData((prev) => {
+      const { existingCustomerId: _dropped, ...rest } = prev
+      return { ...rest, clientName: "" }
+    })
   }
 
   return (
@@ -106,7 +112,7 @@ export default function CustomerForm({ formData, setFormData, disabled, onBillNu
         {selectedExisting && (
           <p className="text-xs text-green-600 mt-1 flex items-center gap-1">
             <UserCheck className="h-3 w-3" />
-            Existing customer selected
+            Adding mobiles to existing record{selectedExisting.lastBillNo ? ` (${selectedExisting.lastBillNo})` : ""}
           </p>
         )}
       </div>
