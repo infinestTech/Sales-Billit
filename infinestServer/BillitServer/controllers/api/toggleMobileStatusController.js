@@ -56,6 +56,11 @@ const toggleMobileStatus = async (req, res) => {
       }
     } else if (field === "delivered") {
       const newValue = !prev.delivered;
+      if (newValue && !(Number(mobile.paid_amount) > 0)) {
+        return res.status(400).json({
+          error: "Please enter a paid amount before marking this device as delivered.",
+        });
+      }
       updateData.delivered = newValue;
       updateData.delivery_date = newValue ? new Date() : null;
     } else if (field === "ready") {

@@ -19,7 +19,8 @@ const {
     SupplierHistory,
     Expense,
     DailySummary,
-    Branch
+    Branch,
+    WhatsAppLog
 } = require('../models/mongoModels');
 const { Supplier } = require('../models/supplier');
 
@@ -652,6 +653,20 @@ router.get('/shops/whatsapp', internalAuth, async (req, res) => {
             balance_reminder: true,
         };
 
+        // Aggregate WhatsApp send stats per shop in one query
+        const statsAgg = await WhatsAppLog.aggregate([
+            { $group: {
+                _id: { shop_id: '$shop_id', status: '$status' },
+                count: { $sum: 1 }
+            } }
+        ]);
+        const statsByShop = {};
+        statsAgg.forEach((row) => {
+            const sid = row._id.shop_id ? String(row._id.shop_id) : 'none';
+            if (!statsByShop[sid]) statsByShop[sid] = { sent: 0, skipped: 0, error: 0 };
+            statsByShop[sid][row._id.status] = row.count;
+        });
+
         const data = shops.map((s) => ({
             _id: s._id,
             shop_name: s.shop_name,
@@ -664,6 +679,7 @@ router.get('/shops/whatsapp', internalAuth, async (req, res) => {
                 enabled: !!s.whatsapp?.enabled,
                 events: { ...defaultEvents, ...(s.whatsapp?.events || {}) },
             },
+            wa_stats: statsByShop[String(s._id)] || { sent: 0, skipped: 0, error: 0 },
         }));
 
         res.json({ success: true, shops: data });
@@ -719,6 +735,26 @@ router.patch('/shops/:shopId/whatsapp', internalAuth, async (req, res) => {
     } catch (error) {
         console.error('Update shop WA settings error:', error);
         res.status(500).json({ message: 'Failed to update WhatsApp settings', error: error.message });
+    }
+});
+
+// Get recent WhatsApp logs for a specific shop (admin only).
+// Query: ?limit=50&status=sent|skipped|error&event=mobile_ready
+router.get('/shops/:shopId/whatsapp/logs', internalAuth, async (req, res) => {
+    try {
+        const { shopId } = req.params;
+        const { limit = 50, status, event } = req.query;
+        const filter = { shop_id: shopId };
+        if (status) filter.status = status;
+        if (event) filter.event = event;
+        const logs = await WhatsAppLog.find(filter)
+            .sort({ created_at: -1 })
+            .limit(Math.min(parseInt(limit) || 50, 500))
+            .lean();
+        res.json({ success: true, logs });
+    } catch (error) {
+        console.error('Fetch WA logs error:', error);
+        res.status(500).json({ message: 'Failed to fetch WhatsApp logs', error: error.message });
     }
 });
 

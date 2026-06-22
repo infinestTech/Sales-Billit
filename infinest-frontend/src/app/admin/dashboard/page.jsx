@@ -1550,6 +1550,9 @@ function WhatsAppTab({ getAuthHeaders }) {
   const [search, setSearch] = useState('');
   const [savingId, setSavingId] = useState(null);
   const [error, setError] = useState('');
+  const [logsShop, setLogsShop] = useState(null);
+  const [logs, setLogs] = useState([]);
+  const [logsLoading, setLogsLoading] = useState(false);
 
   const API_URL = process.env.NEXT_PUBLIC_API_URL_AUTH || 'http://localhost:7000';
 
@@ -1567,6 +1570,23 @@ function WhatsAppTab({ getAuthHeaders }) {
   };
 
   useEffect(() => { fetchShops(); }, []);
+
+  const openLogs = async (shop) => {
+    setLogsShop(shop);
+    setLogs([]);
+    setLogsLoading(true);
+    try {
+      const resp = await axios.get(
+        `${API_URL}/admin/shops/${shop._id}/whatsapp/logs?limit=100`,
+        getAuthHeaders()
+      );
+      setLogs(resp.data.logs || []);
+    } catch (e) {
+      setError(e.response?.data?.message || e.message);
+    } finally {
+      setLogsLoading(false);
+    }
+  };
 
   const patchShop = async (shopId, body, optimistic) => {
     setSavingId(shopId);
@@ -1674,7 +1694,15 @@ function WhatsAppTab({ getAuthHeaders }) {
                       {shop.email && <span>✉️ {shop.email}</span>}
                     </div>
                   </div>
-                  <label className="flex items-center gap-3 cursor-pointer select-none">
+                  <div className="flex items-center gap-3">
+                    <button
+                      type="button"
+                      onClick={() => openLogs(shop)}
+                      className="px-3 py-1.5 text-xs rounded-lg bg-gray-700 hover:bg-gray-600 text-gray-100 border border-gray-600"
+                    >
+                      View logs
+                    </button>
+                    <label className="flex items-center gap-3 cursor-pointer select-none">
                     <span className={`text-sm font-medium ${wa.enabled ? 'text-green-400' : 'text-gray-400'}`}>
                       {wa.enabled ? 'WhatsApp ON' : 'WhatsApp OFF'}
                     </span>
@@ -1690,6 +1718,19 @@ function WhatsAppTab({ getAuthHeaders }) {
                       <span className="absolute left-1 h-4 w-4 rounded-full bg-white transition peer-checked:translate-x-6"></span>
                     </span>
                   </label>
+                  </div>
+                </div>
+
+                <div className="mt-3 flex flex-wrap gap-2 text-xs">
+                  <span className="px-2 py-1 rounded bg-green-900/30 border border-green-800 text-green-300">
+                    Sent: <b>{shop.wa_stats?.sent || 0}</b>
+                  </span>
+                  <span className="px-2 py-1 rounded bg-yellow-900/30 border border-yellow-800 text-yellow-300">
+                    Skipped: <b>{shop.wa_stats?.skipped || 0}</b>
+                  </span>
+                  <span className="px-2 py-1 rounded bg-red-900/30 border border-red-800 text-red-300">
+                    Errors: <b>{shop.wa_stats?.error || 0}</b>
+                  </span>
                 </div>
 
                 <div className={`mt-4 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 ${!wa.enabled ? 'opacity-50 pointer-events-none' : ''}`}>
@@ -1721,6 +1762,82 @@ function WhatsAppTab({ getAuthHeaders }) {
               </div>
             );
           })}
+        </div>
+      )}
+
+      {logsShop && (
+        <div
+          className="fixed inset-0 bg-black/70 z-50 flex items-center justify-center p-4"
+          onClick={() => setLogsShop(null)}
+        >
+          <div
+            className="bg-gray-900 border border-gray-700 rounded-xl max-w-4xl w-full max-h-[85vh] flex flex-col"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between px-5 py-3 border-b border-gray-700">
+              <div>
+                <div className="text-white font-semibold">
+                  WhatsApp Logs · {logsShop.shop_name}
+                </div>
+                <div className="text-xs text-gray-400">
+                  Last 100 events (30-day retention)
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setLogsShop(null)}
+                className="text-gray-400 hover:text-white text-xl px-2"
+              >
+                ×
+              </button>
+            </div>
+            <div className="overflow-auto p-4 flex-1">
+              {logsLoading ? (
+                <div className="text-gray-400 text-center py-10">Loading…</div>
+              ) : logs.length === 0 ? (
+                <div className="text-gray-400 text-center py-10">No logs yet.</div>
+              ) : (
+                <table className="w-full text-sm text-left text-gray-200">
+                  <thead className="text-xs uppercase text-gray-400 border-b border-gray-700">
+                    <tr>
+                      <th className="px-2 py-2">Time</th>
+                      <th className="px-2 py-2">Event</th>
+                      <th className="px-2 py-2">To</th>
+                      <th className="px-2 py-2">Status</th>
+                      <th className="px-2 py-2">Message ID / Reason</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {logs.map((l) => (
+                      <tr key={l._id} className="border-b border-gray-800">
+                        <td className="px-2 py-2 whitespace-nowrap text-gray-400">
+                          {new Date(l.created_at).toLocaleString()}
+                        </td>
+                        <td className="px-2 py-2">{l.event}</td>
+                        <td className="px-2 py-2 font-mono text-xs">{l.to}</td>
+                        <td className="px-2 py-2">
+                          <span
+                            className={`px-2 py-0.5 rounded text-xs ${
+                              l.status === 'sent'
+                                ? 'bg-green-900/40 text-green-300 border border-green-800'
+                                : l.status === 'skipped'
+                                ? 'bg-yellow-900/40 text-yellow-300 border border-yellow-800'
+                                : 'bg-red-900/40 text-red-300 border border-red-800'
+                            }`}
+                          >
+                            {l.status}
+                          </span>
+                        </td>
+                        <td className="px-2 py-2 font-mono text-xs break-all">
+                          {l.message_id || l.error || '—'}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
+            </div>
+          </div>
         </div>
       )}
     </div>

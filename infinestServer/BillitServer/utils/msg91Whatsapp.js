@@ -26,7 +26,7 @@ const axios = require("axios");
 const { Shop, WhatsAppLog } = require("../models/mongoModels");
 
 const MSG91_URL =
-  "https://control.msg91.com/api/v5/whatsapp/whatsapp-outbound-message/bulk/";
+  "https://api.msg91.com/api/v5/whatsapp/whatsapp-outbound-message/bulk/";
 
 const EVENT_TEMPLATE_ENV = {
   record_created: "MSG91_TPL_RECORD_CREATED",
@@ -122,6 +122,7 @@ async function sendWaEvent({ shopId, event, to, vars = {} }) {
 
   const authKey = process.env.MSG91_AUTH_KEY;
   const integratedNumber = process.env.MSG91_INTEGRATED_NUMBER;
+  const namespace = process.env.MSG91_NAMESPACE || null;
   const templateName = process.env[EVENT_TEMPLATE_ENV[event]];
   const langCode = process.env.MSG91_LANG_CODE || "en";
 
@@ -140,7 +141,7 @@ async function sendWaEvent({ shopId, event, to, vars = {} }) {
       template: {
         name: templateName,
         language: { code: langCode, policy: "deterministic" },
-        namespace: null,
+        namespace,
         to_and_components: [
           {
             to: [phone],
@@ -187,10 +188,15 @@ async function sendWaEvent({ shopId, event, to, vars = {} }) {
 
 // Wrapper: call from request handlers without await; never blocks or throws.
 function fireWaEvent(opts) {
+  console.log(`[msg91] queued event=${opts.event} to=${opts.to} shopId=${opts.shopId}`);
   setImmediate(() => {
-    sendWaEvent(opts).catch((err) => {
-      console.error("[msg91] sendWaEvent unexpected error:", err);
-    });
+    sendWaEvent(opts)
+      .then((r) => {
+        console.log(`[msg91] result event=${opts.event} status=${r.status}${r.reason ? ` reason=${r.reason}` : ''}${r.messageId ? ` id=${r.messageId}` : ''}`);
+      })
+      .catch((err) => {
+        console.error("[msg91] sendWaEvent unexpected error:", err);
+      });
   });
 }
 
