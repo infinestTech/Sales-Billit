@@ -5,7 +5,7 @@ import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 import { IoMdPrint } from "react-icons/io";
 import { MdPreview } from "react-icons/md";
-import { FaDownload, FaWhatsapp } from "react-icons/fa";
+import { FaDownload } from "react-icons/fa";
 import { IoCloseCircleOutline } from "react-icons/io5";
 import { BsPrinterFill } from "react-icons/bs";
 import authApi from "../authApi";
@@ -1168,32 +1168,6 @@ const ReceiptGenerator = ({ clientData, shopPhoneNumber, closeModal, shopAddress
     doc.save(fileName);
   };
 
-  const handleWhatsApp = () => {
-    const serviceMobile = filteredClientData?.MobileName?.find(item => !!item._id);
-    if (!serviceMobile?._id) {
-      alert("⚠️ Mobile ID missing. Please contact support.");
-      return;
-    }
-
-    const customerMobile = filteredClientData.mobile_number.startsWith("91")
-      ? filteredClientData.mobile_number
-      : "91" + filteredClientData.mobile_number;
-
-    const receiptLink = `${process.env.NEXT_PUBLIC_FRONTEND_URL}/receipt/${serviceMobile._id}`;
-    const customer = filteredClientData.client_name || "";
-    const shop = filteredClientData.owner_name || "INFINFEST MOBILE SERVICE";
-    const billNumber = filteredClientData.bill_no || "N/A";
-
-    const servicedMobiles = filteredClientData.MobileName.map((device, index) => {
-      const paid = device.total_paid || (device.payments && device.payments.length > 0 ? device.payments.reduce((sum, p) => sum + (p.amount || 0), 0) : 0) || device.paid_amount || 0;
-      return `${index + 1}. 📱 ${device.mobile_name} - ${device.issue || "General Service"} (Paid: ₹${paid})`;
-    }).join("\n");
-
-    const message = `🧾 *${shop}* - Service Receipt\n\n👤 Customer: ${customer}\n📞 Mobile: ${filteredClientData.mobile_number}\n🧾 Bill No: ${billNumber}\n\n📱 *Devices:*\n${servicedMobiles}\n\n🔗 View Online: ${receiptLink}\n\n✨ Thank you for choosing our service!`;
-
-    window.open(`https://web.whatsapp.com/send?phone=${customerMobile}&text=${encodeURIComponent(message)}`, "_blank");
-  };
-
   return (
     <>
       {/* Loading State */}
@@ -1442,14 +1416,6 @@ const ReceiptGenerator = ({ clientData, shopPhoneNumber, closeModal, shopAddress
                 >
                   <FaDownload size={18} />
                   <span className="font-medium">Download</span>
-                </button>
-
-                <button 
-                  onClick={handleWhatsApp}
-                  className="bg-green-600 hover:bg-green-700 text-white px-6 py-3 rounded-lg flex items-center gap-2 transition-all duration-200 shadow-md hover:shadow-lg"
-                >
-                  <FaWhatsapp size={18} />
-                  <span className="font-medium">WhatsApp</span>
                 </button>
               </div>
             </div>

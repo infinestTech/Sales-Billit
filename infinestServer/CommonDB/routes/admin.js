@@ -822,4 +822,41 @@ router.post('/manual-activate-subscription', adminAuth, async (req, res) => {
     }
 });
 
+// ============================================================
+// 💬 WhatsApp / MSG91 admin proxies (admin dashboard -> BillitServer)
+// ============================================================
+
+router.get('/shops/whatsapp', adminAuth, async (req, res) => {
+    try {
+        const billitResp = await axios.get(
+            `${process.env.BILLIT_SERVER_URL}/api/admin/shops/whatsapp`,
+            { headers: { 'x-internal-key': process.env.INTERNAL_API_KEY }, timeout: 8000 }
+        );
+        return res.json(billitResp.data);
+    } catch (err) {
+        console.error('Admin proxy /shops/whatsapp error:', err.response?.data || err.message);
+        return res.status(err.response?.status || 500).json({
+            message: 'Failed to load shop WhatsApp settings',
+            error: err.response?.data || err.message,
+        });
+    }
+});
+
+router.patch('/shops/:shopId/whatsapp', adminAuth, async (req, res) => {
+    try {
+        const billitResp = await axios.patch(
+            `${process.env.BILLIT_SERVER_URL}/api/admin/shops/${req.params.shopId}/whatsapp`,
+            req.body,
+            { headers: { 'x-internal-key': process.env.INTERNAL_API_KEY }, timeout: 8000 }
+        );
+        return res.json(billitResp.data);
+    } catch (err) {
+        console.error('Admin proxy PATCH /shops/:id/whatsapp error:', err.response?.data || err.message);
+        return res.status(err.response?.status || 500).json({
+            message: 'Failed to update shop WhatsApp settings',
+            error: err.response?.data || err.message,
+        });
+    }
+});
+
 module.exports = router;

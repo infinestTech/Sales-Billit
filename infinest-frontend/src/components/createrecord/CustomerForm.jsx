@@ -222,6 +222,20 @@ export default function CustomerForm({ formData, setFormData, disabled, onBillNu
           className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:opacity-50 disabled:cursor-not-allowed"
         />
       </div>
+
+      <div>
+        <label className="block text-gray-700 font-medium mb-2">Estimated Cost</label>
+        <input
+          type="number"
+          name="estimatedCost"
+          placeholder="Enter estimated cost (₹)"
+          min="0"
+          value={formData.estimatedCost ?? ""}
+          onChange={handleInputChange}
+          disabled={disabled}
+          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:opacity-50 disabled:cursor-not-allowed"
+        />
+      </div>
     </div>
   )
 }

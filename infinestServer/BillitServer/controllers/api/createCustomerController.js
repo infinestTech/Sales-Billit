@@ -1,6 +1,7 @@
 
 const { Customer, Mobile, Shop } = require("../../models/mongoModels");
 const moment = require("moment-timezone");
+const { fireWaEvent } = require("../../utils/msg91Whatsapp");
 
 
 // POST /api/createcustomer
@@ -13,6 +14,7 @@ const createCustomerController = async (req, res) => {
       noOfMobile,
       billNo,
       balanceAmount,
+      estimatedCost,
       MobileName,
       technicianname,
       technician,
@@ -56,7 +58,32 @@ const createCustomerController = async (req, res) => {
       await Promise.all(appendPromises);
 
       existing.no_of_mobile = (existing.no_of_mobile || 0) + MobileName.length;
+      if (estimatedCost !== undefined && estimatedCost !== null && estimatedCost !== "") {
+        existing.estimated_cost = (existing.estimated_cost || 0) + Number(estimatedCost);
+      }
       await existing.save();
+
+      // Fire WA event: mobiles appended to existing customer
+      try {
+        const shopDoc = await Shop.findById(userId).lean();
+        const mobileList = MobileName
+          .map((m) => m.mobileName + (m.model ? ` ${m.model}` : ""))
+          .join(", ");
+        fireWaEvent({
+          shopId: userId,
+          event: "mobiles_appended",
+          to: existing.mobile_number,
+          vars: {
+            customer_name: existing.client_name,
+            shop_name: shopDoc?.shop_name || "",
+            bill_no: existing.bill_no || "-",
+            mobile_list: mobileList,
+            shop_phone: shopDoc?.phone || "",
+          },
+        });
+      } catch (waErr) {
+        console.error("[wa] mobiles_appended trigger failed:", waErr.message);
+      }
 
       return res.status(200).json({
         message: "Mobiles added to existing customer successfully.",
@@ -90,6 +117,7 @@ const createCustomerController = async (req, res) => {
       no_of_mobile: noOfMobile,
       bill_no: billNo || null,
       balance_amount: balanceAmount || 0,
+      estimated_cost: Number(estimatedCost) || 0,
     });
 
     const mobilePromises = MobileName.map((mobile) => {
@@ -111,6 +139,29 @@ const createCustomerController = async (req, res) => {
     // Increment record_count
     shop.record_count += 1;
     await shop.save();
+
+    // Fire WA event: record created
+    try {
+      const mobileList = MobileName
+        .map((m) => m.mobileName + (m.model ? ` ${m.model}` : ""))
+        .join(", ");
+      fireWaEvent({
+        shopId: userId,
+        event: "record_created",
+        to: mobileNumber,
+        vars: {
+          customer_name: clientName,
+          shop_name: shop.shop_name || "",
+          bill_no: billNo || "-",
+          mobile_list: mobileList,
+          mobile_count: String(MobileName.length),
+          estimated_cost: String(Number(estimatedCost) || 0),
+          shop_phone: shop.phone || "",
+        },
+      });
+    } catch (waErr) {
+      console.error("[wa] record_created trigger failed:", waErr.message);
+    }
 
     return res.status(201).json({
       message: "Customer and associated mobiles created successfully.",

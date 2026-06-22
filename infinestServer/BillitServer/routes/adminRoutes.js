@@ -631,4 +631,95 @@ router.delete('/user/:userId', internalAuth, async (req, res) => {
     }
 });
 
+// ============================================================
+// 💬 WhatsApp / MSG91 admin endpoints
+// ============================================================
+
+// List all shops with their WhatsApp config (for the admin toggles tab).
+router.get('/shops/whatsapp', internalAuth, async (req, res) => {
+    try {
+        const shops = await Shop.find(
+            {},
+            'shop_name owner_name phone email location mysql_user_id whatsapp'
+        ).sort({ shop_name: 1 }).lean();
+
+        const defaultEvents = {
+            record_created: true,
+            mobiles_appended: true,
+            mobile_ready: true,
+            mobile_delivered: true,
+            mobile_returned: false,
+            balance_reminder: true,
+        };
+
+        const data = shops.map((s) => ({
+            _id: s._id,
+            shop_name: s.shop_name,
+            owner_name: s.owner_name,
+            phone: s.phone,
+            email: s.email,
+            location: s.location,
+            mysql_user_id: s.mysql_user_id,
+            whatsapp: {
+                enabled: !!s.whatsapp?.enabled,
+                events: { ...defaultEvents, ...(s.whatsapp?.events || {}) },
+            },
+        }));
+
+        res.json({ success: true, shops: data });
+    } catch (error) {
+        console.error('List shop WA settings error:', error);
+        res.status(500).json({ message: 'Failed to fetch shops', error: error.message });
+    }
+});
+
+// Update WhatsApp config for one shop (admin only).
+// Body: { enabled?: boolean, events?: { [eventKey]: boolean } }
+router.patch('/shops/:shopId/whatsapp', internalAuth, async (req, res) => {
+    try {
+        const { shopId } = req.params;
+        const { enabled, events } = req.body || {};
+
+        const shop = await Shop.findById(shopId);
+        if (!shop) return res.status(404).json({ message: 'Shop not found' });
+
+        if (!shop.whatsapp) {
+            shop.whatsapp = { enabled: false, events: {} };
+        }
+        if (typeof enabled === 'boolean') {
+            shop.whatsapp.enabled = enabled;
+        }
+        if (events && typeof events === 'object') {
+            const allowed = [
+                'record_created',
+                'mobiles_appended',
+                'mobile_ready',
+                'mobile_delivered',
+                'mobile_returned',
+                'balance_reminder',
+            ];
+            allowed.forEach((k) => {
+                if (typeof events[k] === 'boolean') {
+                    shop.whatsapp.events[k] = events[k];
+                }
+            });
+        }
+
+        shop.markModified('whatsapp');
+        await shop.save();
+
+        res.json({
+            success: true,
+            shop: {
+                _id: shop._id,
+                shop_name: shop.shop_name,
+                whatsapp: shop.whatsapp,
+            },
+        });
+    } catch (error) {
+        console.error('Update shop WA settings error:', error);
+        res.status(500).json({ message: 'Failed to update WhatsApp settings', error: error.message });
+    }
+});
+
 module.exports = router;
