@@ -595,7 +595,7 @@ const esslDeviceSchema = new mongoose.Schema({
   created_at: { type: Date, default: Date.now }
 });
 esslDeviceSchema.index({ shop_id: 1 });
-esslDeviceSchema.index({ device_serial: 1 }, { unique: true });
+// Note: device_serial unique index is already declared via `unique: true` on the field — no separate .index() needed.
 
 // ==============================
 // 🕐 eSSL Punch Log Schema

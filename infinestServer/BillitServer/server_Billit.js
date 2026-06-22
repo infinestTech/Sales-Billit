@@ -18,6 +18,9 @@ mongoose.connect(process.env.BILLIT_MONGO_URI)
 
 const app = express(); // ✅ MOVE THIS TO THE TOP
 
+// Trust the first proxy (nginx) — required for express-rate-limit behind a reverse proxy
+app.set('trust proxy', 1);
+
 // ✅ Webhook MUST be mounted BEFORE express.json() — needs raw body for signature verification
 const webhookRoutes = require("./routes/webhookRoutes");
 app.use("/api", webhookRoutes);
