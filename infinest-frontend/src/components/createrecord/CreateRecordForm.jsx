@@ -222,8 +222,8 @@ export default function CreateRecordForm({ shopId, isLimitReached, setIsLimitRea
     }
 
     if (!formData.noOfMobile || formData.noOfMobile < 1 || formData.noOfMobile > 15) return false
-    // Validate bill number format and presence
-  if (!formData.billNo || formData.billNo.trim().length === 0) return false
+    // Validate bill number format and presence (not needed when appending to existing)
+  if (!formData.existingCustomerId && (!formData.billNo || formData.billNo.trim().length === 0)) return false
   // Technician is optional. If provided, enforce a minimum length of 2 chars.
   if (formData.technician && formData.technician.trim().length > 0 && formData.technician.trim().length < 2) return false
 
@@ -246,8 +246,8 @@ export default function CreateRecordForm({ shopId, isLimitReached, setIsLimitRea
     if (isSubmitting) return
     setIsSubmitting(true)
     try {
-      // Validate bill number uniqueness before submission
-      if (formData.billNo && formData.billNo.trim().length > 0) {
+      // Validate bill number uniqueness before submission (skip when appending to existing)
+      if (!formData.existingCustomerId && formData.billNo && formData.billNo.trim().length > 0) {
         const exists = await checkBillNumberExists(formData.billNo.trim())
         if (exists) {
           logAndNotify("This bill number already exists. Please use a different number or regenerate a new one.", "error", shopId)
@@ -308,7 +308,7 @@ export default function CreateRecordForm({ shopId, isLimitReached, setIsLimitRea
       }
 
       // Success - show notification
-      logSuccess("Record created successfully!", shopId);
+      logSuccess(formData.existingCustomerId ? "Mobiles added to existing record!" : "Record created successfully!", shopId);
 
       // Reset state
       setIsTableVisible(false);

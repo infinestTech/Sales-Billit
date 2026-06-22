@@ -1,5 +1,4 @@
 
-
 const { Customer, Mobile, Shop } = require("../../models/mongoModels");
 const moment = require("moment-timezone");
 
@@ -16,11 +15,14 @@ const createCustomerController = async (req, res) => {
       balanceAmount,
       MobileName,
       technicianname,
-      userId // shop_id
+      technician,
+      userId, // shop_id
+      existingCustomerId, // if set, append mobiles to existing customer (no new record)
     } = req.body;
 
+    const techName = technician || technicianname || "";
 
-    if (!clientName || !mobileNumber || !customerType || !MobileName || !userId) {
+    if (!MobileName || !userId) {
       return res.status(400).json({ error: "Missing required fields." });
     }
 
@@ -30,20 +32,55 @@ const createCustomerController = async (req, res) => {
       return res.status(400).json({ error: `Row ${invalidMobile + 1}: Mobile Name is required.` })
     }
 
+    // --- APPEND TO EXISTING CUSTOMER -----------------------------------------
+    if (existingCustomerId) {
+      const existing = await Customer.findOne({ _id: existingCustomerId, shop_id: userId });
+      if (!existing) {
+        return res.status(404).json({ error: "Existing customer not found." });
+      }
+
+      const appendPromises = MobileName.map((mobile) => {
+        const istDate = moment.tz(mobile.date, "Asia/Kolkata").startOf("day").toDate();
+        return Mobile.create({
+          shop_id: userId,
+          customer_id: existing._id,
+          mobile_name: mobile.mobileName,
+          model: mobile.model || "",
+          imei: mobile.imei || "",
+          issue: mobile.issues || null,
+          added_date: istDate,
+          technician_name: techName,
+        });
+      });
+
+      await Promise.all(appendPromises);
+
+      existing.no_of_mobile = (existing.no_of_mobile || 0) + MobileName.length;
+      await existing.save();
+
+      return res.status(200).json({
+        message: "Mobiles added to existing customer successfully.",
+        customer: existing,
+        appended: true,
+      });
+    }
+
+    // --- CREATE NEW CUSTOMER --------------------------------------------------
+    if (!clientName || !mobileNumber || !customerType) {
+      return res.status(400).json({ error: "Missing required fields." });
+    }
 
     const shop = await Shop.findById(userId);
     if (!shop) {
       return res.status(404).json({ error: "Shop not found." });
     }
 
-
-    // 🚩 Enforce record limit check
+    // Enforce record limit check
     if (shop.record_limit && shop.record_count >= shop.record_limit) {
       return res.status(403).json({
         error: "You have reached your plan's record limit. Please upgrade your plan to add more records."
       });
     }
-
 
     const customer = await Customer.create({
       shop_id: userId,
@@ -55,12 +92,8 @@ const createCustomerController = async (req, res) => {
       balance_amount: balanceAmount || 0,
     });
 
-
-    // Create related mobile records
     const mobilePromises = MobileName.map((mobile) => {
       const istDate = moment.tz(mobile.date, "Asia/Kolkata").startOf("day").toDate();
-
-
       return Mobile.create({
         shop_id: userId,
         customer_id: customer._id,
@@ -69,33 +102,26 @@ const createCustomerController = async (req, res) => {
         imei: mobile.imei || "",
         issue: mobile.issues || null,
         added_date: istDate,
-        technician_name: technicianname || ""
+        technician_name: techName,
       });
     });
 
-
     await Promise.all(mobilePromises);
 
-
-    // 🚩 Increment record_count
+    // Increment record_count
     shop.record_count += 1;
     await shop.save();
-
 
     return res.status(201).json({
       message: "Customer and associated mobiles created successfully.",
       customer,
     });
 
-
   } catch (error) {
-    console.error("❌ Error creating customer:", error);
+    console.error("Error creating customer:", error);
     return res.status(500).json({ error: error.message || "Internal server error" });
   }
 };
 
 
 module.exports = { createCustomerController };
-
-
-

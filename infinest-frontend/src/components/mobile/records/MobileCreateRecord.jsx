@@ -140,14 +140,17 @@ export default function MobileCreateRecord({
 
   const handlePhoneChange = (value) => {
     setSelectedExistingCustomer(null)
-    setFormData((p) => ({ ...p, mobileNumber: value }))
+    setFormData((p) => {
+      const { existingCustomerId: _dropped, ...rest } = p
+      return { ...rest, mobileNumber: value }
+    })
     clearTimeout(mobileSearchDebounce.current)
     mobileSearchDebounce.current = setTimeout(() => searchExistingCustomers(value), 400)
   }
 
   const handleSelectExistingCustomer = (c) => {
     setSelectedExistingCustomer(c)
-    setFormData((p) => ({ ...p, clientName: c.clientName, mobileNumber: c.mobileNumber }))
+    setFormData((p) => ({ ...p, clientName: c.clientName, mobileNumber: c.mobileNumber, existingCustomerId: c.id }))
     setShowCustomerPicker(false)
   }
 
@@ -244,8 +247,8 @@ export default function MobileCreateRecord({
   // Validation
   const validationError = useMemo(() => {
     if (isLimitReached) return "Plan record-limit reached. Upgrade to create more records."
-    if (!formData.billNo?.trim()) return "Bill number is required."
-    if (billDuplicate) return "This bill number already exists."
+    if (!formData.existingCustomerId && !formData.billNo?.trim()) return "Bill number is required."
+    if (!formData.existingCustomerId && billDuplicate) return "This bill number already exists."
     if (customerType === "Customer") {
       if (!formData.clientName.trim()) return "Customer name is required."
       if (!formData.mobileNumber.trim()) return "Mobile number is required."
@@ -295,11 +298,12 @@ export default function MobileCreateRecord({
             mobileNumber: formData.mobileNumber.trim(),
             customerType: "Customer",
             noOfMobile: rows.length,
-            billNo: formData.billNo.trim(),
+            billNo: formData.billNo?.trim() || undefined,
             balanceAmount: 0,
             MobileName: mobileNamePayload,
             userId: shopId,
             technician: formData.technician?.trim() || undefined,
+            existingCustomerId: formData.existingCustomerId || undefined,
           },
           { headers }
         )
@@ -684,7 +688,10 @@ export default function MobileCreateRecord({
             onClick={() => {
               setSelectedExistingCustomer(null)
               setShowCustomerPicker(false)
-              setFormData((p) => ({ ...p, clientName: "" }))
+              setFormData((p) => {
+                const { existingCustomerId: _dropped, ...rest } = p
+                return { ...rest, clientName: "" }
+              })
             }}
             className="flex w-full items-center gap-2 rounded-xl border border-green-200 bg-green-50 px-3 py-3 text-left text-green-700 active:bg-green-100"
           >
