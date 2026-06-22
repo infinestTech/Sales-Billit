@@ -106,11 +106,11 @@ const MobileNameTable = ({ mobileData, setMobileData, onRevenueUpdate, hideActio
 
     // Block marking as Delivered until a paid amount has been entered
     if (field === "delivered" && !mobile.delivered) {
-      const paid = Number(mobile.paid_amount) || 0
+      const paid = Number(mobile.total_paid) || Number(mobile.paid_amount) || 0
       if (paid <= 0) {
-        if (typeof window !== "undefined") {
-          window.alert("Please enter the Paid Amount before marking this device as Delivered.")
-        }
+        window.dispatchEvent(new CustomEvent("show-notification-toast", {
+          detail: { message: "Please enter the Paid Amount before marking this device as Delivered.", type: "error" }
+        }))
         return
       }
     }
