@@ -493,6 +493,167 @@ const PrintableThermalReceipt = React.forwardRef(({ clientData, shopPhoneNumber,
 });
 PrintableThermalReceipt.displayName = "PrintableThermalReceipt";
 
+// ─── A4 Receipt (210mm × 297mm portrait) ─────────────────────────────────────
+const A4Receipt = ({ clientData, mobiles, shopPhoneNumber, shopAddress, shopEmail, shopName, profilePhoto }) => {
+  const totalPaid = mobiles.reduce((sum, m) => {
+    const paid = m.total_paid || (m.payments && m.payments.length > 0 ? m.payments.reduce((s, p) => s + (p.amount || 0), 0) : 0) || m.paid_amount || 0;
+    return sum + paid;
+  }, 0);
+  const cell = { border: '1px solid #555', padding: '5px 7px', fontSize: '10px' };
+  return (
+    <div
+      className="a4-receipt-root"
+      style={{
+        width: '210mm',
+        minHeight: '297mm',
+        fontFamily: 'Arial, Helvetica, sans-serif',
+        color: '#111',
+        padding: '12mm 14mm',
+        boxSizing: 'border-box',
+        background: '#fff',
+      }}
+    >
+      {/* Header */}
+      <div style={{ display: 'flex', alignItems: 'center', borderBottom: '3px solid #222', paddingBottom: '10px', marginBottom: '10px' }}>
+        <div style={{ width: '70px', height: '70px', flexShrink: 0, marginRight: '14px', border: '1px solid #ccc', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#f7f7f7' }}>
+          {profilePhoto ? (
+            <img src={profilePhoto} alt="Logo" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+          ) : (
+            <span style={{ fontSize: '9px', color: '#999', textAlign: 'center' }}>LOGO</span>
+          )}
+        </div>
+        <div style={{ flex: 1, textAlign: 'center' }}>
+          <div style={{ fontSize: '22px', fontWeight: 'bold', textTransform: 'uppercase', color: '#8B4513', letterSpacing: '1px' }}>
+            {shopName || clientData.owner_name || 'MOBILE SERVICE CENTER'}
+          </div>
+          <div style={{ fontSize: '11px', color: '#555', marginTop: '3px' }}>{shopAddress || 'Address Not Provided'}</div>
+          <div style={{ fontSize: '11px', color: '#555' }}>
+            Ph: {shopPhoneNumber || 'N/A'}
+            {shopEmail && shopEmail.trim() !== '' && shopEmail !== 'N/A' ? `  |  Email: ${shopEmail}` : ''}
+          </div>
+        </div>
+      </div>
+
+      {/* Title bar */}
+      <div style={{ background: '#222', color: '#fff', textAlign: 'center', padding: '5px', fontSize: '13px', fontWeight: 'bold', letterSpacing: '3px', marginBottom: '12px' }}>
+        SERVICE RECEIPT / JOB CARD
+      </div>
+
+      {/* Bill info row */}
+      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '12px', fontSize: '11px', gap: '20px' }}>
+        <div style={{ flex: 1 }}>
+          <div style={{ marginBottom: '4px' }}><strong>Customer Name :</strong>&nbsp;{clientData.client_name || ''}</div>
+          <div><strong>Phone / Mobile :</strong>&nbsp;{clientData.mobile_number || ''}</div>
+        </div>
+        <div style={{ flexShrink: 0, border: '1px solid #999', padding: '6px 14px', borderRadius: '4px', background: '#f9f9f9', textAlign: 'right' }}>
+          <div style={{ fontWeight: 'bold', fontSize: '13px', color: '#8B4513' }}>Bill No: {clientData.bill_no || 'N/A'}</div>
+          <div style={{ color: '#555', marginTop: '2px' }}>Date: {new Date().toLocaleDateString('en-IN')}</div>
+        </div>
+      </div>
+
+      {/* Devices table */}
+      <table style={{ width: '100%', borderCollapse: 'collapse', marginBottom: '12px' }}>
+        <thead>
+          <tr style={{ background: '#f0f0f0' }}>
+            <th style={{ ...cell, textAlign: 'center', width: '28px' }}>#</th>
+            <th style={cell}>Mobile Make</th>
+            <th style={cell}>Model</th>
+            <th style={cell}>IMEI No.</th>
+            <th style={cell}>Complaint / Issue</th>
+            <th style={{ ...cell, whiteSpace: 'nowrap' }}>Date Added</th>
+            <th style={{ ...cell, whiteSpace: 'nowrap' }}>Delivery Date</th>
+            <th style={{ ...cell, textAlign: 'right', whiteSpace: 'nowrap' }}>Amount (₹)</th>
+          </tr>
+        </thead>
+        <tbody>
+          {mobiles.map((mobile, idx) => {
+            const paid = mobile.total_paid || (mobile.payments && mobile.payments.length > 0 ? mobile.payments.reduce((s, p) => s + (p.amount || 0), 0) : 0) || mobile.paid_amount || 0;
+            return (
+              <tr key={mobile._id || idx} style={{ background: idx % 2 === 0 ? '#fff' : '#fafafa' }}>
+                <td style={{ ...cell, textAlign: 'center' }}>{idx + 1}</td>
+                <td style={cell}>{mobile.mobile_name || '-'}</td>
+                <td style={cell}>{mobile.model || '-'}</td>
+                <td style={cell}>{mobile.imei || '-'}</td>
+                <td style={cell}>{mobile.issue || '-'}</td>
+                <td style={cell}>{mobile.added_date ? new Date(mobile.added_date).toLocaleDateString('en-IN') : '-'}</td>
+                <td style={cell}>{mobile.delivery_date ? new Date(mobile.delivery_date).toLocaleDateString('en-IN') : '-'}</td>
+                <td style={{ ...cell, textAlign: 'right' }}>₹{paid}</td>
+              </tr>
+            );
+          })}
+          <tr style={{ background: '#f0f0f0', fontWeight: 'bold' }}>
+            <td colSpan={7} style={{ ...cell, textAlign: 'right', borderTop: '2px solid #333' }}>Total Amount</td>
+            <td style={{ ...cell, textAlign: 'right', borderTop: '2px solid #333' }}>₹{totalPaid}</td>
+          </tr>
+        </tbody>
+      </table>
+
+      {/* Accessories & Notes */}
+      <div style={{ display: 'flex', gap: '12px', marginBottom: '14px', fontSize: '10px' }}>
+        <div style={{ flex: 1, border: '1px solid #ccc', padding: '7px', borderRadius: '3px' }}>
+          <div style={{ fontWeight: 'bold', marginBottom: '5px', fontSize: '11px' }}>ACCESSORIES RECEIVED</div>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px 18px' }}>
+            {['Battery', 'Back Door', 'Sim Card', 'Memory Card', 'Head Set', 'Charger', 'Bluetooth', 'Others'].map((item) => (
+              <label key={item} style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                <input type="checkbox" disabled style={{ width: '11px', height: '11px' }} />
+                <span>{item}</span>
+              </label>
+            ))}
+          </div>
+          <div style={{ marginTop: '6px' }}>
+            <strong>Flashing:</strong>&nbsp;<span style={{ color: '#777' }}>Backup — Yes &nbsp;/&nbsp; No</span>
+          </div>
+        </div>
+        <div style={{ flex: 1, border: '1px solid #ccc', padding: '7px', borderRadius: '3px' }}>
+          <div style={{ fontWeight: 'bold', marginBottom: '5px', fontSize: '11px' }}>REMARKS / NOTES</div>
+          <div style={{ borderBottom: '1px dashed #bbb', minHeight: '22px', marginBottom: '6px' }} />
+          <div style={{ borderBottom: '1px dashed #bbb', minHeight: '22px', marginBottom: '6px' }} />
+          <div style={{ borderBottom: '1px dashed #bbb', minHeight: '22px' }} />
+        </div>
+      </div>
+
+      {/* Terms */}
+      <div style={{ fontSize: '9px', color: '#666', borderTop: '1px solid #ddd', paddingTop: '6px', marginBottom: '20px', lineHeight: '1.6' }}>
+        <strong style={{ color: '#333' }}>Terms &amp; Conditions: </strong>
+        1. No guarantee for liquid / water damage. &nbsp;
+        2. Collect your device within 30 days of completion. &nbsp;
+        3. We are not responsible for any data loss. &nbsp;
+        4. Advance payment required before ordering parts.
+      </div>
+
+      {/* Signatures */}
+      <div style={{ display: 'flex', justifyContent: 'space-between', paddingTop: '10px' }}>
+        <div style={{ textAlign: 'center', minWidth: '140px' }}>
+          <div style={{ borderTop: '1px solid #333', paddingTop: '4px', fontSize: '10px' }}>Authorised Signature</div>
+          <div style={{ fontSize: '9px', color: '#777', marginTop: '2px' }}>{shopName || clientData.owner_name || 'MOBILE SERVICE'}</div>
+        </div>
+        <div style={{ textAlign: 'center', minWidth: '140px' }}>
+          <div style={{ borderTop: '1px solid #333', paddingTop: '4px', fontSize: '10px' }}>Customer Signature</div>
+          <div style={{ fontSize: '9px', color: '#777', marginTop: '2px' }}>{clientData.client_name || ''}</div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+const PrintableA4Receipt = React.forwardRef(({ clientData, shopPhoneNumber, shopAddress, shopEmail, shopName, profilePhoto }, ref) => {
+  const mobiles = clientData.MobileName || [];
+  return (
+    <div ref={ref}>
+      <A4Receipt
+        clientData={clientData}
+        mobiles={mobiles}
+        shopPhoneNumber={shopPhoneNumber}
+        shopAddress={shopAddress}
+        shopEmail={shopEmail}
+        shopName={shopName}
+        profilePhoto={profilePhoto}
+      />
+    </div>
+  );
+});
+PrintableA4Receipt.displayName = 'PrintableA4Receipt';
+
 // PDF Generation: single-mobile uses original job card layout, multi-mobile uses table layout on one page
 const generateEnhancedPDF = (clientData, shopPhoneNumber, shopAddress, shopEmail, shopName, profilePhoto) => {
   const doc = new jsPDF({
@@ -764,6 +925,7 @@ const generateEnhancedPDF = (clientData, shopPhoneNumber, shopAddress, shopEmail
 const ReceiptGenerator = ({ clientData, shopPhoneNumber, closeModal, shopAddress }) => {
   const receiptRef = useRef(null);
   const thermalRef = useRef(null);
+  const a4Ref = useRef(null);
   const [previewURL, setPreviewURL] = useState(null);
   const [showPreviewModal, setShowPreviewModal] = useState(false);
   const [shopEmail, setShopEmail] = useState(null);
@@ -878,6 +1040,16 @@ const ReceiptGenerator = ({ clientData, shopPhoneNumber, closeModal, shopAddress
     }
   });
 
+  const handleA4Print = useReactToPrint({
+    contentRef: a4Ref,
+    documentTitle: `A4-Receipt-${clientData.bill_no || 'Service'}`,
+    pageStyle: `
+      @page { size: A4 portrait; margin: 0; }
+      body { -webkit-print-color-adjust: exact; print-color-adjust: exact; margin: 0; }
+      .a4-receipt-root { width: 210mm; min-height: 297mm; margin: 0 auto; }
+    `,
+  });
+
   // Manual print fallback: serialize the receipt node into a new window and print it
   const printManual = () => {
     try {
@@ -934,6 +1106,18 @@ const ReceiptGenerator = ({ clientData, shopPhoneNumber, closeModal, shopAddress
       console.warn('Print requested but receipt element did not mount in time. Please try again.');
     };
 
+    attemptPrint();
+  };
+
+  const handleA4PrintIfReady = () => {
+    const maxAttempts = 12;
+    let attempts = 0;
+    const attemptPrint = () => {
+      attempts += 1;
+      if (a4Ref && a4Ref.current) { handleA4Print(); return; }
+      if (attempts < maxAttempts) { setTimeout(attemptPrint, 100); return; }
+      console.warn('A4 print: element did not mount in time.');
+    };
     attemptPrint();
   };
 
@@ -1201,6 +1385,19 @@ const ReceiptGenerator = ({ clientData, shopPhoneNumber, closeModal, shopAddress
                     shopName={shopName}
                   />
                 </div>
+
+                {/* Hidden A4 receipt for printing (off-screen) */}
+                <div style={{ position: 'absolute', left: '-9999px', top: 0 }}>
+                  <PrintableA4Receipt
+                    ref={a4Ref}
+                    clientData={filteredClientData}
+                    shopPhoneNumber={profilePhoneNumber || shopPhoneNumber}
+                    shopAddress={profileAddress || shopAddress}
+                    shopEmail={shopEmail}
+                    shopName={shopName}
+                    profilePhoto={profilePhoto}
+                  />
+                </div>
               </div>
 
               {/* Action Buttons */}
@@ -1208,9 +1405,19 @@ const ReceiptGenerator = ({ clientData, shopPhoneNumber, closeModal, shopAddress
                 <button 
                   onClick={printIfReady} 
                   className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-lg flex items-center gap-2 transition-all duration-200 shadow-md hover:shadow-lg"
+                  title="Print A5 landscape job card"
                 >
                   <IoMdPrint size={20} />
                   <span className="font-medium">Print</span>
+                </button>
+
+                <button 
+                  onClick={handleA4PrintIfReady} 
+                  className="bg-teal-600 hover:bg-teal-700 text-white px-6 py-3 rounded-lg flex items-center gap-2 transition-all duration-200 shadow-md hover:shadow-lg"
+                  title="Print full A4 service receipt"
+                >
+                  <IoMdPrint size={20} />
+                  <span className="font-medium">A4 Print</span>
                 </button>
 
                 <button 
