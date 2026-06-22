@@ -73,6 +73,18 @@ const shopSchema = new mongoose.Schema({
     // Fixed lunch duration in minutes; punches inside this window after LUNCH_OUT are ignored.
     lunch_break_minutes: { type: Number, default: 30 }
   },
+  // WhatsApp / MSG91 messaging config. Master `enabled` plus per-event toggles.
+  whatsapp: {
+    enabled: { type: Boolean, default: false },
+    events: {
+      record_created: { type: Boolean, default: true },
+      mobiles_appended: { type: Boolean, default: true },
+      mobile_ready: { type: Boolean, default: true },
+      mobile_delivered: { type: Boolean, default: true },
+      mobile_returned: { type: Boolean, default: false },
+      balance_reminder: { type: Boolean, default: true }
+    }
+  },
   created_at: { type: Date, default: Date.now }
 });
 
@@ -86,6 +98,7 @@ const dealerSchema = new mongoose.Schema({
   bill_no: { type: String },
   customer_type: { type: String, default: "Dealer" },
   balance_amount: { type: Number, default: 0 },
+  estimated_cost: { type: Number, default: 0 },
   no_of_mobile: { type: Number, default: 0 },
   vendors: [{
     vendor_name: { type: String, required: true },
@@ -119,6 +132,7 @@ const customerSchema = new mongoose.Schema({
   customer_type: { type: String, default: "Customer" },
   no_of_mobile: { type: Number, default: 0 },
   balance_amount: { type: Number, default: 0 },
+  estimated_cost: { type: Number, default: 0 },
   created_at: { type: Date, default: Date.now }
 });
 
@@ -620,9 +634,26 @@ const HrPunch = mongoose.model("HrPunch", hrPunchSchema);
 const HrDailyAttendance = mongoose.model("HrDailyAttendance", hrDailyAttendanceSchema);
 const HrSalaryRecord = mongoose.model("HrSalaryRecord", hrSalaryRecordSchema);
 
+// ==============================
+// 💬 WhatsApp send log
+// ==============================
+const whatsAppLogSchema = new mongoose.Schema({
+  shop_id: { type: mongoose.Schema.Types.ObjectId, ref: "Shop", index: true },
+  event: { type: String, required: true, index: true },
+  to: { type: String, required: true },
+  template: { type: String },
+  vars: { type: mongoose.Schema.Types.Mixed },
+  status: { type: String, enum: ["sent", "skipped", "error"], default: "sent" },
+  message_id: { type: String },
+  error: { type: String },
+  created_at: { type: Date, default: Date.now, index: { expires: '30d' } }
+});
+const WhatsAppLog = mongoose.model("WhatsAppLog", whatsAppLogSchema);
+
 module.exports = {
   Role, User, Manager, Branch, Shop, Dealer, Customer, Notification, Mobile, Technician,
   PlanCategory, Plan, DailySummary, Expense, ProductHistory, Product,
   MobileBrand, MobileIssue, AdminSale, SupplierHistory, Employee, Attendance, ShopAdmin, Supplier,
-  EsslDevice, EsslPunchLog, HrPunch, HrDailyAttendance, HrSalaryRecord
+  EsslDevice, EsslPunchLog, HrPunch, HrDailyAttendance, HrSalaryRecord,
+  WhatsAppLog
 };

@@ -170,7 +170,8 @@ export default function AdminDashboard() {
               { id: 'subscriptions', label: 'Subscriptions', icon: '📝' },
               { id: 'payments', label: 'Payments', icon: '💰' },
               { id: 'analytics', label: 'Analytics', icon: '📈' },
-              { id: 'shop-admins', label: 'Shop Admins', icon: '🏪' }
+              { id: 'shop-admins', label: 'Shop Admins', icon: '🏪' },
+              { id: 'whatsapp', label: 'WhatsApp', icon: '💬' }
             ].map(tab => (
               <button
                 key={tab.id}
@@ -207,6 +208,7 @@ export default function AdminDashboard() {
         {activeTab === 'payments' && <PaymentsTab payments={payments} />}
         {activeTab === 'analytics' && <AnalyticsTab userAnalytics={userAnalytics} overallAnalytics={overallAnalytics} />}
         {activeTab === 'shop-admins' && <ShopAdminsTab getAuthHeaders={getAuthHeaders} adminEmail={adminEmail} />}
+        {activeTab === 'whatsapp' && <WhatsAppTab getAuthHeaders={getAuthHeaders} />}
       </div>
 
       {/* User Details Modal */}
@@ -1524,6 +1526,201 @@ function ShopAdminsTab({ getAuthHeaders, adminEmail }) {
               </div>
             </form>
           </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// =====================================================
+// WhatsApp / MSG91 settings tab
+// =====================================================
+const WA_EVENT_LABELS = {
+  record_created: 'Record created',
+  mobiles_appended: 'Mobiles appended to existing record',
+  mobile_ready: 'Mobile ready for pickup',
+  mobile_delivered: 'Mobile delivered (billing)',
+  mobile_returned: 'Mobile returned',
+  balance_reminder: 'Balance reminder (manual)',
+};
+
+function WhatsAppTab({ getAuthHeaders }) {
+  const [shops, setShops] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [search, setSearch] = useState('');
+  const [savingId, setSavingId] = useState(null);
+  const [error, setError] = useState('');
+
+  const API_URL = process.env.NEXT_PUBLIC_API_URL_AUTH || 'http://localhost:7000';
+
+  const fetchShops = async () => {
+    setLoading(true);
+    setError('');
+    try {
+      const resp = await axios.get(`${API_URL}/admin/shops/whatsapp`, getAuthHeaders());
+      setShops(resp.data.shops || []);
+    } catch (e) {
+      setError(e.response?.data?.message || e.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => { fetchShops(); }, []);
+
+  const patchShop = async (shopId, body, optimistic) => {
+    setSavingId(shopId);
+    const prev = shops;
+    if (optimistic) setShops(optimistic);
+    try {
+      await axios.patch(
+        `${API_URL}/admin/shops/${shopId}/whatsapp`,
+        body,
+        getAuthHeaders()
+      );
+    } catch (e) {
+      setError(e.response?.data?.message || e.message);
+      setShops(prev);
+    } finally {
+      setSavingId(null);
+    }
+  };
+
+  const toggleMaster = (shop) => {
+    const next = !shop.whatsapp.enabled;
+    const optimistic = shops.map((s) =>
+      s._id === shop._id ? { ...s, whatsapp: { ...s.whatsapp, enabled: next } } : s
+    );
+    patchShop(shop._id, { enabled: next }, optimistic);
+  };
+
+  const toggleEvent = (shop, eventKey) => {
+    const next = !shop.whatsapp.events[eventKey];
+    const optimistic = shops.map((s) =>
+      s._id === shop._id
+        ? {
+            ...s,
+            whatsapp: {
+              ...s.whatsapp,
+              events: { ...s.whatsapp.events, [eventKey]: next },
+            },
+          }
+        : s
+    );
+    patchShop(shop._id, { events: { [eventKey]: next } }, optimistic);
+  };
+
+  const filtered = shops.filter((s) => {
+    const q = search.trim().toLowerCase();
+    if (!q) return true;
+    return (
+      (s.shop_name || '').toLowerCase().includes(q) ||
+      (s.owner_name || '').toLowerCase().includes(q) ||
+      (s.phone || '').toLowerCase().includes(q) ||
+      (s.email || '').toLowerCase().includes(q)
+    );
+  });
+
+  return (
+    <div className="bg-gray-800 rounded-xl p-6">
+      <div className="flex items-center justify-between mb-6 gap-4 flex-wrap">
+        <div>
+          <h2 className="text-2xl font-bold text-white">WhatsApp Automation</h2>
+          <p className="text-gray-400 text-sm mt-1">
+            Per-shop MSG91 WhatsApp messaging. Enable the master switch, then pick which events trigger automatic messages.
+          </p>
+        </div>
+        <input
+          type="text"
+          placeholder="Search shop / owner / phone…"
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          className="px-4 py-2 bg-gray-700 text-white rounded-lg border border-gray-600 focus:outline-none focus:border-purple-500 min-w-[260px]"
+        />
+      </div>
+
+      {error && (
+        <div className="mb-4 px-4 py-2 rounded bg-red-900/40 border border-red-700 text-red-200 text-sm">
+          {error}
+        </div>
+      )}
+
+      {loading ? (
+        <div className="text-gray-400 py-10 text-center">Loading shops…</div>
+      ) : filtered.length === 0 ? (
+        <div className="text-gray-400 py-10 text-center">No shops found.</div>
+      ) : (
+        <div className="space-y-4">
+          {filtered.map((shop) => {
+            const wa = shop.whatsapp || { enabled: false, events: {} };
+            const isSaving = savingId === shop._id;
+            return (
+              <div
+                key={shop._id}
+                className={`rounded-xl border ${
+                  wa.enabled
+                    ? 'border-green-700 bg-green-900/10'
+                    : 'border-gray-700 bg-gray-900/40'
+                } p-5`}
+              >
+                <div className="flex items-start justify-between gap-4 flex-wrap">
+                  <div>
+                    <div className="text-white text-lg font-semibold">
+                      {shop.shop_name || '(unnamed shop)'}
+                    </div>
+                    <div className="text-gray-400 text-sm mt-1 space-x-3">
+                      {shop.owner_name && <span>👤 {shop.owner_name}</span>}
+                      {shop.phone && <span>📞 {shop.phone}</span>}
+                      {shop.email && <span>✉️ {shop.email}</span>}
+                    </div>
+                  </div>
+                  <label className="flex items-center gap-3 cursor-pointer select-none">
+                    <span className={`text-sm font-medium ${wa.enabled ? 'text-green-400' : 'text-gray-400'}`}>
+                      {wa.enabled ? 'WhatsApp ON' : 'WhatsApp OFF'}
+                    </span>
+                    <span className="relative inline-flex h-6 w-12 items-center">
+                      <input
+                        type="checkbox"
+                        checked={wa.enabled}
+                        onChange={() => toggleMaster(shop)}
+                        disabled={isSaving}
+                        className="peer sr-only"
+                      />
+                      <span className="absolute inset-0 rounded-full bg-gray-600 transition peer-checked:bg-green-500"></span>
+                      <span className="absolute left-1 h-4 w-4 rounded-full bg-white transition peer-checked:translate-x-6"></span>
+                    </span>
+                  </label>
+                </div>
+
+                <div className={`mt-4 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 ${!wa.enabled ? 'opacity-50 pointer-events-none' : ''}`}>
+                  {Object.entries(WA_EVENT_LABELS).map(([key, label]) => {
+                    const on = !!wa.events?.[key];
+                    return (
+                      <label
+                        key={key}
+                        className={`flex items-center justify-between gap-3 px-3 py-2 rounded-lg border cursor-pointer ${
+                          on ? 'border-green-700 bg-green-900/20' : 'border-gray-700 bg-gray-800/60'
+                        }`}
+                      >
+                        <span className="text-sm text-gray-200">{label}</span>
+                        <span className="relative inline-flex h-5 w-10 items-center">
+                          <input
+                            type="checkbox"
+                            checked={on}
+                            onChange={() => toggleEvent(shop, key)}
+                            disabled={isSaving || !wa.enabled}
+                            className="peer sr-only"
+                          />
+                          <span className="absolute inset-0 rounded-full bg-gray-600 transition peer-checked:bg-green-500"></span>
+                          <span className="absolute left-0.5 h-4 w-4 rounded-full bg-white transition peer-checked:translate-x-5"></span>
+                        </span>
+                      </label>
+                    );
+                  })}
+                </div>
+              </div>
+            );
+          })}
         </div>
       )}
     </div>

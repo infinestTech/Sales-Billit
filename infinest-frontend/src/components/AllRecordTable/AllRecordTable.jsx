@@ -22,6 +22,8 @@ import {
   TrendingUp,
   TrendingDown,
   Package,
+  Calculator,
+  MessageCircle,
 } from "lucide-react"
 
 
@@ -216,6 +218,49 @@ const [shopAddressState, setShopAddressState] = useState("")
     }
   }
 
+  const updateEstimatedCost = async (id, estimatedCost, type) => {
+    try {
+      const token = localStorage.getItem("token")
+      const response = await api.post(
+        "/api/allUpdateEstimatedCost",
+        {
+          id,
+          estimatedCost,
+          type,
+        },
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        },
+      )
+      console.warn(response.data.message)
+    } catch (error) {
+      console.error("Error updating estimated cost:", error)
+    }
+  }
+
+  const sendBalanceReminder = async (id, type) => {
+    try {
+      const token = localStorage.getItem("token")
+      const response = await api.post(
+        "/api/sendBalanceReminder",
+        { id, type },
+        { headers: { Authorization: `Bearer ${token}` } },
+      )
+      const status = response?.data?.status
+      if (status === "sent") {
+        alert("✅ WhatsApp reminder sent.")
+      } else {
+        alert(`ℹ️ Reminder not sent: ${response?.data?.reason || response?.data?.message || "check WhatsApp settings"}`)
+      }
+    } catch (error) {
+      const msg = error.response?.data?.error || error.message
+      alert(`❌ Failed to send reminder: ${msg}`)
+      console.error("Error sending reminder:", error)
+    }
+  }
+
 
   const indexOfLastInvoice = currentPage * invoicesPerPage
   const indexOfFirstInvoice = indexOfLastInvoice - invoicesPerPage
@@ -363,6 +408,12 @@ const [shopAddressState, setShopAddressState] = useState("")
                     </th>
                     <th className="px-6 py-4 text-left text-sm font-bold text-gray-700 border-b border-gray-300">
                       <div className="flex items-center">
+                        <Calculator className="h-4 w-4 mr-2 text-emerald-600" />
+                        Estimated Cost
+                      </div>
+                    </th>
+                    <th className="px-6 py-4 text-left text-sm font-bold text-gray-700 border-b border-gray-300">
+                      <div className="flex items-center">
                         <DollarSign className="h-4 w-4 mr-2 text-red-600" />
                         Balance Amount
                       </div>
@@ -439,11 +490,35 @@ const [shopAddressState, setShopAddressState] = useState("")
                             })()}
                           </div>
                         </td>
-                        <td className="px-6 py-4 border-b border-gray-200">
+                        <td className="px-6 py-4 border-b border-gray-200" onClick={(e) => e.stopPropagation()}>
                           <input
                             type="number"
-                            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent transition-all duration-200"
-                            value={invoice.balance_amount || ""}
+                            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition-all duration-200"
+                            value={invoice.estimated_cost ?? ""}
+                            onChange={(e) => {
+                              const val = e.target.value
+                              if (/^\d{0,8}$/.test(val)) {
+                                const updated = [...filteredInvoices]
+                                updated[indexOfFirstInvoice + index].estimated_cost = val
+                                setFilteredInvoices(updated)
+                              }
+                            }}
+                            onBlur={(e) =>
+                              updateEstimatedCost(
+                                invoice._id,
+                                Number.parseInt(e.target.value, 10) || 0,
+                                invoice.customer_type || "Customer",
+                              )
+                            }
+                            onClick={(e) => e.stopPropagation()}
+                          />
+                        </td>
+                        <td className="px-6 py-4 border-b border-gray-200">
+                          <div className="flex items-center gap-2">
+                            <input
+                              type="number"
+                              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent transition-all duration-200"
+                              value={invoice.balance_amount || ""}
                             onChange={(e) => {
                               const val = e.target.value
                               if (/^\d{0,8}$/.test(val)) {
@@ -461,6 +536,20 @@ const [shopAddressState, setShopAddressState] = useState("")
                             }
                             onClick={(e) => e.stopPropagation()}
                           />
+                            {Number(invoice.balance_amount) > 0 && (
+                              <button
+                                type="button"
+                                title="Send WhatsApp balance reminder"
+                                onClick={(e) => {
+                                  e.stopPropagation()
+                                  sendBalanceReminder(invoice._id, invoice.customer_type || "Customer")
+                                }}
+                                className="shrink-0 inline-flex items-center justify-center w-9 h-9 rounded-lg bg-green-100 hover:bg-green-200 text-green-700 transition-colors"
+                              >
+                                <MessageCircle className="h-4 w-4" />
+                              </button>
+                            )}
+                          </div>
                         </td>
                         <td className="px-3 py-3 xl:px-6 xl:py-4 border-b border-gray-200 text-center">
                           <button
@@ -477,7 +566,7 @@ const [shopAddressState, setShopAddressState] = useState("")
                       </tr>
                       {expandedRow === index && (
                         <tr>
-                          <td colSpan="8" className="px-6 py-4 bg-gray-50/30">
+                          <td colSpan="9" className="px-6 py-4 bg-gray-50/30">
                             <div className="bg-white rounded-lg border border-gray-200 p-4">
                               <MobileNameTable
                                 mobileData={invoice.MobileName}

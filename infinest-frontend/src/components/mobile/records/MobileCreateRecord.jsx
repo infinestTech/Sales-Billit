@@ -300,6 +300,7 @@ export default function MobileCreateRecord({
             noOfMobile: rows.length,
             billNo: formData.billNo?.trim() || undefined,
             balanceAmount: 0,
+            estimatedCost: Number(formData.estimatedCost) || 0,
             MobileName: mobileNamePayload,
             userId: shopId,
             technician: formData.technician?.trim() || undefined,
@@ -623,6 +624,24 @@ export default function MobileCreateRecord({
             </p>
           )}
         </Field>
+        {isCustomer && (
+          <Field label="Estimated cost">
+            <input
+              type="number"
+              min={0}
+              placeholder="₹"
+              value={formData.estimatedCost ?? ""}
+              onChange={(e) =>
+                setFormData((p) => ({
+                  ...p,
+                  estimatedCost: e.target.value,
+                }))
+              }
+              disabled={isLimitReached}
+              className="input-base w-full"
+            />
+          </Field>
+        )}
       </Section>
 
       {/* Mobile entries */}

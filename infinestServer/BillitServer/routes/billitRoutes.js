@@ -85,6 +85,18 @@ const { allUpdateBalance } = require("../controllers/api/allUpdateBalanceControl
 router.post("/allUpdateBalance",authenticateToken, allUpdateBalance);
 
 
+const { allUpdateEstimatedCost } = require("../controllers/api/allUpdateEstimatedCostController");
+
+
+router.post("/allUpdateEstimatedCost", authenticateToken, allUpdateEstimatedCost);
+
+
+const { sendBalanceReminder } = require("../controllers/api/sendBalanceReminderController");
+
+
+router.post("/sendBalanceReminder", authenticateToken, sendBalanceReminder);
+
+
 const { getCustomerBalances } = require("../controllers/api/getCustomerBalancesController");
 
 
