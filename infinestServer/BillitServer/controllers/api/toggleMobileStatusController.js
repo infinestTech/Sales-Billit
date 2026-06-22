@@ -56,10 +56,16 @@ const toggleMobileStatus = async (req, res) => {
       }
     } else if (field === "delivered") {
       const newValue = !prev.delivered;
-      if (newValue && !(Number(mobile.paid_amount) > 0)) {
-        return res.status(400).json({
-          error: "Please enter a paid amount before marking this device as delivered.",
-        });
+      if (newValue) {
+        const paymentsSum = Array.isArray(mobile.payments)
+          ? mobile.payments.reduce((s, p) => s + (Number(p.amount) || 0), 0)
+          : 0;
+        const totalPaid = Number(mobile.total_paid) || paymentsSum || Number(mobile.paid_amount) || 0;
+        if (totalPaid <= 0) {
+          return res.status(400).json({
+            error: "Please enter a paid amount before marking this device as delivered.",
+          });
+        }
       }
       updateData.delivered = newValue;
       updateData.delivery_date = newValue ? new Date() : null;
