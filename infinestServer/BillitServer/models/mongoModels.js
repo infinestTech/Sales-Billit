@@ -76,6 +76,7 @@ const shopSchema = new mongoose.Schema({
   // WhatsApp / MSG91 messaging config. Master `enabled` plus per-event toggles.
   whatsapp: {
     enabled: { type: Boolean, default: false },
+    rate_per_message: { type: Number, default: 0.5 },
     events: {
       record_created: { type: Boolean, default: true },
       mobiles_appended: { type: Boolean, default: true },

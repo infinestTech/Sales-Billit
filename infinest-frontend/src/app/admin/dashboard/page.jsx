@@ -1553,6 +1553,15 @@ function WhatsAppTab({ getAuthHeaders }) {
   const [logsShop, setLogsShop] = useState(null);
   const [logs, setLogs] = useState([]);
   const [logsLoading, setLogsLoading] = useState(false);
+  const [invoiceShop, setInvoiceShop] = useState(null);
+  const [invoice, setInvoice] = useState(null);
+  const [invoiceLoading, setInvoiceLoading] = useState(false);
+  const today = new Date();
+  const firstOfMonth = new Date(today.getFullYear(), today.getMonth(), 1);
+  const toISO = (d) => d.toISOString().slice(0, 10);
+  const [invFrom, setInvFrom] = useState(toISO(firstOfMonth));
+  const [invTo, setInvTo] = useState(toISO(today));
+  const [rateDraft, setRateDraft] = useState({});
 
   const API_URL = process.env.NEXT_PUBLIC_API_URL_AUTH || 'http://localhost:7000';
 
@@ -1586,6 +1595,81 @@ function WhatsAppTab({ getAuthHeaders }) {
     } finally {
       setLogsLoading(false);
     }
+  };
+
+  const fetchInvoice = async (shop, from = invFrom, to = invTo) => {
+    setInvoiceLoading(true);
+    setInvoice(null);
+    try {
+      const resp = await axios.get(
+        `${API_URL}/admin/shops/${shop._id}/whatsapp/invoice`,
+        { ...getAuthHeaders(), params: { from, to } }
+      );
+      setInvoice(resp.data.invoice);
+    } catch (e) {
+      setError(e.response?.data?.message || e.message);
+    } finally {
+      setInvoiceLoading(false);
+    }
+  };
+
+  const openInvoice = (shop) => {
+    setInvoiceShop(shop);
+    fetchInvoice(shop, invFrom, invTo);
+  };
+
+  const saveRate = async (shop) => {
+    const draft = rateDraft[shop._id];
+    const next = Number(draft);
+    if (isNaN(next) || next < 0) return;
+    const optimistic = shops.map((s) =>
+      s._id === shop._id ? { ...s, whatsapp: { ...s.whatsapp, rate_per_message: next } } : s
+    );
+    await patchShop(shop._id, { rate_per_message: next }, optimistic);
+    setRateDraft((d) => { const c = { ...d }; delete c[shop._id]; return c; });
+  };
+
+  const downloadInvoicePDF = async () => {
+    if (!invoice) return;
+    const { default: jsPDF } = await import('jspdf');
+    const autoTableMod = await import('jspdf-autotable');
+    const autoTable = autoTableMod.default || autoTableMod.autoTable;
+    const doc = new jsPDF();
+    const fmt = (d) => new Date(d).toLocaleDateString('en-IN');
+    const money = (n) => `INR ${Number(n).toFixed(2)}`;
+
+    doc.setFontSize(18);
+    doc.text('WhatsApp Usage Invoice', 14, 18);
+    doc.setFontSize(10);
+    doc.text(`Generated: ${new Date(invoice.generated_at).toLocaleString('en-IN')}`, 14, 25);
+
+    doc.setFontSize(11);
+    doc.text(`Shop: ${invoice.shop.shop_name || '-'}`, 14, 36);
+    if (invoice.shop.owner_name) doc.text(`Owner: ${invoice.shop.owner_name}`, 14, 42);
+    if (invoice.shop.phone) doc.text(`Phone: ${invoice.shop.phone}`, 14, 48);
+    if (invoice.shop.email) doc.text(`Email: ${invoice.shop.email}`, 14, 54);
+
+    doc.text(`Period: ${fmt(invoice.period.from)}  to  ${fmt(invoice.period.to)}`, 120, 36);
+    doc.text(`Rate / message: ${money(invoice.rate_per_message)}`, 120, 42);
+
+    autoTable(doc, {
+      startY: 64,
+      head: [['Event', 'Messages Sent', 'Rate', 'Amount']],
+      body: invoice.items.length
+        ? invoice.items.map((i) => [i.event, i.count, money(i.rate), money(i.amount)])
+        : [['No messages sent in this period', '-', '-', '-']],
+      foot: [[
+        { content: 'Total', colSpan: 2, styles: { halign: 'right', fontStyle: 'bold' } },
+        { content: `${invoice.total_messages} msgs`, styles: { fontStyle: 'bold' } },
+        { content: money(invoice.total_amount), styles: { fontStyle: 'bold' } },
+      ]],
+      theme: 'striped',
+      headStyles: { fillColor: [37, 99, 235] },
+      footStyles: { fillColor: [243, 244, 246], textColor: 20 },
+    });
+
+    const filename = `whatsapp-invoice-${(invoice.shop.shop_name || 'shop').replace(/\s+/g, '_')}-${toISO(new Date(invoice.period.from))}_to_${toISO(new Date(invoice.period.to))}.pdf`;
+    doc.save(filename);
   };
 
   const patchShop = async (shopId, body, optimistic) => {
@@ -1697,6 +1781,13 @@ function WhatsAppTab({ getAuthHeaders }) {
                   <div className="flex items-center gap-3">
                     <button
                       type="button"
+                      onClick={() => openInvoice(shop)}
+                      className="px-3 py-1.5 text-xs rounded-lg bg-blue-700 hover:bg-blue-600 text-white border border-blue-600"
+                    >
+                      Invoice
+                    </button>
+                    <button
+                      type="button"
                       onClick={() => openLogs(shop)}
                       className="px-3 py-1.5 text-xs rounded-lg bg-gray-700 hover:bg-gray-600 text-gray-100 border border-gray-600"
                     >
@@ -1721,7 +1812,7 @@ function WhatsAppTab({ getAuthHeaders }) {
                   </div>
                 </div>
 
-                <div className="mt-3 flex flex-wrap gap-2 text-xs">
+                <div className="mt-3 flex flex-wrap items-center gap-2 text-xs">
                   <span className="px-2 py-1 rounded bg-green-900/30 border border-green-800 text-green-300">
                     Sent: <b>{shop.wa_stats?.sent || 0}</b>
                   </span>
@@ -1730,6 +1821,28 @@ function WhatsAppTab({ getAuthHeaders }) {
                   </span>
                   <span className="px-2 py-1 rounded bg-red-900/30 border border-red-800 text-red-300">
                     Errors: <b>{shop.wa_stats?.error || 0}</b>
+                  </span>
+                  <span className="ml-auto flex items-center gap-2 text-gray-300">
+                    <span className="text-gray-400">Rate / msg ₹</span>
+                    <input
+                      type="number"
+                      step="0.01"
+                      min="0"
+                      value={rateDraft[shop._id] ?? (shop.whatsapp?.rate_per_message ?? 0.5)}
+                      onChange={(e) => setRateDraft((d) => ({ ...d, [shop._id]: e.target.value }))}
+                      className="w-20 px-2 py-1 bg-gray-800 border border-gray-700 rounded text-white"
+                    />
+                    {rateDraft[shop._id] !== undefined &&
+                      Number(rateDraft[shop._id]) !== Number(shop.whatsapp?.rate_per_message ?? 0.5) && (
+                        <button
+                          type="button"
+                          onClick={() => saveRate(shop)}
+                          disabled={isSaving}
+                          className="px-2 py-1 rounded bg-green-700 hover:bg-green-600 text-white"
+                        >
+                          Save
+                        </button>
+                      )}
                   </span>
                 </div>
 
@@ -1835,6 +1948,127 @@ function WhatsAppTab({ getAuthHeaders }) {
                     ))}
                   </tbody>
                 </table>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {invoiceShop && (
+        <div
+          className="fixed inset-0 bg-black/70 z-50 flex items-center justify-center p-4"
+          onClick={() => { setInvoiceShop(null); setInvoice(null); }}
+        >
+          <div
+            className="bg-gray-900 border border-gray-700 rounded-xl max-w-3xl w-full max-h-[90vh] flex flex-col"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between px-5 py-3 border-b border-gray-700">
+              <div>
+                <div className="text-white font-semibold">
+                  WhatsApp Invoice · {invoiceShop.shop_name}
+                </div>
+                <div className="text-xs text-gray-400">
+                  Counts only messages with status = sent
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => { setInvoiceShop(null); setInvoice(null); }}
+                className="text-gray-400 hover:text-white text-xl px-2"
+              >
+                ×
+              </button>
+            </div>
+
+            <div className="px-5 py-3 border-b border-gray-700 flex flex-wrap items-end gap-3 text-sm">
+              <div>
+                <label className="block text-gray-400 text-xs mb-1">From</label>
+                <input
+                  type="date"
+                  value={invFrom}
+                  onChange={(e) => setInvFrom(e.target.value)}
+                  className="px-2 py-1 bg-gray-800 border border-gray-700 rounded text-white"
+                />
+              </div>
+              <div>
+                <label className="block text-gray-400 text-xs mb-1">To</label>
+                <input
+                  type="date"
+                  value={invTo}
+                  onChange={(e) => setInvTo(e.target.value)}
+                  className="px-2 py-1 bg-gray-800 border border-gray-700 rounded text-white"
+                />
+              </div>
+              <button
+                type="button"
+                onClick={() => fetchInvoice(invoiceShop, invFrom, invTo)}
+                disabled={invoiceLoading}
+                className="px-3 py-1.5 rounded-lg bg-purple-700 hover:bg-purple-600 text-white text-xs"
+              >
+                {invoiceLoading ? 'Loading…' : 'Generate'}
+              </button>
+              <button
+                type="button"
+                onClick={downloadInvoicePDF}
+                disabled={!invoice || invoiceLoading}
+                className="ml-auto px-3 py-1.5 rounded-lg bg-blue-700 hover:bg-blue-600 disabled:bg-gray-700 disabled:cursor-not-allowed text-white text-xs"
+              >
+                Download PDF
+              </button>
+            </div>
+
+            <div className="overflow-auto p-5 flex-1">
+              {invoiceLoading ? (
+                <div className="text-gray-400 text-center py-10">Loading…</div>
+              ) : !invoice ? (
+                <div className="text-gray-400 text-center py-10">Pick a date range and click Generate.</div>
+              ) : (
+                <div className="text-gray-200 text-sm space-y-4">
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <div className="text-gray-400 text-xs">Shop</div>
+                      <div>{invoice.shop.shop_name}</div>
+                      {invoice.shop.owner_name && <div className="text-gray-400 text-xs">{invoice.shop.owner_name}</div>}
+                      {invoice.shop.phone && <div className="text-gray-400 text-xs">{invoice.shop.phone}</div>}
+                    </div>
+                    <div className="text-right">
+                      <div className="text-gray-400 text-xs">Period</div>
+                      <div>{new Date(invoice.period.from).toLocaleDateString('en-IN')} → {new Date(invoice.period.to).toLocaleDateString('en-IN')}</div>
+                      <div className="text-gray-400 text-xs mt-1">Rate / msg: ₹{Number(invoice.rate_per_message).toFixed(2)}</div>
+                    </div>
+                  </div>
+
+                  <table className="w-full text-left">
+                    <thead className="text-xs uppercase text-gray-400 border-b border-gray-700">
+                      <tr>
+                        <th className="px-2 py-2">Event</th>
+                        <th className="px-2 py-2 text-right">Messages Sent</th>
+                        <th className="px-2 py-2 text-right">Rate</th>
+                        <th className="px-2 py-2 text-right">Amount</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {invoice.items.length === 0 ? (
+                        <tr><td colSpan={4} className="text-center text-gray-500 py-6">No messages sent in this period.</td></tr>
+                      ) : invoice.items.map((i) => (
+                        <tr key={i.event} className="border-b border-gray-800">
+                          <td className="px-2 py-2">{i.event}</td>
+                          <td className="px-2 py-2 text-right">{i.count}</td>
+                          <td className="px-2 py-2 text-right">₹{Number(i.rate).toFixed(2)}</td>
+                          <td className="px-2 py-2 text-right">₹{Number(i.amount).toFixed(2)}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                    <tfoot>
+                      <tr className="bg-gray-800/60 font-semibold">
+                        <td className="px-2 py-2 text-right" colSpan={2}>Total</td>
+                        <td className="px-2 py-2 text-right">{invoice.total_messages} msgs</td>
+                        <td className="px-2 py-2 text-right">₹{Number(invoice.total_amount).toFixed(2)}</td>
+                      </tr>
+                    </tfoot>
+                  </table>
+                </div>
               )}
             </div>
           </div>

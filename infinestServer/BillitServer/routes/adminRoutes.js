@@ -1,5 +1,6 @@
 const express = require('express');
 const router = express.Router();
+const mongoose = require('mongoose');
 const { blacklistUser } = require('../utils/tokenBlacklist');
 const {
     User,
@@ -677,6 +678,7 @@ router.get('/shops/whatsapp', internalAuth, async (req, res) => {
             mysql_user_id: s.mysql_user_id,
             whatsapp: {
                 enabled: !!s.whatsapp?.enabled,
+                rate_per_message: Number(s.whatsapp?.rate_per_message ?? 0.5),
                 events: { ...defaultEvents, ...(s.whatsapp?.events || {}) },
             },
             wa_stats: statsByShop[String(s._id)] || { sent: 0, skipped: 0, error: 0 },
@@ -694,16 +696,21 @@ router.get('/shops/whatsapp', internalAuth, async (req, res) => {
 router.patch('/shops/:shopId/whatsapp', internalAuth, async (req, res) => {
     try {
         const { shopId } = req.params;
-        const { enabled, events } = req.body || {};
+        const { enabled, events, rate_per_message } = req.body || {};
 
         const shop = await Shop.findById(shopId);
         if (!shop) return res.status(404).json({ message: 'Shop not found' });
 
         if (!shop.whatsapp) {
-            shop.whatsapp = { enabled: false, events: {} };
+            shop.whatsapp = { enabled: false, rate_per_message: 0.5, events: {} };
         }
         if (typeof enabled === 'boolean') {
             shop.whatsapp.enabled = enabled;
+        }
+        if (rate_per_message !== undefined && rate_per_message !== null && !isNaN(Number(rate_per_message))) {
+            const r = Number(rate_per_message);
+            if (r < 0) return res.status(400).json({ message: 'rate_per_message must be >= 0' });
+            shop.whatsapp.rate_per_message = r;
         }
         if (events && typeof events === 'object') {
             const allowed = [
@@ -755,6 +762,77 @@ router.get('/shops/:shopId/whatsapp/logs', internalAuth, async (req, res) => {
     } catch (error) {
         console.error('Fetch WA logs error:', error);
         res.status(500).json({ message: 'Failed to fetch WhatsApp logs', error: error.message });
+    }
+});
+
+// Generate WhatsApp invoice data for a shop (admin only).
+// Query: ?from=YYYY-MM-DD&to=YYYY-MM-DD  (both optional; default = current calendar month)
+// Returns: shop info, rate, breakdown by event, total messages, total amount
+router.get('/shops/:shopId/whatsapp/invoice', internalAuth, async (req, res) => {
+    try {
+        const { shopId } = req.params;
+        const shop = await Shop.findById(shopId).lean();
+        if (!shop) return res.status(404).json({ message: 'Shop not found' });
+
+        let { from, to } = req.query;
+        const now = new Date();
+        const fromDate = from
+            ? new Date(from)
+            : new Date(now.getFullYear(), now.getMonth(), 1);
+        const toDate = to
+            ? new Date(to)
+            : new Date(now.getFullYear(), now.getMonth() + 1, 1);
+        // Make `to` inclusive of the chosen day if user passed a plain date
+        if (to && /^\d{4}-\d{2}-\d{2}$/.test(to)) {
+            toDate.setHours(23, 59, 59, 999);
+        }
+
+        const rate = Number(shop.whatsapp?.rate_per_message ?? 0.5);
+
+        const breakdown = await WhatsAppLog.aggregate([
+            {
+                $match: {
+                    shop_id: new mongoose.Types.ObjectId(shopId),
+                    status: 'sent',
+                    created_at: { $gte: fromDate, $lte: toDate },
+                },
+            },
+            { $group: { _id: '$event', count: { $sum: 1 } } },
+            { $sort: { _id: 1 } },
+        ]);
+
+        const items = breakdown.map((b) => ({
+            event: b._id,
+            count: b.count,
+            rate,
+            amount: +(b.count * rate).toFixed(2),
+        }));
+        const totalMessages = items.reduce((s, i) => s + i.count, 0);
+        const totalAmount = +(totalMessages * rate).toFixed(2);
+
+        res.json({
+            success: true,
+            invoice: {
+                generated_at: new Date(),
+                period: { from: fromDate, to: toDate },
+                shop: {
+                    _id: shop._id,
+                    shop_name: shop.shop_name,
+                    owner_name: shop.owner_name,
+                    phone: shop.phone,
+                    email: shop.email,
+                    location: shop.location,
+                },
+                rate_per_message: rate,
+                items,
+                total_messages: totalMessages,
+                total_amount: totalAmount,
+                currency: 'INR',
+            },
+        });
+    } catch (error) {
+        console.error('WA invoice error:', error);
+        res.status(500).json({ message: 'Failed to generate invoice', error: error.message });
     }
 });
 
