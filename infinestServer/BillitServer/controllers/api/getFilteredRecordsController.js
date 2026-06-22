@@ -105,13 +105,13 @@ if (!shop) {
 
     // Fetch matching customers and dealers
     const customers = await Customer.find(customerFilters)
-      .select("client_name mobile_number bill_no balance_amount customer_type");
+      .select("client_name mobile_number bill_no balance_amount estimated_cost customer_type");
 
 
 
 
     const dealers = await Dealer.find(dealerFilters)
-      .select("client_name mobile_number bill_no balance_amount customer_type");
+      .select("client_name mobile_number bill_no balance_amount estimated_cost customer_type");
 
 
 

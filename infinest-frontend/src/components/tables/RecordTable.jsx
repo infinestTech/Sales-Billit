@@ -111,9 +111,28 @@ const RecordTable = ({ shop_id, setIsLimitReached }) => {
     }
   }
 
+  const updateEstimatedCost = async (id, estimatedCost, type) => {
+    try {
+      const token = localStorage.getItem("token")
+      await api.post(
+        "/api/allUpdateEstimatedCost",
+        { id, estimatedCost, type },
+        { headers: { Authorization: `Bearer ${token}` } },
+      )
+    } catch (error) {
+      console.error("Error updating estimated cost:", error.response?.data || error.message)
+    }
+  }
+
   const handleBalanceChange = (index, value) => {
     const updated = [...filteredData]
     updated[index].balanceAmount = value
+    setFilteredData(updated)
+  }
+
+  const handleEstimatedCostChange = (index, value) => {
+    const updated = [...filteredData]
+    updated[index].estimatedCost = value
     setFilteredData(updated)
   }
 
@@ -222,6 +241,9 @@ const RecordTable = ({ shop_id, setIsLimitReached }) => {
                   Payment Breakdown
                 </th>
                 <th className="px-6 py-3 text-left text-sm font-medium text-gray-700 border-b border-gray-200">
+                  Estimated Cost
+                </th>
+                <th className="px-6 py-3 text-left text-sm font-medium text-gray-700 border-b border-gray-200">
                   Balance Amount
                 </th>
               </tr>
@@ -290,6 +312,23 @@ const RecordTable = ({ shop_id, setIsLimitReached }) => {
                     <td className="px-6 py-4 border-b border-gray-200">
                       <input
                         type="number"
+                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent text-sm"
+                        placeholder="₹0"
+                        value={record.estimatedCost ?? ""}
+                        onChange={(e) => handleEstimatedCostChange((currentPage - 1) * ROWS_PER_PAGE + index, e.target.value)}
+                        onBlur={(e) =>
+                          updateEstimatedCost(
+                            record.id,
+                            Number.parseInt(e.target.value, 10) || 0,
+                            record.customerType || "Customer",
+                          )
+                        }
+                        onClick={(e) => e.stopPropagation()}
+                      />
+                    </td>
+                    <td className="px-6 py-4 border-b border-gray-200">
+                      <input
+                        type="number"
                         className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
                         placeholder="₹0"
                         value={record.balanceAmount || ""}
@@ -306,7 +345,7 @@ const RecordTable = ({ shop_id, setIsLimitReached }) => {
                   </tr>
                   {expandedRow === index && (
                     <tr>
-                      <td colSpan="7" className="border-b border-gray-200 bg-gray-50 px-6 py-4">
+                      <td colSpan="8" className="border-b border-gray-200 bg-gray-50 px-6 py-4">
                         <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
                           <div className="bg-gray-50 px-4 py-3 border-b border-gray-200">
                             <h5 className="text-sm font-medium text-gray-800">Mobile Device Details</h5>
