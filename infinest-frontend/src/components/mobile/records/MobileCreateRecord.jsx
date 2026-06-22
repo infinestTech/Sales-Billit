@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useMemo, useState } from "react"
+import { useEffect, useMemo, useRef, useState } from "react"
 import {
   AlertTriangle,
   Building2,
@@ -13,7 +13,9 @@ import {
   RefreshCw,
   Search,
   User,
+  UserCheck,
   UserCog,
+  UserPlus,
   Users,
 } from "lucide-react"
 import api from "@/components/api"
@@ -72,6 +74,13 @@ export default function MobileCreateRecord({
   const [billCheckTimeout, setBillCheckTimeout] = useState(null)
 
   const [submitting, setSubmitting] = useState(false)
+  // Existing-customer search
+  const [customerSuggestions, setCustomerSuggestions] = useState([])
+  const [showCustomerPicker, setShowCustomerPicker] = useState(false)
+  const [selectedExistingCustomer, setSelectedExistingCustomer] = useState(null)
+  const [customerSearchLoading, setCustomerSearchLoading] = useState(false)
+  const mobileSearchDebounce = useRef(null)
+
   const [showDealerPicker, setShowDealerPicker] = useState(false)
   const [showCreateDealer, setShowCreateDealer] = useState(false)
   const [creatingDealer, setCreatingDealer] = useState(false)
@@ -104,6 +113,43 @@ export default function MobileCreateRecord({
       return prev.slice(0, n)
     })
   }, [formData.noOfMobile])
+
+  const searchExistingCustomers = async (phone) => {
+    if (!shopId || phone.trim().length < 3) {
+      setCustomerSuggestions([])
+      setShowCustomerPicker(false)
+      return
+    }
+    setCustomerSearchLoading(true)
+    try {
+      const res = await api.post(
+        "/api/search-customers-by-mobile",
+        { mobileNumber: phone.trim(), userId: shopId },
+        { headers: { Authorization: `Bearer ${localStorage.getItem("token")}` } }
+      )
+      const list = res.data?.customers || []
+      setCustomerSuggestions(list)
+      if (list.length > 0) setShowCustomerPicker(true)
+    } catch (err) {
+      logError("Customer search failed", err)
+      setCustomerSuggestions([])
+    } finally {
+      setCustomerSearchLoading(false)
+    }
+  }
+
+  const handlePhoneChange = (value) => {
+    setSelectedExistingCustomer(null)
+    setFormData((p) => ({ ...p, mobileNumber: value }))
+    clearTimeout(mobileSearchDebounce.current)
+    mobileSearchDebounce.current = setTimeout(() => searchExistingCustomers(value), 400)
+  }
+
+  const handleSelectExistingCustomer = (c) => {
+    setSelectedExistingCustomer(c)
+    setFormData((p) => ({ ...p, clientName: c.clientName, mobileNumber: c.mobileNumber }))
+    setShowCustomerPicker(false)
+  }
 
   const fetchDealers = async () => {
     if (!shopId) return
@@ -381,19 +427,28 @@ export default function MobileCreateRecord({
               disabled={isLimitReached}
               className="input-base"
             />
+            {selectedExistingCustomer && (
+              <p className="mt-1 flex items-center gap-1 text-xs text-green-600">
+                <UserCheck className="h-3 w-3" /> Existing customer selected
+              </p>
+            )}
           </Field>
           <Field label="Phone number" required>
-            <input
-              type="tel"
-              inputMode="tel"
-              value={formData.mobileNumber}
-              onChange={(e) =>
-                setFormData((p) => ({ ...p, mobileNumber: e.target.value }))
-              }
-              placeholder="Enter phone number"
-              disabled={isLimitReached}
-              className="input-base"
-            />
+            <div className="relative">
+              <input
+                type="tel"
+                inputMode="tel"
+                value={formData.mobileNumber}
+                onChange={(e) => handlePhoneChange(e.target.value)}
+                placeholder="Enter phone number"
+                disabled={isLimitReached}
+                autoComplete="off"
+                className="input-base pr-10"
+              />
+              {customerSearchLoading && (
+                <Loader2 className="absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 animate-spin text-gray-400" />
+              )}
+            </div>
           </Field>
           <Field label="Technician (optional)">
             <input
@@ -599,6 +654,45 @@ export default function MobileCreateRecord({
           )}
         </button>
       </div>
+
+      {/* Existing customer picker sheet */}
+      <BottomSheet
+        open={showCustomerPicker}
+        onClose={() => setShowCustomerPicker(false)}
+        title="Existing customers found"
+        subtitle={`${customerSuggestions.length} match${customerSuggestions.length !== 1 ? "es" : ""}`}
+      >
+        <div className="space-y-2">
+          {customerSuggestions.map((c) => (
+            <button
+              key={c.id}
+              type="button"
+              onClick={() => handleSelectExistingCustomer(c)}
+              className="flex w-full items-center justify-between rounded-xl border border-gray-200 bg-gray-50 px-3 py-3 text-left active:bg-blue-50"
+            >
+              <div className="min-w-0">
+                <p className="truncate text-sm font-medium text-gray-900">{c.clientName}</p>
+                <p className="truncate text-xs text-gray-500">
+                  {c.mobileNumber}{c.lastBillNo ? ` · Last: ${c.lastBillNo}` : ""}
+                </p>
+              </div>
+              <UserCheck className="h-4 w-4 text-blue-500 flex-shrink-0" />
+            </button>
+          ))}
+          <button
+            type="button"
+            onClick={() => {
+              setSelectedExistingCustomer(null)
+              setShowCustomerPicker(false)
+              setFormData((p) => ({ ...p, clientName: "" }))
+            }}
+            className="flex w-full items-center gap-2 rounded-xl border border-green-200 bg-green-50 px-3 py-3 text-left text-green-700 active:bg-green-100"
+          >
+            <UserPlus className="h-4 w-4 flex-shrink-0" />
+            <span className="text-sm font-medium">Create as new customer</span>
+          </button>
+        </div>
+      </BottomSheet>
 
       {/* Dealer picker sheet */}
       <BottomSheet

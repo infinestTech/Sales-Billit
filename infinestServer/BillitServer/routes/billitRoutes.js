@@ -5,6 +5,8 @@ const authenticateToken = require("../utils/authMiddleware");
 
 const { createCustomerController } = require("../controllers/api/createCustomerController");
 router.post("/createcustomer", authenticateToken, createCustomerController);
+const { searchCustomersByMobile } = require("../controllers/api/searchCustomersByMobileController");
+router.post("/search-customers-by-mobile", authenticateToken, searchCustomersByMobile);
 const { createDealer } = require("../controllers/api/createDealerController");
 router.post("/createdealer",authenticateToken, createDealer);
 const { getAllDealers } = require("../controllers/api/getAllDealersController");
