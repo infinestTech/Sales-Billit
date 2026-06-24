@@ -3,10 +3,11 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import axios from 'axios';
-import { 
+import {
   Users, Phone, Calendar, Filter, Search, ChevronDown,
   TrendingUp, Package, Wrench, DollarSign, CheckCircle,
-  XCircle, Truck, AlertCircle
+  XCircle, Truck, AlertCircle, UserPlus, Briefcase,
+  ClipboardList, FileText
 } from 'lucide-react';
 import {
   LineChart, Line, AreaChart, Area, BarChart, Bar,
@@ -18,7 +19,41 @@ import SalaryManagement from '@/components/shop-admin/SalaryManagement';
 import EsslDeviceSettings from '@/components/shop-admin/EsslDeviceSettings';
 import EmployeeManagement from '@/components/shop-admin/EmployeeManagement';
 import AttendanceManagement from '@/components/shop-admin/AttendanceManagement';
+import CreateCustomerPanel from '@/components/shop-admin/panels/CreateCustomerPanel';
+import CreateDealerPanel from '@/components/shop-admin/panels/CreateDealerPanel';
+import AllRecordsPanel from '@/components/shop-admin/panels/AllRecordsPanel';
+import SuppliersPanel from '@/components/shop-admin/panels/SuppliersPanel';
 import * as XLSX from 'xlsx';
+
+// Sidebar navigation config: standalone items + collapsible groups
+const NAV = [
+  { type: 'item', id: 'overview', label: 'Overview', icon: TrendingUp },
+  {
+    type: 'group', key: 'hr', label: 'HR', icon: Users, children: [
+      { id: 'hr-employees', label: 'Employees', icon: Users },
+      { id: 'hr-attendance', label: 'Attendance', icon: CheckCircle },
+      { id: 'salary', label: 'Salary', icon: DollarSign },
+    ]
+  },
+  {
+    type: 'group', key: 'records', label: 'Records', icon: ClipboardList, children: [
+      { id: 'customer-create', label: 'Create Customer', icon: UserPlus },
+      { id: 'dealer-create', label: 'Create Dealer', icon: Briefcase },
+      { id: 'all-records', label: 'All Records', icon: Phone },
+    ]
+  },
+  {
+    type: 'group', key: 'suppliers', label: 'Suppliers', icon: Truck, children: [
+      { id: 'suppliers', label: 'Manage Suppliers', icon: Truck },
+    ]
+  },
+  {
+    type: 'group', key: 'reports', label: 'Reports', icon: FileText, children: [
+      { id: 'revenue', label: 'Revenue', icon: DollarSign },
+      { id: 'report', label: 'Financial Report', icon: AlertCircle },
+    ]
+  },
+];
 
 export default function ShopAdminDashboard() {
   const router = useRouter();
@@ -31,6 +66,7 @@ export default function ShopAdminDashboard() {
   const [analytics, setAnalytics] = useState(null);
   const [loading, setLoading] = useState(true);
   const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [openGroups, setOpenGroups] = useState({ hr: false, records: true, suppliers: false, reports: false });
   const [showShopSelector, setShowShopSelector] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
   
@@ -111,6 +147,8 @@ export default function ShopAdminDashboard() {
         const savedShopId = localStorage.getItem('currentShopId');
         const initialShopId = savedShopId || admin.current_shop_id || admin.shops[0].id;
         setCurrentShopId(initialShopId);
+        // Persist on initial load so shopAdminApi (panels) reads the right shop_id immediately
+        if (initialShopId) localStorage.setItem('currentShopId', initialShopId);
       }
     } catch (error) {
       console.error('Error parsing admin info:', error);
@@ -124,6 +162,12 @@ export default function ShopAdminDashboard() {
       fetchRevenueVisibility();
     }
   }, [currentShopId]);
+
+  // Keep the sidebar group containing the active tab expanded
+  useEffect(() => {
+    const group = NAV.find(n => n.type === 'group' && n.children.some(c => c.id === activeTab));
+    if (group) setOpenGroups(prev => (prev[group.key] ? prev : { ...prev, [group.key]: true }));
+  }, [activeTab]);
 
   useEffect(() => {
     // Fetch analytics when switching to analytics tabs
@@ -1396,28 +1440,66 @@ export default function ShopAdminDashboard() {
 
             {/* Navigation */}
             <nav className="flex-1 px-4 py-6 space-y-2">
-              {[
-                { id: 'overview', label: 'Overview', icon: TrendingUp },
-                { id: 'hr-employees', label: 'HR — Employees', icon: Users },
-                { id: 'hr-attendance', label: 'HR — Attendance', icon: CheckCircle },
-                { id: 'salary', label: 'HR — Salary', icon: DollarSign },
-                { id: 'revenue', label: 'Revenue', icon: DollarSign },
-                { id: 'report', label: 'Financial Report', icon: AlertCircle }
-              ].map((tab) => {
-                const Icon = tab.icon;
+              {NAV.map((node) => {
+                if (node.type === 'item') {
+                  const Icon = node.icon;
+                  const active = activeTab === node.id;
+                  return (
+                    <button
+                      key={node.id}
+                      onClick={() => setActiveTab(node.id)}
+                      className={`w-full text-left px-4 py-3 rounded-lg transition-all flex items-center group ${
+                        active
+                          ? 'bg-green-600 text-white shadow-lg shadow-green-900/50'
+                          : 'text-gray-300 hover:bg-gray-700 hover:text-white'
+                      }`}
+                    >
+                      <Icon className={`h-5 w-5 mr-3 ${active ? 'text-white' : 'text-gray-400 group-hover:text-green-400'}`} />
+                      <span className="font-medium">{node.label}</span>
+                    </button>
+                  );
+                }
+
+                const Icon = node.icon;
+                const open = openGroups[node.key];
+                const hasActiveChild = node.children.some(c => c.id === activeTab);
                 return (
-                  <button
-                    key={tab.id}
-                    onClick={() => setActiveTab(tab.id)}
-                    className={`w-full text-left px-4 py-3 rounded-lg transition-all flex items-center group ${
-                      activeTab === tab.id
-                        ? 'bg-green-600 text-white shadow-lg shadow-green-900/50'
-                        : 'text-gray-300 hover:bg-gray-700 hover:text-white'
-                    }`}
-                  >
-                    <Icon className={`h-5 w-5 mr-3 ${activeTab === tab.id ? 'text-white' : 'text-gray-400 group-hover:text-green-400'}`} />
-                    <span className="font-medium">{tab.label}</span>
-                  </button>
+                  <div key={node.key}>
+                    <button
+                      onClick={() => setOpenGroups(prev => ({ ...prev, [node.key]: !prev[node.key] }))}
+                      className={`w-full text-left px-4 py-3 rounded-lg transition-all flex items-center group ${
+                        hasActiveChild
+                          ? 'bg-gray-700/60 text-white'
+                          : 'text-gray-300 hover:bg-gray-700 hover:text-white'
+                      }`}
+                    >
+                      <Icon className={`h-5 w-5 mr-3 ${hasActiveChild ? 'text-green-400' : 'text-gray-400 group-hover:text-green-400'}`} />
+                      <span className="font-medium flex-1">{node.label}</span>
+                      <ChevronDown className={`h-4 w-4 transition-transform ${open ? 'rotate-180' : ''}`} />
+                    </button>
+                    {open && (
+                      <div className="mt-1 ml-4 pl-3 border-l border-gray-700 space-y-1">
+                        {node.children.map((child) => {
+                          const ChildIcon = child.icon;
+                          const active = activeTab === child.id;
+                          return (
+                            <button
+                              key={child.id}
+                              onClick={() => setActiveTab(child.id)}
+                              className={`w-full text-left px-3 py-2 rounded-lg transition-all flex items-center group ${
+                                active
+                                  ? 'bg-green-600 text-white shadow-lg shadow-green-900/50'
+                                  : 'text-gray-300 hover:bg-gray-700 hover:text-white'
+                              }`}
+                            >
+                              <ChildIcon className={`h-4 w-4 mr-3 ${active ? 'text-white' : 'text-gray-400 group-hover:text-green-400'}`} />
+                              <span className="text-sm font-medium">{child.label}</span>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
                 );
               })}
             </nav>
@@ -1440,25 +1522,40 @@ export default function ShopAdminDashboard() {
         {/* Collapsed State */}
         {!sidebarOpen && (
           <nav className="flex-1 px-2 py-6 space-y-3">
-            {[
-              { id: 'overview', icon: TrendingUp },
-              { id: 'hr-employees', icon: Users },
-              { id: 'hr-attendance', icon: CheckCircle },
-              { id: 'salary', icon: DollarSign },
-              { id: 'revenue', icon: DollarSign },
-              { id: 'report', icon: AlertCircle }
-            ].map((tab) => {
-              const Icon = tab.icon;
+            {NAV.map((node) => {
+              if (node.type === 'item') {
+                const Icon = node.icon;
+                return (
+                  <button
+                    key={node.id}
+                    onClick={() => setActiveTab(node.id)}
+                    className={`w-full p-3 rounded-lg transition-all flex items-center justify-center ${
+                      activeTab === node.id
+                        ? 'bg-green-600 text-white shadow-lg'
+                        : 'text-gray-400 hover:bg-gray-700 hover:text-white'
+                    }`}
+                    title={node.label}
+                  >
+                    <Icon className="h-5 w-5" />
+                  </button>
+                );
+              }
+
+              const Icon = node.icon;
+              const hasActiveChild = node.children.some(c => c.id === activeTab);
               return (
                 <button
-                  key={tab.id}
-                  onClick={() => setActiveTab(tab.id)}
+                  key={node.key}
+                  onClick={() => {
+                    setSidebarOpen(true);
+                    setOpenGroups(prev => ({ ...prev, [node.key]: true }));
+                  }}
                   className={`w-full p-3 rounded-lg transition-all flex items-center justify-center ${
-                    activeTab === tab.id
+                    hasActiveChild
                       ? 'bg-green-600 text-white shadow-lg'
                       : 'text-gray-400 hover:bg-gray-700 hover:text-white'
                   }`}
-                  title={tab.id}
+                  title={node.label}
                 >
                   <Icon className="h-5 w-5" />
                 </button>
@@ -1894,6 +1991,22 @@ export default function ShopAdminDashboard() {
 
         {activeTab === 'salary' && (
           <SalaryManagement shopId={currentShopId} />
+        )}
+
+        {activeTab === 'customer-create' && (
+          <CreateCustomerPanel currentShopId={currentShopId} />
+        )}
+
+        {activeTab === 'dealer-create' && (
+          <CreateDealerPanel currentShopId={currentShopId} />
+        )}
+
+        {activeTab === 'all-records' && (
+          <AllRecordsPanel currentShopId={currentShopId} />
+        )}
+
+        {activeTab === 'suppliers' && (
+          <SuppliersPanel currentShopId={currentShopId} />
         )}
 
         {activeTab === 'revenue' && (
