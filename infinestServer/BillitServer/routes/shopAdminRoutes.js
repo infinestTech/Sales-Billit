@@ -2347,5 +2347,551 @@ router.get('/hr/salary/:id',                      hrController.getSalaryRecord);
 router.get('/hr/settings',                        hrController.getHrSettings);
 router.patch('/hr/settings',                      hrController.updateHrSettings);
 
+// ============================================================================
+// CRUD ENDPOINTS — Records / Suppliers / Inventory / Expenses (shop-scoped)
+// All endpoints below run under shopAdminAuth and use req.shopId for scoping.
+// ============================================================================
+
+const { Supplier: SupplierModel } = require('../models/supplier');
+const { ProductHistory, SupplierHistory } = require('../models/mongoModels');
+const { PAYMENT_METHOD_ENUM } = require('../constants/paymentMethods');
+
+// -------------------- BILL NUMBER --------------------
+router.post('/records/next-bill-number', shopAdminAuth, async (req, res) => {
+    try {
+        const { prefix } = req.body;
+        if (!prefix || (prefix !== 'CUST' && prefix !== 'DEAL')) {
+            return res.status(400).json({ success: false, message: "prefix must be 'CUST' or 'DEAL'" });
+        }
+        const Model = prefix === 'CUST' ? Customer : Dealer;
+        const existing = await Model.find({
+            shop_id: req.shopId,
+            bill_no: { $regex: `^${prefix}-`, $ne: null }
+        }).select('bill_no').lean();
+        let highest = 0;
+        const re = new RegExp(`^${prefix}-(\\d+)$`);
+        existing.forEach(r => { const m = r.bill_no?.match(re); if (m) { const n = parseInt(m[1], 10); if (n > highest) highest = n; } });
+        const billNumber = `${prefix}-${String(highest + 1).padStart(4, '0')}`;
+        res.json({ success: true, billNumber });
+    } catch (err) {
+        console.error('next-bill-number error:', err);
+        res.status(500).json({ success: false, message: 'Server error' });
+    }
+});
+
+router.post('/records/check-bill-number', shopAdminAuth, async (req, res) => {
+    try {
+        const { billNumber } = req.body;
+        if (!billNumber) return res.status(400).json({ success: false, message: 'billNumber required' });
+        const [c, d] = await Promise.all([
+            Customer.findOne({ shop_id: req.shopId, bill_no: billNumber.trim() }).select('_id').lean(),
+            Dealer.findOne({ shop_id: req.shopId, bill_no: billNumber.trim() }).select('_id').lean()
+        ]);
+        res.json({ success: true, exists: !!(c || d) });
+    } catch (err) {
+        console.error('check-bill-number error:', err);
+        res.status(500).json({ success: false, message: 'Server error' });
+    }
+});
+
+// -------------------- CUSTOMER / DEALER CREATION --------------------
+router.post('/records/customer', shopAdminAuth, async (req, res) => {
+    try {
+        const { clientName, mobileNumber, billNo, noOfMobile, balanceAmount, estimatedCost, MobileName = [], technicianname } = req.body;
+        if (!clientName || !mobileNumber) {
+            return res.status(400).json({ success: false, message: 'clientName & mobileNumber required' });
+        }
+        const customer = await Customer.create({
+            shop_id: req.shopId,
+            client_name: clientName,
+            mobile_number: mobileNumber,
+            bill_no: billNo || '',
+            customer_type: 'Customer',
+            no_of_mobile: Number(noOfMobile) || MobileName.length || 0,
+            balance_amount: Number(balanceAmount) || 0,
+            estimated_cost: Number(estimatedCost) || 0
+        });
+        const mobiles = [];
+        for (const m of MobileName) {
+            const payments = Array.isArray(m.payments) ? m.payments : (m.paid_amount ? [{ amount: Number(m.paid_amount), method: m.payment || 'Cash', date: new Date() }] : []);
+            const total_paid = payments.reduce((s, p) => s + (Number(p.amount) || 0), 0);
+            const mob = await Mobile.create({
+                shop_id: req.shopId,
+                customer_id: customer._id,
+                mobile_name: m.mobile_name || m.mobileName || '',
+                model: m.model || '',
+                imei: m.imei || '',
+                issue: m.issue || '',
+                technician_name: m.technician_name || technicianname || '',
+                payments,
+                total_paid,
+                paid_amount: total_paid,
+                payment: m.payment || 'Cash'
+            });
+            mobiles.push(mob);
+        }
+        res.json({ success: true, customer, mobiles });
+    } catch (err) {
+        console.error('create customer error:', err);
+        res.status(500).json({ success: false, message: 'Server error' });
+    }
+});
+
+router.post('/records/dealer', shopAdminAuth, async (req, res) => {
+    try {
+        const { clientName, mobileNumber, billNo, balanceAmount, estimatedCost, vendors = [], MobileName = [] } = req.body;
+        if (!clientName || !mobileNumber) return res.status(400).json({ success: false, message: 'clientName & mobileNumber required' });
+        const dealer = await Dealer.create({
+            shop_id: req.shopId,
+            client_name: clientName,
+            mobile_number: mobileNumber,
+            bill_no: billNo || '',
+            customer_type: 'Dealer',
+            balance_amount: Number(balanceAmount) || 0,
+            estimated_cost: Number(estimatedCost) || 0,
+            no_of_mobile: vendors.reduce((s, v) => s + (Number(v.mobile_count) || 0), 0) || MobileName.length,
+            vendors: vendors.map(v => ({ vendor_name: v.vendor_name, vendor_number: v.vendor_number, mobile_count: Number(v.mobile_count) || 0 }))
+        });
+        const mobiles = [];
+        for (const m of MobileName) {
+            const payments = Array.isArray(m.payments) ? m.payments : [];
+            const total_paid = payments.reduce((s, p) => s + (Number(p.amount) || 0), 0);
+            const mob = await Mobile.create({
+                shop_id: req.shopId,
+                dealer_id: dealer._id,
+                mobile_name: m.mobile_name || '',
+                model: m.model || '',
+                imei: m.imei || '',
+                issue: m.issue || '',
+                payments, total_paid, paid_amount: total_paid
+            });
+            mobiles.push(mob);
+        }
+        res.json({ success: true, dealer, mobiles });
+    } catch (err) {
+        console.error('create dealer error:', err);
+        res.status(500).json({ success: false, message: 'Server error' });
+    }
+});
+
+// -------------------- RECORDS LIST / STATUS / DELETE --------------------
+router.get('/records', shopAdminAuth, async (req, res) => {
+    try {
+        const [mobiles, customers, dealers, shop] = await Promise.all([
+            Mobile.find({ shop_id: req.shopId }).sort({ created_at: -1 }).lean(),
+            Customer.find({ shop_id: req.shopId }).sort({ created_at: -1 }).lean(),
+            Dealer.find({ shop_id: req.shopId }).sort({ created_at: -1 }).lean(),
+            Shop.findById(req.shopId).lean()
+        ]);
+        res.json({
+            success: true,
+            mobiles, customers, dealers,
+            shopOwnerName: shop?.owner_name || '',
+            shopPhone: shop?.phone || '',
+            shopaddress: shop?.address || ''
+        });
+    } catch (err) {
+        console.error('records list error:', err);
+        res.status(500).json({ success: false, message: 'Server error' });
+    }
+});
+
+router.post('/records/toggle-status', shopAdminAuth, async (req, res) => {
+    try {
+        const { mobileId, status, value } = req.body;
+        if (!['ready', 'delivered', 'returned'].includes(status)) {
+            return res.status(400).json({ success: false, message: 'invalid status' });
+        }
+        const update = { [status]: !!value };
+        if (status === 'delivered' && value) update.delivery_date = new Date();
+        const mobile = await Mobile.findOneAndUpdate({ _id: mobileId, shop_id: req.shopId }, update, { new: true });
+        if (!mobile) return res.status(404).json({ success: false, message: 'Mobile not found' });
+        res.json({ success: true, mobile });
+    } catch (err) {
+        console.error('toggle-status error:', err);
+        res.status(500).json({ success: false, message: 'Server error' });
+    }
+});
+
+router.delete('/records/mobile/:mobileId', shopAdminAuth, async (req, res) => {
+    try {
+        const result = await Mobile.findOneAndDelete({ _id: req.params.mobileId, shop_id: req.shopId });
+        if (!result) return res.status(404).json({ success: false, message: 'Mobile not found' });
+        res.json({ success: true });
+    } catch (err) {
+        console.error('delete mobile error:', err);
+        res.status(500).json({ success: false, message: 'Server error' });
+    }
+});
+
+router.put('/records/balance', shopAdminAuth, async (req, res) => {
+    try {
+        const { id, balanceAmount, type } = req.body;
+        const Model = type === 'Dealer' ? Dealer : Customer;
+        const updated = await Model.findOneAndUpdate(
+            { _id: id, shop_id: req.shopId },
+            { balance_amount: Number(balanceAmount) || 0 },
+            { new: true }
+        );
+        if (!updated) return res.status(404).json({ success: false, message: 'Record not found' });
+        res.json({ success: true, record: updated });
+    } catch (err) {
+        console.error('update balance error:', err);
+        res.status(500).json({ success: false, message: 'Server error' });
+    }
+});
+
+router.delete('/records/customer/:id', shopAdminAuth, async (req, res) => {
+    try {
+        const c = await Customer.findOneAndDelete({ _id: req.params.id, shop_id: req.shopId });
+        if (!c) return res.status(404).json({ success: false, message: 'Not found' });
+        await Mobile.deleteMany({ customer_id: req.params.id, shop_id: req.shopId });
+        res.json({ success: true });
+    } catch (err) {
+        console.error('delete customer error:', err);
+        res.status(500).json({ success: false, message: 'Server error' });
+    }
+});
+
+router.delete('/records/dealer/:id', shopAdminAuth, async (req, res) => {
+    try {
+        const d = await Dealer.findOneAndDelete({ _id: req.params.id, shop_id: req.shopId });
+        if (!d) return res.status(404).json({ success: false, message: 'Not found' });
+        await Mobile.deleteMany({ dealer_id: req.params.id, shop_id: req.shopId });
+        res.json({ success: true });
+    } catch (err) {
+        console.error('delete dealer error:', err);
+        res.status(500).json({ success: false, message: 'Server error' });
+    }
+});
+
+// -------------------- PAYMENT ENTRY --------------------
+router.post('/records/payment', shopAdminAuth, async (req, res) => {
+    try {
+        const { mobileId, amount, method } = req.body;
+        const mobile = await Mobile.findOne({ _id: mobileId, shop_id: req.shopId });
+        if (!mobile) return res.status(404).json({ success: false, message: 'Mobile not found' });
+        mobile.payments = mobile.payments || [];
+        mobile.payments.push({ amount: Number(amount) || 0, method: method || 'Cash', date: new Date() });
+        mobile.total_paid = mobile.payments.reduce((s, p) => s + (Number(p.amount) || 0), 0);
+        mobile.paid_amount = mobile.total_paid;
+        await mobile.save();
+        res.json({ success: true, mobile });
+    } catch (err) {
+        console.error('add payment error:', err);
+        res.status(500).json({ success: false, message: 'Server error' });
+    }
+});
+
+router.delete('/records/payment', shopAdminAuth, async (req, res) => {
+    try {
+        const { mobileId, paymentIndex } = req.body;
+        const mobile = await Mobile.findOne({ _id: mobileId, shop_id: req.shopId });
+        if (!mobile) return res.status(404).json({ success: false, message: 'Mobile not found' });
+        if (!mobile.payments || paymentIndex < 0 || paymentIndex >= mobile.payments.length) {
+            return res.status(400).json({ success: false, message: 'invalid paymentIndex' });
+        }
+        mobile.payments.splice(paymentIndex, 1);
+        mobile.total_paid = mobile.payments.reduce((s, p) => s + (Number(p.amount) || 0), 0);
+        mobile.paid_amount = mobile.total_paid;
+        await mobile.save();
+        res.json({ success: true, mobile });
+    } catch (err) {
+        console.error('delete payment error:', err);
+        res.status(500).json({ success: false, message: 'Server error' });
+    }
+});
+
+// -------------------- SUPPLIERS --------------------
+router.get('/suppliers', shopAdminAuth, async (req, res) => {
+    try {
+        const suppliers = await SupplierModel.find({ userId: req.shopId }).sort({ createdAt: -1 }).lean();
+        res.json({ success: true, suppliers });
+    } catch (err) {
+        console.error('list suppliers error:', err);
+        res.status(500).json({ success: false, message: 'Server error' });
+    }
+});
+
+router.post('/suppliers', shopAdminAuth, async (req, res) => {
+    try {
+        const { supplierName, agencyName, phoneNumber, address } = req.body;
+        if (!supplierName?.toString().trim()) return res.status(400).json({ success: false, message: 'supplierName required' });
+        const supplier = await SupplierModel.create({
+            userId: req.shopId,
+            supplierName: supplierName.toString().trim(),
+            agencyName: (agencyName || '').toString().trim(),
+            phoneNumber: (phoneNumber || '').toString().trim(),
+            address: (address || '').toString().trim(),
+            totalAmount: 0
+        });
+        res.json({ success: true, supplier });
+    } catch (err) {
+        console.error('add supplier error:', err);
+        res.status(500).json({ success: false, message: 'Server error' });
+    }
+});
+
+router.put('/suppliers/:id', shopAdminAuth, async (req, res) => {
+    try {
+        const { supplierName, agencyName, phoneNumber, address, totalAmount, lastPaymentMethod } = req.body;
+        const update = {};
+        if (supplierName != null) update.supplierName = supplierName.toString().trim();
+        if (agencyName != null) update.agencyName = agencyName.toString().trim();
+        if (phoneNumber != null) update.phoneNumber = phoneNumber.toString().trim();
+        if (address != null) update.address = address.toString().trim();
+        if (totalAmount != null) update.totalAmount = Number(totalAmount) || 0;
+        if (lastPaymentMethod != null) update.lastPaymentMethod = lastPaymentMethod;
+        const supplier = await SupplierModel.findOneAndUpdate({ _id: req.params.id, userId: req.shopId }, update, { new: true });
+        if (!supplier) return res.status(404).json({ success: false, message: 'Supplier not found' });
+        res.json({ success: true, supplier });
+    } catch (err) {
+        console.error('update supplier error:', err);
+        res.status(500).json({ success: false, message: 'Server error' });
+    }
+});
+
+router.delete('/suppliers/:id', shopAdminAuth, async (req, res) => {
+    try {
+        const supplier = await SupplierModel.findOneAndDelete({ _id: req.params.id, userId: req.shopId });
+        if (!supplier) return res.status(404).json({ success: false, message: 'Supplier not found' });
+        res.json({ success: true });
+    } catch (err) {
+        console.error('delete supplier error:', err);
+        res.status(500).json({ success: false, message: 'Server error' });
+    }
+});
+
+// -------------------- PRODUCTS / INVENTORY --------------------
+router.get('/products', shopAdminAuth, async (req, res) => {
+    try {
+        const products = await Product.find({ userId: req.shopId }).sort({ addedDate: -1 }).lean();
+        res.json({ success: true, products });
+    } catch (err) {
+        console.error('list products error:', err);
+        res.status(500).json({ success: false, message: 'Server error' });
+    }
+});
+
+router.post('/products', shopAdminAuth, async (req, res) => {
+    try {
+        const { name, category, costPrice, sellingPrice, quantity, supplierId, paymentMethod } = req.body;
+        if (!name || costPrice == null || quantity == null) {
+            return res.status(400).json({ success: false, message: 'name, costPrice, quantity required' });
+        }
+        const product = await Product.create({
+            userId: req.shopId,
+            name: name.toString().trim(),
+            category: (category || '').toString().trim(),
+            costPrice: Number(costPrice),
+            sellingPrice: Number(sellingPrice) || 0,
+            quantity: Number(quantity),
+            supplierId: supplierId || undefined,
+            paymentMethod: paymentMethod || undefined,
+            addedDate: new Date()
+        });
+        if (supplierId) {
+            const cost = Number(costPrice) * Number(quantity);
+            await SupplierModel.findOneAndUpdate(
+                { _id: supplierId, userId: req.shopId },
+                { $inc: { totalAmount: cost }, lastPaymentMethod: paymentMethod || '' }
+            );
+        }
+        await ProductHistory.create({
+            productId: product._id, changeDate: new Date(), changeType: 'ADD',
+            quantity: Number(quantity), costPrice: Number(costPrice)
+        });
+        res.json({ success: true, product });
+    } catch (err) {
+        console.error('add product error:', err);
+        res.status(500).json({ success: false, message: 'Server error' });
+    }
+});
+
+router.put('/products/:id', shopAdminAuth, async (req, res) => {
+    try {
+        const { name, category, costPrice, sellingPrice, quantity } = req.body;
+        const product = await Product.findOne({ _id: req.params.id, userId: req.shopId });
+        if (!product) return res.status(404).json({ success: false, message: 'Product not found' });
+        if (name != null) product.name = name.toString().trim();
+        if (category != null) product.category = category.toString().trim();
+        if (costPrice != null) product.costPrice = Number(costPrice);
+        if (sellingPrice != null) product.sellingPrice = Number(sellingPrice);
+        if (quantity != null) product.quantity = Number(quantity);
+        product.updatedAt = new Date();
+        await product.save();
+        await ProductHistory.create({
+            productId: product._id, changeDate: new Date(), changeType: 'EDIT',
+            quantity: product.quantity, costPrice: product.costPrice
+        });
+        res.json({ success: true, product });
+    } catch (err) {
+        console.error('update product error:', err);
+        res.status(500).json({ success: false, message: 'Server error' });
+    }
+});
+
+router.delete('/products/:id', shopAdminAuth, async (req, res) => {
+    try {
+        const p = await Product.findOneAndDelete({ _id: req.params.id, userId: req.shopId });
+        if (!p) return res.status(404).json({ success: false, message: 'Product not found' });
+        await ProductHistory.create({
+            productId: p._id, changeDate: new Date(), changeType: 'REMOVE',
+            quantity: p.quantity, costPrice: p.costPrice
+        });
+        res.json({ success: true });
+    } catch (err) {
+        console.error('delete product error:', err);
+        res.status(500).json({ success: false, message: 'Server error' });
+    }
+});
+
+router.post('/products/:id/sell', shopAdminAuth, async (req, res) => {
+    try {
+        const { quantitySold, sellingPrice } = req.body;
+        const product = await Product.findOne({ _id: req.params.id, userId: req.shopId });
+        if (!product) return res.status(404).json({ success: false, message: 'Product not found' });
+        const qty = Number(quantitySold) || 0;
+        if (qty <= 0 || qty > product.quantity) return res.status(400).json({ success: false, message: 'Invalid quantity' });
+        product.quantity -= qty;
+        if (sellingPrice != null) product.sellingPrice = Number(sellingPrice);
+        product.updatedAt = new Date();
+        await product.save();
+        await ProductHistory.create({
+            productId: product._id, changeDate: new Date(), changeType: 'SELL',
+            quantity: qty, costPrice: product.costPrice,
+            paidAmount: (Number(sellingPrice) || product.sellingPrice) * qty
+        });
+        res.json({ success: true, product });
+    } catch (err) {
+        console.error('sell product error:', err);
+        res.status(500).json({ success: false, message: 'Server error' });
+    }
+});
+
+router.post('/products/:id/restock', shopAdminAuth, async (req, res) => {
+    try {
+        const { quantityToAdd } = req.body;
+        const qty = Number(quantityToAdd) || 0;
+        if (qty <= 0) return res.status(400).json({ success: false, message: 'Invalid quantity' });
+        const product = await Product.findOne({ _id: req.params.id, userId: req.shopId });
+        if (!product) return res.status(404).json({ success: false, message: 'Product not found' });
+        product.quantity += qty;
+        product.updatedAt = new Date();
+        await product.save();
+        await ProductHistory.create({
+            productId: product._id, changeDate: new Date(), changeType: 'RESTOCK',
+            quantity: qty, costPrice: product.costPrice
+        });
+        res.json({ success: true, product });
+    } catch (err) {
+        console.error('restock product error:', err);
+        res.status(500).json({ success: false, message: 'Server error' });
+    }
+});
+
+// -------------------- EXPENSES --------------------
+router.get('/expenses', shopAdminAuth, async (req, res) => {
+    try {
+        const { fromDate, toDate } = req.query;
+        const filter = { userId: req.shopId };
+        if (fromDate || toDate) {
+            filter.createdAt = {};
+            if (fromDate) filter.createdAt.$gte = new Date(fromDate);
+            if (toDate) filter.createdAt.$lte = new Date(toDate);
+        }
+        const expenses = await Expense.find(filter).sort({ createdAt: -1 }).lean();
+        const total = expenses.reduce((s, e) => s + (Number(e.amount) || 0), 0);
+        res.json({ success: true, expenses, total });
+    } catch (err) {
+        console.error('list expenses error:', err);
+        res.status(500).json({ success: false, message: 'Server error' });
+    }
+});
+
+router.post('/expenses', shopAdminAuth, async (req, res) => {
+    try {
+        const { title, amount, paymentMethod } = req.body;
+        if (!title || amount == null) return res.status(400).json({ success: false, message: 'title & amount required' });
+        const expense = await Expense.create({
+            userId: req.shopId,
+            title: title.toString().trim(),
+            amount: Number(amount),
+            paymentMethod: paymentMethod || 'Cash'
+        });
+        res.json({ success: true, expense });
+    } catch (err) {
+        console.error('add expense error:', err);
+        res.status(500).json({ success: false, message: 'Server error' });
+    }
+});
+
+router.put('/expenses/:id', shopAdminAuth, async (req, res) => {
+    try {
+        const { title, amount, paymentMethod } = req.body;
+        const update = {};
+        if (title != null) update.title = title.toString().trim();
+        if (amount != null) update.amount = Number(amount);
+        if (paymentMethod != null) update.paymentMethod = paymentMethod;
+        const expense = await Expense.findOneAndUpdate({ _id: req.params.id, userId: req.shopId }, update, { new: true });
+        if (!expense) return res.status(404).json({ success: false, message: 'Expense not found' });
+        res.json({ success: true, expense });
+    } catch (err) {
+        console.error('update expense error:', err);
+        res.status(500).json({ success: false, message: 'Server error' });
+    }
+});
+
+router.delete('/expenses/:id', shopAdminAuth, async (req, res) => {
+    try {
+        const e = await Expense.findOneAndDelete({ _id: req.params.id, userId: req.shopId });
+        if (!e) return res.status(404).json({ success: false, message: 'Expense not found' });
+        res.json({ success: true });
+    } catch (err) {
+        console.error('delete expense error:', err);
+        res.status(500).json({ success: false, message: 'Server error' });
+    }
+});
+
+// -------------------- BALANCE SUMMARY --------------------
+router.get('/balance-summary', shopAdminAuth, async (req, res) => {
+    try {
+        const [customers, dealers] = await Promise.all([
+            Customer.find({ shop_id: req.shopId, balance_amount: { $gt: 0 } })
+                .select('client_name mobile_number balance_amount bill_no created_at').sort({ balance_amount: -1 }).lean(),
+            Dealer.find({ shop_id: req.shopId, balance_amount: { $gt: 0 } })
+                .select('client_name mobile_number balance_amount bill_no vendors created_at').sort({ balance_amount: -1 }).lean()
+        ]);
+        const totalCustomerBalance = customers.reduce((s, c) => s + (Number(c.balance_amount) || 0), 0);
+        const totalDealerBalance = dealers.reduce((s, d) => s + (Number(d.balance_amount) || 0), 0);
+        res.json({
+            success: true, customers, dealers, totalCustomerBalance, totalDealerBalance,
+            grandTotal: totalCustomerBalance + totalDealerBalance
+        });
+    } catch (err) {
+        console.error('balance summary error:', err);
+        res.status(500).json({ success: false, message: 'Server error' });
+    }
+});
+
+// -------------------- MOBILE REGISTRY (grouped by mobile_name) --------------------
+router.get('/mobile-registry', shopAdminAuth, async (req, res) => {
+    try {
+        const mobiles = await Mobile.find({ shop_id: req.shopId })
+            .populate('customer_id', 'client_name mobile_number')
+            .populate('dealer_id', 'client_name mobile_number')
+            .sort({ created_at: -1 }).lean();
+        res.json({ success: true, mobiles });
+    } catch (err) {
+        console.error('mobile-registry error:', err);
+        res.status(500).json({ success: false, message: 'Server error' });
+    }
+});
+
+// -------------------- META --------------------
+router.get('/meta/payment-methods', shopAdminAuth, (req, res) => {
+    res.json({ success: true, paymentMethods: PAYMENT_METHOD_ENUM });
+});
+
 module.exports = router;
 
