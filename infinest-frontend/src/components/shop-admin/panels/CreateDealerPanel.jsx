@@ -3,11 +3,13 @@ import { useEffect, useState } from "react";
 import { Briefcase, Plus, Trash2, Save } from "lucide-react";
 import shopAdminApi from "../shopAdminApi";
 import { PanelHeader, PanelCard, Btn, Field, Input, Toast, useToast } from "./_ui";
+import MobileEntries, { emptyMobile } from "./MobileEntries";
 
 export default function CreateDealerPanel({ currentShopId }) {
   const { toast, show, clear } = useToast();
   const [form, setForm] = useState({ clientName: "", mobileNumber: "", billNo: "", balanceAmount: 0, estimatedCost: 0 });
   const [vendors, setVendors] = useState([{ vendor_name: "", vendor_number: "", mobile_count: 0 }]);
+  const [mobiles, setMobiles] = useState([emptyMobile()]);
   const [submitting, setSubmitting] = useState(false);
 
   const fetchBill = async () => {
@@ -26,10 +28,15 @@ export default function CreateDealerPanel({ currentShopId }) {
     if (!form.clientName.trim() || !form.mobileNumber.trim()) { show("Name and mobile required", "error"); return; }
     setSubmitting(true);
     try {
-      await shopAdminApi.createDealer({ ...form, vendors: vendors.filter(v => v.vendor_name.trim()) });
+      await shopAdminApi.createDealer({
+        ...form,
+        vendors: vendors.filter(v => v.vendor_name.trim()),
+        MobileName: mobiles.filter(m => m.mobile_name.trim()),
+      });
       show("Dealer record created");
       setForm({ clientName: "", mobileNumber: "", billNo: "", balanceAmount: 0, estimatedCost: 0 });
       setVendors([{ vendor_name: "", vendor_number: "", mobile_count: 0 }]);
+      setMobiles([emptyMobile()]);
       fetchBill();
     } catch (e) { show(e?.response?.data?.message || "Failed", "error"); }
     setSubmitting(false);
@@ -66,10 +73,14 @@ export default function CreateDealerPanel({ currentShopId }) {
             </div>
           ))}
         </div>
-        <div className="flex justify-end mt-6">
-          <Btn icon={Save} onClick={submit} disabled={submitting}>{submitting ? "Saving..." : "Create Dealer"}</Btn>
-        </div>
       </PanelCard>
+
+      <div className="mb-6" />
+      <MobileEntries mobiles={mobiles} setMobiles={setMobiles} />
+
+      <div className="flex justify-end mt-6">
+        <Btn icon={Save} onClick={submit} disabled={submitting}>{submitting ? "Saving..." : "Create Dealer"}</Btn>
+      </div>
       {toast && <Toast {...toast} onClose={clear} />}
     </div>
   );

@@ -91,6 +91,10 @@ const shopAdminApi = {
 
   // meta
   paymentMethods: () => request("get", "/meta/payment-methods"),
+  mobileBrands: () => request("get", "/meta/mobile-brands"),
+  addMobileBrand: (brandName) => request("post", "/meta/mobile-brands", { data: { brandName } }),
+  mobileIssues: () => request("get", "/meta/mobile-issues"),
+  addMobileIssue: (payload) => request("post", "/meta/mobile-issues", { data: payload }),
 };
 
 export default shopAdminApi;

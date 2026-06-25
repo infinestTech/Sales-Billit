@@ -72,7 +72,7 @@ export function Input(props) {
   return (
     <input
       {...props}
-      className={`w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent text-sm ${props.className || ""}`}
+      className={`w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent text-sm text-slate-900 placeholder-slate-400 ${props.className || ""}`}
     />
   );
 }
@@ -81,7 +81,7 @@ export function Select({ children, ...rest }) {
   return (
     <select
       {...rest}
-      className={`w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent text-sm bg-white ${rest.className || ""}`}
+      className={`w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent text-sm bg-white text-slate-900 ${rest.className || ""}`}
     >
       {children}
     </select>

@@ -4,7 +4,7 @@ import axios from "axios";
 import {
   DollarSign, Calculator, FileText, CheckCircle,
   XCircle, Clock, Users, AlertCircle, RefreshCw,
-  Eye
+  Eye, CalendarDays
 } from "lucide-react";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL_BILLIT || "http://localhost:8000";
@@ -29,6 +29,12 @@ export default function SalaryManagement({ shopId }) {
   });
   const [genEmployeeId, setGenEmployeeId] = useState("");
   const [generating, setGenerating] = useState(false);
+
+  // Daily Breakdown tab state
+  const [dailyEmployee, setDailyEmployee] = useState("");
+  const [dailyRecords, setDailyRecords] = useState([]);
+  const [dailyLoading, setDailyLoading] = useState(false);
+  const [dailySummary, setDailySummary] = useState(null);
 
   const token = () => localStorage.getItem("shopAdminToken");
   const headers = () => ({ Authorization: `Bearer ${token()}` });
@@ -98,6 +104,24 @@ export default function SalaryManagement({ shopId }) {
     } catch (_) {}
   };
 
+  const fetchDailyBreakdown = async (empId) => {
+    if (!empId) { setDailyRecords([]); setDailySummary(null); return; }
+    setDailyLoading(true);
+    try {
+      const res = await axios.get(`${API_URL}/api/shop-admin/hr/attendance/${empId}/monthly`, {
+        headers: headers(), params: { shopId, month, year }
+      });
+      if (res.data.success) {
+        setDailyRecords(res.data.data || []);
+        setDailySummary(res.data.summary || null);
+      }
+    } catch (_) { setDailyRecords([]); setDailySummary(null); }
+    finally { setDailyLoading(false); }
+  };
+
+  // Refresh daily breakdown when month or employee changes
+  useEffect(() => { if (activeTab === "daily" && dailyEmployee) fetchDailyBreakdown(dailyEmployee); }, [selectedMonth, dailyEmployee, activeTab]); // eslint-disable-line
+
   const TAB = ({ id, label, icon: Icon }) => (
     <button onClick={() => setActiveTab(id)}
       className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition ${activeTab===id?"bg-green-600 text-white":"bg-white text-gray-600 hover:bg-gray-100 border border-gray-200"}`}>
@@ -119,6 +143,7 @@ export default function SalaryManagement({ shopId }) {
         <div className="flex gap-2 flex-wrap">
           <TAB id="records" label="Salary Records" icon={FileText}/>
           <TAB id="generate" label="Generate Salary" icon={Calculator}/>
+          <TAB id="daily" label="Daily Breakdown" icon={CalendarDays}/>
         </div>
       </div>
 
@@ -244,6 +269,115 @@ export default function SalaryManagement({ shopId }) {
               Generate for All ({employees.length})
             </button>
           </div>
+        </div>
+      )}
+
+      {activeTab==="daily" && (
+        <div className="space-y-4">
+          <div className="bg-white rounded-xl border border-gray-200 p-4">
+            <div className="flex flex-wrap items-end gap-3">
+              <div className="flex-1 min-w-[200px]">
+                <label className="block text-xs font-medium text-gray-600 mb-1">Employee</label>
+                <select value={dailyEmployee}
+                  onChange={e => { setDailyEmployee(e.target.value); fetchDailyBreakdown(e.target.value); }}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white text-gray-900 focus:outline-none focus:ring-2 focus:ring-green-500">
+                  <option value="">— Select Employee —</option>
+                  {employees.map(e=><option key={e.employeeId} value={e.employeeId}>{e.name}</option>)}
+                </select>
+              </div>
+              {dailyEmployee && !dailyLoading && dailyRecords.length > 0 && (
+                <div className="flex gap-3 text-sm text-gray-600">
+                  <span className="px-3 py-2 bg-green-50 border border-green-200 rounded-lg text-green-700 font-semibold">
+                    Earned: ₹{dailyRecords.reduce((s,r)=>s+(r.dayNetSalary||0),0).toLocaleString()}
+                  </span>
+                  {(dailySummary?.totalLateDeduction||0)>0 && (
+                    <span className="px-3 py-2 bg-orange-50 border border-orange-200 rounded-lg text-orange-700 font-semibold">
+                      Late Deductions: −₹{(dailySummary.totalLateDeduction||0).toLocaleString()}
+                    </span>
+                  )}
+                </div>
+              )}
+            </div>
+          </div>
+
+          {!dailyEmployee ? (
+            <div className="bg-white rounded-xl border border-gray-200 p-12 text-center text-gray-400">
+              <CalendarDays className="h-12 w-12 mx-auto mb-3 text-gray-300"/>
+              <p>Select an employee to view per-day salary breakdown</p>
+            </div>
+          ) : dailyLoading ? (
+            <div className="bg-white rounded-xl border border-gray-200 p-12 text-center">
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-green-600 mx-auto"/>
+            </div>
+          ) : dailyRecords.length === 0 ? (
+            <div className="bg-white rounded-xl border border-gray-200 p-12 text-center text-gray-400">
+              <p>No attendance records for this employee in {new Date(selectedMonth+"-01").toLocaleString("en-IN",{month:"long",year:"numeric"})}.</p>
+            </div>
+          ) : (
+            <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead className="bg-gray-50 border-b border-gray-200">
+                    <tr>{["Date","Status","Check-In","Check-Out","Late","Deduction","Day Earned"].map(h=>(
+                      <th key={h} className="px-3 py-3 text-left text-xs font-semibold text-gray-600">{h}</th>
+                    ))}</tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-100">
+                    {dailyRecords.map((r,i)=>{
+                      const fmt = (t) => t ? new Date(t).toLocaleTimeString("en-IN",{hour:"2-digit",minute:"2-digit",hour12:true}) : "—";
+                      const shiftOpen = r.status==="PRESENT" && r.checkInTime && !r.checkOutTime;
+                      return (
+                        <tr key={i} className={`transition ${r.isLate?"bg-orange-50 hover:bg-orange-100":"hover:bg-gray-50"}`}>
+                          <td className="px-3 py-2.5 font-medium text-gray-800">{r.date}</td>
+                          <td className="px-3 py-2.5">
+                            <span className={`px-2 py-0.5 rounded-full text-xs font-semibold ${
+                              r.status==="PRESENT"?"bg-green-100 text-green-700":
+                              r.status==="LEAVE"?"bg-blue-100 text-blue-700":
+                              r.status==="HOLIDAY"?"bg-purple-100 text-purple-700":
+                              "bg-red-100 text-red-700"}`}>{r.status}</span>
+                          </td>
+                          <td className="px-3 py-2.5 text-gray-600">{fmt(r.checkInTime)}</td>
+                          <td className="px-3 py-2.5 text-gray-600">
+                            {shiftOpen ? <span className="text-amber-600 text-xs font-medium">Shift open</span> : fmt(r.checkOutTime)}
+                          </td>
+                          <td className="px-3 py-2.5">
+                            {r.isLate
+                              ? <span className="text-orange-700 font-medium">{r.lateMinutes} min</span>
+                              : <span className="text-gray-400">—</span>}
+                          </td>
+                          <td className="px-3 py-2.5">
+                            {(r.lateDeduction||0)>0
+                              ? <span className="text-red-600 font-medium">−₹{r.lateDeduction.toLocaleString()}</span>
+                              : <span className="text-gray-400">—</span>}
+                          </td>
+                          <td className="px-3 py-2.5 font-semibold">
+                            {shiftOpen
+                              ? <span className="text-amber-600 text-xs">— (shift open)</span>
+                              : r.status==="PRESENT" && r.checkOutTime
+                                ? <span className="text-green-700">₹{(r.dayNetSalary||0).toLocaleString()}</span>
+                                : <span className="text-gray-400">₹0</span>}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                  <tfoot className="border-t-2 border-gray-300 bg-gray-50">
+                    <tr>
+                      <td colSpan={5} className="px-3 py-3 text-sm font-bold text-gray-700">
+                        Month Earnings So Far (from punches)
+                      </td>
+                      <td className="px-3 py-3 text-sm font-bold text-red-600">
+                        {(dailySummary?.totalLateDeduction||0)>0 ? `−₹${(dailySummary.totalLateDeduction).toLocaleString()}` : "—"}
+                      </td>
+                      <td className="px-3 py-3 text-base font-bold text-green-700">
+                        ₹{dailyRecords.reduce((s,r)=>s+(r.dayNetSalary||0),0).toLocaleString()}
+                      </td>
+                    </tr>
+                  </tfoot>
+                </table>
+              </div>
+            </div>
+          )}
         </div>
       )}
 

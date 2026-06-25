@@ -18,7 +18,9 @@ const {
     AdminSale,
     User,
     Role,
-    Supplier
+    Supplier,
+    MobileBrand,
+    MobileIssue
 } = require('../models/mongoModels');
 
 // JWT Secret for shop admins (different from regular users)
@@ -2425,8 +2427,10 @@ router.post('/records/customer', shopAdminAuth, async (req, res) => {
                 technician_name: m.technician_name || technicianname || '',
                 payments,
                 total_paid,
-                paid_amount: total_paid,
-                payment: m.payment || 'Cash'
+                paid_amount: total_paid
+                // `payment` is intentionally not set here — the Mobile schema enum is lowercase
+                // ("cash"/"UPI"/...) and defaults to "". Payments are recorded later via the
+                // payments[] array (All Records → Pay), matching the fixel/dealer flow.
             });
             mobiles.push(mob);
         }
@@ -2891,6 +2895,85 @@ router.get('/mobile-registry', shopAdminAuth, async (req, res) => {
 // -------------------- META --------------------
 router.get('/meta/payment-methods', shopAdminAuth, (req, res) => {
     res.json({ success: true, paymentMethods: PAYMENT_METHOD_ENUM });
+});
+
+// Mobile brands (shop-specific + global) — shop-admin equivalent of GET /api/mobile-brands/:shopId
+router.get('/meta/mobile-brands', shopAdminAuth, async (req, res) => {
+    try {
+        const brands = await MobileBrand.find({
+            $or: [{ shop_id: req.shopId }, { shop_id: null }],
+            is_active: true
+        }).sort({ brand_name: 1 }).lean();
+        res.json({ success: true, brands });
+    } catch (err) {
+        console.error('meta mobile-brands error:', err);
+        res.status(500).json({ success: false, message: 'Server error' });
+    }
+});
+
+// Add a custom mobile brand for this shop
+router.post('/meta/mobile-brands', shopAdminAuth, async (req, res) => {
+    try {
+        const { brandName } = req.body;
+        if (!brandName || !brandName.trim()) {
+            return res.status(400).json({ success: false, message: 'brandName required' });
+        }
+        const existing = await MobileBrand.findOne({
+            shop_id: req.shopId,
+            brand_name: { $regex: new RegExp(`^${brandName.trim()}$`, 'i') }
+        });
+        if (existing) return res.status(400).json({ success: false, message: 'Brand already exists' });
+        const brand = await MobileBrand.create({
+            shop_id: req.shopId,
+            brand_name: brandName.trim(),
+            is_custom: true,
+            is_active: true
+        });
+        res.json({ success: true, brand });
+    } catch (err) {
+        console.error('add mobile-brand error:', err);
+        res.status(500).json({ success: false, message: 'Server error' });
+    }
+});
+
+// Mobile issues (shop-specific + global) — shop-admin equivalent of GET /api/mobile-issues/:shopId
+router.get('/meta/mobile-issues', shopAdminAuth, async (req, res) => {
+    try {
+        const issues = await MobileIssue.find({
+            $or: [{ shop_id: req.shopId }, { shop_id: null }],
+            is_active: true
+        }).sort({ issue_category: 1, issue_name: 1 }).lean();
+        res.json({ success: true, issues });
+    } catch (err) {
+        console.error('meta mobile-issues error:', err);
+        res.status(500).json({ success: false, message: 'Server error' });
+    }
+});
+
+// Add a custom mobile issue for this shop
+router.post('/meta/mobile-issues', shopAdminAuth, async (req, res) => {
+    try {
+        const { issueName, issueCategory } = req.body;
+        if (!issueName || !issueName.trim()) {
+            return res.status(400).json({ success: false, message: 'issueName required' });
+        }
+        const existing = await MobileIssue.findOne({
+            shop_id: req.shopId,
+            issue_name: { $regex: new RegExp(`^${issueName.trim()}$`, 'i') }
+        });
+        if (existing) return res.status(400).json({ success: false, message: 'Issue already exists' });
+        const issue = await MobileIssue.create({
+            shop_id: req.shopId,
+            issue_name: issueName.trim(),
+            issue_category: (issueCategory && issueCategory.trim()) || 'General',
+            is_custom: true,
+            is_active: true
+        });
+        res.json({ success: true, issue });
+    } catch (err) {
+        console.error('add mobile-issue error:', err);
+        res.status(500).json({ success: false, message: 'Server error' });
+    }
 });
 
 module.exports = router;
