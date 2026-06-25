@@ -484,6 +484,7 @@ const hrDailyAttendanceSchema = new mongoose.Schema({
   is_late: { type: Boolean, default: false },
   late_minutes: { type: Number, default: 0 },
   late_deduction: { type: Number, default: 0 }, // ₹ deducted for lateness on this day
+  day_net_salary: { type: Number, default: 0 }, // daily_salary − late_deduction; set on checkout
   lunch_minutes: { type: Number, default: 0 },
   total_worked_minutes: { type: Number, default: 0 },
   source: { type: String, enum: ['SOFTWARE', 'ESSL_M20', 'MANUAL'], default: 'SOFTWARE' },

@@ -359,6 +359,13 @@ function buildDailySummary(employee, punches, hrSettings) {
 
   const status = checkIn ? 'PRESENT' : 'ABSENT';
 
+  // day_net_salary is only set once checkout is recorded (day is complete).
+  // Stays 0 while the shift is still open so the salary section doesn't show partial earnings.
+  const dailySalary = employee.daily_salary || 0;
+  const dayNetSalary = (checkIn && checkOut)
+    ? Math.max(0, Math.round((dailySalary - lateDeduction) * 100) / 100)
+    : 0;
+
   return {
     status,
     check_in_time:  checkIn?.punch_time,
@@ -370,6 +377,7 @@ function buildDailySummary(employee, punches, hrSettings) {
     is_late: isLate,
     late_minutes: lateMinutes,
     late_deduction: lateDeduction,
+    day_net_salary: dayNetSalary,
   };
 }
 
@@ -513,6 +521,7 @@ function attendanceToFrontend(rec, employee) {
     isLate:         !!r.is_late,
     lateMinutes:    r.late_minutes || 0,
     lateDeduction:  r.late_deduction || 0,
+    dayNetSalary:   r.day_net_salary || 0,
     totalWorkMinutes: r.total_worked_minutes || 0,
     source: r.source,
     notes: r.notes,

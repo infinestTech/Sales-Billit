@@ -66,7 +66,7 @@ export default function AllRecordsPanel({ currentShopId }) {
           </div>
           <div className="relative flex-1 min-w-[200px]">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
-            <input className="w-full pl-10 pr-3 py-2 border border-slate-300 rounded-lg text-sm" placeholder="Search by name, phone, bill no..." value={q} onChange={e => setQ(e.target.value)} />
+            <input className="w-full pl-10 pr-3 py-2 border border-slate-300 rounded-lg text-sm text-slate-900 placeholder-slate-400" placeholder="Search by name, phone, bill no..." value={q} onChange={e => setQ(e.target.value)} />
           </div>
         </div>
       </PanelCard>
