@@ -2481,15 +2481,38 @@ router.post('/records/dealer', shopAdminAuth, async (req, res) => {
 // -------------------- RECORDS LIST / STATUS / DELETE --------------------
 router.get('/records', shopAdminAuth, async (req, res) => {
     try {
-        const [mobiles, customers, dealers, shop] = await Promise.all([
-            Mobile.find({ shop_id: req.shopId }).sort({ created_at: -1 }).lean(),
-            Customer.find({ shop_id: req.shopId }).sort({ created_at: -1 }).lean(),
-            Dealer.find({ shop_id: req.shopId }).sort({ created_at: -1 }).lean(),
-            Shop.findById(req.shopId).lean()
+        const { tab = 'customers', page = 1, limit = 20, q = '' } = req.query;
+        const Model = tab === 'dealers' ? Dealer : Customer;
+        const pageNum = Math.max(1, parseInt(page) || 1);
+        const limitNum = Math.min(100, Math.max(1, parseInt(limit) || 20));
+        const skip = (pageNum - 1) * limitNum;
+
+        const filter = { shop_id: req.shopId };
+        if (q && q.trim()) {
+            const escaped = q.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+            const regex = new RegExp(escaped, 'i');
+            filter.$or = [{ client_name: regex }, { mobile_number: regex }, { bill_no: regex }];
+        }
+
+        const [clients, total, shop] = await Promise.all([
+            Model.find(filter).sort({ created_at: -1 }).skip(skip).limit(limitNum).lean(),
+            Model.countDocuments(filter),
+            Shop.findById(req.shopId).select('owner_name phone address').lean()
         ]);
+
+        const clientIds = clients.map(c => c._id);
+        const idField = tab === 'dealers' ? 'dealer_id' : 'customer_id';
+        const mobiles = clientIds.length
+            ? await Mobile.find({ shop_id: req.shopId, [idField]: { $in: clientIds } }).lean()
+            : [];
+
         res.json({
             success: true,
-            mobiles, customers, dealers,
+            [tab]: clients,
+            mobiles,
+            total,
+            page: pageNum,
+            totalPages: Math.ceil(total / limitNum),
             shopOwnerName: shop?.owner_name || '',
             shopPhone: shop?.phone || '',
             shopaddress: shop?.address || ''

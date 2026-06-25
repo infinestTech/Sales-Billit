@@ -1,55 +1,88 @@
 "use client";
-import { useEffect, useState } from "react";
-import { Database, Trash2, CheckCircle, XCircle, Truck, RotateCcw, Search, Plus, Minus } from "lucide-react";
+import { useEffect, useState, useRef } from "react";
+import { Database, Trash2, CheckCircle, Truck, RotateCcw, Search, Plus, Minus, ChevronLeft, ChevronRight } from "lucide-react";
 import shopAdminApi from "../shopAdminApi";
-import { PanelHeader, PanelCard, Btn, Input, Select, Modal, Field, Toast, useToast, EmptyState, LoadingRow } from "./_ui";
+import { PanelHeader, PanelCard, Btn, Input, Select, Modal, Field, Toast, useToast, EmptyState } from "./_ui";
+
+const PAGE_SIZE = 20;
 
 export default function AllRecordsPanel({ currentShopId }) {
   const { toast, show, clear } = useToast();
-  const [data, setData] = useState({ mobiles: [], customers: [], dealers: [] });
+  const [clients, setClients] = useState([]);
+  const [mobiles, setMobiles] = useState([]);
+  const [total, setTotal] = useState(0);
+  const [totalPages, setTotalPages] = useState(0);
   const [loading, setLoading] = useState(true);
   const [q, setQ] = useState("");
+  const [debouncedQ, setDebouncedQ] = useState("");
   const [tab, setTab] = useState("customers");
+  const [page, setPage] = useState(1);
   const [paymentModal, setPaymentModal] = useState(null);
   const [payForm, setPayForm] = useState({ amount: 0, method: "Cash" });
+  const debounceRef = useRef(null);
 
-  const fetch = async () => {
+  const fetchPage = async (tabVal, pageVal, qVal) => {
     setLoading(true);
-    try { const r = await shopAdminApi.listRecords(); setData({ mobiles: r.mobiles || [], customers: r.customers || [], dealers: r.dealers || [] }); }
-    catch (e) { show("Failed to load records", "error"); }
+    try {
+      const r = await shopAdminApi.listRecords({ tab: tabVal, page: pageVal, limit: PAGE_SIZE, q: qVal });
+      setClients(r[tabVal] || []);
+      setMobiles(r.mobiles || []);
+      setTotal(r.total || 0);
+      setTotalPages(r.totalPages || 0);
+    } catch (e) { show("Failed to load records", "error"); }
     setLoading(false);
   };
-  useEffect(() => { if (currentShopId) fetch(); /* eslint-disable-next-line */ }, [currentShopId]);
+
+  useEffect(() => { if (currentShopId) fetchPage(tab, page, debouncedQ); }, [currentShopId, tab, page, debouncedQ]);
+
+  const handleSearchChange = (val) => {
+    setQ(val);
+    clearTimeout(debounceRef.current);
+    debounceRef.current = setTimeout(() => { setPage(1); setDebouncedQ(val); }, 400);
+  };
+
+  const handleTabChange = (t) => { setTab(t); setPage(1); };
+
+  const refetch = () => fetchPage(tab, page, debouncedQ);
 
   const toggle = async (mobileId, status, value) => {
-    try { await shopAdminApi.toggleMobileStatus(mobileId, status, value); show(`Marked ${status}`); fetch(); }
+    try { await shopAdminApi.toggleMobileStatus(mobileId, status, value); show(`Marked ${status}`); refetch(); }
     catch (e) { show("Failed", "error"); }
   };
-  const delMobile = async (id) => { if (!confirm("Delete mobile entry?")) return; try { await shopAdminApi.deleteMobile(id); show("Deleted"); fetch(); } catch (e) { show("Failed", "error"); } };
+  const delMobile = async (id) => {
+    if (!confirm("Delete mobile entry?")) return;
+    try { await shopAdminApi.deleteMobile(id); show("Deleted"); refetch(); }
+    catch (e) { show("Failed", "error"); }
+  };
   const delClient = async (type, id) => {
     if (!confirm(`Delete this ${type} and all linked mobiles?`)) return;
-    try { type === "customer" ? await shopAdminApi.deleteCustomer(id) : await shopAdminApi.deleteDealer(id); show("Deleted"); fetch(); }
-    catch (e) { show("Failed", "error"); }
+    try {
+      type === "customer" ? await shopAdminApi.deleteCustomer(id) : await shopAdminApi.deleteDealer(id);
+      show("Deleted"); refetch();
+    } catch (e) { show("Failed", "error"); }
   };
 
   const openPayment = (mobile) => { setPaymentModal(mobile); setPayForm({ amount: 0, method: "Cash" }); };
   const submitPayment = async () => {
     try {
       await shopAdminApi.addPayment(paymentModal._id, Number(payForm.amount), payForm.method);
-      show("Payment added"); setPaymentModal(null); fetch();
+      show("Payment added"); setPaymentModal(null); refetch();
     } catch (e) { show("Failed", "error"); }
   };
   const delPayment = async (mobileId, idx) => {
     if (!confirm("Remove this payment?")) return;
-    try { await shopAdminApi.removePayment(mobileId, idx); show("Removed"); fetch(); }
+    try { await shopAdminApi.removePayment(mobileId, idx); show("Removed"); refetch(); }
     catch (e) { show("Failed", "error"); }
   };
 
-  const filterFn = (item) => !q || item.client_name?.toLowerCase().includes(q.toLowerCase()) || item.mobile_number?.includes(q) || item.bill_no?.toLowerCase().includes(q.toLowerCase());
-  const customers = data.customers.filter(filterFn);
-  const dealers = data.dealers.filter(filterFn);
+  const mobilesFor = (clientId) => mobiles.filter(m => String(m.customer_id) === String(clientId) || String(m.dealer_id) === String(clientId));
 
-  const mobilesFor = (clientId) => data.mobiles.filter(m => String(m.customer_id) === String(clientId) || String(m.dealer_id) === String(clientId));
+  const pagePills = () => {
+    if (totalPages <= 5) return Array.from({ length: totalPages }, (_, i) => i + 1);
+    if (page <= 3) return [1, 2, 3, 4, 5];
+    if (page >= totalPages - 2) return [totalPages - 4, totalPages - 3, totalPages - 2, totalPages - 1, totalPages];
+    return [page - 2, page - 1, page, page + 1, page + 2];
+  };
 
   return (
     <div>
@@ -59,14 +92,19 @@ export default function AllRecordsPanel({ currentShopId }) {
         <div className="flex flex-wrap items-center gap-3">
           <div className="flex bg-slate-100 rounded-lg p-1">
             {["customers", "dealers"].map(t => (
-              <button key={t} onClick={() => setTab(t)} className={`px-4 py-1.5 rounded-md text-sm font-medium capitalize ${tab === t ? "bg-white text-emerald-700 shadow-sm" : "text-slate-600"}`}>
-                {t} ({t === "customers" ? customers.length : dealers.length})
+              <button key={t} onClick={() => handleTabChange(t)} className={`px-4 py-1.5 rounded-md text-sm font-medium capitalize ${tab === t ? "bg-white text-emerald-700 shadow-sm" : "text-slate-600"}`}>
+                {t} {tab === t ? `(${total})` : ""}
               </button>
             ))}
           </div>
           <div className="relative flex-1 min-w-[200px]">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
-            <input className="w-full pl-10 pr-3 py-2 border border-slate-300 rounded-lg text-sm text-slate-900 placeholder-slate-400" placeholder="Search by name, phone, bill no..." value={q} onChange={e => setQ(e.target.value)} />
+            <input
+              className="w-full pl-10 pr-3 py-2 border border-slate-300 rounded-lg text-sm text-slate-900 placeholder-slate-400"
+              placeholder="Search by name, phone, bill no..."
+              value={q}
+              onChange={e => handleSearchChange(e.target.value)}
+            />
           </div>
         </div>
       </PanelCard>
@@ -74,14 +112,43 @@ export default function AllRecordsPanel({ currentShopId }) {
       <PanelCard>
         {loading ? <div className="p-8 text-center text-slate-400">Loading...</div> : (
           <div className="divide-y divide-slate-100">
-            {(tab === "customers" ? customers : dealers).length === 0 && (
-              <EmptyState icon={Database} title={`No ${tab} found`} />
-            )}
-            {(tab === "customers" ? customers : dealers).map(c => (
+            {clients.length === 0 && <EmptyState icon={Database} title={`No ${tab} found`} />}
+            {clients.map(c => (
               <ClientRow key={c._id} client={c} type={tab === "customers" ? "customer" : "dealer"}
                 mobiles={mobilesFor(c._id)} onToggle={toggle} onDelMobile={delMobile} onDelClient={delClient}
                 onAddPay={openPayment} onDelPay={delPayment} />
             ))}
+          </div>
+        )}
+
+        {!loading && totalPages > 1 && (
+          <div className="flex items-center justify-between px-4 py-3 border-t border-slate-100">
+            <p className="text-sm text-slate-500">{total} total • Page {page} of {totalPages}</p>
+            <div className="flex items-center gap-1">
+              <button
+                onClick={() => setPage(p => Math.max(1, p - 1))}
+                disabled={page === 1}
+                className="p-2 rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed"
+              >
+                <ChevronLeft className="h-4 w-4" />
+              </button>
+              {pagePills().map(p => (
+                <button
+                  key={p}
+                  onClick={() => setPage(p)}
+                  className={`w-9 h-9 rounded-lg text-sm font-medium border ${p === page ? "bg-emerald-600 text-white border-emerald-600" : "border-slate-200 text-slate-600 hover:bg-slate-50"}`}
+                >
+                  {p}
+                </button>
+              ))}
+              <button
+                onClick={() => setPage(p => Math.min(totalPages, p + 1))}
+                disabled={page === totalPages}
+                className="p-2 rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed"
+              >
+                <ChevronRight className="h-4 w-4" />
+              </button>
+            </div>
           </div>
         )}
       </PanelCard>

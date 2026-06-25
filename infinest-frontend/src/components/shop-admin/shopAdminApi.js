@@ -54,7 +54,7 @@ const shopAdminApi = {
   // records / customers / dealers
   createCustomer: (payload) => request("post", "/records/customer", { data: payload }),
   createDealer: (payload) => request("post", "/records/dealer", { data: payload }),
-  listRecords: () => request("get", "/records"),
+  listRecords: ({ tab = 'customers', page = 1, limit = 20, q = '' } = {}) => request("get", "/records", { params: { tab, page, limit, q } }),
   toggleMobileStatus: (mobileId, status, value) => request("post", "/records/toggle-status", { data: { mobileId, status, value } }),
   deleteMobile: (mobileId) => request("delete", `/records/mobile/${mobileId}`),
   updateBalance: (id, balanceAmount, type) => request("put", "/records/balance", { data: { id, balanceAmount, type } }),
