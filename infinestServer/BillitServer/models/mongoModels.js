@@ -109,6 +109,7 @@ const dealerSchema = new mongoose.Schema({
   }],
   created_at: { type: Date, default: Date.now }
 });
+dealerSchema.index({ shop_id: 1 });
 
 
 // ==============================
@@ -136,6 +137,7 @@ const customerSchema = new mongoose.Schema({
   estimated_cost: { type: Number, default: 0 },
   created_at: { type: Date, default: Date.now }
 });
+customerSchema.index({ shop_id: 1 });
 
 // ==============================
 // 📱 Mobile Schema
@@ -175,6 +177,9 @@ const mobileSchema = new mongoose.Schema({
   created_at: { type: Date, default: Date.now }
 });
 
+// Indexes for $lookup performance in customer-details aggregation
+mobileSchema.index({ shop_id: 1, customer_id: 1 });
+mobileSchema.index({ shop_id: 1, dealer_id: 1 });
 
 // ==============================
 // 🔧 Technician Schema

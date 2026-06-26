@@ -271,88 +271,65 @@ router.get('/dashboard/overview', shopAdminAuth, async (req, res) => {
 // ==============================
 router.get('/customer-details', shopAdminAuth, async (req, res) => {
     try {
-        const shopId = req.shopId;
-        const { billNumber } = req.query; // Get bill number filter from query params
+        const shopId = req.shopId; // already an ObjectId from shopAdminAuth
+        const { billNumber, name, mobileNumber, fromDate, toDate } = req.query;
+        const page = Math.max(1, parseInt(req.query.page) || 1);
+        const limit = Math.min(100, Math.max(1, parseInt(req.query.limit) || 10));
+        const skip = (page - 1) * limit;
 
-        console.log('Customer details request - shopId:', shopId, 'billNumber:', billNumber); // Debug log
+        const buildMatch = (extra) => {
+            const match = { shop_id: shopId, ...extra };
+            if (billNumber && billNumber.trim()) match.bill_no = { $regex: billNumber.trim(), $options: 'i' };
+            if (name && name.trim()) match.client_name = { $regex: name.trim(), $options: 'i' };
+            if (mobileNumber && mobileNumber.trim()) match.mobile_number = { $regex: mobileNumber.trim(), $options: 'i' };
+            return match;
+        };
 
-        // Fetch all customers and dealers
-        let customerQuery = { shop_id: shopId };
-        let dealerQuery = { shop_id: shopId };
-        
-        // If bill number filter is provided, filter customers/dealers by bill_no
-        if (billNumber && billNumber.trim()) {
-            const billRegex = { $regex: billNumber.trim(), $options: 'i' };
-            customerQuery.bill_no = billRegex;
-            dealerQuery.bill_no = billRegex;
-        }
-
-        const [customers, dealers] = await Promise.all([
-            Customer.find(customerQuery).lean(),
-            Dealer.find(dealerQuery).lean()
-        ]);
-
-        // Combine customers and dealers
-        const allClients = [
-            ...customers.map(c => ({ ...c, customer_type: 'Customer' })),
-            ...dealers.map(d => ({ ...d, customer_type: 'Dealer' }))
+        const buildPipeline = (matchStage, clientType, foreignField) => [
+            { $match: matchStage },
+            { $lookup: { from: 'mobiles', localField: '_id', foreignField, as: 'mobiles' } },
+            { $addFields: {
+                customer_type: clientType,
+                total_mobiles: { $size: '$mobiles' },
+                ready_count: { $size: { $filter: { input: '$mobiles', cond: { $eq: ['$$this.ready', true] } } } },
+                not_ready_count: { $size: { $filter: { input: '$mobiles', cond: { $eq: ['$$this.ready', false] } } } },
+                delivered_count: { $size: { $filter: { input: '$mobiles', cond: { $eq: ['$$this.delivered', true] } } } },
+                total_paid: { $sum: { $map: { input: '$mobiles', in: {
+                    $cond: [
+                        { $gt: [{ $size: { $ifNull: ['$$this.payments', []] } }, 0] },
+                        { $sum: '$$this.payments.amount' },
+                        { $ifNull: ['$$this.paid_amount', 0] }
+                    ]
+                }}}},
+                latest_mobile_date: { $max: '$mobiles.created_at' },
+                latest_bill_no: {
+                    $let: {
+                        vars: { sorted: { $sortArray: { input: '$mobiles', sortBy: { created_at: -1 } } } },
+                        in: { $ifNull: [{ $arrayElemAt: ['$$sorted.bill_no', 0] }, 'N/A'] }
+                    }
+                }
+            }},
+            { $match: { total_mobiles: { $gt: 0 } } },
+            { $project: { mobiles: 0 } }
         ];
 
-        // Fetch mobile statistics for each client
-        const clientDetails = await Promise.all(
-            allClients.map(async (client) => {
-                // Build the query for mobiles
-                const mobileQuery = {
-                    shop_id: shopId,
-                    [client.customer_type === 'Customer' ? 'customer_id' : 'dealer_id']: client._id
-                };
+        const [customerResults, dealerResults] = await Promise.all([
+            Customer.aggregate(buildPipeline(buildMatch({}), 'Customer', 'customer_id')),
+            Dealer.aggregate(buildPipeline(buildMatch({}), 'Dealer', 'dealer_id'))
+        ]);
 
-                const mobiles = await Mobile.find(mobileQuery).lean();
+        let allClients = [...customerResults, ...dealerResults];
 
-                const totalMobiles = mobiles.length;
-                const readyCount = mobiles.filter(m => m.ready).length;
-                const notReadyCount = mobiles.filter(m => !m.ready).length;
-                const deliveredCount = mobiles.filter(m => m.delivered).length;
-                
-                // Calculate total paid from payments array (not just paid_amount field)
-                let totalPaid = 0;
-                mobiles.forEach(m => {
-                    if (m.payments && m.payments.length > 0) {
-                        // Sum all payments in the payments array
-                        totalPaid += m.payments.reduce((sum, p) => sum + (p.amount || 0), 0);
-                    } else {
-                        // Fallback to paid_amount for legacy data without payments array
-                        totalPaid += (m.paid_amount || 0);
-                    }
-                });
+        if (fromDate) allClients = allClients.filter(c => new Date(c.latest_mobile_date) >= new Date(fromDate));
+        if (toDate) allClients = allClients.filter(c => new Date(c.latest_mobile_date) <= new Date(toDate));
 
-                // Get the latest mobile date and bill number
-                const latestMobile = mobiles.sort((a, b) => 
-                    new Date(b.created_at) - new Date(a.created_at)
-                )[0];
+        allClients.sort((a, b) => new Date(b.latest_mobile_date || 0) - new Date(a.latest_mobile_date || 0));
 
-                return {
-                    _id: client._id,
-                    client_name: client.client_name,
-                    mobile_number: client.mobile_number,
-                    customer_type: client.customer_type,
-                    total_mobiles: totalMobiles,
-                    ready_count: readyCount,
-                    not_ready_count: notReadyCount,
-                    delivered_count: deliveredCount,
-                    total_paid: totalPaid,
-                    latest_mobile_date: latestMobile?.created_at || client.created_at,
-                    latest_bill_no: latestMobile?.bill_no || 'N/A'
-                };
-            })
-        );
+        const totalCount = allClients.length;
+        const totalPages = Math.ceil(totalCount / limit);
+        const pageData = allClients.slice(skip, skip + limit);
 
-        // Filter out clients with no mobiles and sort by latest activity (latest first)
-        const activeClients = clientDetails
-            .filter(c => c.total_mobiles > 0)
-            .sort((a, b) => new Date(b.latest_mobile_date) - new Date(a.latest_mobile_date));
-
-        res.json({ success: true, customerDetails: activeClients });
+        res.json({ success: true, customerDetails: pageData, totalCount, page, totalPages });
     } catch (error) {
         console.error('Get customer details error:', error);
         res.status(500).json({ success: false, message: 'Server error' });
