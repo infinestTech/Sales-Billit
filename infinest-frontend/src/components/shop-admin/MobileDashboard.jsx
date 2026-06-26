@@ -26,6 +26,8 @@ export default function MobileDashboard({
   customerDetails,
   filteredCustomers,
   setFilteredCustomers,
+  customerTotalCount: initialTotalCount = 0,
+  setCustomerTotalCount: setParentTotalCount,
   selectedEmployee,
   setSelectedEmployee,
   employeeAttendance,
@@ -54,6 +56,9 @@ export default function MobileDashboard({
   });
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage] = useState(5);
+  const [customerTotalCount, setCustomerTotalCount] = useState(initialTotalCount);
+
+  useEffect(() => { setCustomerTotalCount(initialTotalCount); }, [initialTotalCount]);
 
   // Employee filters
   const [attendanceFilters, setAttendanceFilters] = useState({
@@ -596,72 +601,42 @@ export default function MobileDashboard({
 
   const currentShop = getCurrentShop();
 
-  // Handle customer filter
-  const handleCustomerFilter = async () => {
+  const fetchCustomerPage = async (page, filters = customerFilters) => {
     try {
       const token = localStorage.getItem('shopAdminToken');
-      const authConfig = {
-        headers: { 'Authorization': `Bearer ${token}` },
-        params: { shop_id: currentShopId }
-      };
+      const params = { shop_id: currentShopId, page, limit: itemsPerPage };
+      if (filters.billNumber) params.billNumber = filters.billNumber;
+      if (filters.name) params.name = filters.name;
+      if (filters.mobileNumber) params.mobileNumber = filters.mobileNumber;
+      if (filters.fromDate) params.fromDate = filters.fromDate;
+      if (filters.toDate) params.toDate = filters.toDate;
 
-      if (customerFilters.billNumber) {
-        authConfig.params.billNumber = customerFilters.billNumber;
-      }
-
-      const customerDetailsRes = await axios.get(
+      const res = await axios.get(
         `${API_URL}/api/shop-admin/customer-details`,
-        authConfig
+        { headers: { 'Authorization': `Bearer ${token}` }, params }
       );
 
-      if (customerDetailsRes.data.success) {
-        let filtered = customerDetailsRes.data.customerDetails || [];
-
-        if (customerFilters.name) {
-          filtered = filtered.filter(c =>
-            c.client_name.toLowerCase().includes(customerFilters.name.toLowerCase())
-          );
-        }
-
-        if (customerFilters.mobileNumber) {
-          filtered = filtered.filter(c =>
-            c.mobile_number.includes(customerFilters.mobileNumber)
-          );
-        }
-
-        if (customerFilters.fromDate) {
-          filtered = filtered.filter(c => {
-            const date = new Date(c.latest_mobile_date);
-            return date >= new Date(customerFilters.fromDate);
-          });
-        }
-
-        if (customerFilters.toDate) {
-          filtered = filtered.filter(c => {
-            const date = new Date(c.latest_mobile_date);
-            return date <= new Date(customerFilters.toDate);
-          });
-        }
-
-        setFilteredCustomers(filtered);
-        setCurrentPage(1);
-        setShowFilters(false);
+      if (res.data.success) {
+        setFilteredCustomers(res.data.customerDetails || []);
+        setCustomerTotalCount(res.data.totalCount || 0);
+        if (setParentTotalCount) setParentTotalCount(res.data.totalCount || 0);
+        setCurrentPage(page);
       }
     } catch (error) {
-      console.error('Error filtering customers:', error);
+      console.error('Error fetching customer page:', error);
     }
   };
 
-  const handleClearFilters = () => {
-    setCustomerFilters({
-      name: '',
-      mobileNumber: '',
-      billNumber: '',
-      fromDate: '',
-      toDate: ''
-    });
-    setFilteredCustomers(customerDetails);
-    setCurrentPage(1);
+  // Handle customer filter
+  const handleCustomerFilter = async () => {
+    await fetchCustomerPage(1);
+    setShowFilters(false);
+  };
+
+  const handleClearFilters = async () => {
+    const cleared = { name: '', mobileNumber: '', billNumber: '', fromDate: '', toDate: '' };
+    setCustomerFilters(cleared);
+    await fetchCustomerPage(1, cleared);
     setShowFilters(false);
   };
 
@@ -688,11 +663,10 @@ export default function MobileDashboard({
     }
   };
 
-  // Pagination
-  const indexOfLastItem = currentPage * itemsPerPage;
-  const indexOfFirstItem = indexOfLastItem - itemsPerPage;
-  const currentCustomers = filteredCustomers.slice(indexOfFirstItem, indexOfLastItem);
-  const totalPages = Math.ceil(filteredCustomers.length / itemsPerPage);
+  // Pagination (server-side)
+  const indexOfFirstItem = (currentPage - 1) * itemsPerPage;
+  const currentCustomers = filteredCustomers; // server returns the current page only
+  const totalPages = Math.ceil(customerTotalCount / itemsPerPage);
 
   if (loading) {
     return (
@@ -946,23 +920,23 @@ export default function MobileDashboard({
               </div>
 
               {/* Pagination */}
-              {filteredCustomers.length > 0 && (
+              {customerTotalCount > 0 && (
                 <div className="p-3 bg-gray-50 border-t border-gray-200">
                   <div className="flex items-center justify-between text-xs text-gray-600 mb-2">
                     <span>
-                      {indexOfFirstItem + 1}-{Math.min(indexOfLastItem, filteredCustomers.length)} of {filteredCustomers.length}
+                      {indexOfFirstItem + 1}–{Math.min(indexOfFirstItem + itemsPerPage, customerTotalCount)} of {customerTotalCount}
                     </span>
                     <div className="flex gap-2">
                       <button
-                        onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
+                        onClick={() => fetchCustomerPage(Math.max(currentPage - 1, 1))}
                         disabled={currentPage === 1}
                         className="p-1.5 bg-white border border-gray-300 rounded disabled:opacity-50"
                       >
                         <ChevronLeft className="h-4 w-4" />
                       </button>
                       <button
-                        onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
-                        disabled={currentPage === totalPages}
+                        onClick={() => fetchCustomerPage(Math.min(currentPage + 1, totalPages))}
+                        disabled={currentPage === totalPages || totalPages === 0}
                         className="p-1.5 bg-white border border-gray-300 rounded disabled:opacity-50"
                       >
                         <ChevronRight className="h-4 w-4" />

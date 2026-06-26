@@ -73,6 +73,7 @@ export default function ShopAdminDashboard() {
   // Customer details state
   const [customerDetails, setCustomerDetails] = useState([]);
   const [filteredCustomers, setFilteredCustomers] = useState([]);
+  const [customerTotalCount, setCustomerTotalCount] = useState(0);
   const [customerFilters, setCustomerFilters] = useState({
     name: '',
     mobileNumber: '',
@@ -214,20 +215,26 @@ export default function ShopAdminDashboard() {
       const [overviewRes, employeesRes, customerDetailsRes] = await Promise.all([
         axios.get(`${API_URL}/api/shop-admin/dashboard/overview`, authConfig),
         axios.get(`${API_URL}/api/shop-admin/employees`, authConfig),
-        axios.get(`${API_URL}/api/shop-admin/customer-details`, authConfig)
+        axios.get(`${API_URL}/api/shop-admin/customer-details`, {
+          ...authConfig,
+          params: { ...authConfig.params, page: 1, limit: itemsPerPage }
+        })
       ]);
 
       if (overviewRes.data.success) {
         setOverview(overviewRes.data.overview);
       }
-      
+
       if (employeesRes.data.success) {
         setEmployees(employeesRes.data.employees || []);
       }
 
       if (customerDetailsRes.data.success) {
-        setCustomerDetails(customerDetailsRes.data.customerDetails || []);
-        setFilteredCustomers(customerDetailsRes.data.customerDetails || []);
+        const data = customerDetailsRes.data.customerDetails || [];
+        setCustomerDetails(data);
+        setFilteredCustomers(data);
+        setCustomerTotalCount(customerDetailsRes.data.totalCount || 0);
+        setCurrentPage(1);
       }
       
       // Clear cached analytics when switching shops
@@ -285,61 +292,25 @@ export default function ShopAdminDashboard() {
     }
   };
 
-  const handleCustomerFilter = async () => {
+  const handleCustomerFilter = async (page = 1) => {
     try {
       const token = localStorage.getItem('shopAdminToken');
-      const authConfig = {
-        headers: {
-          'Authorization': `Bearer ${token}`
-        },
-        params: {
-          shop_id: currentShopId
-        }
-      };
+      const params = { shop_id: currentShopId, page, limit: itemsPerPage };
+      if (customerFilters.billNumber) params.billNumber = customerFilters.billNumber;
+      if (customerFilters.name) params.name = customerFilters.name;
+      if (customerFilters.mobileNumber) params.mobileNumber = customerFilters.mobileNumber;
+      if (customerFilters.fromDate) params.fromDate = customerFilters.fromDate;
+      if (customerFilters.toDate) params.toDate = customerFilters.toDate;
 
-      // Add bill number to params if provided
-      if (customerFilters.billNumber) {
-        authConfig.params.billNumber = customerFilters.billNumber;
-      }
-
-      // Fetch from API with bill number filter if applicable
       const customerDetailsRes = await axios.get(
-        `${API_URL}/api/shop-admin/customer-details`, 
-        authConfig
+        `${API_URL}/api/shop-admin/customer-details`,
+        { headers: { 'Authorization': `Bearer ${token}` }, params }
       );
 
       if (customerDetailsRes.data.success) {
-        let filtered = customerDetailsRes.data.customerDetails || [];
-
-        // Apply additional frontend filters
-        if (customerFilters.name) {
-          filtered = filtered.filter(c =>
-            c.client_name.toLowerCase().includes(customerFilters.name.toLowerCase())
-          );
-        }
-
-        if (customerFilters.mobileNumber) {
-          filtered = filtered.filter(c =>
-            c.mobile_number.includes(customerFilters.mobileNumber)
-          );
-        }
-
-        if (customerFilters.fromDate) {
-          filtered = filtered.filter(c => {
-            const date = new Date(c.latest_mobile_date);
-            return date >= new Date(customerFilters.fromDate);
-          });
-        }
-
-        if (customerFilters.toDate) {
-          filtered = filtered.filter(c => {
-            const date = new Date(c.latest_mobile_date);
-            return date <= new Date(customerFilters.toDate);
-          });
-        }
-
-        setFilteredCustomers(filtered);
-        setCurrentPage(1);
+        setFilteredCustomers(customerDetailsRes.data.customerDetails || []);
+        setCustomerTotalCount(customerDetailsRes.data.totalCount || 0);
+        setCurrentPage(page);
       }
     } catch (error) {
       console.error('Error filtering customers:', error);
@@ -347,42 +318,27 @@ export default function ShopAdminDashboard() {
   };
 
   const handleClearFilters = async () => {
-    setCustomerFilters({
-      name: '',
-      mobileNumber: '',
-      billNumber: '',
-      fromDate: '',
-      toDate: ''
-    });
-    
-    // Fetch fresh data without any filters
+    const cleared = { name: '', mobileNumber: '', billNumber: '', fromDate: '', toDate: '' };
+    setCustomerFilters(cleared);
+
     try {
       const token = localStorage.getItem('shopAdminToken');
-      const authConfig = {
-        headers: {
-          'Authorization': `Bearer ${token}`
-        },
-        params: {
-          shop_id: currentShopId
-        }
-      };
-
       const customerDetailsRes = await axios.get(
-        `${API_URL}/api/shop-admin/customer-details`, 
-        authConfig
+        `${API_URL}/api/shop-admin/customer-details`,
+        { headers: { 'Authorization': `Bearer ${token}` }, params: { shop_id: currentShopId, page: 1, limit: itemsPerPage } }
       );
 
       if (customerDetailsRes.data.success) {
-        setCustomerDetails(customerDetailsRes.data.customerDetails || []);
-        setFilteredCustomers(customerDetailsRes.data.customerDetails || []);
+        const data = customerDetailsRes.data.customerDetails || [];
+        setCustomerDetails(data);
+        setFilteredCustomers(data);
+        setCustomerTotalCount(customerDetailsRes.data.totalCount || 0);
+        setCurrentPage(1);
       }
     } catch (error) {
       console.error('Error clearing filters:', error);
-      // Fallback to existing data
       setFilteredCustomers(customerDetails);
     }
-    
-    setCurrentPage(1);
   };
 
   const fetchEmployeeAttendance = async (employeeId) => {
@@ -1302,11 +1258,30 @@ export default function ShopAdminDashboard() {
     return shop || shops[0];
   };
 
-  // Pagination for customer details
-  const indexOfLastItem = currentPage * itemsPerPage;
-  const indexOfFirstItem = indexOfLastItem - itemsPerPage;
-  const currentCustomers = filteredCustomers.slice(indexOfFirstItem, indexOfLastItem);
-  const totalPages = Math.ceil(filteredCustomers.length / itemsPerPage);
+  // Pagination for customer details (server-side)
+  const indexOfFirstItem = (currentPage - 1) * itemsPerPage;
+  const currentCustomers = filteredCustomers; // server returns the current page only
+  const totalPages = Math.ceil(customerTotalCount / itemsPerPage);
+
+  const handlePageChange = (newPage) => {
+    const hasActiveFilters = customerFilters.name || customerFilters.mobileNumber ||
+      customerFilters.billNumber || customerFilters.fromDate || customerFilters.toDate;
+    if (hasActiveFilters) {
+      handleCustomerFilter(newPage);
+    } else {
+      const token = localStorage.getItem('shopAdminToken');
+      axios.get(`${API_URL}/api/shop-admin/customer-details`, {
+        headers: { 'Authorization': `Bearer ${token}` },
+        params: { shop_id: currentShopId, page: newPage, limit: itemsPerPage }
+      }).then(res => {
+        if (res.data.success) {
+          setFilteredCustomers(res.data.customerDetails || []);
+          setCustomerTotalCount(res.data.totalCount || 0);
+          setCurrentPage(newPage);
+        }
+      }).catch(err => console.error('Error fetching customer page:', err));
+    }
+  };
 
   if (loading) {
     return (
@@ -1332,6 +1307,8 @@ export default function ShopAdminDashboard() {
         customerDetails={customerDetails}
         filteredCustomers={filteredCustomers}
         setFilteredCustomers={setFilteredCustomers}
+        customerTotalCount={customerTotalCount}
+        setCustomerTotalCount={setCustomerTotalCount}
         selectedEmployee={selectedEmployee}
         setSelectedEmployee={setSelectedEmployee}
         employeeAttendance={employeeAttendance}
@@ -1913,37 +1890,41 @@ export default function ShopAdminDashboard() {
                   {/* Pagination */}
                   <div className="bg-gray-50 px-6 py-4 border-t border-gray-200 flex items-center justify-between">
                     <div className="text-sm text-gray-600">
-                      Showing {indexOfFirstItem + 1} to {Math.min(indexOfLastItem, filteredCustomers.length)} of {filteredCustomers.length} customers
+                      Showing {indexOfFirstItem + 1}–{Math.min(indexOfFirstItem + itemsPerPage, customerTotalCount)} of {customerTotalCount} customers
                     </div>
                     <div className="flex gap-2">
                       <button
-                        onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
+                        onClick={() => handlePageChange(Math.max(currentPage - 1, 1))}
                         disabled={currentPage === 1}
                         className="px-3 py-2 bg-white border border-gray-300 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
                       >
                         Previous
                       </button>
                       <div className="flex items-center gap-1">
-                        {[...Array(Math.min(totalPages, 5))].map((_, i) => {
-                          const pageNum = i + 1;
-                          return (
-                            <button
-                              key={pageNum}
-                              onClick={() => setCurrentPage(pageNum)}
-                              className={`px-3 py-2 rounded-lg text-sm font-medium ${
-                                currentPage === pageNum
-                                  ? 'bg-green-600 text-white'
-                                  : 'bg-white border border-gray-300 text-gray-700 hover:bg-gray-50'
-                              }`}
-                            >
-                              {pageNum}
-                            </button>
-                          );
-                        })}
+                        {(() => {
+                          const start = Math.max(1, currentPage - 2);
+                          const end = Math.min(totalPages, start + 4);
+                          return [...Array(end - start + 1)].map((_, i) => {
+                            const pageNum = start + i;
+                            return (
+                              <button
+                                key={pageNum}
+                                onClick={() => handlePageChange(pageNum)}
+                                className={`px-3 py-2 rounded-lg text-sm font-medium ${
+                                  currentPage === pageNum
+                                    ? 'bg-green-600 text-white'
+                                    : 'bg-white border border-gray-300 text-gray-700 hover:bg-gray-50'
+                                }`}
+                              >
+                                {pageNum}
+                              </button>
+                            );
+                          });
+                        })()}
                       </div>
                       <button
-                        onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
-                        disabled={currentPage === totalPages}
+                        onClick={() => handlePageChange(Math.min(currentPage + 1, totalPages))}
+                        disabled={currentPage === totalPages || totalPages === 0}
                         className="px-3 py-2 bg-white border border-gray-300 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
                       >
                         Next
