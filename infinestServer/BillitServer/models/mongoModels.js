@@ -177,7 +177,8 @@ const mobileSchema = new mongoose.Schema({
   created_at: { type: Date, default: Date.now }
 });
 
-// Indexes for $lookup performance in customer-details aggregation
+// Indexes for customer-details aggregation:
+// - mobiles-first grouping uses shop_id prefix; customer_id/dealer_id for the $group key
 mobileSchema.index({ shop_id: 1, customer_id: 1 });
 mobileSchema.index({ shop_id: 1, dealer_id: 1 });
 
