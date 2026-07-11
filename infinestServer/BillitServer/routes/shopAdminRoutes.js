@@ -271,64 +271,91 @@ router.get('/dashboard/overview', shopAdminAuth, async (req, res) => {
 // ==============================
 router.get('/customer-details', shopAdminAuth, async (req, res) => {
     try {
-        const shopId = req.shopId; // already an ObjectId from shopAdminAuth
+        const shopId = req.shopId;
         const { billNumber, name, mobileNumber, fromDate, toDate } = req.query;
         const page = Math.max(1, parseInt(req.query.page) || 1);
         const limit = Math.min(100, Math.max(1, parseInt(req.query.limit) || 10));
         const skip = (page - 1) * limit;
 
-        const baseMatch = { shop_id: shopId };
-        if (billNumber && billNumber.trim()) baseMatch.bill_no = { $regex: billNumber.trim(), $options: 'i' };
-        if (name && name.trim()) baseMatch.client_name = { $regex: name.trim(), $options: 'i' };
-        if (mobileNumber && mobileNumber.trim()) baseMatch.mobile_number = { $regex: mobileNumber.trim(), $options: 'i' };
+        // ─── Mobiles-first approach ───────────────────────────────────────────
+        // Instead of: Customer → $lookup all mobiles per customer (slow, loads huge arrays)
+        // We do:      Mobile  → $group stats per client → $lookup one client doc (fast)
+        // This scales O(mobiles) rather than O(customers × mobiles).
 
-        // Shared aggregation stages for enriching a customer/dealer document
-        const buildEnrichStages = (clientType, foreignField) => [
-            { $match: baseMatch },
-            { $lookup: { from: 'mobiles', localField: '_id', foreignField, as: 'mobiles' } },
-            { $addFields: {
-                customer_type: clientType,
-                total_mobiles: { $size: '$mobiles' },
-                ready_count: { $size: { $filter: { input: '$mobiles', cond: { $eq: ['$$this.ready', true] } } } },
-                not_ready_count: { $size: { $filter: { input: '$mobiles', cond: { $eq: ['$$this.ready', false] } } } },
-                delivered_count: { $size: { $filter: { input: '$mobiles', cond: { $eq: ['$$this.delivered', true] } } } },
-                total_paid: { $sum: { $map: { input: '$mobiles', in: {
-                    $cond: [
-                        { $gt: [{ $size: { $ifNull: ['$$this.payments', []] } }, 0] },
-                        { $sum: '$$this.payments.amount' },
-                        { $ifNull: ['$$this.paid_amount', 0] }
-                    ]
-                }}}},
-                latest_mobile_date: { $max: '$mobiles.created_at' },
-                latest_bill_no: {
-                    $let: {
-                        vars: { sorted: { $sortArray: { input: '$mobiles', sortBy: { created_at: -1 } } } },
-                        in: { $ifNull: [{ $arrayElemAt: ['$$sorted.bill_no', 0] }, 'N/A'] }
-                    }
-                }
+        // Group mobile stats per unique customer/dealer
+        const groupStage = {
+            _id: {
+                id:   { $ifNull: ['$customer_id', '$dealer_id'] },
+                type: { $cond: [{ $ifNull: ['$customer_id', false] }, 'Customer', 'Dealer'] }
+            },
+            total_mobiles:   { $sum: 1 },
+            ready_count:     { $sum: { $cond: ['$ready', 1, 0] } },
+            not_ready_count: { $sum: { $cond: [{ $eq: ['$ready', false] }, 1, 0] } },
+            delivered_count: { $sum: { $cond: ['$delivered', 1, 0] } },
+            // Per-mobile pay: use payments array sum if present, else paid_amount field
+            total_paid: { $sum: {
+                $cond: [
+                    { $gt: [{ $size: { $ifNull: ['$payments', []] } }, 0] },
+                    { $sum: '$payments.amount' },
+                    { $ifNull: ['$paid_amount', 0] }
+                ]
             }},
-            { $match: { total_mobiles: { $gt: 0 } } },
-            { $project: { mobiles: 0 } }
+            latest_mobile_date: { $max: '$created_at' },
+            // $top picks the bill_no from the most-recent mobile without a full pre-sort
+            latest_bill_no: { $top: { output: '$bill_no', sortBy: { created_at: -1 } } }
+        };
+
+        // Lookup one client document per group from customers or dealers collection
+        const clientLookupStages = [
+            { $lookup: {
+                from: 'customers', localField: '_id.id', foreignField: '_id', as: '_cust',
+                pipeline: [{ $project: { client_name: 1, mobile_number: 1, bill_no: 1 } }]
+            }},
+            { $lookup: {
+                from: 'dealers', localField: '_id.id', foreignField: '_id', as: '_deal',
+                pipeline: [{ $project: { client_name: 1, mobile_number: 1, bill_no: 1 } }]
+            }},
+            { $addFields: {
+                _clientDoc: { $ifNull: [{ $arrayElemAt: ['$_cust', 0] }, { $arrayElemAt: ['$_deal', 0] }] }
+            }},
+            { $match: { _clientDoc: { $ne: null } } },
+            { $addFields: {
+                customer_type: '$_id.type',
+                client_name:   '$_clientDoc.client_name',
+                mobile_number: '$_clientDoc.mobile_number',
+                bill_no:       '$_clientDoc.bill_no',
+            }},
+            { $project: { _cust: 0, _deal: 0, _clientDoc: 0, _id: 0 } }
         ];
 
-        // Date range filter applied after computing latest_mobile_date
+        // Optional post-group text filters (applied on resolved client fields)
+        const filterStages = [];
+        if (name && name.trim())
+            filterStages.push({ $match: { client_name: { $regex: name.trim(), $options: 'i' } } });
+        if (mobileNumber && mobileNumber.trim())
+            filterStages.push({ $match: { mobile_number: { $regex: mobileNumber.trim(), $options: 'i' } } });
+        if (billNumber && billNumber.trim())
+            filterStages.push({ $match: { bill_no: { $regex: billNumber.trim(), $options: 'i' } } });
+
         const dateFilter = {};
         if (fromDate) dateFilter.$gte = new Date(fromDate);
-        if (toDate) dateFilter.$lte = new Date(toDate);
+        if (toDate)   dateFilter.$lte = new Date(toDate);
+        if (Object.keys(dateFilter).length > 0)
+            filterStages.push({ $match: { latest_mobile_date: dateFilter } });
 
-        // Single pipeline: Customer → $unionWith Dealer → filter → sort → paginate
         const pipeline = [
-            ...buildEnrichStages('Customer', 'customer_id'),
-            { $unionWith: { coll: 'dealers', pipeline: buildEnrichStages('Dealer', 'dealer_id') } },
-            ...(Object.keys(dateFilter).length > 0 ? [{ $match: { latest_mobile_date: dateFilter } }] : []),
+            { $match: { shop_id: shopId } },
+            { $group: groupStage },
+            ...clientLookupStages,
+            ...filterStages,
             { $sort: { latest_mobile_date: -1 } },
             { $facet: {
-                data: [{ $skip: skip }, { $limit: limit }],
+                data:       [{ $skip: skip }, { $limit: limit }],
                 totalCount: [{ $count: 'count' }]
             }}
         ];
 
-        const [result] = await Customer.aggregate(pipeline);
+        const [result] = await Mobile.aggregate(pipeline);
         const totalCount = result.totalCount[0]?.count || 0;
         const totalPages = Math.ceil(totalCount / limit);
 
