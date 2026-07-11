@@ -277,16 +277,14 @@ router.get('/customer-details', shopAdminAuth, async (req, res) => {
         const limit = Math.min(100, Math.max(1, parseInt(req.query.limit) || 10));
         const skip = (page - 1) * limit;
 
-        const buildMatch = (extra) => {
-            const match = { shop_id: shopId, ...extra };
-            if (billNumber && billNumber.trim()) match.bill_no = { $regex: billNumber.trim(), $options: 'i' };
-            if (name && name.trim()) match.client_name = { $regex: name.trim(), $options: 'i' };
-            if (mobileNumber && mobileNumber.trim()) match.mobile_number = { $regex: mobileNumber.trim(), $options: 'i' };
-            return match;
-        };
+        const baseMatch = { shop_id: shopId };
+        if (billNumber && billNumber.trim()) baseMatch.bill_no = { $regex: billNumber.trim(), $options: 'i' };
+        if (name && name.trim()) baseMatch.client_name = { $regex: name.trim(), $options: 'i' };
+        if (mobileNumber && mobileNumber.trim()) baseMatch.mobile_number = { $regex: mobileNumber.trim(), $options: 'i' };
 
-        const buildPipeline = (matchStage, clientType, foreignField) => [
-            { $match: matchStage },
+        // Shared aggregation stages for enriching a customer/dealer document
+        const buildEnrichStages = (clientType, foreignField) => [
+            { $match: baseMatch },
             { $lookup: { from: 'mobiles', localField: '_id', foreignField, as: 'mobiles' } },
             { $addFields: {
                 customer_type: clientType,
@@ -313,23 +311,28 @@ router.get('/customer-details', shopAdminAuth, async (req, res) => {
             { $project: { mobiles: 0 } }
         ];
 
-        const [customerResults, dealerResults] = await Promise.all([
-            Customer.aggregate(buildPipeline(buildMatch({}), 'Customer', 'customer_id')),
-            Dealer.aggregate(buildPipeline(buildMatch({}), 'Dealer', 'dealer_id'))
-        ]);
+        // Date range filter applied after computing latest_mobile_date
+        const dateFilter = {};
+        if (fromDate) dateFilter.$gte = new Date(fromDate);
+        if (toDate) dateFilter.$lte = new Date(toDate);
 
-        let allClients = [...customerResults, ...dealerResults];
+        // Single pipeline: Customer → $unionWith Dealer → filter → sort → paginate
+        const pipeline = [
+            ...buildEnrichStages('Customer', 'customer_id'),
+            { $unionWith: { coll: 'dealers', pipeline: buildEnrichStages('Dealer', 'dealer_id') } },
+            ...(Object.keys(dateFilter).length > 0 ? [{ $match: { latest_mobile_date: dateFilter } }] : []),
+            { $sort: { latest_mobile_date: -1 } },
+            { $facet: {
+                data: [{ $skip: skip }, { $limit: limit }],
+                totalCount: [{ $count: 'count' }]
+            }}
+        ];
 
-        if (fromDate) allClients = allClients.filter(c => new Date(c.latest_mobile_date) >= new Date(fromDate));
-        if (toDate) allClients = allClients.filter(c => new Date(c.latest_mobile_date) <= new Date(toDate));
-
-        allClients.sort((a, b) => new Date(b.latest_mobile_date || 0) - new Date(a.latest_mobile_date || 0));
-
-        const totalCount = allClients.length;
+        const [result] = await Customer.aggregate(pipeline);
+        const totalCount = result.totalCount[0]?.count || 0;
         const totalPages = Math.ceil(totalCount / limit);
-        const pageData = allClients.slice(skip, skip + limit);
 
-        res.json({ success: true, customerDetails: pageData, totalCount, page, totalPages });
+        res.json({ success: true, customerDetails: result.data, totalCount, page, totalPages });
     } catch (error) {
         console.error('Get customer details error:', error);
         res.status(500).json({ success: false, message: 'Server error' });
