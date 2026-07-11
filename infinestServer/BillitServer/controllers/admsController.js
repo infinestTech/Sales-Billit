@@ -58,9 +58,7 @@ function resolvePunchType(inOutCode) {
  * Returns null if the line is malformed.
  *
  * IMPORTANT: The device sends the timestamp in its local timezone (IST for us).
- * Node's `new Date("YYYY-MM-DD HH:MM:SS")` parses that string as the host
- * server's local time — and Hetzner is in Europe (UTC+1/UTC+2).  We therefore
- * explicitly parse the string in Asia/Kolkata so the stored UTC instant is
+ * We explicitly parse the string in Asia/Kolkata so the stored UTC instant is
  * correct regardless of where the server lives.
  */
 function parseAttLogLine(line) {
