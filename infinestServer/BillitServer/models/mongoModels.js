@@ -71,7 +71,19 @@ const shopSchema = new mongoose.Schema({
     // Any check-out after this time of day is treated as the start of lunch.
     lunch_threshold_time: { type: String, default: '12:00' }, // HH:MM (24h)
     // Fixed lunch duration in minutes; punches inside this window after LUNCH_OUT are ignored.
-    lunch_break_minutes: { type: Number, default: 30 }
+    lunch_break_minutes: { type: Number, default: 30 },
+    // Master toggle: apply late-entry salary deductions (requires per-employee deduction_per_hour > 0).
+    enable_late_deduction: { type: Boolean, default: true },
+    // 'fixed' = shift start/end enforced; 'flexible' = any hours as long as minimum is met.
+    working_hours_type: { type: String, enum: ['fixed', 'flexible'], default: 'fixed' },
+    // Minimum hours per day required when working_hours_type is 'flexible'.
+    flexible_min_hours_per_day: { type: Number, default: 8 },
+    // Master toggle: pay overtime bonus for hours worked beyond the employee shift.
+    enable_overtime_bonus: { type: Boolean, default: false },
+    // Minimum extra minutes beyond shift end before overtime starts counting.
+    overtime_threshold_minutes: { type: Number, default: 30 },
+    // Bonus amount in ₹ per hour of overtime.
+    overtime_bonus_rate_per_hour: { type: Number, default: 0 },
   },
   // WhatsApp / MSG91 messaging config. Master `enabled` plus per-event toggles.
   whatsapp: {
@@ -130,6 +142,7 @@ const customerSchema = new mongoose.Schema({
   shop_id: { type: mongoose.Schema.Types.ObjectId, ref: "Shop", required: true },
   client_name: { type: String, required: true },
   mobile_number: { type: String, required: true },
+  whatsapp_number: { type: String, default: "" }, // Optional; if set, WA notifications go here instead of mobile_number
   bill_no: { type: String },
   customer_type: { type: String, default: "Customer" },
   no_of_mobile: { type: Number, default: 0 },

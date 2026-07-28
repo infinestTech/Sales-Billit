@@ -24,6 +24,7 @@ import BottomSheet from "./BottomSheet"
 import MobilePaymentSheet from "./MobilePaymentSheet"
 import MobileUseProductSheet from "./MobileUseProductSheet"
 import { formatDate, formatINR } from "./utils"
+import { useShopWhatsappConfig } from "@/hooks/useShopWhatsappConfig"
 
 /**
  * Detail bottom-sheet for one record.
@@ -49,6 +50,9 @@ export default function MobileRecordDetailSheet({
   const [balance, setBalance] = useState("")
   const [savingBalance, setSavingBalance] = useState(false)
   const [editingBalance, setEditingBalance] = useState(false)
+  const [waConfirmState, setWaConfirmState] = useState({ open: false, mobile: null, field: null })
+  // Whether WhatsApp automation is enabled for this shop (drives dialog visibility)
+  const waShopEnabled = useShopWhatsappConfig()
 
   useEffect(() => {
     if (record) {
@@ -68,12 +72,16 @@ export default function MobileRecordDetailSheet({
   const setBusy = (id, val) =>
     setWorking((prev) => ({ ...prev, [id]: val }))
 
-  const handleToggle = async (mobile, field) => {
+  // WA-triggering fields — only false→true transitions fire a WhatsApp message
+  const WA_TRIGGER_FIELDS = ["ready", "delivered", "returned"]
+  const WA_FIELD_LABELS = { ready: "Ready for Pickup", delivered: "Delivered", returned: "Returned" }
+
+  const executeToggle = async (mobile, field, skipWhatsapp = false) => {
     setBusy(mobile._id, true)
     try {
       const res = await api.post(
         "/api/toggle-status",
-        { id: mobile._id, field },
+        { id: mobile._id, field, skipWhatsapp },
         { headers }
       )
       onChanged?.({ type: "mobile", mobile: res.data?.updatedMobile })
@@ -86,6 +94,15 @@ export default function MobileRecordDetailSheet({
     } finally {
       setBusy(mobile._id, false)
     }
+  }
+
+  const handleToggle = (mobile, field) => {
+    // For false→true on WA-triggering fields, ask about WA only when WA is enabled for this shop
+    if (WA_TRIGGER_FIELDS.includes(field) && !mobile[field] && waShopEnabled === true) {
+      setWaConfirmState({ open: true, mobile, field })
+      return
+    }
+    executeToggle(mobile, field)
   }
 
   const handleDelete = async (mobile, mobileIndex) => {
@@ -376,6 +393,51 @@ export default function MobileRecordDetailSheet({
           })}
         </div>
       </BottomSheet>
+
+      {/* WhatsApp Send Confirmation Dialog */}
+      {waConfirmState.open && (
+        <>
+          <div className="fixed inset-0 bg-black/40 z-[60]" />
+          <div className="fixed left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 bg-white rounded-xl shadow-2xl border border-gray-200 p-6 w-80 z-[60]">
+            <div className="flex items-center gap-3 mb-3">
+              <div className="flex h-10 w-10 items-center justify-center rounded-full bg-green-100 text-xl">
+                💬
+              </div>
+              <h4 className="text-base font-semibold text-gray-900">Also send WhatsApp?</h4>
+            </div>
+            <p className="text-sm text-gray-600 mb-1">
+              Status will be marked as{" "}
+              <span className="font-semibold">{WA_FIELD_LABELS[waConfirmState.field]}</span>{" "}
+              regardless.
+            </p>
+            <p className="text-sm text-gray-500 mb-5">
+              Do you also want to send a WhatsApp notification to the customer?
+            </p>
+            <div className="flex gap-2">
+              <button
+                className="flex-1 rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
+                onClick={() => {
+                  const { mobile, field } = waConfirmState
+                  setWaConfirmState({ open: false, mobile: null, field: null })
+                  executeToggle(mobile, field, true)
+                }}
+              >
+                Skip WhatsApp
+              </button>
+              <button
+                className="flex-1 rounded-lg bg-green-600 px-4 py-2 text-sm font-semibold text-white hover:bg-green-700"
+                onClick={() => {
+                  const { mobile, field } = waConfirmState
+                  setWaConfirmState({ open: false, mobile: null, field: null })
+                  executeToggle(mobile, field, false)
+                }}
+              >
+                Send WhatsApp
+              </button>
+            </div>
+          </div>
+        </>
+      )}
 
       <MobilePaymentSheet
         open={!!paymentMobile}

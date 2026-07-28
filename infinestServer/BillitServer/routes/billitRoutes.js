@@ -1,7 +1,20 @@
 const express = require("express");
 const router = express.Router();
 const authenticateToken = require("../utils/authMiddleware");
+const { Shop } = require("../models/mongoModels");
 
+// Return the WhatsApp config (enabled + events) for the authenticated user's shop
+router.get("/shop/whatsapp-config", authenticateToken, async (req, res) => {
+  try {
+    const shop = await Shop.findById(req.user.shop_id).select("whatsapp").lean();
+    if (!shop) return res.status(404).json({ error: "Shop not found" });
+    const wa = shop.whatsapp || {};
+    return res.json({ enabled: !!wa.enabled, events: wa.events || {} });
+  } catch (err) {
+    console.error("shop/whatsapp-config error:", err);
+    return res.status(500).json({ error: "Internal server error" });
+  }
+});
 
 const { createCustomerController } = require("../controllers/api/createCustomerController");
 router.post("/createcustomer", authenticateToken, createCustomerController);

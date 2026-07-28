@@ -1,7 +1,8 @@
 "use client"
 
 import { useEffect, useRef, useState } from "react"
-import { RefreshCw, UserCheck, UserPlus } from "lucide-react"
+import { MessageCircle, RefreshCw, UserCheck, UserPlus } from "lucide-react"
+import { useShopWhatsappConfig } from "@/hooks/useShopWhatsappConfig"
 
 export default function CustomerForm({ formData, setFormData, disabled, onBillNumberChange, onRegenerateBillNumber, shopId }) {
   const [suggestions, setSuggestions] = useState([])
@@ -10,6 +11,9 @@ export default function CustomerForm({ formData, setFormData, disabled, onBillNu
   const [selectedExisting, setSelectedExisting] = useState(null)
   const debounceRef = useRef(null)
   const dropdownRef = useRef(null)
+  // WhatsApp Number field is only active when the admin has enabled WA for this shop
+  const waShopEnabled = useShopWhatsappConfig()
+  const waFieldDisabled = disabled || waShopEnabled !== true
 
   // Close dropdown on outside click
   useEffect(() => {
@@ -235,6 +239,30 @@ export default function CustomerForm({ formData, setFormData, disabled, onBillNu
           disabled={disabled}
           className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:opacity-50 disabled:cursor-not-allowed"
         />
+      </div>
+
+      <div>
+        <label className={`block font-medium mb-2 flex items-center gap-1.5 ${waShopEnabled === true ? 'text-gray-700' : 'text-gray-400'}`}>
+          <MessageCircle className={`h-4 w-4 ${waShopEnabled === true ? 'text-green-600' : 'text-gray-400'}`} />
+          WhatsApp Number
+          {waShopEnabled !== true && (
+            <span className="text-xs font-normal text-gray-400 ml-1">(WhatsApp not enabled for your shop)</span>
+          )}
+        </label>
+        <input
+          type="tel"
+          name="whatsappNumber"
+          placeholder="Leave empty if mobile number is WhatsApp number"
+          value={formData.whatsappNumber || ""}
+          onChange={handleInputChange}
+          disabled={waFieldDisabled}
+          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent disabled:opacity-50 disabled:cursor-not-allowed"
+        />
+        <p className="text-xs text-gray-400 mt-1">
+          {waShopEnabled === true
+            ? "Used for WhatsApp notifications \u2014 overrides mobile number if provided"
+            : "Enable WhatsApp in the admin portal to use this field"}
+        </p>
       </div>
     </div>
   )

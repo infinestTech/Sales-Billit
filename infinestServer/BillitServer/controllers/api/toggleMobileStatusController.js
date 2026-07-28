@@ -10,7 +10,7 @@ const FIELD_TO_EVENT = {
 
 
 const toggleMobileStatus = async (req, res) => {
-  const { id, field } = req.body;
+  const { id, field, skipWhatsapp } = req.body;
 
 
   if (!id || !field) {
@@ -76,17 +76,20 @@ const toggleMobileStatus = async (req, res) => {
 
     const updatedMobile = await Mobile.findByIdAndUpdate(id, updateData, { new: true });
 
-    // ---- WhatsApp triggers (only on false -> true transitions) ----
+    // ---- WhatsApp triggers (only on false -> true transitions, unless skipWhatsapp) ----
     try {
       const transitions = ["ready", "delivered", "returned"].filter(
         (f) => updateData[f] === true && prev[f] === false
       );
 
-      if (transitions.length && mobile.customer_id) {
+      if (!skipWhatsapp && transitions.length && mobile.customer_id) {
         const customer = await Customer.findById(mobile.customer_id).lean();
         const shop = customer ? await Shop.findById(customer.shop_id).lean() : null;
 
         if (customer && shop) {
+          const waTo = (customer.whatsapp_number && customer.whatsapp_number.trim())
+            ? customer.whatsapp_number.trim()
+            : customer.mobile_number;
           const totalPaid =
             updatedMobile?.total_paid ||
             (Array.isArray(updatedMobile?.payments)
@@ -149,7 +152,7 @@ const toggleMobileStatus = async (req, res) => {
             fireWaEvent({
               shopId: shop._id,
               event,
-              to: customer.mobile_number,
+              to: waTo,
               vars,
             });
           });

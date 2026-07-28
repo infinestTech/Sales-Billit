@@ -88,6 +88,12 @@ async function getShopHrSettings(shopId) {
     duplicate_punch_window_minutes: 180,
     lunch_threshold_time: '12:00',
     lunch_break_minutes: 30,
+    enable_late_deduction: true,
+    working_hours_type: 'fixed',
+    flexible_min_hours_per_day: 8,
+    enable_overtime_bonus: false,
+    overtime_threshold_minutes: 30,
+    overtime_bonus_rate_per_hour: 0,
   };
   return { ...defaults, ...(shop?.hr_settings || {}) };
 }
@@ -650,12 +656,40 @@ async function buildMonthlyAttendanceSummary(empOid, monthStr) {
   };
 }
 
-function calculateSalary(employee, summary, year, monthNum) {
+function calculateSalary(employee, summary, year, monthNum, hrSettings = {}) {
   const daily = employee.daily_salary || 0;
   const workingDays = workingDaysInMonth(year, monthNum, employee.weekly_off || ['SUN']);
   const earnedBase = Math.round(daily * summary.present_days * 100) / 100;
-  const lateDeduction = Math.round(summary.total_late_deduction * 100) / 100;
-  const netSalary = Math.max(0, Math.round((earnedBase - lateDeduction) * 100) / 100);
+
+  // Apply late deduction only if not disabled at shop level
+  const enableLateDeduction = hrSettings.enable_late_deduction !== false;
+  const lateDeduction = enableLateDeduction
+    ? Math.round(summary.total_late_deduction * 100) / 100
+    : 0;
+
+  // Overtime bonus — compute from daily records if the shop has enabled it
+  let overtimeBonus = 0;
+  let totalOvertimeMinutes = 0;
+  if (hrSettings.enable_overtime_bonus) {
+    const shiftStart = employee.shift?.start_time || '09:00';
+    const shiftEnd   = employee.shift?.end_time   || '18:00';
+    const [sh, sm] = shiftStart.split(':').map(Number);
+    const [eh, em] = shiftEnd.split(':').map(Number);
+    const shiftMins       = Math.max(0, (eh * 60 + em) - (sh * 60 + sm));
+    const thresholdMins   = Number(hrSettings.overtime_threshold_minutes)  || 0;
+    const ratePerHour     = Number(hrSettings.overtime_bonus_rate_per_hour) || 0;
+
+    if (ratePerHour > 0 && shiftMins > 0) {
+      (summary.records || []).forEach(r => {
+        if (r.status === 'PRESENT' && (r.total_worked_minutes || 0) > shiftMins + thresholdMins) {
+          totalOvertimeMinutes += r.total_worked_minutes - shiftMins - thresholdMins;
+        }
+      });
+      overtimeBonus = Math.round((totalOvertimeMinutes / 60) * ratePerHour * 100) / 100;
+    }
+  }
+
+  const netSalary = Math.max(0, Math.round((earnedBase - lateDeduction + overtimeBonus) * 100) / 100);
 
   return {
     daily_salary: daily,
@@ -667,6 +701,8 @@ function calculateSalary(employee, summary, year, monthNum) {
     total_late_minutes: summary.total_late_minutes,
     earned_base: earnedBase,
     late_deduction: lateDeduction,
+    overtime_bonus: overtimeBonus,
+    total_overtime_minutes: totalOvertimeMinutes,
     net_salary: netSalary,
   };
 }
@@ -684,6 +720,13 @@ function mapSalaryToFrontend(rec) {
   const employeeId = empRaw?._id ? empRaw._id.toString() : (empRaw ? empRaw.toString() : null);
 
   const earnings = [{ name: 'Earned (Daily × Present)', amount: r.earned_base || 0 }];
+  if ((r.overtime_bonus || 0) > 0) {
+    earnings.push({
+      name: 'Overtime Bonus',
+      amount: r.overtime_bonus,
+      reason: `${r.total_overtime_minutes || 0} overtime minutes`,
+    });
+  }
   const deductions = [];
   if ((r.late_deduction || 0) > 0) {
     deductions.push({
@@ -734,8 +777,9 @@ async function generateSalary(req, res) {
     const employee = await Employee.findOne({ _id: empOid, shop_id: shopId }).lean();
     if (!employee) return res.status(404).json({ success: false, message: 'Employee not found' });
 
-    const summary = await buildMonthlyAttendanceSummary(empOid, monthStr);
-    const calc    = calculateSalary(employee, summary, yearNum, monthNum);
+    const hrSettings = await getShopHrSettings(shopId);
+    const summary    = await buildMonthlyAttendanceSummary(empOid, monthStr);
+    const calc       = calculateSalary(employee, summary, yearNum, monthNum, hrSettings);
 
     const record = await HrSalaryRecord.findOneAndUpdate(
       { employee_id: empOid, month: monthStr },
@@ -771,12 +815,13 @@ async function generateBulkSalary(req, res) {
     const yearNum  = parseInt(year);
     const monthStr = `${yearNum}-${String(monthNum).padStart(2, '0')}`;
 
-    const employees = await Employee.find({ shop_id: shopId, is_active: true }).lean();
+    const employees   = await Employee.find({ shop_id: shopId, is_active: true }).lean();
+    const hrSettings  = await getShopHrSettings(shopId);
     const results = [];
     for (const emp of employees) {
       try {
         const summary = await buildMonthlyAttendanceSummary(emp._id, monthStr);
-        const calc    = calculateSalary(emp, summary, yearNum, monthNum);
+        const calc    = calculateSalary(emp, summary, yearNum, monthNum, hrSettings);
         const record  = await HrSalaryRecord.findOneAndUpdate(
           { employee_id: emp._id, month: monthStr },
           {
@@ -903,9 +948,15 @@ async function getHrSettings(req, res) {
     return res.json({
       success: true,
       data: {
-        duplicatePunchWindowMinutes: settings.duplicate_punch_window_minutes,
-        lunchThresholdTime: settings.lunch_threshold_time,
-        lunchBreakMinutes: settings.lunch_break_minutes,
+        duplicatePunchWindowMinutes:  settings.duplicate_punch_window_minutes,
+        lunchThresholdTime:           settings.lunch_threshold_time,
+        lunchBreakMinutes:            settings.lunch_break_minutes,
+        enableLateDeduction:          settings.enable_late_deduction !== false,
+        workingHoursType:             settings.working_hours_type || 'fixed',
+        flexibleMinHoursPerDay:       settings.flexible_min_hours_per_day ?? 8,
+        enableOvertimeBonus:          !!settings.enable_overtime_bonus,
+        overtimeThresholdMinutes:     settings.overtime_threshold_minutes ?? 30,
+        overtimeBonusRatePerHour:     settings.overtime_bonus_rate_per_hour ?? 0,
       },
     });
   } catch (err) {
@@ -917,8 +968,13 @@ async function getHrSettings(req, res) {
 async function updateHrSettings(req, res) {
   try {
     const shopId = requireShop(req, res); if (!shopId) return;
-    const { duplicatePunchWindowMinutes, lunchThresholdTime, lunchBreakMinutes } = req.body;
+    const {
+      duplicatePunchWindowMinutes, lunchThresholdTime, lunchBreakMinutes,
+      enableLateDeduction, workingHoursType, flexibleMinHoursPerDay,
+      enableOvertimeBonus, overtimeThresholdMinutes, overtimeBonusRatePerHour,
+    } = req.body;
     const update = {};
+
     if (duplicatePunchWindowMinutes !== undefined) {
       const v = Number(duplicatePunchWindowMinutes);
       if (!(v >= 0 && v <= 24 * 60)) return res.status(400).json({ success: false, message: 'duplicatePunchWindowMinutes must be 0–1440' });
@@ -933,15 +989,47 @@ async function updateHrSettings(req, res) {
       if (!(v >= 0 && v <= 240)) return res.status(400).json({ success: false, message: 'lunchBreakMinutes must be 0–240' });
       update['hr_settings.lunch_break_minutes'] = v;
     }
+    if (enableLateDeduction !== undefined) {
+      update['hr_settings.enable_late_deduction'] = !!enableLateDeduction;
+    }
+    if (workingHoursType !== undefined) {
+      if (!['fixed', 'flexible'].includes(workingHoursType)) return res.status(400).json({ success: false, message: 'workingHoursType must be fixed or flexible' });
+      update['hr_settings.working_hours_type'] = workingHoursType;
+    }
+    if (flexibleMinHoursPerDay !== undefined) {
+      const v = Number(flexibleMinHoursPerDay);
+      if (!(v >= 1 && v <= 24)) return res.status(400).json({ success: false, message: 'flexibleMinHoursPerDay must be 1–24' });
+      update['hr_settings.flexible_min_hours_per_day'] = v;
+    }
+    if (enableOvertimeBonus !== undefined) {
+      update['hr_settings.enable_overtime_bonus'] = !!enableOvertimeBonus;
+    }
+    if (overtimeThresholdMinutes !== undefined) {
+      const v = Number(overtimeThresholdMinutes);
+      if (!(v >= 0 && v <= 240)) return res.status(400).json({ success: false, message: 'overtimeThresholdMinutes must be 0–240' });
+      update['hr_settings.overtime_threshold_minutes'] = v;
+    }
+    if (overtimeBonusRatePerHour !== undefined) {
+      const v = Number(overtimeBonusRatePerHour);
+      if (!(v >= 0)) return res.status(400).json({ success: false, message: 'overtimeBonusRatePerHour must be ≥ 0' });
+      update['hr_settings.overtime_bonus_rate_per_hour'] = v;
+    }
+
     await Shop.findByIdAndUpdate(shopId, { $set: update });
     const settings = await getShopHrSettings(shopId);
     return res.json({
       success: true,
       message: 'HR settings updated',
       data: {
-        duplicatePunchWindowMinutes: settings.duplicate_punch_window_minutes,
-        lunchThresholdTime: settings.lunch_threshold_time,
-        lunchBreakMinutes: settings.lunch_break_minutes,
+        duplicatePunchWindowMinutes:  settings.duplicate_punch_window_minutes,
+        lunchThresholdTime:           settings.lunch_threshold_time,
+        lunchBreakMinutes:            settings.lunch_break_minutes,
+        enableLateDeduction:          settings.enable_late_deduction !== false,
+        workingHoursType:             settings.working_hours_type || 'fixed',
+        flexibleMinHoursPerDay:       settings.flexible_min_hours_per_day ?? 8,
+        enableOvertimeBonus:          !!settings.enable_overtime_bonus,
+        overtimeThresholdMinutes:     settings.overtime_threshold_minutes ?? 30,
+        overtimeBonusRatePerHour:     settings.overtime_bonus_rate_per_hour ?? 0,
       },
     });
   } catch (err) {
