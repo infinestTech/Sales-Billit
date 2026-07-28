@@ -20,6 +20,7 @@ const createCustomerController = async (req, res) => {
       technician,
       userId, // shop_id
       existingCustomerId, // if set, append mobiles to existing customer (no new record)
+      whatsappNumber,     // optional; overrides mobile_number for WA notifications
     } = req.body;
 
     const techName = technician || technicianname || "";
@@ -69,10 +70,11 @@ const createCustomerController = async (req, res) => {
         const mobileList = MobileName
           .map((m) => m.mobileName + (m.model ? ` ${m.model}` : ""))
           .join(", ");
+        const waTo = (existing.whatsapp_number && existing.whatsapp_number.trim()) || existing.mobile_number;
         fireWaEvent({
           shopId: userId,
           event: "mobiles_appended",
-          to: existing.mobile_number,
+          to: waTo,
           vars: {
             customer_name: existing.client_name,
             shop_name: shopDoc?.shop_name || "",
@@ -113,6 +115,7 @@ const createCustomerController = async (req, res) => {
       shop_id: userId,
       client_name: clientName,
       mobile_number: mobileNumber,
+      whatsapp_number: (whatsappNumber && whatsappNumber.trim()) ? whatsappNumber.trim() : "",
       customer_type: customerType,
       no_of_mobile: noOfMobile,
       bill_no: billNo || null,
@@ -145,10 +148,11 @@ const createCustomerController = async (req, res) => {
       const mobileList = MobileName
         .map((m) => m.mobileName + (m.model ? ` ${m.model}` : ""))
         .join(", ");
+      const waTo = (whatsappNumber && whatsappNumber.trim()) ? whatsappNumber.trim() : mobileNumber;
       fireWaEvent({
         shopId: userId,
         event: "record_created",
-        to: mobileNumber,
+        to: waTo,
         vars: {
           customer_name: clientName,
           shop_name: shop.shop_name || "",

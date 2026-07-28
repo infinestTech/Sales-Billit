@@ -4,7 +4,8 @@ import axios from "axios";
 import {
   Clock, CheckCircle, XCircle, AlertCircle, Calendar,
   User, Users, LogIn, LogOut, RefreshCw, Filter,
-  ArrowRight, Download, ChevronLeft, ChevronRight, Edit2, Settings, Save
+  ArrowRight, Download, ChevronLeft, ChevronRight, Edit2, Settings, Save,
+  ToggleLeft, ToggleRight, Gift, TimerReset, Sliders, Clock4,
 } from "lucide-react";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL_BILLIT || "http://localhost:8000";
@@ -73,6 +74,12 @@ export default function AttendanceManagement({ shopId }) {
     duplicatePunchWindowMinutes: 180,
     lunchThresholdTime: "12:00",
     lunchBreakMinutes: 30,
+    enableLateDeduction: true,
+    workingHoursType: "fixed",
+    flexibleMinHoursPerDay: 8,
+    enableOvertimeBonus: false,
+    overtimeThresholdMinutes: 30,
+    overtimeBonusRatePerHour: 0,
   });
   const [hrSettingsLoading, setHrSettingsLoading] = useState(false);
   const [hrSettingsSaving, setHrSettingsSaving] = useState(false);
@@ -216,8 +223,14 @@ export default function AttendanceManagement({ shopId }) {
       if (res.data.success && res.data.data) {
         setHrSettings({
           duplicatePunchWindowMinutes: res.data.data.duplicatePunchWindowMinutes ?? 180,
-          lunchThresholdTime: res.data.data.lunchThresholdTime ?? "12:00",
-          lunchBreakMinutes: res.data.data.lunchBreakMinutes ?? 30,
+          lunchThresholdTime:          res.data.data.lunchThresholdTime ?? "12:00",
+          lunchBreakMinutes:           res.data.data.lunchBreakMinutes ?? 30,
+          enableLateDeduction:         res.data.data.enableLateDeduction !== false,
+          workingHoursType:            res.data.data.workingHoursType || "fixed",
+          flexibleMinHoursPerDay:      res.data.data.flexibleMinHoursPerDay ?? 8,
+          enableOvertimeBonus:         !!res.data.data.enableOvertimeBonus,
+          overtimeThresholdMinutes:    res.data.data.overtimeThresholdMinutes ?? 30,
+          overtimeBonusRatePerHour:    res.data.data.overtimeBonusRatePerHour ?? 0,
         });
       }
     } catch (err) {
@@ -229,6 +242,9 @@ export default function AttendanceManagement({ shopId }) {
     const dpw = Number(hrSettings.duplicatePunchWindowMinutes);
     const lbm = Number(hrSettings.lunchBreakMinutes);
     const ltt = String(hrSettings.lunchThresholdTime || "");
+    const fmhpd = Number(hrSettings.flexibleMinHoursPerDay);
+    const otThres = Number(hrSettings.overtimeThresholdMinutes);
+    const otRate  = Number(hrSettings.overtimeBonusRatePerHour);
     if (!Number.isFinite(dpw) || dpw < 0 || dpw > 1440) {
       setHrSettingsMsg({ error: "Duplicate-punch window must be 0–1440 minutes." }); return;
     }
@@ -238,16 +254,38 @@ export default function AttendanceManagement({ shopId }) {
     if (!/^([01]\d|2[0-3]):[0-5]\d$/.test(ltt)) {
       setHrSettingsMsg({ error: "Lunch threshold time must be HH:MM (24-hour)." }); return;
     }
+    if (hrSettings.workingHoursType === "flexible" && (!Number.isFinite(fmhpd) || fmhpd < 1 || fmhpd > 24)) {
+      setHrSettingsMsg({ error: "Minimum hours per day must be 1–24." }); return;
+    }
+    if (hrSettings.enableOvertimeBonus) {
+      if (!Number.isFinite(otThres) || otThres < 0 || otThres > 240) {
+        setHrSettingsMsg({ error: "Overtime threshold must be 0–240 minutes." }); return;
+      }
+      if (!Number.isFinite(otRate) || otRate < 0) {
+        setHrSettingsMsg({ error: "Overtime bonus rate must be ≥ 0." }); return;
+      }
+    }
     setHrSettingsSaving(true); setHrSettingsMsg(null);
     try {
       const res = await axios.patch(`${API_URL}/api/shop-admin/hr/settings`,
-        { shopId, duplicatePunchWindowMinutes: dpw, lunchThresholdTime: ltt, lunchBreakMinutes: lbm },
+        {
+          shopId,
+          duplicatePunchWindowMinutes: dpw,
+          lunchThresholdTime: ltt,
+          lunchBreakMinutes: lbm,
+          enableLateDeduction:      hrSettings.enableLateDeduction,
+          workingHoursType:         hrSettings.workingHoursType,
+          flexibleMinHoursPerDay:   fmhpd,
+          enableOvertimeBonus:      hrSettings.enableOvertimeBonus,
+          overtimeThresholdMinutes: otThres,
+          overtimeBonusRatePerHour: otRate,
+        },
         { headers: headers() });
       if (res.data.success) setHrSettingsMsg({ success: "HR settings saved." });
     } catch (err) {
       setHrSettingsMsg({ error: err.response?.data?.message || "Save failed" });
     } finally { setHrSettingsSaving(false); }
-  };
+  };;
   // ── Helpers ───────────────────────────────────────────────────────────────────
   const getEmployeeName = (id) => employees.find((e) => e.employeeId === id)?.name || id;
 
@@ -745,76 +783,240 @@ export default function AttendanceManagement({ shopId }) {
       {/* ── HR Settings ─────────────────────────────────────────────────────────────────────── */}
       {activeTab === "settings" && (
         <div className="space-y-4">
-          <div className="bg-white rounded-xl border border-gray-200 p-6 max-w-2xl">
-            <div className="flex items-start gap-3 mb-4">
-              <Settings className="h-5 w-5 text-green-600 mt-0.5" />
-              <div>
-                <h3 className="text-base font-bold text-gray-800">Punch & Lunch Rules</h3>
-                <p className="text-xs text-gray-500">Controls duplicate-punch protection and lunch-break detection used by Software Punch and eSSL devices.</p>
-              </div>
+
+          {/* status banners */}
+          {hrSettingsMsg?.success && (
+            <div className="flex items-center gap-2 p-3 bg-green-50 border border-green-200 rounded-lg text-green-700 text-sm">
+              <CheckCircle className="h-4 w-4 shrink-0" />{hrSettingsMsg.success}
             </div>
+          )}
+          {hrSettingsMsg?.error && (
+            <div className="flex items-center gap-2 p-3 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm">
+              <AlertCircle className="h-4 w-4 shrink-0" />{hrSettingsMsg.error}
+            </div>
+          )}
 
-            {hrSettingsMsg?.success && (
-              <div className="flex items-center gap-2 p-3 mb-3 bg-green-50 border border-green-200 rounded-lg text-green-700 text-sm">
-                <CheckCircle className="h-4 w-4 shrink-0" />{hrSettingsMsg.success}
-              </div>
-            )}
-            {hrSettingsMsg?.error && (
-              <div className="flex items-center gap-2 p-3 mb-3 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm">
-                <AlertCircle className="h-4 w-4 shrink-0" />{hrSettingsMsg.error}
-              </div>
-            )}
-
-            {hrSettingsLoading ? (
-              <div className="p-8 text-center"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-green-600 mx-auto" /></div>
-            ) : (
-              <div className="space-y-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Duplicate-Punch Window (minutes)</label>
-                  <input
-                    type="number" min={0} max={1440}
-                    value={hrSettings.duplicatePunchWindowMinutes}
-                    onChange={(e) => setHrSettings(s => ({ ...s, duplicatePunchWindowMinutes: e.target.value }))}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm text-gray-900 bg-white focus:outline-none focus:ring-2 focus:ring-green-500"
-                  />
-                  <p className="text-xs text-gray-500 mt-1">Any punch within this window after the previous accepted punch is treated as a duplicate. Default: 180 (3 hours).</p>
+          {hrSettingsLoading ? (
+            <div className="bg-white rounded-xl border border-gray-200 p-12 text-center">
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-green-600 mx-auto" />
+            </div>
+          ) : (
+            <>
+              {/* ──── 1. Working Hours Policy ──────────────────────────────────────────────── */}
+              <div className="bg-white rounded-xl border border-gray-200 p-5">
+                <div className="flex items-start gap-3 mb-4">
+                  <Sliders className="h-5 w-5 text-blue-600 mt-0.5" />
+                  <div>
+                    <h3 className="text-base font-bold text-gray-800">Working Hours Policy</h3>
+                    <p className="text-xs text-gray-500">Choose between a fixed shift schedule or flexible daily hour targets.</p>
+                  </div>
                 </div>
 
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Lunch Threshold Time (HH:MM, 24-hour)</label>
-                  <input
-                    type="time"
-                    value={hrSettings.lunchThresholdTime}
-                    onChange={(e) => setHrSettings(s => ({ ...s, lunchThresholdTime: e.target.value }))}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm text-gray-900 bg-white focus:outline-none focus:ring-2 focus:ring-green-500"
-                  />
-                  <p className="text-xs text-gray-500 mt-1">A checkout after this time is treated as the start of lunch. Default: 12:00.</p>
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Lunch Break (minutes)</label>
-                  <input
-                    type="number" min={0} max={240}
-                    value={hrSettings.lunchBreakMinutes}
-                    onChange={(e) => setHrSettings(s => ({ ...s, lunchBreakMinutes: e.target.value }))}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm text-gray-900 bg-white focus:outline-none focus:ring-2 focus:ring-green-500"
-                  />
-                  <p className="text-xs text-gray-500 mt-1">The first punch after this many minutes from lunch-out is treated as lunch-in. Default: 30.</p>
-                </div>
-
-                <div className="flex justify-end pt-2">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <button
-                    onClick={saveHrSettings}
-                    disabled={hrSettingsSaving}
-                    className="flex items-center gap-2 px-4 py-2 bg-green-600 hover:bg-green-700 disabled:bg-gray-300 text-white rounded-lg text-sm font-medium transition"
+                    type="button"
+                    onClick={() => setHrSettings(s => ({ ...s, workingHoursType: "fixed" }))}
+                    className={`flex items-start gap-3 p-4 rounded-xl border-2 transition text-left ${
+                      hrSettings.workingHoursType === "fixed"
+                        ? "border-blue-500 bg-blue-50"
+                        : "border-gray-200 hover:border-gray-300 bg-white"
+                    }`}
                   >
-                    {hrSettingsSaving ? <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white" /> : <Save className="h-4 w-4" />}
-                    Save Settings
+                    <Clock4 className={`h-5 w-5 mt-0.5 shrink-0 ${hrSettings.workingHoursType === "fixed" ? "text-blue-600" : "text-gray-400"}`} />
+                    <div>
+                      <div className="font-semibold text-sm text-gray-800">Fixed Shift</div>
+                      <div className="text-xs text-gray-500 mt-0.5">
+                        Employees have defined start &amp; end times. Lateness is measured against the shift start.
+                      </div>
+                    </div>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setHrSettings(s => ({ ...s, workingHoursType: "flexible" }))}
+                    className={`flex items-start gap-3 p-4 rounded-xl border-2 transition text-left ${
+                      hrSettings.workingHoursType === "flexible"
+                        ? "border-purple-500 bg-purple-50"
+                        : "border-gray-200 hover:border-gray-300 bg-white"
+                    }`}
+                  >
+                    <TimerReset className={`h-5 w-5 mt-0.5 shrink-0 ${hrSettings.workingHoursType === "flexible" ? "text-purple-600" : "text-gray-400"}`} />
+                    <div>
+                      <div className="font-semibold text-sm text-gray-800">Flexible Hours</div>
+                      <div className="text-xs text-gray-500 mt-0.5">
+                        Employees can arrive anytime as long as they complete the minimum daily hours.
+                      </div>
+                    </div>
                   </button>
                 </div>
+
+                {hrSettings.workingHoursType === "flexible" && (
+                  <div className="mt-4">
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Minimum Hours Per Day</label>
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="number" min={1} max={24}
+                        value={hrSettings.flexibleMinHoursPerDay}
+                        onChange={(e) => setHrSettings(s => ({ ...s, flexibleMinHoursPerDay: e.target.value }))}
+                        className="w-24 px-3 py-2 border border-gray-300 rounded-lg text-sm text-gray-900 bg-white focus:outline-none focus:ring-2 focus:ring-purple-500"
+                      />
+                      <span className="text-sm text-gray-500">hours</span>
+                    </div>
+                    <p className="text-xs text-gray-500 mt-1">Attendance is counted as present only when the employee works at least this many hours.</p>
+                  </div>
+                )}
               </div>
-            )}
-          </div>
+
+              {/* ──── 2. Late Deduction Policy ─────────────────────────────────────────────── */}
+              <div className="bg-white rounded-xl border border-gray-200 p-5">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-start gap-3">
+                    <AlertCircle className="h-5 w-5 text-orange-500 mt-0.5" />
+                    <div>
+                      <h3 className="text-base font-bold text-gray-800">Late Entry Salary Deduction</h3>
+                      <p className="text-xs text-gray-500">When enabled, late arrivals reduce the employee's net salary based on their per-employee deduction rate.</p>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setHrSettings(s => ({ ...s, enableLateDeduction: !s.enableLateDeduction }))}
+                    className="shrink-0 ml-4"
+                    title={hrSettings.enableLateDeduction ? "Click to disable" : "Click to enable"}
+                  >
+                    {hrSettings.enableLateDeduction
+                      ? <ToggleRight className="h-8 w-8 text-green-500" />
+                      : <ToggleLeft  className="h-8 w-8 text-gray-400" />}
+                  </button>
+                </div>
+                {!hrSettings.enableLateDeduction && (
+                  <div className="mt-3 flex items-center gap-2 p-3 bg-amber-50 border border-amber-200 rounded-lg text-amber-700 text-xs">
+                    <AlertCircle className="h-4 w-4 shrink-0" />
+                    Late deductions are <strong className="mx-1">disabled</strong>. Lateness is still tracked in reports but will not affect salary calculations.
+                  </div>
+                )}
+                {hrSettings.enableLateDeduction && (
+                  <p className="mt-3 text-xs text-gray-500">
+                    The deduction amount per hour is configured <strong>per employee</strong> in the Employees tab (Late Policy → Deduction Per Hour). A grace period is also set per employee.
+                  </p>
+                )}
+              </div>
+
+              {/* ──── 3. Overtime Bonus ────────────────────────────────────────────────────── */}
+              <div className="bg-white rounded-xl border border-gray-200 p-5">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-start gap-3">
+                    <Gift className="h-5 w-5 text-emerald-500 mt-0.5" />
+                    <div>
+                      <h3 className="text-base font-bold text-gray-800">Overtime Bonus</h3>
+                      <p className="text-xs text-gray-500">Pay employees extra when they work beyond their assigned shift hours.</p>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setHrSettings(s => ({ ...s, enableOvertimeBonus: !s.enableOvertimeBonus }))}
+                    className="shrink-0 ml-4"
+                    title={hrSettings.enableOvertimeBonus ? "Click to disable" : "Click to enable"}
+                  >
+                    {hrSettings.enableOvertimeBonus
+                      ? <ToggleRight className="h-8 w-8 text-green-500" />
+                      : <ToggleLeft  className="h-8 w-8 text-gray-400" />}
+                  </button>
+                </div>
+
+                {hrSettings.enableOvertimeBonus && (
+                  <div className="mt-4 space-y-4 border-t border-gray-100 pt-4">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Overtime Threshold (minutes)</label>
+                        <input
+                          type="number" min={0} max={240}
+                          value={hrSettings.overtimeThresholdMinutes}
+                          onChange={(e) => setHrSettings(s => ({ ...s, overtimeThresholdMinutes: e.target.value }))}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm text-gray-900 bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                        />
+                        <p className="text-xs text-gray-500 mt-1">Minimum extra minutes beyond shift end before overtime counts. E.g. 30 = need 30 min extra before bonus starts.</p>
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Bonus Rate (₹ per hour of overtime)</label>
+                        <input
+                          type="number" min={0} step={0.5}
+                          value={hrSettings.overtimeBonusRatePerHour}
+                          onChange={(e) => setHrSettings(s => ({ ...s, overtimeBonusRatePerHour: e.target.value }))}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm text-gray-900 bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                        />
+                        <p className="text-xs text-gray-500 mt-1">Applied to each hour of overtime. Appears as "Overtime Bonus" in the salary slip.</p>
+                      </div>
+                    </div>
+                    <div className="flex items-start gap-2 p-3 bg-emerald-50 border border-emerald-200 rounded-lg text-emerald-700 text-xs">
+                      <Gift className="h-4 w-4 shrink-0 mt-0.5" />
+                      Formula per day: <code className="mx-1 font-mono bg-emerald-100 px-1 rounded">worked_min − shift_min − threshold_min</code> → divided by 60 × rate.
+                      Bonus is added to net salary when generating salary records.
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* ──── 4. Punch & Lunch Rules ───────────────────────────────────────────────── */}
+              <div className="bg-white rounded-xl border border-gray-200 p-5">
+                <div className="flex items-start gap-3 mb-4">
+                  <Settings className="h-5 w-5 text-green-600 mt-0.5" />
+                  <div>
+                    <h3 className="text-base font-bold text-gray-800">Punch &amp; Lunch Rules</h3>
+                    <p className="text-xs text-gray-500">Controls duplicate-punch protection and lunch-break detection for Software Punch and eSSL devices.</p>
+                  </div>
+                </div>
+
+                <div className="space-y-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Duplicate-Punch Window (minutes)</label>
+                    <input
+                      type="number" min={0} max={1440}
+                      value={hrSettings.duplicatePunchWindowMinutes}
+                      onChange={(e) => setHrSettings(s => ({ ...s, duplicatePunchWindowMinutes: e.target.value }))}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm text-gray-900 bg-white focus:outline-none focus:ring-2 focus:ring-green-500"
+                    />
+                    <p className="text-xs text-gray-500 mt-1">Any punch within this window after the previous accepted punch is treated as a duplicate. Default: 180 (3 hours).</p>
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Lunch Threshold Time (HH:MM, 24-hour)</label>
+                    <input
+                      type="time"
+                      value={hrSettings.lunchThresholdTime}
+                      onChange={(e) => setHrSettings(s => ({ ...s, lunchThresholdTime: e.target.value }))}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm text-gray-900 bg-white focus:outline-none focus:ring-2 focus:ring-green-500"
+                    />
+                    <p className="text-xs text-gray-500 mt-1">A checkout after this time is treated as the start of lunch. Default: 12:00.</p>
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Lunch Break (minutes)</label>
+                    <input
+                      type="number" min={0} max={240}
+                      value={hrSettings.lunchBreakMinutes}
+                      onChange={(e) => setHrSettings(s => ({ ...s, lunchBreakMinutes: e.target.value }))}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm text-gray-900 bg-white focus:outline-none focus:ring-2 focus:ring-green-500"
+                    />
+                    <p className="text-xs text-gray-500 mt-1">The first punch after this many minutes from lunch-out is treated as lunch-in. Default: 30.</p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Save button */}
+              <div className="flex justify-end">
+                <button
+                  onClick={saveHrSettings}
+                  disabled={hrSettingsSaving}
+                  className="flex items-center gap-2 px-5 py-2.5 bg-green-600 hover:bg-green-700 disabled:bg-gray-300 text-white rounded-lg text-sm font-semibold transition shadow-sm"
+                >
+                  {hrSettingsSaving
+                    ? <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white" />
+                    : <Save className="h-4 w-4" />}
+                  Save HR Settings
+                </button>
+              </div>
+            </>
+          )}
         </div>
       )}
     </div>

@@ -8,6 +8,7 @@ import api from "../api"
 import { Calendar, Smartphone, AlertCircle, CheckCircle, RotateCcw, DollarSign, Truck, Package, Eye } from "lucide-react"
 import { useRouter } from "next/navigation"
 import { jwtDecode } from "jwt-decode"
+import { useShopWhatsappConfig } from "@/hooks/useShopWhatsappConfig"
 import { PAYMENT_METHOD_OPTIONS, DEFAULT_PAYMENT_METHOD } from "@/constants/paymentMethods"
 
 
@@ -45,6 +46,11 @@ const MobileNameTable = ({ mobileData, setMobileData, onRevenueUpdate, hideActio
   const [addingPayment, setAddingPayment] = useState(false)
   const [popupPosition, setPopupPosition] = useState({ top: 0, left: 0 })
   const [viewPopupPosition, setViewPopupPosition] = useState({ top: 0, left: 0 })
+
+  // WhatsApp confirmation dialog state
+  const [waConfirmState, setWaConfirmState] = useState({ open: false, index: null, field: null })
+  // Whether WhatsApp automation is enabled for this shop (drives dialog visibility)
+  const waShopEnabled = useShopWhatsappConfig()
 
   // Console log all mobile data with model values
   useEffect(() => {
@@ -95,14 +101,45 @@ const MobileNameTable = ({ mobileData, setMobileData, onRevenueUpdate, hideActio
 
 
 
+  // WA-triggering fields — only false→true transitions fire a WhatsApp message
+  const WA_TRIGGER_FIELDS = ["ready", "delivered", "returned"]
+  const WA_FIELD_LABELS = { ready: "Ready for Pickup", delivered: "Delivered", returned: "Returned" }
+
+  const executeToggle = async (index, field, skipWhatsapp = false) => {
+    const mobile = currentMobileData[index]
+    const globalIndex = indexOfFirstItem + index
+    try {
+      const token = localStorage.getItem("token")
+      const response = await api.post(
+        "/api/toggle-status",
+        { id: mobile._id, field, skipWhatsapp },
+        { headers: { Authorization: `Bearer ${token}` } },
+      )
+      const updated = response.data.updatedMobile
+      const updatedData = [...mobileData]
+      const localRecord = updatedData[globalIndex] || {}
+      const merged = {
+        ...localRecord,
+        ...updated,
+        payment: updated.payment !== undefined ? updated.payment : localRecord.payment,
+        paid_amount: updated.paid_amount !== undefined ? updated.paid_amount : localRecord.paid_amount,
+        deliveryDate: updated.deliveryDate,
+      }
+      updatedData[globalIndex] = merged
+      setMobileData(updatedData)
+    } catch (error) {
+      const msg = error.response?.data?.error || `Failed to update ${field}`
+      window.dispatchEvent(new CustomEvent("show-notification-toast", {
+        detail: { message: msg, type: "error" }
+      }))
+      console.error(`Failed to toggle ${field}:`, error.message)
+    }
+  }
+
   const toggleStatus = async (index, field) => {
     if (hideActions) return
 
-
-
-
     const mobile = currentMobileData[index]
-    const globalIndex = indexOfFirstItem + index
 
     // Block marking as Delivered until a paid amount has been entered
     if (field === "delivered" && !mobile.delivered) {
@@ -115,50 +152,13 @@ const MobileNameTable = ({ mobileData, setMobileData, onRevenueUpdate, hideActio
       }
     }
 
-
-
-
-    try {
-      const token = localStorage.getItem("token")
-      const response = await api.post(
-        "/api/toggle-status",
-        {
-          id: mobile._id,
-          field,
-        },
-        {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        },
-      )
-
-
-
-
-      const updated = response.data.updatedMobile
-      const updatedData = [...mobileData]
-      const localRecord = updatedData[globalIndex] || {}
-      const merged = {
-        ...localRecord,
-        ...updated,
-        payment: updated.payment !== undefined ? updated.payment : localRecord.payment,
-        paid_amount: updated.paid_amount !== undefined ? updated.paid_amount : localRecord.paid_amount,
-        deliveryDate: updated.deliveryDate,
-      }
-      updatedData[globalIndex] = merged
-
-
-
-
-      setMobileData(updatedData)
-    } catch (error) {
-      const msg = error.response?.data?.error || `Failed to update ${field}`
-      window.dispatchEvent(new CustomEvent("show-notification-toast", {
-        detail: { message: msg, type: "error" }
-      }))
-      console.error(`Failed to toggle ${field}:`, error.message)
+    // Show WhatsApp confirmation for false→true transitions — only when WA is enabled for this shop
+    if (WA_TRIGGER_FIELDS.includes(field) && !mobile[field] && waShopEnabled === true) {
+      setWaConfirmState({ open: true, index, field })
+      return
     }
+
+    await executeToggle(index, field)
   }
 
 
@@ -1119,6 +1119,51 @@ const MobileNameTable = ({ mobileData, setMobileData, onRevenueUpdate, hideActio
             </div>
           </div>
         </div>
+      )}
+
+      {/* WhatsApp Send Confirmation Dialog */}
+      {waConfirmState.open && (
+        <>
+          <div className="fixed inset-0 bg-black/40 z-50" />
+          <div className="fixed left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 bg-white rounded-xl shadow-2xl border border-gray-200 p-6 w-80 z-50">
+            <div className="flex items-center gap-3 mb-3">
+              <div className="flex h-10 w-10 items-center justify-center rounded-full bg-green-100 text-xl">
+                💬
+              </div>
+              <h4 className="text-base font-semibold text-gray-900">Also send WhatsApp?</h4>
+            </div>
+            <p className="text-sm text-gray-600 mb-1">
+              Status will be marked as{" "}
+              <span className="font-semibold">{WA_FIELD_LABELS[waConfirmState.field]}</span>{" "}
+              regardless.
+            </p>
+            <p className="text-sm text-gray-500 mb-5">
+              Do you also want to send a WhatsApp notification to the customer?
+            </p>
+            <div className="flex gap-2">
+              <button
+                className="flex-1 rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
+                onClick={() => {
+                  const { index, field } = waConfirmState
+                  setWaConfirmState({ open: false, index: null, field: null })
+                  executeToggle(index, field, true)
+                }}
+              >
+                Skip WhatsApp
+              </button>
+              <button
+                className="flex-1 rounded-lg bg-green-600 px-4 py-2 text-sm font-semibold text-white hover:bg-green-700"
+                onClick={() => {
+                  const { index, field } = waConfirmState
+                  setWaConfirmState({ open: false, index: null, field: null })
+                  executeToggle(index, field, false)
+                }}
+              >
+                Send WhatsApp
+              </button>
+            </div>
+          </div>
+        </>
       )}
     </div>
   )
