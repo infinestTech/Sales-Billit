@@ -14,6 +14,7 @@ const {
     Attendance,
     Technician,
     Product,
+    ProductHistory,
     Expense,
     AdminSale,
     User,
@@ -1360,6 +1361,75 @@ router.get('/reports/financial', shopAdminAuth, async (req, res) => {
             { $sort: { date: 1 } }
         ]);
 
+        // ── Spare Stock Purchases & Returns (ProductHistory) ──────────────────
+        // Fetch all product IDs belonging to this shop
+        const shopProductIds = await Product.find({ userId: req.shopId }).distinct('_id');
+
+        // Spare purchases (ADD / RESTOCK)
+        const sparePurchases = await ProductHistory.aggregate([
+            {
+                $match: {
+                    productId: { $in: shopProductIds },
+                    changeType: { $in: ['ADD', 'RESTOCK'] },
+                    changeDate: { $gte: startDate, $lte: endDate }
+                }
+            },
+            {
+                $lookup: {
+                    from: 'products',
+                    localField: 'productId',
+                    foreignField: '_id',
+                    as: 'product'
+                }
+            },
+            { $unwind: { path: '$product', preserveNullAndEmptyArrays: true } },
+            {
+                $project: {
+                    date: '$changeDate',
+                    spareName: { $ifNull: ['$product.name', 'Unknown Spare'] },
+                    category: { $ifNull: ['$product.category', 'General'] },
+                    quantity: '$quantity',
+                    costPrice: '$costPrice',
+                    amount: { $multiply: ['$quantity', '$costPrice'] },
+                    changeType: '$changeType',
+                    notes: { $ifNull: ['$notes', ''] }
+                }
+            },
+            { $sort: { date: 1 } }
+        ]);
+
+        // Spare returns to supplier (RETURN_TO_SUPPLIER)
+        const spareReturns = await ProductHistory.aggregate([
+            {
+                $match: {
+                    productId: { $in: shopProductIds },
+                    changeType: 'RETURN_TO_SUPPLIER',
+                    changeDate: { $gte: startDate, $lte: endDate }
+                }
+            },
+            {
+                $lookup: {
+                    from: 'products',
+                    localField: 'productId',
+                    foreignField: '_id',
+                    as: 'product'
+                }
+            },
+            { $unwind: { path: '$product', preserveNullAndEmptyArrays: true } },
+            {
+                $project: {
+                    date: '$changeDate',
+                    spareName: { $ifNull: ['$product.name', 'Unknown Spare'] },
+                    category: { $ifNull: ['$product.category', 'General'] },
+                    quantity: '$quantity',
+                    costPrice: '$costPrice',
+                    amount: { $multiply: ['$quantity', '$costPrice'] },
+                    notes: { $ifNull: ['$notes', ''] }
+                }
+            },
+            { $sort: { date: 1 } }
+        ]);
+
         // Combine all customer payments (modern + legacy + admin sales)
         const finalCustomerPayments = [...allCustomerPayments, ...adminSales];
 
@@ -1369,7 +1439,9 @@ router.get('/reports/financial', shopAdminAuth, async (req, res) => {
         const totalRevenue = totalCustomerPayments + totalDealerPayments;
         const totalSupplierPayments = supplierPayments.reduce((sum, p) => sum + (p.amount || 0), 0);
         const totalOperatingExpenses = operatingExpenses.reduce((sum, e) => sum + (e.amount || 0), 0);
-        const totalExpenses = totalSupplierPayments + totalOperatingExpenses;
+        const totalSparePurchases = sparePurchases.reduce((sum, p) => sum + (p.amount || 0), 0);
+        const totalSpareReturns = spareReturns.reduce((sum, p) => sum + (p.amount || 0), 0);
+        const totalExpenses = totalSupplierPayments + totalOperatingExpenses + totalSparePurchases - totalSpareReturns;
         const netProfit = totalRevenue - totalExpenses;
         const profitMargin = totalRevenue > 0 ? (netProfit / totalRevenue) * 100 : 0;
 
@@ -1417,6 +1489,8 @@ router.get('/reports/financial', shopAdminAuth, async (req, res) => {
                     totalDealerPayments,
                     totalSupplierPayments,
                     totalOperatingExpenses,
+                    totalSparePurchases,
+                    totalSpareReturns,
                     totalExpenses,
                     netProfit,
                     profitMargin
@@ -1425,6 +1499,8 @@ router.get('/reports/financial', shopAdminAuth, async (req, res) => {
                 dealerPayments: allDealerPayments,
                 supplierPayments,
                 expenses: operatingExpenses,
+                sparePurchases,
+                spareReturns,
                 paymentBreakdown
             }
         });
@@ -2362,7 +2438,6 @@ router.patch('/hr/settings',                      hrController.updateHrSettings)
 // ============================================================================
 
 const { Supplier: SupplierModel } = require('../models/supplier');
-const { ProductHistory, SupplierHistory } = require('../models/mongoModels');
 const { PAYMENT_METHOD_ENUM } = require('../constants/paymentMethods');
 
 // -------------------- BILL NUMBER --------------------

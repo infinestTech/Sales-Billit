@@ -848,6 +848,16 @@ export default function ShopAdminDashboard() {
               <div class="label">Dealer Payments</div>
               <div class="value" style="color: #2563eb;">₹${reportData.summary?.totalDealerPayments?.toLocaleString() || 0}</div>
             </div>
+            ${(reportData.summary?.totalSparePurchases > 0) ? `
+            <div class="summary-box" style="background: #fffbeb;">
+              <div class="label">Spare Purchases</div>
+              <div class="value" style="color: #d97706;">₹${reportData.summary?.totalSparePurchases?.toLocaleString() || 0}</div>
+            </div>` : ''}
+            ${(reportData.summary?.totalSpareReturns > 0) ? `
+            <div class="summary-box" style="background: #f0fdf4;">
+              <div class="label">Spare Returns (Credit)</div>
+              <div class="value" style="color: #16a34a;">₹${reportData.summary?.totalSpareReturns?.toLocaleString() || 0}</div>
+            </div>` : ''}
           </div>
         </div>
 
@@ -1005,6 +1015,82 @@ export default function ShopAdminDashboard() {
               </div>
             `).join('')}
           </div>
+        </div>
+        ` : ''}
+
+        ${reportData.sparePurchases && reportData.sparePurchases.length > 0 ? `
+        <div class="section">
+          <div class="section-title" style="border-left-color: #d97706;">SPARE STOCK PURCHASES</div>
+          <table>
+            <thead>
+              <tr>
+                <th style="width: 40px;">S.No</th>
+                <th style="width: 80px;">Date</th>
+                <th>Spare Name</th>
+                <th>Category</th>
+                <th class="text-center" style="width: 70px;">Qty</th>
+                <th class="text-right" style="width: 80px;">Cost/Unit</th>
+                <th class="text-right" style="width: 100px;">Amount</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${reportData.sparePurchases.map((item, idx) => `
+                <tr>
+                  <td class="text-center">${idx + 1}</td>
+                  <td>${new Date(item.date).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}</td>
+                  <td>${item.spareName}</td>
+                  <td>${item.category || '-'}</td>
+                  <td class="text-center">${item.quantity}</td>
+                  <td class="text-right">₹${item.costPrice?.toLocaleString()}</td>
+                  <td class="text-right">₹${item.amount?.toLocaleString()}</td>
+                </tr>
+              `).join('')}
+            </tbody>
+            <tfoot>
+              <tr>
+                <td colspan="6" class="text-right">TOTAL SPARE PURCHASES:</td>
+                <td class="text-right">₹${reportData.summary?.totalSparePurchases?.toLocaleString()}</td>
+              </tr>
+            </tfoot>
+          </table>
+        </div>
+        ` : ''}
+
+        ${reportData.spareReturns && reportData.spareReturns.length > 0 ? `
+        <div class="section">
+          <div class="section-title" style="border-left-color: #16a34a;">SPARE RETURNS TO SUPPLIER</div>
+          <table>
+            <thead>
+              <tr>
+                <th style="width: 40px;">S.No</th>
+                <th style="width: 80px;">Date</th>
+                <th>Spare Name</th>
+                <th>Category</th>
+                <th class="text-center" style="width: 70px;">Qty</th>
+                <th class="text-right" style="width: 80px;">Cost/Unit</th>
+                <th class="text-right" style="width: 100px;">Return Value</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${reportData.spareReturns.map((item, idx) => `
+                <tr>
+                  <td class="text-center">${idx + 1}</td>
+                  <td>${new Date(item.date).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}</td>
+                  <td>${item.spareName}</td>
+                  <td>${item.category || '-'}</td>
+                  <td class="text-center">${item.quantity}</td>
+                  <td class="text-right">₹${item.costPrice?.toLocaleString()}</td>
+                  <td class="text-right" style="color: #16a34a;">₹${item.amount?.toLocaleString()}</td>
+                </tr>
+              `).join('')}
+            </tbody>
+            <tfoot>
+              <tr>
+                <td colspan="6" class="text-right">TOTAL RETURNS (CREDIT):</td>
+                <td class="text-right" style="color: #16a34a;">₹${reportData.summary?.totalSpareReturns?.toLocaleString()}</td>
+              </tr>
+            </tfoot>
+          </table>
         </div>
         ` : ''}
 
@@ -2447,6 +2533,18 @@ export default function ShopAdminDashboard() {
                       <div className="text-sm text-blue-700 font-medium">Dealer Payments</div>
                       <div className="text-xl font-bold text-blue-900 mt-1">₹{reportData.summary?.totalDealerPayments?.toLocaleString() || 0}</div>
                     </div>
+                    {(reportData.summary?.totalSparePurchases > 0) && (
+                      <div className="p-4 bg-amber-50 rounded-lg border border-amber-200">
+                        <div className="text-sm text-amber-700 font-medium">Spare Stock Purchases</div>
+                        <div className="text-xl font-bold text-amber-900 mt-1">₹{reportData.summary?.totalSparePurchases?.toLocaleString() || 0}</div>
+                      </div>
+                    )}
+                    {(reportData.summary?.totalSpareReturns > 0) && (
+                      <div className="p-4 bg-green-50 rounded-lg border border-green-200">
+                        <div className="text-sm text-green-700 font-medium">Spare Returns (Credit)</div>
+                        <div className="text-xl font-bold text-green-900 mt-1">₹{reportData.summary?.totalSpareReturns?.toLocaleString() || 0}</div>
+                      </div>
+                    )}
                   </div>
                 </div>
 
@@ -2629,6 +2727,88 @@ export default function ShopAdminDashboard() {
                     ))}
                   </div>
                 </div>
+
+                {/* Spare Stock Purchases */}
+                {reportData.sparePurchases && reportData.sparePurchases.length > 0 && (
+                  <div className="p-8 border-t border-amber-200 bg-amber-50">
+                    <h3 className="text-xl font-bold text-gray-900 mb-4">SPARE STOCK PURCHASES</h3>
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-sm">
+                        <thead>
+                          <tr className="bg-amber-100 border-b border-amber-300">
+                            <th className="px-4 py-3 text-left font-semibold text-gray-700">S.No</th>
+                            <th className="px-4 py-3 text-left font-semibold text-gray-700">Date</th>
+                            <th className="px-4 py-3 text-left font-semibold text-gray-700">Spare Name</th>
+                            <th className="px-4 py-3 text-left font-semibold text-gray-700">Category</th>
+                            <th className="px-4 py-3 text-center font-semibold text-gray-700">Qty</th>
+                            <th className="px-4 py-3 text-right font-semibold text-gray-700">Cost/Unit</th>
+                            <th className="px-4 py-3 text-right font-semibold text-gray-700">Amount</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {reportData.sparePurchases.map((item, idx) => (
+                            <tr key={idx} className="border-b border-amber-100 hover:bg-amber-50">
+                              <td className="px-4 py-3 text-gray-900">{idx + 1}</td>
+                              <td className="px-4 py-3 text-gray-900">{new Date(item.date).toLocaleDateString('en-IN')}</td>
+                              <td className="px-4 py-3 font-medium text-gray-900">{item.spareName}</td>
+                              <td className="px-4 py-3 text-gray-700">{item.category || '—'}</td>
+                              <td className="px-4 py-3 text-center text-gray-900">{item.quantity}</td>
+                              <td className="px-4 py-3 text-right text-gray-700">₹{item.costPrice?.toLocaleString()}</td>
+                              <td className="px-4 py-3 text-right font-semibold text-amber-700">₹{item.amount?.toLocaleString()}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                        <tfoot>
+                          <tr className="bg-amber-100 font-bold">
+                            <td colSpan="6" className="px-4 py-3 text-right text-gray-900">TOTAL SPARE PURCHASES:</td>
+                            <td className="px-4 py-3 text-right text-amber-700">₹{reportData.summary?.totalSparePurchases?.toLocaleString()}</td>
+                          </tr>
+                        </tfoot>
+                      </table>
+                    </div>
+                  </div>
+                )}
+
+                {/* Spare Returns to Supplier */}
+                {reportData.spareReturns && reportData.spareReturns.length > 0 && (
+                  <div className="p-8 border-t border-green-200 bg-green-50">
+                    <h3 className="text-xl font-bold text-gray-900 mb-4">SPARE RETURNS TO SUPPLIER</h3>
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-sm">
+                        <thead>
+                          <tr className="bg-green-100 border-b border-green-300">
+                            <th className="px-4 py-3 text-left font-semibold text-gray-700">S.No</th>
+                            <th className="px-4 py-3 text-left font-semibold text-gray-700">Date</th>
+                            <th className="px-4 py-3 text-left font-semibold text-gray-700">Spare Name</th>
+                            <th className="px-4 py-3 text-left font-semibold text-gray-700">Category</th>
+                            <th className="px-4 py-3 text-center font-semibold text-gray-700">Qty Returned</th>
+                            <th className="px-4 py-3 text-right font-semibold text-gray-700">Cost/Unit</th>
+                            <th className="px-4 py-3 text-right font-semibold text-gray-700">Return Value</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {reportData.spareReturns.map((item, idx) => (
+                            <tr key={idx} className="border-b border-green-100 hover:bg-green-50">
+                              <td className="px-4 py-3 text-gray-900">{idx + 1}</td>
+                              <td className="px-4 py-3 text-gray-900">{new Date(item.date).toLocaleDateString('en-IN')}</td>
+                              <td className="px-4 py-3 font-medium text-gray-900">{item.spareName}</td>
+                              <td className="px-4 py-3 text-gray-700">{item.category || '—'}</td>
+                              <td className="px-4 py-3 text-center text-gray-900">{item.quantity}</td>
+                              <td className="px-4 py-3 text-right text-gray-700">₹{item.costPrice?.toLocaleString()}</td>
+                              <td className="px-4 py-3 text-right font-semibold text-green-700">₹{item.amount?.toLocaleString()}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                        <tfoot>
+                          <tr className="bg-green-100 font-bold">
+                            <td colSpan="6" className="px-4 py-3 text-right text-gray-900">TOTAL RETURNS (CREDIT):</td>
+                            <td className="px-4 py-3 text-right text-green-700">₹{reportData.summary?.totalSpareReturns?.toLocaleString()}</td>
+                          </tr>
+                        </tfoot>
+                      </table>
+                    </div>
+                  </div>
+                )}
 
                 {/* Footer */}
                 <div className="p-8 bg-gray-50 border-t border-gray-200 text-center text-sm text-gray-600">

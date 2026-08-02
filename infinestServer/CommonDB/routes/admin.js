@@ -899,4 +899,43 @@ router.get('/shops/:shopId/whatsapp/invoice', adminAuth, async (req, res) => {
     }
 });
 
+// ============================================================
+// 🖥️ Product UI Mode (legacy vs spares) — proxy to BillitServer
+// ============================================================
+
+// List all shops with their product UI mode
+router.get('/shops/product-ui', adminAuth, async (req, res) => {
+    try {
+        const billitResp = await axios.get(
+            `${process.env.BILLIT_SERVER_URL}/api/admin/shops/product-ui`,
+            { headers: { 'x-internal-key': process.env.INTERNAL_API_KEY }, timeout: 8000 }
+        );
+        return res.json(billitResp.data);
+    } catch (err) {
+        console.error('Admin proxy GET /shops/product-ui error:', err.response?.data || err.message);
+        return res.status(err.response?.status || 500).json({
+            message: 'Failed to load product UI settings',
+            error: err.response?.data || err.message,
+        });
+    }
+});
+
+// Toggle product UI mode for a specific shop
+router.patch('/shops/:shopId/product-ui', adminAuth, async (req, res) => {
+    try {
+        const billitResp = await axios.patch(
+            `${process.env.BILLIT_SERVER_URL}/api/admin/shops/${req.params.shopId}/product-ui`,
+            req.body,
+            { headers: { 'x-internal-key': process.env.INTERNAL_API_KEY }, timeout: 8000 }
+        );
+        return res.json(billitResp.data);
+    } catch (err) {
+        console.error('Admin proxy PATCH /shops/:id/product-ui error:', err.response?.data || err.message);
+        return res.status(err.response?.status || 500).json({
+            message: 'Failed to update product UI setting',
+            error: err.response?.data || err.message,
+        });
+    }
+});
+
 module.exports = router;

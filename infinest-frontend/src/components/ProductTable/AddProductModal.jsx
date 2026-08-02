@@ -4,7 +4,7 @@
 import { useEffect, useState } from "react"
 import api from "../../components/api"
 import { X, Package, Tag, DollarSign, Hash } from "lucide-react"
-import { logAndNotify, logError, logSystem } from "@/utils/logger"
+import { logAndNotify, logError } from "@/utils/logger"
 import { PAYMENT_METHOD_OPTIONS, DEFAULT_PAYMENT_METHOD } from "@/constants/paymentMethods"
 
 
@@ -44,38 +44,17 @@ const AddProductModal = ({ shop_id, onClose, onSuccess }) => {
   }, [shop_id])
 
 
-
-
   const handleChange = (e) => {
     setForm({ ...form, [e.target.name]: e.target.value })
   }
 
 
-
-
   const handleSubmit = async (e) => {
     e.preventDefault()
     if (!form.name || !form.costPrice || !form.quantity) {
-       console.warn("Product name, cost price, and quantity are required.")
+      console.warn("Product name, cost price, and quantity are required.")
       return
     }
-
-
-
-
-    console.log("Sending data:", {
-      name: form.name,
-      category: form.category,
-      costPrice: Number.parseInt(form.costPrice),
-      sellingPrice: form.sellingPrice ? Number.parseInt(form.sellingPrice) : undefined,
-      quantity: Number.parseInt(form.quantity),
-      supplierId: form.supplierId || undefined,
-      paymentMethod: form.paymentMethod,
-      shop_id,
-    })
-
-
-
 
     try {
       setLoading(true)
@@ -92,22 +71,16 @@ const AddProductModal = ({ shop_id, onClose, onSuccess }) => {
           paymentMethod: form.paymentMethod,
           shop_id,
         },
-        {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        },
+        { headers: { Authorization: `Bearer ${token}` } },
       )
       onSuccess()
     } catch (error) {
       console.error("Error adding product:", error)
-       console.warn("Failed to add product.")
+      console.warn("Failed to add product.")
     } finally {
       setLoading(false)
     }
   }
-
-
 
 
   return (
@@ -125,9 +98,6 @@ const AddProductModal = ({ shop_id, onClose, onSuccess }) => {
             <X className="h-5 w-5 text-white" />
           </button>
         </div>
-
-
-
 
         {/* Form */}
         <form onSubmit={handleSubmit} className="p-6 space-y-5">
@@ -147,9 +117,6 @@ const AddProductModal = ({ shop_id, onClose, onSuccess }) => {
             />
           </div>
 
-
-
-
           {/* Category */}
           <div className="space-y-2">
             <label className="text-sm font-semibold text-gray-700 flex items-center">
@@ -164,9 +131,6 @@ const AddProductModal = ({ shop_id, onClose, onSuccess }) => {
               className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all duration-200 bg-gray-50 hover:bg-white"
             />
           </div>
-
-
-
 
           {/* Price Fields */}
           <div className="grid grid-cols-2 gap-4">
@@ -201,13 +165,10 @@ const AddProductModal = ({ shop_id, onClose, onSuccess }) => {
             </div>
           </div>
 
-
           {/* Supplier & Payment */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="space-y-2">
-              <label className="text-sm font-semibold text-gray-700 flex items-center">
-                Supplier
-              </label>
+              <label className="text-sm font-semibold text-gray-700">Supplier</label>
               <select
                 name="supplierId"
                 value={form.supplierId}
@@ -222,12 +183,8 @@ const AddProductModal = ({ shop_id, onClose, onSuccess }) => {
                 ))}
               </select>
             </div>
-
-
             <div className="space-y-2">
-              <label className="text-sm font-semibold text-gray-700 flex items-center">
-                Payment Method
-              </label>
+              <label className="text-sm font-semibold text-gray-700">Payment Method</label>
               <select
                 name="paymentMethod"
                 value={form.paymentMethod}
@@ -242,9 +199,6 @@ const AddProductModal = ({ shop_id, onClose, onSuccess }) => {
               </select>
             </div>
           </div>
-
-
-
 
           {/* Quantity */}
           <div className="space-y-2">
@@ -263,9 +217,6 @@ const AddProductModal = ({ shop_id, onClose, onSuccess }) => {
             />
           </div>
 
-
-
-
           {/* Buttons */}
           <div className="flex justify-end gap-3 pt-4">
             <button
@@ -278,30 +229,9 @@ const AddProductModal = ({ shop_id, onClose, onSuccess }) => {
             <button
               type="submit"
               disabled={loading}
-              className="px-6 py-3 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-semibold rounded-xl transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed shadow-lg hover:shadow-xl transform hover:scale-[1.02]"
+              className="px-6 py-3 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-semibold rounded-xl transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed shadow-lg"
             >
-              {loading ? (
-                <div className="flex items-center">
-                  <svg className="animate-spin -ml-1 mr-3 h-5 w-5 text-white" fill="none" viewBox="0 0 24 24">
-                    <circle
-                      className="opacity-25"
-                      cx="12"
-                      cy="12"
-                      r="10"
-                      stroke="currentColor"
-                      strokeWidth="4"
-                    ></circle>
-                    <path
-                      className="opacity-75"
-                      fill="currentColor"
-                      d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-                    ></path>
-                  </svg>
-                  Adding...
-                </div>
-              ) : (
-                "Add Product"
-              )}
+              {loading ? "Adding..." : "Add Product"}
             </button>
           </div>
         </form>
@@ -309,8 +239,5 @@ const AddProductModal = ({ shop_id, onClose, onSuccess }) => {
     </div>
   )
 }
-
-
-
 
 export default AddProductModal

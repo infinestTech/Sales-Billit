@@ -92,12 +92,16 @@ export default function EmployeeManagement({ shopId }) {
     personal: true, pay: true, shift: false, policies: false,
   });
   const [showInactive, setShowInactive] = useState(false);
+  const [hrSettings, setHrSettings] = useState(null);
 
   const token = () => localStorage.getItem("shopAdminToken");
   const headers = () => ({ Authorization: `Bearer ${token()}` });
 
   useEffect(() => {
-    if (shopId) fetchEmployees();
+    if (shopId) {
+      fetchEmployees();
+      fetchHrSettings();
+    }
   }, [shopId]);
 
   const fetchEmployees = async () => {
@@ -113,6 +117,16 @@ export default function EmployeeManagement({ shopId }) {
     } finally {
       setLoading(false);
     }
+  };
+
+  const fetchHrSettings = async () => {
+    try {
+      const res = await axios.get(`${API_URL}/api/shop-admin/hr/settings`, {
+        headers: headers(),
+        params: { shopId },
+      });
+      if (res.data.success && res.data.data) setHrSettings(res.data.data);
+    } catch (_) {}
   };
 
   useEffect(() => { fetchEmployees(); }, [showInactive]);
@@ -193,6 +207,7 @@ export default function EmployeeManagement({ shopId }) {
     setError("");
     setSuccess("");
     try {
+      const gracePeriod = Number(form.latePolicy.gracePeriodMinutes);
       const payload = {
         ...form,
         dailySalary: Number(form.dailySalary),
@@ -201,10 +216,12 @@ export default function EmployeeManagement({ shopId }) {
           name: form.shift.name,
           startTime: form.shift.startTime,
           endTime: form.shift.endTime,
-          gracePeriodMinutes: Number(form.shift.gracePeriodMinutes),
+          // Keep shift.gracePeriodMinutes in sync with latePolicy.gracePeriodMinutes
+          // so both DB fields agree and buildDailySummary always reads the correct value.
+          gracePeriodMinutes: gracePeriod,
         },
         latePolicy: {
-          gracePeriodMinutes: Number(form.latePolicy.gracePeriodMinutes),
+          gracePeriodMinutes: gracePeriod,
           deductionPerHour: Number(form.latePolicy.deductionPerHour),
         },
         shopId,
@@ -425,29 +442,78 @@ export default function EmployeeManagement({ shopId }) {
                 </p>
               </Section>
 
+              {/* HR Policy Context — shows what's active shop-wide so admin stays in sync */}
+              {hrSettings && (
+                <div className="flex flex-wrap items-center gap-x-4 gap-y-1 px-4 py-2.5 bg-blue-50 border border-blue-200 rounded-xl text-xs text-blue-800 mb-1">
+                  <span className="flex items-center gap-1.5">
+                    <Clock className="h-3.5 w-3.5" />
+                    <strong>Hours Policy:</strong>{" "}
+                    {hrSettings.workingHoursType === "flexible"
+                      ? `Flexible (min ${hrSettings.flexibleMinHoursPerDay ?? 8}h/day)`
+                      : "Fixed Shift"}
+                  </span>
+                  <span className="text-blue-300">|</span>
+                  <span><strong>Late Deduction:</strong> {hrSettings.enableLateDeduction ? "Enabled" : "Disabled"}</span>
+                  {hrSettings.enableOvertimeBonus && (
+                    <>
+                      <span className="text-blue-300">|</span>
+                      <span><strong>Overtime:</strong> ₹{hrSettings.overtimeBonusRatePerHour}/hr after {hrSettings.overtimeThresholdMinutes}min extra</span>
+                    </>
+                  )}
+                </div>
+              )}
+
               {/* Shift */}
               <Section id="shift" label="Shift & Working Hours" icon={Clock} expanded={expandedSections.shift} onToggle={toggleSection}>
-                <div className="grid grid-cols-2 gap-3">
-                  <Field label="Shift Name">
-                    <input className={inp} value={form.shift.name} onChange={(e) => setField("shift.name", e.target.value)} placeholder="General / Morning / Night" />
-                  </Field>
-                  <Field label="Working Hours / Day (auto)">
-                    <input readOnly className={`${inp} bg-gray-100 cursor-not-allowed`} value={`${computedHours} h`} />
-                  </Field>
-                  <Field label="Shift Start Time *">
-                    <input required type="time" className={inp} value={form.shift.startTime} onChange={(e) => setField("shift.startTime", e.target.value)} />
-                  </Field>
-                  <Field label="Shift End Time *">
-                    <input required type="time" className={inp} value={form.shift.endTime} onChange={(e) => setField("shift.endTime", e.target.value)} />
-                  </Field>
-                  <Field label="Grace Period (minutes)">
-                    <input type="number" min="0" className={inp} value={form.shift.gracePeriodMinutes} onChange={(e) => setField("shift.gracePeriodMinutes", e.target.value)} />
-                  </Field>
-                  <Field label="Working Days / Week">
-                    <input type="number" min="1" max="7" className={inp} value={form.workingDaysPerWeek} onChange={(e) => setField("workingDaysPerWeek", e.target.value)} />
-                  </Field>
-                </div>
-                <div>
+                {hrSettings?.workingHoursType === "flexible" ? (
+                  <>
+                    <div className="flex items-start gap-2 p-3 bg-purple-50 border border-purple-200 rounded-lg text-purple-800 text-xs mb-3">
+                      <AlertCircle className="h-4 w-4 shrink-0 mt-0.5 text-purple-500" />
+                      <span>
+                        Shop uses <strong>Flexible Hours</strong> — employees can arrive at any time as long as they work at least{" "}
+                        <strong>{hrSettings.flexibleMinHoursPerDay ?? 8}h/day</strong> (configured in HR Settings). Shift start/end is not used for lateness detection.
+                        {hrSettings.enableOvertimeBonus && " Shift times below are used only as a reference label for overtime calculations."}
+                      </span>
+                    </div>
+                    <div className="grid grid-cols-2 gap-3">
+                      <Field label="Working Days / Week">
+                        <input type="number" min="1" max="7" className={inp} value={form.workingDaysPerWeek} onChange={(e) => setField("workingDaysPerWeek", e.target.value)} />
+                      </Field>
+                      <Field label="Shift Label (optional)">
+                        <input className={inp} value={form.shift.name} onChange={(e) => setField("shift.name", e.target.value)} placeholder="General" />
+                      </Field>
+                      {hrSettings.enableOvertimeBonus && (
+                        <>
+                          <Field label="Shift Start (reference)">
+                            <input type="time" className={inp} value={form.shift.startTime} onChange={(e) => setField("shift.startTime", e.target.value)} />
+                          </Field>
+                          <Field label="Shift End (reference)">
+                            <input type="time" className={inp} value={form.shift.endTime} onChange={(e) => setField("shift.endTime", e.target.value)} />
+                          </Field>
+                        </>
+                      )}
+                    </div>
+                  </>
+                ) : (
+                  <div className="grid grid-cols-2 gap-3">
+                    <Field label="Shift Name">
+                      <input className={inp} value={form.shift.name} onChange={(e) => setField("shift.name", e.target.value)} placeholder="General / Morning / Night" />
+                    </Field>
+                    <Field label="Working Hours / Day (auto)">
+                      <input readOnly className={`${inp} bg-gray-100 cursor-not-allowed`} value={`${computedHours} h`} />
+                    </Field>
+                    <Field label="Shift Start Time *">
+                      <input required type="time" className={inp} value={form.shift.startTime} onChange={(e) => setField("shift.startTime", e.target.value)} />
+                    </Field>
+                    <Field label="Shift End Time *">
+                      <input required type="time" className={inp} value={form.shift.endTime} onChange={(e) => setField("shift.endTime", e.target.value)} />
+                    </Field>
+                    <Field label="Working Days / Week">
+                      <input type="number" min="1" max="7" className={inp} value={form.workingDaysPerWeek} onChange={(e) => setField("workingDaysPerWeek", e.target.value)} />
+                    </Field>
+                  </div>
+                )}
+                <div className="mt-3">
                   <label className="block text-xs font-medium text-gray-600 mb-2">Weekly Off Days</label>
                   <div className="flex gap-2 flex-wrap">
                     {DAYS.map((day) => (
@@ -470,25 +536,47 @@ export default function EmployeeManagement({ shopId }) {
 
               {/* Late Entry Policy */}
               <Section id="policies" label="Late Entry Policy" icon={AlertCircle} expanded={expandedSections.policies} onToggle={toggleSection}>
-                <div className="bg-orange-50 border border-orange-200 rounded-lg p-3 space-y-3">
-                  <p className="text-xs text-orange-700">
-                    Late = check-in after shift start + grace. Deduction is prorated per minute from the per-hour rate below, capped at one day's salary.
-                  </p>
-                  <div className="grid grid-cols-2 gap-3">
-                    <Field label="Late Grace Period (minutes)">
-                      <input type="number" min="0" className={inp} value={form.latePolicy.gracePeriodMinutes} onChange={(e) => setField("latePolicy.gracePeriodMinutes", e.target.value)} />
-                    </Field>
-                    <Field label="Deduction ₹ per hour late *">
-                      <input
-                        type="number" min="0"
-                        className={inp}
-                        value={form.latePolicy.deductionPerHour}
-                        onChange={(e) => setField("latePolicy.deductionPerHour", e.target.value)}
-                        placeholder="e.g. 100"
-                      />
-                    </Field>
+                {hrSettings?.workingHoursType === "flexible" ? (
+                  <div className="flex items-start gap-2 p-3 bg-gray-50 border border-gray-200 rounded-lg text-gray-600 text-xs">
+                    <AlertCircle className="h-4 w-4 shrink-0 mt-0.5 text-gray-400" />
+                    <span>
+                      Late entry tracking <strong>does not apply</strong> in Flexible Hours mode — employees have no fixed start time so there is no concept of being late.
+                      These fields are ignored during attendance and salary calculations.
+                    </span>
                   </div>
-                </div>
+                ) : (
+                  <>
+                    {hrSettings && !hrSettings.enableLateDeduction && (
+                      <div className="flex items-start gap-2 p-3 mb-3 bg-amber-50 border border-amber-200 rounded-lg text-amber-800 text-xs">
+                        <AlertCircle className="h-4 w-4 shrink-0 mt-0.5 text-amber-500" />
+                        <span>
+                          Late deduction is currently <strong>disabled shop-wide</strong> in HR Settings. Lateness will still be
+                          recorded in attendance, but it won&apos;t reduce salary until you re-enable the
+                          &quot;Late Entry Salary Deduction&quot; toggle in HR Settings → Attendance.
+                        </span>
+                      </div>
+                    )}
+                    <div className={`bg-orange-50 border border-orange-200 rounded-lg p-3 space-y-3 transition-opacity ${hrSettings && !hrSettings.enableLateDeduction ? "opacity-60" : ""}`}>
+                      <p className="text-xs text-orange-700">
+                        Late = check-in after shift start + grace period. Deduction is prorated per minute from the hourly rate below, capped at one day&apos;s salary.
+                      </p>
+                      <div className="grid grid-cols-2 gap-3">
+                        <Field label="Grace Period (minutes)">
+                          <input type="number" min="0" className={inp} value={form.latePolicy.gracePeriodMinutes} onChange={(e) => setField("latePolicy.gracePeriodMinutes", e.target.value)} />
+                        </Field>
+                        <Field label="Deduction ₹ per hour late">
+                          <input
+                            type="number" min="0"
+                            className={inp}
+                            value={form.latePolicy.deductionPerHour}
+                            onChange={(e) => setField("latePolicy.deductionPerHour", e.target.value)}
+                            placeholder="e.g. 100"
+                          />
+                        </Field>
+                      </div>
+                    </div>
+                  </>
+                )}
               </Section>
             </form>
 

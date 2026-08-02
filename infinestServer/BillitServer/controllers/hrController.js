@@ -348,7 +348,11 @@ function buildDailySummary(employee, punches, hrSettings) {
   let isLate = false;
   let lateMinutes = 0;
   let lateDeduction = 0;
-  if (checkIn) {
+  const isFlexible = hrSettings.working_hours_type === 'flexible';
+
+  // For fixed-shift schedules, compute lateness against the configured shift start.
+  // For flexible hours there is no fixed start time, so late tracking does not apply.
+  if (checkIn && !isFlexible) {
     const graceMin = employee.late_policy?.grace_period_minutes
       ?? employee.shift?.grace_period_minutes ?? 15;
     const shiftStart = todayAt(employee.shift?.start_time || '09:00', checkIn.punch_time);
@@ -363,12 +367,28 @@ function buildDailySummary(employee, punches, hrSettings) {
     }
   }
 
-  const status = checkIn ? 'PRESENT' : 'ABSENT';
+  // Determine daily status.
+  // Fixed shift: PRESENT as soon as the employee checks in.
+  // Flexible hours: PRESENT only if the employee has checked out AND met the minimum daily hours.
+  //   While the shift is still open (no checkout yet), tentatively treat as PRESENT.
+  let status;
+  if (isFlexible) {
+    if (!checkIn) {
+      status = 'ABSENT';
+    } else if (checkIn && checkOut) {
+      const minMinutes = (Number(hrSettings.flexible_min_hours_per_day) || 8) * 60;
+      status = workedMinutes >= minMinutes ? 'PRESENT' : 'ABSENT';
+    } else {
+      status = 'PRESENT'; // shift still in progress — no checkout yet
+    }
+  } else {
+    status = checkIn ? 'PRESENT' : 'ABSENT';
+  }
 
-  // day_net_salary is only set once checkout is recorded (day is complete).
-  // Stays 0 while the shift is still open so the salary section doesn't show partial earnings.
+  // day_net_salary is only set once the day is complete (both check-in and check-out recorded
+  // and employee is marked PRESENT). Stays 0 for incomplete/absent days.
   const dailySalary = employee.daily_salary || 0;
-  const dayNetSalary = (checkIn && checkOut)
+  const dayNetSalary = (status === 'PRESENT' && checkIn && checkOut)
     ? Math.max(0, Math.round((dailySalary - lateDeduction) * 100) / 100)
     : 0;
 
@@ -667,15 +687,22 @@ function calculateSalary(employee, summary, year, monthNum, hrSettings = {}) {
     ? Math.round(summary.total_late_deduction * 100) / 100
     : 0;
 
-  // Overtime bonus — compute from daily records if the shop has enabled it
+  // Overtime bonus — compute from daily records if the shop has enabled it.
+  // For fixed shifts: baseline = employee's shift duration (end − start).
+  // For flexible hours: baseline = shop's minimum hours per day setting.
   let overtimeBonus = 0;
   let totalOvertimeMinutes = 0;
   if (hrSettings.enable_overtime_bonus) {
-    const shiftStart = employee.shift?.start_time || '09:00';
-    const shiftEnd   = employee.shift?.end_time   || '18:00';
-    const [sh, sm] = shiftStart.split(':').map(Number);
-    const [eh, em] = shiftEnd.split(':').map(Number);
-    const shiftMins       = Math.max(0, (eh * 60 + em) - (sh * 60 + sm));
+    let shiftMins;
+    if (hrSettings.working_hours_type === 'flexible') {
+      shiftMins = (Number(hrSettings.flexible_min_hours_per_day) || 8) * 60;
+    } else {
+      const shiftStart = employee.shift?.start_time || '09:00';
+      const shiftEnd   = employee.shift?.end_time   || '18:00';
+      const [sh, sm] = shiftStart.split(':').map(Number);
+      const [eh, em] = shiftEnd.split(':').map(Number);
+      shiftMins = Math.max(0, (eh * 60 + em) - (sh * 60 + sm));
+    }
     const thresholdMins   = Number(hrSettings.overtime_threshold_minutes)  || 0;
     const ratePerHour     = Number(hrSettings.overtime_bonus_rate_per_hour) || 0;
 

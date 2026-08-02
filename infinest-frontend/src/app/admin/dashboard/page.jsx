@@ -171,7 +171,8 @@ export default function AdminDashboard() {
               { id: 'payments', label: 'Payments', icon: '💰' },
               { id: 'analytics', label: 'Analytics', icon: '📈' },
               { id: 'shop-admins', label: 'Shop Admins', icon: '🏪' },
-              { id: 'whatsapp', label: 'WhatsApp', icon: '💬' }
+              { id: 'whatsapp', label: 'WhatsApp', icon: '💬' },
+              { id: 'product-ui', label: 'Product UI', icon: '🖥️' }
             ].map(tab => (
               <button
                 key={tab.id}
@@ -209,6 +210,7 @@ export default function AdminDashboard() {
         {activeTab === 'analytics' && <AnalyticsTab userAnalytics={userAnalytics} overallAnalytics={overallAnalytics} />}
         {activeTab === 'shop-admins' && <ShopAdminsTab getAuthHeaders={getAuthHeaders} adminEmail={adminEmail} />}
         {activeTab === 'whatsapp' && <WhatsAppTab getAuthHeaders={getAuthHeaders} />}
+        {activeTab === 'product-ui' && <ProductUITab getAuthHeaders={getAuthHeaders} />}
       </div>
 
       {/* User Details Modal */}
@@ -2074,6 +2076,143 @@ function WhatsAppTab({ getAuthHeaders }) {
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+// ============================================================
+// 🖥️ Product UI Mode Tab
+// ============================================================
+function ProductUITab({ getAuthHeaders }) {
+  const [shops, setShops] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState({});
+  const [search, setSearch] = useState('');
+  const API_URL = process.env.NEXT_PUBLIC_API_URL_AUTH || 'http://localhost:7000';
+
+  const fetchShops = async () => {
+    setLoading(true);
+    try {
+      const res = await axios.get(`${API_URL}/admin/shops/product-ui`, getAuthHeaders());
+      setShops(res.data.shops || []);
+    } catch (err) {
+      console.error('Failed to load product UI settings:', err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => { fetchShops(); }, []);
+
+  const toggleLegacyUI = async (shopId, currentValue) => {
+    setSaving(prev => ({ ...prev, [shopId]: true }));
+    try {
+      await axios.patch(
+        `${API_URL}/admin/shops/${shopId}/product-ui`,
+        { use_legacy_product_ui: !currentValue },
+        getAuthHeaders()
+      );
+      setShops(prev =>
+        prev.map(s => s._id === shopId ? { ...s, use_legacy_product_ui: !currentValue } : s)
+      );
+    } catch (err) {
+      alert('Failed to update: ' + (err.response?.data?.message || err.message));
+    } finally {
+      setSaving(prev => ({ ...prev, [shopId]: false }));
+    }
+  };
+
+  const filtered = shops.filter(s =>
+    search === '' ||
+    s.shop_name?.toLowerCase().includes(search.toLowerCase()) ||
+    s.email?.toLowerCase().includes(search.toLowerCase()) ||
+    s.owner_name?.toLowerCase().includes(search.toLowerCase())
+  );
+
+  if (loading) {
+    return (
+      <div className="text-center py-20">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-purple-500 mx-auto"></div>
+        <p className="text-gray-400 mt-4">Loading shop settings…</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-6">
+      <div className="bg-gray-800 rounded-xl p-6 border border-gray-700">
+        <h2 className="text-xl font-bold text-white mb-2">Product Inventory UI Mode</h2>
+        <p className="text-gray-400 text-sm mb-4">
+          By default, all shops see the new <strong className="text-orange-400">Service Spares Inventory</strong> (spare parts tracking with supplier returns).
+          Enable <strong className="text-blue-400">Legacy UI</strong> for shops that need the old sell-focused product inventory page.
+        </p>
+
+        {/* Search */}
+        <input
+          type="text"
+          placeholder="Search by shop name, email or owner..."
+          value={search}
+          onChange={e => setSearch(e.target.value)}
+          className="w-full max-w-md px-4 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-purple-500"
+        />
+      </div>
+
+      <div className="bg-gray-800 rounded-xl border border-gray-700 overflow-hidden">
+        <table className="w-full">
+          <thead>
+            <tr className="border-b border-gray-700">
+              <th className="text-left px-6 py-4 text-gray-400 font-medium text-sm">Shop</th>
+              <th className="text-left px-6 py-4 text-gray-400 font-medium text-sm">Owner</th>
+              <th className="text-left px-6 py-4 text-gray-400 font-medium text-sm">Email</th>
+              <th className="text-left px-6 py-4 text-gray-400 font-medium text-sm">Current UI</th>
+              <th className="text-left px-6 py-4 text-gray-400 font-medium text-sm">Toggle</th>
+            </tr>
+          </thead>
+          <tbody>
+            {filtered.length === 0 ? (
+              <tr>
+                <td colSpan={5} className="text-center text-gray-500 py-10">No shops found.</td>
+              </tr>
+            ) : (
+              filtered.map(shop => (
+                <tr key={shop._id} className="border-b border-gray-700 hover:bg-gray-750">
+                  <td className="px-6 py-4 text-white font-medium">{shop.shop_name}</td>
+                  <td className="px-6 py-4 text-gray-300">{shop.owner_name || '—'}</td>
+                  <td className="px-6 py-4 text-gray-400 text-sm">{shop.email || '—'}</td>
+                  <td className="px-6 py-4">
+                    {shop.use_legacy_product_ui ? (
+                      <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold bg-blue-900 text-blue-300 border border-blue-700">
+                        🛒 Legacy (Sell-focused)
+                      </span>
+                    ) : (
+                      <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold bg-orange-900 text-orange-300 border border-orange-700">
+                        🔧 Service Spares (New)
+                      </span>
+                    )}
+                  </td>
+                  <td className="px-6 py-4">
+                    <button
+                      onClick={() => toggleLegacyUI(shop._id, shop.use_legacy_product_ui)}
+                      disabled={saving[shop._id]}
+                      className={`px-4 py-2 rounded-lg text-sm font-medium transition ${
+                        shop.use_legacy_product_ui
+                          ? 'bg-orange-600 hover:bg-orange-500 text-white'
+                          : 'bg-blue-600 hover:bg-blue-500 text-white'
+                      } disabled:opacity-50 disabled:cursor-not-allowed`}
+                    >
+                      {saving[shop._id]
+                        ? 'Saving…'
+                        : shop.use_legacy_product_ui
+                          ? 'Switch to Spares UI'
+                          : 'Enable Legacy UI'}
+                    </button>
+                  </td>
+                </tr>
+              ))
+            )}
+          </tbody>
+        </table>
+      </div>
     </div>
   );
 }
