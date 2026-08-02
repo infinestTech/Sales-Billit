@@ -150,10 +150,12 @@ const RecordTable = ({ shop_id, setIsLimitReached }) => {
       ready = 0,
       delivered = 0,
       pending = 0,
-      returned = 0
+      returned = 0,
+      shouldBeReturned = 0
     data.forEach((record) => {
       record.mobiles?.forEach((m) => {
         if (m.returned) returned++
+        else if (m.should_be_returned) shouldBeReturned++
         else {
           if (m.ready) ready++
           else notReady++
@@ -162,7 +164,7 @@ const RecordTable = ({ shop_id, setIsLimitReached }) => {
         }
       })
     })
-    return { ready, notReady, delivered, pending, returned }
+    return { ready, notReady, delivered, pending, returned, shouldBeReturned }
   }
 
   const totals = computeTotals()
@@ -203,10 +205,13 @@ const RecordTable = ({ shop_id, setIsLimitReached }) => {
           </div>
         </div>
 
-        {/* Returned Card */}
+        {/* Return Status Card */}
         <div className="bg-white border border-gray-200 rounded-lg p-4">
-          <div className="text-sm text-gray-600 mb-2">Returned</div>
-          <div className="text-green-600 font-medium text-lg">{totals.returned}</div>
+          <div className="text-sm text-gray-600 mb-2">Return Status</div>
+          <div className="flex items-center justify-between">
+            <span className="text-amber-600 font-medium">{totals.shouldBeReturned} SBRd</span>
+            <span className="text-red-600 font-medium">{totals.returned} Returned</span>
+          </div>
         </div>
 
         {/* Today's Revenue Card - Hidden when shop admin disables revenue visibility */}

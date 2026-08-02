@@ -11,6 +11,7 @@ import {
   Clock,
   Undo2,
   Wallet,
+  AlertTriangle,
 } from "lucide-react"
 import { aggregatePaymentsByMethod, formatINR, summarizeMobiles, truncate } from "./utils"
 
@@ -76,6 +77,13 @@ export default function MobileRecordCard({ record, onOpen, onReceipt }) {
         )}
         {stats.pending > 0 && (
           <Chip color="amber" label={`Pending ${stats.pending}`} />
+        )}
+        {stats.shouldBeReturned > 0 && (
+          <Chip
+            color="amber"
+            icon={<AlertTriangle className="h-3 w-3" />}
+            label={`SBRd ${stats.shouldBeReturned}`}
+          />
         )}
         {stats.returned > 0 && (
           <Chip

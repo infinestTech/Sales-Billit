@@ -9,6 +9,7 @@ import {
   CheckCircle2,
   Truck,
   RotateCcw,
+  AlertTriangle,
   User,
   Wrench,
   Edit3,
@@ -22,6 +23,7 @@ const STATUS_CHIPS = [
   { id: "all", label: "All" },
   { id: "ready", label: "Ready", tone: "emerald" },
   { id: "delivered", label: "Delivered", tone: "blue" },
+  { id: "shouldBeReturned", label: "SBRd", tone: "amber" },
   { id: "returned", label: "Returned", tone: "rose" },
   { id: "pending", label: "Pending", tone: "amber" },
 ]
@@ -58,6 +60,7 @@ export default function MobileRegistry({ shopId: shopIdProp }) {
           ready: m.ready,
           delivered: m.delivered,
           returned: m.returned,
+          should_be_returned: m.should_be_returned,
           addedDate: m.added_date,
         }))
       )
@@ -89,8 +92,9 @@ export default function MobileRegistry({ shopId: shopIdProp }) {
     }
     if (filter === "ready") list = list.filter((r) => r.ready && !r.delivered)
     else if (filter === "delivered") list = list.filter((r) => r.delivered)
+    else if (filter === "shouldBeReturned") list = list.filter((r) => r.should_be_returned && !r.returned)
     else if (filter === "returned") list = list.filter((r) => r.returned)
-    else if (filter === "pending") list = list.filter((r) => !r.ready && !r.delivered && !r.returned)
+    else if (filter === "pending") list = list.filter((r) => !r.ready && !r.delivered && !r.returned && !r.should_be_returned)
     return list
   }, [rows, search, filter])
 
@@ -247,6 +251,7 @@ function StatusBadges({ row }) {
   if (row.delivered) tags.push({ label: "Delivered", cls: "bg-indigo-100 text-indigo-700", Icon: Truck })
   else if (row.ready) tags.push({ label: "Ready", cls: "bg-emerald-100 text-emerald-700", Icon: CheckCircle2 })
   else tags.push({ label: "Pending", cls: "bg-amber-100 text-amber-700", Icon: Wrench })
+  if (row.should_be_returned && !row.returned) tags.push({ label: "SBRd", cls: "bg-amber-100 text-amber-700", Icon: AlertTriangle })
   if (row.returned) tags.push({ label: "Returned", cls: "bg-rose-100 text-rose-700", Icon: RotateCcw })
   return tags.map((t, i) => (
     <span key={i} className={`inline-flex items-center gap-0.5 rounded-full px-2 py-0.5 text-[10px] font-bold ${t.cls}`}>

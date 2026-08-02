@@ -71,6 +71,7 @@ const MobileNamePage = ({ shopId }) => {
           isReady: mobile.ready,
           isDelivered: mobile.delivered,
           isReturn: mobile.returned,
+          isShouldBeReturned: mobile.should_be_returned,
           addedDate: mobile.added_date,
           index,
         })),
@@ -191,13 +192,15 @@ const MobileNamePage = ({ shopId }) => {
       if (imeiSearch.trim()) return true
       switch (selectedStatus) {
         case "notReady":
-          return !mobile.isReady
+          return !mobile.isReady && !mobile.isShouldBeReturned && !mobile.isReturn
         case "notDelivered":
           return !mobile.isDelivered
         case "readyNotDelivered":
           return mobile.isReady && !mobile.isDelivered
         case "return":
           return mobile.isReturn
+        case "shouldBeReturned":
+          return mobile.isShouldBeReturned
         default:
           return true
       }
@@ -232,7 +235,7 @@ const MobileNamePage = ({ shopId }) => {
     else if (clientFilter === "__dealers__") filterParts.push("Type: Dealer")
     else if (clientFilter) filterParts.push(`Dealer: ${clientFilter}`)
     if (selectedStatus && !imeiSearch.trim()) {
-      const statusLabels = { notReady: "Not Ready", notDelivered: "Not Delivered", readyNotDelivered: "Pending", return: "Return" }
+      const statusLabels = { notReady: "Not Ready", notDelivered: "Not Delivered", readyNotDelivered: "Pending", return: "Return", shouldBeReturned: "Should Be Returned" }
       filterParts.push(`Status: ${statusLabels[selectedStatus] || selectedStatus}`)
     }
     if (dateFrom) filterParts.push(`From: ${dateFrom}`)
@@ -257,7 +260,7 @@ const MobileNamePage = ({ shopId }) => {
         m.imei || "-",
         m.issues,
         m.technician || "-",
-        m.isDelivered ? "Delivered" : m.isReturn ? "Returned" : m.isReady ? "Ready" : "Not Ready",
+        m.isDelivered ? "Delivered" : m.isReturn ? "Returned" : m.isShouldBeReturned ? "Should Be Returned" : m.isReady ? "Ready" : "Not Ready",
         m.addedDate ? new Date(m.addedDate).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" }) : "N/A",
       ]),
       styles: { fontSize: 8, cellPadding: 3 },
@@ -389,6 +392,7 @@ const MobileNamePage = ({ shopId }) => {
                 <option value="notReady">Not Ready</option>
                 <option value="notDelivered">Not Delivered</option>
                 <option value="readyNotDelivered">Pending</option>
+                <option value="shouldBeReturned">Should Be Returned (SBRd)</option>
                 <option value="return">Return</option>
               </select>
               {imeiSearch.trim() && (
@@ -623,6 +627,8 @@ const MobileNamePage = ({ shopId }) => {
                           <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold bg-green-100 text-green-800">Delivered</span>
                         ) : data.isReturn ? (
                           <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold bg-yellow-100 text-yellow-800">Returned</span>
+                        ) : data.isShouldBeReturned ? (
+                          <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold bg-amber-100 text-amber-800">SBRd</span>
                         ) : data.isReady ? (
                           <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold bg-blue-100 text-blue-800">Ready</span>
                         ) : (

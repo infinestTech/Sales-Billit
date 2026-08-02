@@ -33,6 +33,7 @@ const toggleMobileStatus = async (req, res) => {
       ready: !!mobile.ready,
       delivered: !!mobile.delivered,
       returned: !!mobile.returned,
+      should_be_returned: !!mobile.should_be_returned,
     };
 
 
@@ -40,19 +41,28 @@ const toggleMobileStatus = async (req, res) => {
 
 
     if (field === "returned") {
-      const isReady = prev.ready;
-      const isDelivered = prev.delivered;
-
-
-      if (!isReady && !isDelivered) {
-        // Directly toggle returned
-        updateData.returned = !prev.returned;
-      } else {
-        // If either ready or delivered is true, set both to false and set returned to true
-        updateData.ready = false;
-        updateData.delivered = false;
-        updateData.delivery_date = null; // clear delivery date
+      // Three-state cycle: No → SBRd (should_be_returned=true) → Returned → No
+      if (prev.returned) {
+        // State 2 → State 0: Undo returned, fully reset
+        updateData.returned = false;
+        updateData.should_be_returned = false;
+      } else if (prev.should_be_returned) {
+        // State 1 → State 2: Actually returned to customer
+        updateData.should_be_returned = false;
         updateData.returned = true;
+        if (prev.ready || prev.delivered) {
+          updateData.ready = false;
+          updateData.delivered = false;
+          updateData.delivery_date = null;
+        }
+      } else {
+        // State 0 → State 1: Mark as Should Be Returned (SBRd)
+        updateData.should_be_returned = true;
+        if (prev.ready || prev.delivered) {
+          updateData.ready = false;
+          updateData.delivered = false;
+          updateData.delivery_date = null;
+        }
       }
     } else if (field === "delivered") {
       const newValue = !prev.delivered;
@@ -77,6 +87,7 @@ const toggleMobileStatus = async (req, res) => {
     const updatedMobile = await Mobile.findByIdAndUpdate(id, updateData, { new: true });
 
     // ---- WhatsApp triggers (only on false -> true transitions, unless skipWhatsapp) ----
+    // For 'returned': WA fires only on State1→State2 (should_be_returned=true → returned=true)
     try {
       const transitions = ["ready", "delivered", "returned"].filter(
         (f) => updateData[f] === true && prev[f] === false

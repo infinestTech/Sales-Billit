@@ -35,7 +35,7 @@ export default function MobileRecordsList({ shopId, refreshKey }) {
   const [filters, setFilters] = useState(emptyFilters)
   const [quickQuery, setQuickQuery] = useState("")
   const [showFilters, setShowFilters] = useState(false)
-  const [activeChip, setActiveChip] = useState("all") // all | pending | ready | delivered | returned | balance
+  const [activeChip, setActiveChip] = useState("all") // all | pending | ready | delivered | shouldBeReturned | returned | balance
 
   const [openRecord, setOpenRecord] = useState(null)
   const [receiptRecord, setReceiptRecord] = useState(null)
@@ -138,6 +138,8 @@ export default function MobileRecordsList({ shopId, refreshKey }) {
           return stats.ready > 0
         case "delivered":
           return stats.total > 0 && stats.delivered === stats.total
+        case "shouldBeReturned":
+          return stats.shouldBeReturned > 0
         case "returned":
           return stats.returned > 0
         case "balance":
@@ -154,6 +156,7 @@ export default function MobileRecordsList({ shopId, refreshKey }) {
       ready = 0,
       delivered = 0,
       returned = 0,
+      shouldBeReturned = 0,
       paid = 0,
       balance = 0
     for (const r of records) {
@@ -162,10 +165,11 @@ export default function MobileRecordsList({ shopId, refreshKey }) {
       ready += s.ready
       delivered += s.delivered
       returned += s.returned
+      shouldBeReturned += s.shouldBeReturned
       paid += s.totalPaid
       balance += Number(r.balance_amount || 0)
     }
-    return { pending, ready, delivered, returned, paid, balance }
+    return { pending, ready, delivered, returned, shouldBeReturned, paid, balance }
   }, [records])
 
   const handleRecordChanged = useCallback(
@@ -314,6 +318,7 @@ export default function MobileRecordsList({ shopId, refreshKey }) {
             { id: "pending", label: "Pending" },
             { id: "ready", label: "Ready" },
             { id: "delivered", label: "Delivered" },
+            { id: "shouldBeReturned", label: "SBRd" },
             { id: "returned", label: "Returned" },
             { id: "balance", label: "Has balance" },
           ].map((chip) => {

@@ -270,9 +270,10 @@ export default function EnhancedAnalyticsDashboard({ shopId }) {
     setData({
       revenueData: Object.values(revenueByDate).sort((a, b) => new Date(a.date) - new Date(b.date)),
       statusDistribution: {
-        pending: mobilesInRange.filter(m => !m.ready && !m.delivered && !m.returned).length,
+        pending: mobilesInRange.filter(m => !m.ready && !m.delivered && !m.returned && !m.should_be_returned).length,
         ready: mobilesInRange.filter(m => m.ready && !m.delivered).length,
         delivered: mobilesInRange.filter(m => m.delivered).length,
+        shouldBeReturned: mobilesInRange.filter(m => m.should_be_returned && !m.returned).length,
         returned: mobilesInRange.filter(m => m.returned).length,
       },
       deviceTypeData: Object.values(deviceTypes).sort((a, b) => b.value - a.value),
@@ -400,6 +401,7 @@ export default function EnhancedAnalyticsDashboard({ shopId }) {
     { name: 'Pending', value: statusDistribution.pending || 0, color: COLORS[3] },
     { name: 'Ready', value: statusDistribution.ready || 0, color: COLORS[1] },
     { name: 'Delivered', value: statusDistribution.delivered || 0, color: COLORS[0] },
+    { name: 'SBRd', value: statusDistribution.shouldBeReturned || 0, color: '#F59E0B' },
     { name: 'Returned', value: statusDistribution.returned || 0, color: COLORS[4] },
   ].filter(item => item.value > 0);
 

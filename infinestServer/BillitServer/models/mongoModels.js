@@ -171,6 +171,7 @@ const mobileSchema = new mongoose.Schema({
   ready: { type: Boolean, default: false },
   delivered: { type: Boolean, default: false },
   returned: { type: Boolean, default: false },
+  should_be_returned: { type: Boolean, default: false },
   paid_amount: { type: Number, default: 0 }, // Customer payment amount (legacy, kept for backward compatibility)
   payment: { type: String, enum: ["cash", "UPI", "card", "UPI-h", "UPI-s", "Cash + Card", "UPI H + CASH", "UPI S + CASH", "UPI H + CARD", "UPI S + CARD", ""], default: "" },
   // Split payment tracking
