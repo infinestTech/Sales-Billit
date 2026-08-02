@@ -41,6 +41,7 @@ const AllRecordTable = ({ shopId, filterDate }) => {
     notReadyFalseCount: 0,
     notDeliveredFalseCount: 0,
     returnCount: 0,
+    shouldBeReturnedCount: 0,
   })
   const [shopOwnerName, setShopOwnerName] = useState("")
 const [shopAddressState, setShopAddressState] = useState("")
@@ -149,13 +150,16 @@ const [shopAddressState, setShopAddressState] = useState("")
       deliveredCount = 0,
       notReadyFalseCount = 0,
       notDeliveredFalseCount = 0,
-      returnCount = 0
+      returnCount = 0,
+      shouldBeReturnedCount = 0
 
 
     data.forEach((invoice) => {
       invoice.MobileName.forEach((mobile) => {
         if (mobile.returned) {
           returnCount++
+        } else if (mobile.should_be_returned) {
+          shouldBeReturnedCount++
         } else {
           if (!mobile.ready) notReadyFalseCount++
           else notReadyCount++
@@ -168,7 +172,7 @@ const [shopAddressState, setShopAddressState] = useState("")
     })
 
 
-    setTotals({ notReadyCount, deliveredCount, notReadyFalseCount, notDeliveredFalseCount, returnCount })
+    setTotals({ notReadyCount, deliveredCount, notReadyFalseCount, notDeliveredFalseCount, returnCount, shouldBeReturnedCount })
   }
 
 
@@ -339,8 +343,16 @@ const [shopAddressState, setShopAddressState] = useState("")
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm font-semibold text-gray-600 mb-1">Return Status</p>
-                <p className="text-2xl font-bold text-purple-700">{totals.returnCount}</p>
-                <p className="text-sm text-gray-500">Returned</p>
+                <div className="flex items-center space-x-4">
+                  <div className="flex items-center">
+                    <span className="text-lg font-bold text-amber-600">{totals.shouldBeReturnedCount}</span>
+                    <span className="text-sm text-gray-500 ml-1">SBRd</span>
+                  </div>
+                  <div className="flex items-center">
+                    <span className="text-lg font-bold text-purple-700">{totals.returnCount}</span>
+                    <span className="text-sm text-gray-500 ml-1">Returned</span>
+                  </div>
+                </div>
               </div>
               <div className="p-3 bg-purple-100 rounded-xl">
                 <RotateCcw className="h-8 w-8 text-purple-600" />

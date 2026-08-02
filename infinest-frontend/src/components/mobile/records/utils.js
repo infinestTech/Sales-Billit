@@ -63,10 +63,12 @@ export const summarizeMobiles = (mobiles = []) => {
   let ready = 0
   let delivered = 0
   let returned = 0
+  let shouldBeReturned = 0
   let pending = 0
   let totalPaid = 0
   for (const m of mobiles) {
     if (m.returned) returned += 1
+    else if (m.should_be_returned) shouldBeReturned += 1
     else if (m.delivered) delivered += 1
     else if (m.ready) ready += 1
     else pending += 1
@@ -76,6 +78,7 @@ export const summarizeMobiles = (mobiles = []) => {
     ready,
     delivered,
     returned,
+    shouldBeReturned,
     pending,
     totalPaid,
     total: mobiles.length,

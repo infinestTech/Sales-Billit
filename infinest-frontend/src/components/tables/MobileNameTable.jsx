@@ -154,7 +154,10 @@ const MobileNameTable = ({ mobileData, setMobileData, onRevenueUpdate, hideActio
     }
 
     // Show WhatsApp confirmation for false→true transitions — only when WA is enabled for this shop
-    if (WA_TRIGGER_FIELDS.includes(field) && !mobile[field] && waShopEnabled === true) {
+    // For 'returned': only show WA dialog on the actual returned transition (should_be_returned=true → returned=true)
+    const isActualReturnTransition = field === "returned" && !mobile.returned && !!mobile.should_be_returned
+    const isOtherWaTrigger = WA_TRIGGER_FIELDS.includes(field) && field !== "returned" && !mobile[field]
+    if ((isActualReturnTransition || isOtherWaTrigger) && waShopEnabled === true) {
       setWaConfirmState({ open: true, index, field })
       return
     }
@@ -691,10 +694,12 @@ const MobileNameTable = ({ mobileData, setMobileData, onRevenueUpdate, hideActio
                     className={`px-3 py-1 text-xs font-semibold rounded-full transition-all duration-200 ${
                       mobile.returned
                         ? "bg-green-100 text-green-800 hover:bg-green-200"
-                        : "bg-red-100 text-red-800 hover:bg-red-200"
+                        : mobile.should_be_returned
+                          ? "bg-amber-100 text-amber-800 hover:bg-amber-200"
+                          : "bg-red-100 text-red-800 hover:bg-red-200"
                     } ${hideActions ? "cursor-not-allowed opacity-60" : "cursor-pointer"}`}
                   >
-                    {mobile.returned ? "Yes" : "No"}
+                    {mobile.returned ? "Yes" : mobile.should_be_returned ? "SBRd" : "No"}
                   </button>
                 </td>
                 <td className="px-6 py-4 border-b border-gray-200">

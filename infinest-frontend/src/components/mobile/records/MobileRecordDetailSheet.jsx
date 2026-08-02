@@ -98,7 +98,10 @@ export default function MobileRecordDetailSheet({
 
   const handleToggle = (mobile, field) => {
     // For false→true on WA-triggering fields, ask about WA only when WA is enabled for this shop
-    if (WA_TRIGGER_FIELDS.includes(field) && !mobile[field] && waShopEnabled === true) {
+    // For 'returned': only show WA dialog on the actual returned transition (should_be_returned=true → returned=true)
+    const isActualReturnTransition = field === "returned" && !mobile.returned && !!mobile.should_be_returned
+    const isOtherWaTrigger = WA_TRIGGER_FIELDS.includes(field) && field !== "returned" && !mobile[field]
+    if ((isActualReturnTransition || isOtherWaTrigger) && waShopEnabled === true) {
       setWaConfirmState({ open: true, mobile, field })
       return
     }
@@ -331,6 +334,7 @@ export default function MobileRecordDetailSheet({
                   <StatusButton
                     label="Returned"
                     active={!!m.returned}
+                    intermediate={!!m.should_be_returned}
                     busy={busy}
                     onClick={() => handleToggle(m, "returned")}
                     color="rose"
@@ -472,29 +476,31 @@ const colorMap = {
   },
   rose: {
     on: "bg-rose-50 border-rose-300 text-rose-700",
+    intermediate: "bg-amber-50 border-amber-300 text-amber-700",
     off: "bg-white border-gray-200 text-gray-500",
   },
 }
 
-function StatusButton({ label, active, busy, onClick, color }) {
+function StatusButton({ label, active, intermediate, busy, onClick, color }) {
   const cls = colorMap[color] || colorMap.blue
+  const stateClass = active ? cls.on : (intermediate && cls.intermediate) ? cls.intermediate : cls.off
   return (
     <button
       type="button"
       onClick={onClick}
       disabled={busy}
-      className={`flex items-center justify-center gap-1.5 rounded-lg border px-2 py-2 text-xs font-medium transition-colors disabled:opacity-50 ${
-        active ? cls.on : cls.off
-      }`}
+      className={`flex items-center justify-center gap-1.5 rounded-lg border px-2 py-2 text-xs font-medium transition-colors disabled:opacity-50 ${stateClass}`}
     >
       {busy ? (
         <Loader2 className="h-3.5 w-3.5 animate-spin" />
       ) : active ? (
         <CheckCircle2 className="h-3.5 w-3.5" />
+      ) : intermediate ? (
+        <AlertTriangle className="h-3.5 w-3.5" />
       ) : (
         <Circle className="h-3.5 w-3.5" />
       )}
-      {label}
+      {intermediate && !active ? "SBRd" : label}
     </button>
   )
 }
