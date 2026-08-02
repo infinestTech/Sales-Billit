@@ -192,9 +192,7 @@ const MobileNamePage = ({ shopId }) => {
       if (imeiSearch.trim()) return true
       switch (selectedStatus) {
         case "notReady":
-          return !mobile.isReady && !mobile.isShouldBeReturned && !mobile.isReturn
-        case "notDelivered":
-          return !mobile.isDelivered
+          return !mobile.isReady && !mobile.isDelivered && !mobile.isShouldBeReturned && !mobile.isReturn
         case "readyNotDelivered":
           return mobile.isReady && !mobile.isDelivered
         case "return":
@@ -235,7 +233,7 @@ const MobileNamePage = ({ shopId }) => {
     else if (clientFilter === "__dealers__") filterParts.push("Type: Dealer")
     else if (clientFilter) filterParts.push(`Dealer: ${clientFilter}`)
     if (selectedStatus && !imeiSearch.trim()) {
-      const statusLabels = { notReady: "Not Ready", notDelivered: "Not Delivered", readyNotDelivered: "Pending", return: "Return", shouldBeReturned: "Should Be Returned" }
+      const statusLabels = { notReady: "Not Ready", readyNotDelivered: "Pending", return: "Return", shouldBeReturned: "Should Be Returned" }
       filterParts.push(`Status: ${statusLabels[selectedStatus] || selectedStatus}`)
     }
     if (dateFrom) filterParts.push(`From: ${dateFrom}`)
@@ -390,7 +388,6 @@ const MobileNamePage = ({ shopId }) => {
                 disabled={!!imeiSearch.trim()}
               >
                 <option value="notReady">Not Ready</option>
-                <option value="notDelivered">Not Delivered</option>
                 <option value="readyNotDelivered">Pending</option>
                 <option value="shouldBeReturned">Should Be Returned (SBRd)</option>
                 <option value="return">Return</option>
