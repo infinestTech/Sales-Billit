@@ -836,4 +836,65 @@ router.get('/shops/:shopId/whatsapp/invoice', internalAuth, async (req, res) => 
     }
 });
 
+// ==============================
+// 🖥️ Product UI Mode (legacy vs spares)
+// ==============================
+
+// List all shops with their product UI mode setting
+router.get('/shops/product-ui', internalAuth, async (req, res) => {
+    try {
+        const shops = await Shop.find(
+            {},
+            'shop_name owner_name email mysql_user_id use_legacy_product_ui'
+        ).sort({ shop_name: 1 }).lean();
+
+        res.json({
+            success: true,
+            shops: shops.map(s => ({
+                _id: s._id,
+                shop_name: s.shop_name,
+                owner_name: s.owner_name,
+                email: s.email,
+                mysql_user_id: s.mysql_user_id,
+                use_legacy_product_ui: !!s.use_legacy_product_ui,
+            }))
+        });
+    } catch (error) {
+        console.error('List shops product-ui error:', error);
+        res.status(500).json({ message: 'Failed to fetch shops', error: error.message });
+    }
+});
+
+// Toggle product UI mode for a specific shop
+// Body: { use_legacy_product_ui: boolean }
+router.patch('/shops/:shopId/product-ui', internalAuth, async (req, res) => {
+    try {
+        const { shopId } = req.params;
+        const { use_legacy_product_ui } = req.body || {};
+
+        if (typeof use_legacy_product_ui !== 'boolean') {
+            return res.status(400).json({ message: 'use_legacy_product_ui must be a boolean' });
+        }
+
+        const shop = await Shop.findByIdAndUpdate(
+            shopId,
+            { $set: { use_legacy_product_ui } },
+            { new: true }
+        );
+        if (!shop) return res.status(404).json({ message: 'Shop not found' });
+
+        res.json({
+            success: true,
+            shop: {
+                _id: shop._id,
+                shop_name: shop.shop_name,
+                use_legacy_product_ui: shop.use_legacy_product_ui,
+            }
+        });
+    } catch (error) {
+        console.error('Toggle product UI error:', error);
+        res.status(500).json({ message: 'Failed to update product UI setting', error: error.message });
+    }
+});
+
 module.exports = router;

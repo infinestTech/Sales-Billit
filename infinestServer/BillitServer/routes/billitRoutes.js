@@ -189,6 +189,24 @@ router.post("/products/increase-stock", authenticateToken, increaseStock);
 const { adminSell } = require('../controllers/api/adminSellController');
 router.post('/products/admin-sell', authenticateToken, adminSell);
 
+const { returnSpare } = require('../controllers/api/returnSpareController');
+router.post('/products/return', authenticateToken, returnSpare);
+
+const { getSpareHistory } = require('../controllers/api/spareHistoryController');
+router.post('/products/spare-history', authenticateToken, getSpareHistory);
+
+// Return whether this shop uses the legacy sell-focused product UI
+router.get('/shop/product-ui-mode', authenticateToken, async (req, res) => {
+  try {
+    const shop = await Shop.findById(req.user.shop_id).select('use_legacy_product_ui').lean();
+    if (!shop) return res.status(404).json({ error: 'Shop not found' });
+    return res.json({ success: true, use_legacy_product_ui: !!shop.use_legacy_product_ui });
+  } catch (err) {
+    console.error('shop/product-ui-mode error:', err);
+    return res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
 
 
 

@@ -5,7 +5,7 @@ import {
   Clock, CheckCircle, XCircle, AlertCircle, Calendar,
   User, Users, LogIn, LogOut, RefreshCw, Filter,
   ArrowRight, Download, ChevronLeft, ChevronRight, Edit2, Settings, Save,
-  ToggleLeft, ToggleRight, Gift, TimerReset, Sliders, Clock4,
+  ToggleLeft, ToggleRight, Gift, TimerReset, SlidersHorizontal, Clock4,
 } from "lucide-react";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL_BILLIT || "http://localhost:8000";
@@ -89,7 +89,10 @@ export default function AttendanceManagement({ shopId }) {
   const headers = () => ({ Authorization: `Bearer ${token()}` });
 
   useEffect(() => {
-    if (shopId) fetchEmployees();
+    if (shopId) {
+      fetchEmployees();
+      fetchHrSettings(); // Load HR settings on mount so they're ready before the settings tab is visited
+    }
   }, [shopId]);
 
   useEffect(() => {
@@ -97,7 +100,7 @@ export default function AttendanceManagement({ shopId }) {
   }, [dailyDate, shopId, activeTab]);
 
   useEffect(() => {
-    if (shopId && activeTab === "settings") fetchHrSettings();
+    if (shopId && activeTab === "settings") fetchHrSettings(); // Re-fetch when settings tab is opened (ensures latest values)
   }, [shopId, activeTab]);
 
   const fetchEmployees = async () => {
@@ -281,7 +284,25 @@ export default function AttendanceManagement({ shopId }) {
           overtimeBonusRatePerHour: otRate,
         },
         { headers: headers() });
-      if (res.data.success) setHrSettingsMsg({ success: "HR settings saved." });
+      if (res.data.success) {
+        setHrSettingsMsg({ success: "HR settings saved." });
+        // Sync local state with the server's confirmed saved values
+        if (res.data.data) {
+          setHrSettings({
+            duplicatePunchWindowMinutes: res.data.data.duplicatePunchWindowMinutes ?? 180,
+            lunchThresholdTime:          res.data.data.lunchThresholdTime ?? "12:00",
+            lunchBreakMinutes:           res.data.data.lunchBreakMinutes ?? 30,
+            enableLateDeduction:         res.data.data.enableLateDeduction !== false,
+            workingHoursType:            res.data.data.workingHoursType || "fixed",
+            flexibleMinHoursPerDay:      res.data.data.flexibleMinHoursPerDay ?? 8,
+            enableOvertimeBonus:         !!res.data.data.enableOvertimeBonus,
+            overtimeThresholdMinutes:    res.data.data.overtimeThresholdMinutes ?? 30,
+            overtimeBonusRatePerHour:    res.data.data.overtimeBonusRatePerHour ?? 0,
+          });
+        }
+      } else {
+        setHrSettingsMsg({ error: res.data.message || "Save failed. Please try again." });
+      }
     } catch (err) {
       setHrSettingsMsg({ error: err.response?.data?.message || "Save failed" });
     } finally { setHrSettingsSaving(false); }
@@ -805,7 +826,7 @@ export default function AttendanceManagement({ shopId }) {
               {/* ──── 1. Working Hours Policy ──────────────────────────────────────────────── */}
               <div className="bg-white rounded-xl border border-gray-200 p-5">
                 <div className="flex items-start gap-3 mb-4">
-                  <Sliders className="h-5 w-5 text-blue-600 mt-0.5" />
+                  <SlidersHorizontal className="h-5 w-5 text-blue-600 mt-0.5" />
                   <div>
                     <h3 className="text-base font-bold text-gray-800">Working Hours Policy</h3>
                     <p className="text-xs text-gray-500">Choose between a fixed shift schedule or flexible daily hour targets.</p>

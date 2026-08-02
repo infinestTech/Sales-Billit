@@ -41,6 +41,7 @@ const PAYMENT_METHOD_ENUM = [
   'UPI S + CASH',
   'UPI H + CARD',
   'UPI S + CARD',
+  'credit', 'Credit',
   '', null
 ];
 

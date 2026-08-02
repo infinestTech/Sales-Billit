@@ -5,7 +5,7 @@
 import { useEffect, useState } from "react"
 import Pagination from "./Pagination"
 import api from "../api"
-import { Calendar, Smartphone, AlertCircle, CheckCircle, RotateCcw, DollarSign, Truck, Package, Eye } from "lucide-react"
+import { Calendar, Smartphone, AlertCircle, CheckCircle, RotateCcw, DollarSign, Truck, Package, Eye, Banknote, CreditCard } from "lucide-react"
 import { useRouter } from "next/navigation"
 import { jwtDecode } from "jwt-decode"
 import { useShopWhatsappConfig } from "@/hooks/useShopWhatsappConfig"
@@ -36,6 +36,7 @@ const MobileNameTable = ({ mobileData, setMobileData, onRevenueUpdate, hideActio
   const [warranty, setWarranty] = useState("")
   const [selling, setSelling] = useState(false)
   const [sellDate, setSellDate] = useState(new Date().toISOString().split("T")[0])
+  const [sparePurchaseType, setSparePurchaseType] = useState("credit") // "cash" | "credit"
 
   // Split Payment Modal States
   const [paymentModalOpen, setPaymentModalOpen] = useState(false)
@@ -312,6 +313,7 @@ const MobileNameTable = ({ mobileData, setMobileData, onRevenueUpdate, hideActio
     setShowProductDropdown(false)
     setActiveMobileIndex(null)
     setActiveMobileId(null)
+    setSparePurchaseType("credit")
   }
 
 
@@ -442,6 +444,10 @@ const MobileNameTable = ({ mobileData, setMobileData, onRevenueUpdate, hideActio
       alert("Please select a supplier")
       return
     }
+    if (!paidAmount || Number(paidAmount) <= 0) {
+      alert("Please enter the spare cost")
+      return
+    }
     if (!selectedProductId && !paymentMethod) {
       alert("Please select a Payment Method")
       return
@@ -469,19 +475,20 @@ const MobileNameTable = ({ mobileData, setMobileData, onRevenueUpdate, hideActio
         console.warn("No matching product found by name; skipping product sell and only updating supplier history")
       }
 
-      // find current supplier total and increment it by the paidAmount (or cost)
-      const currentSupplier = suppliers.find(s => String(s._id) === String(selectedSupplierId))
-      const currentTotal = Number(currentSupplier?.totalAmount || 0)
-      const increment = Number(paidAmount || 0)
-      const newTotal = currentTotal + increment
+      // Only update supplier credit balance if this is a CREDIT purchase
+      // Cash purchases don't create supplier debt — already paid
+      if (sparePurchaseType === "credit") {
+        const currentSupplier = suppliers.find(s => String(s._id) === String(selectedSupplierId))
+        const currentTotal = Number(currentSupplier?.totalAmount || 0)
+        const increment = Number(paidAmount || 0)
+        const newTotal = currentTotal + increment
 
-      // call supplier update to record history and update totalAmount
-      await api.post(
-        "/api/suppliers/update",
-        { shop_id: shopId, supplierId: selectedSupplierId, totalAmount: newTotal, lastPaymentMethod: paymentMethod || DEFAULT_PAYMENT_METHOD, message: `Added: ${productNameInput} x${sellQty} - ₹${increment}`, changeDate: selectedDate },
-        { headers: { Authorization: `Bearer ${token}` } }
-      )
-      
+        await api.post(
+          "/api/suppliers/update",
+          { shop_id: shopId, supplierId: selectedSupplierId, totalAmount: newTotal, lastPaymentMethod: paymentMethod || DEFAULT_PAYMENT_METHOD, message: `Added: ${productNameInput} x${sellQty} - ₹${increment}`, changeDate: selectedDate },
+          { headers: { Authorization: `Bearer ${token}` } }
+        )
+      }
 
       // Save supplier/product details and supplier amount to mobile record
       // This tracks what was used/sold and the cost for this mobile
@@ -1065,10 +1072,51 @@ const MobileNameTable = ({ mobileData, setMobileData, onRevenueUpdate, hideActio
                   onChange={(e) => setSellQty(e.target.value)}
                 />
               </div>
+
+              {/* Purchase Type — Cash or Credit */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">How did you buy this spare?</label>
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setSparePurchaseType("credit")}
+                    className={`flex items-center justify-center gap-1.5 py-2.5 px-3 rounded-lg border-2 text-sm font-semibold transition-all ${
+                      sparePurchaseType === "credit"
+                        ? "border-orange-500 bg-orange-50 text-orange-700"
+                        : "border-gray-200 bg-white text-gray-500 hover:border-gray-300"
+                    }`}
+                  >
+                    <CreditCard className="h-4 w-4" />
+                    Credit
+                    <span className="text-xs font-normal">(will owe supplier)</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setSparePurchaseType("cash")}
+                    className={`flex items-center justify-center gap-1.5 py-2.5 px-3 rounded-lg border-2 text-sm font-semibold transition-all ${
+                      sparePurchaseType === "cash"
+                        ? "border-green-500 bg-green-50 text-green-700"
+                        : "border-gray-200 bg-white text-gray-500 hover:border-gray-300"
+                    }`}
+                  >
+                    <Banknote className="h-4 w-4" />
+                    Cash / UPI
+                    <span className="text-xs font-normal">(already paid)</span>
+                  </button>
+                </div>
+                {sparePurchaseType === "credit" && (
+                  <p className="mt-1.5 text-xs text-orange-600 bg-orange-50 rounded p-1.5">
+                    This amount will be added to the supplier's credit balance.
+                  </p>
+                )}
+              </div>
+
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Supplier Amount (optional)
-                  <span className="text-xs text-gray-500 block">Cost paid to supplier for this product</span>
+                  Spare Cost *
+                  <span className="text-xs text-gray-500 ml-1">
+                    {sparePurchaseType === "credit" ? "(added to supplier credit)" : "(cash expense recorded)"}
+                  </span>
                 </label>
                 <input
                   type="number"
@@ -1076,6 +1124,7 @@ const MobileNameTable = ({ mobileData, setMobileData, onRevenueUpdate, hideActio
                   className="w-full border rounded-lg px-3 py-2"
                   value={paidAmount}
                   onChange={(e) => setPaidAmount(e.target.value)}
+                  placeholder="₹0"
                 />
               </div>
               <div>
@@ -1083,11 +1132,11 @@ const MobileNameTable = ({ mobileData, setMobileData, onRevenueUpdate, hideActio
                   Payment Method
                   {selectedProductId
                     ? <span className="ml-2 text-xs text-green-600 font-normal">(auto-filled from inventory)</span>
-                    : <span className="ml-1 text-red-500">*</span>
+                    : sparePurchaseType === "cash" ? <span className="ml-1 text-red-500">*</span> : <span className="ml-2 text-xs text-gray-400 font-normal">(optional for credit)</span>
                   }
                 </label>
                 <select
-                  className={`w-full border rounded-lg px-3 py-2 ${!selectedProductId && !paymentMethod ? 'border-red-300' : 'border-gray-300'}`}
+                  className={`w-full border rounded-lg px-3 py-2 ${sparePurchaseType === "cash" && !selectedProductId && !paymentMethod ? 'border-red-300' : 'border-gray-300'}`}
                   value={paymentMethod}
                   onChange={(e) => setPaymentMethod(e.target.value)}
                 >

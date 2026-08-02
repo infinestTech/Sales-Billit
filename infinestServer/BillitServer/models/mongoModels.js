@@ -61,6 +61,8 @@ const shopSchema = new mongoose.Schema({
   address: { type: String },
   owner_name: { type: String }, // ✅ new field for MySQL name
   revenue_visible_to_users: { type: Boolean, default: true }, // Toggle: show/hide revenue & analytics for regular users
+  // Feature flag: show legacy sell-focused product inventory UI (for specific shops that still need it)
+  use_legacy_product_ui: { type: Boolean, default: false },
   // eSSL M20 Biometric Attendance Integration
   use_essl_attendance: { type: Boolean, default: false }, // When true, use ADMS device; hide built-in attendance
   essl_device_serial: { type: String, trim: true }, // Registered device serial number (SN)
@@ -316,10 +318,11 @@ const supplierHistorySchema = new mongoose.Schema({
 const productHistorySchema = new mongoose.Schema({
   productId: { type: mongoose.Schema.Types.ObjectId, ref: "Product", required: true },
   changeDate: { type: Date, default: Date.now },
-  changeType: { type: String, enum: ["ADD", "REMOVE", "EDIT", "SELL", "RESTOCK"], required: true },
+  changeType: { type: String, enum: ["ADD", "REMOVE", "EDIT", "SELL", "RESTOCK", "RETURN_TO_SUPPLIER", "USE_SPARE"], required: true },
   quantity: { type: Number, required: true },
   costPrice: { type: Number, required: true },
   paidAmount: { type: Number },
+  mobileId: { type: mongoose.Schema.Types.ObjectId, ref: "Mobile" }, // optional: linked mobile repair record
   notes: { type: String }
 });
 

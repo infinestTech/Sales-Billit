@@ -8,7 +8,9 @@ const listProducts = async (req, res) => {
   }
 
   try {
-    const products = await Product.find({ userId: shop_id }).sort({ updatedAt: -1 });
+    const products = await Product.find({ userId: shop_id })
+      .populate("supplierId", "supplierName agencyName")
+      .sort({ updatedAt: -1 });
     return res.status(200).json({ products });
   } catch (error) {
     console.error("Error fetching products:", error);
