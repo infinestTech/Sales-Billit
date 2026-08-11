@@ -760,6 +760,69 @@ router.get('/get-user-session-limit/:userId', async (req, res) => {
     }
 });
 
+// ✅ Toggle deactivation of a user's account (admin-only)
+// Body: { isDeactivated: boolean, reason?: string }
+router.patch('/users/:userId/deactivate', adminAuth, async (req, res) => {
+    try {
+        const { userId } = req.params;
+        const { isDeactivated, reason } = req.body;
+
+        if (typeof isDeactivated !== 'boolean') {
+            return res.status(400).json({
+                success: false,
+                message: 'isDeactivated must be a boolean'
+            });
+        }
+
+        const user = await prisma.user.update({
+            where: { id: userId },
+            data: {
+                isDeactivated,
+                deactivatedAt: isDeactivated ? new Date() : null,
+                deactivatedReason: isDeactivated ? (reason || null) : null
+            },
+            select: {
+                id: true,
+                email: true,
+                username: true,
+                isDeactivated: true,
+                deactivatedAt: true,
+                deactivatedReason: true
+            }
+        });
+
+        // The isDeactivated flag is checked in authenticateToken on every request,
+        // so active sessions/tokens are rejected immediately without needing a blacklist entry
+        // (which would show a misleading "Account has been deleted" message).
+
+        // Also kill any active BillitServer sessions so the user is logged out on all devices.
+        if (isDeactivated) {
+            try {
+                await axios.post(
+                    `${process.env.BILLIT_SERVER_URL}/api/admin/invalidate-user-sessions/${userId}`,
+                    {},
+                    { headers: { 'x-internal-key': process.env.INTERNAL_API_KEY } }
+                );
+            } catch (err) {
+                console.warn('⚠️ Failed to invalidate BillitServer sessions:', err?.response?.data || err.message);
+            }
+        }
+
+        res.json({
+            success: true,
+            message: isDeactivated ? 'User account deactivated.' : 'User account reactivated.',
+            user
+        });
+    } catch (error) {
+        console.error('Deactivate user error:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Failed to update deactivation status',
+            error: error.message
+        });
+    }
+});
+
 // ✅ Admin: manually activate/recover subscription for a user
 // Use this to fix users who paid via Razorpay but subscription wasn't created
 // (e.g. page close / network drop after payment before create-subscription was called)

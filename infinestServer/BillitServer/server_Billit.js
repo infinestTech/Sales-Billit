@@ -44,10 +44,10 @@ app.use(express.json());
 //     'http://[::1]:8000',        // ✅ Add IPv6 localhost for billit server
 //     'http://89.116.121.212:3000',
 //      //Production domains
-//     'https://sales.infinestech.com',    // ✅ Production sales frontend
-//     'http://sales.infinestech.com',     // ✅ Fallback for sales frontend
-//     'https://auth.infinestech.com',     // ✅ Production auth server
-//     'http://auth.infinestech.com',      // ✅ Fallback for auth server
+//     'https://sales.mobilebillingsoftware.com',    // ✅ Production sales frontend
+//     'http://sales.mobilebillingsoftware.com',     // ✅ Fallback for sales frontend
+//     'https://auth.mobilebillingsoftware.com',     // ✅ Production auth server
+//     'http://auth.mobilebillingsoftware.com',      // ✅ Fallback for auth server
 //      //Sales Server Communication
 //     'http://localhost:9000',            // ✅ Sales server local
 //     'http://127.0.0.1:9000',

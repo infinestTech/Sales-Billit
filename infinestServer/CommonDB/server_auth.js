@@ -70,8 +70,8 @@ app.use(cors({
      'http://127.0.0.1:3000',
      'https://127.0.0.1:3000',
      // Production Sales Domain
-     'https://sales.infinestech.com',   // ✅ Production sales frontend
-     'http://sales.infinestech.com',    // ✅ Fallback for sales frontend
+     'https://sales.mobilebillingsoftware.com',   // ✅ Production sales frontend
+     'http://sales.mobilebillingsoftware.com',    // ✅ Fallback for sales frontend
      // Sales Server Internal Communication
      'http://localhost:9000',           // ✅ Sales server local
      'http://127.0.0.1:9000',
@@ -246,6 +246,13 @@ app.post('/login', authLimiter, async (req, res) => {
     return res.status(401).json({ error: "Invalid credentials" });
   }
 
+  if (user.isDeactivated) {
+    return res.status(403).json({
+      error: "Your account has been deactivated by the admin. Please contact the admin.",
+      accountDeactivated: true
+    });
+  }
+
   const token = createJWT({ userId: user.id });
 
   res.json({
@@ -282,6 +289,14 @@ app.post('/verify-user-login', async (req, res) => {
       return res.status(401).json({ success: false, message: "Invalid password." });
     }
 
+    if (user.isDeactivated) {
+      return res.status(403).json({
+        success: false,
+        accountDeactivated: true,
+        message: "Your account has been deactivated by the admin. Please contact the admin."
+      });
+    }
+
     // 3️⃣ Success: return userId
     return res.json({
       success: true,
@@ -310,6 +325,14 @@ app.post('/verify-user-email', async (req, res) => {
 
     if (!user) {
       return res.status(404).json({ success: false, message: "User not found." });
+    }
+
+    if (user.isDeactivated) {
+      return res.status(403).json({
+        success: false,
+        accountDeactivated: true,
+        message: "Your account has been deactivated by the admin. Please contact the admin."
+      });
     }
 
     // Success: return userId

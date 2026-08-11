@@ -316,7 +316,43 @@ function OverviewTab({ stats, overallAnalytics }) {
 function UsersTab({ users, searchQuery, setSearchQuery, onViewDetails, onDeleteUser, deleteConfirm }) {
   const [editingSessionLimit, setEditingSessionLimit] = useState(null);
   const [sessionLimitValue, setSessionLimitValue] = useState('');
+  const [deactivatingId, setDeactivatingId] = useState(null);
   const API_URL = process.env.NEXT_PUBLIC_API_URL_AUTH || 'http://localhost:7000';
+
+  const handleToggleDeactivate = async (user) => {
+    const nextState = !user.isDeactivated;
+    const verb = nextState ? 'deactivate' : 'reactivate';
+    let reason = null;
+    if (nextState) {
+      reason = window.prompt(`Enter a reason for deactivating ${user.email || user.username} (optional):`, '');
+      if (reason === null) return; // Cancelled
+    } else {
+      if (!window.confirm(`Reactivate account for ${user.email || user.username}?`)) return;
+    }
+
+    setDeactivatingId(user.id);
+    try {
+      const token = localStorage.getItem('adminToken');
+      const res = await fetch(`${API_URL}/admin/users/${user.id}/deactivate`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`
+        },
+        body: JSON.stringify({ isDeactivated: nextState, reason: reason || undefined })
+      });
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        throw new Error(data.message || `Failed to ${verb} account`);
+      }
+      window.location.reload();
+    } catch (err) {
+      console.error(`Failed to ${verb} user:`, err);
+      alert(err.message || `Failed to ${verb} user`);
+    } finally {
+      setDeactivatingId(null);
+    }
+  };
 
   const handleUpdateSessionLimit = async (userId) => {
     try {
@@ -378,6 +414,11 @@ function UsersTab({ users, searchQuery, setSearchQuery, onViewDetails, onDeleteU
                     <div>
                       <p className="text-white font-medium">{user.name || user.username}</p>
                       <p className="text-gray-400 text-sm">{user.username}</p>
+                      {user.isDeactivated && (
+                        <span className="inline-block mt-1 px-2 py-0.5 text-[10px] font-semibold rounded-full bg-red-500/20 text-red-300 border border-red-500/40">
+                          DEACTIVATED
+                        </span>
+                      )}
                     </div>
                   </td>
                   <td className="px-6 py-4">
@@ -450,6 +491,21 @@ function UsersTab({ users, searchQuery, setSearchQuery, onViewDetails, onDeleteU
                         className="px-3 py-1 bg-blue-500 hover:bg-blue-600 text-white text-sm rounded transition"
                       >
                         View
+                      </button>
+                      <button
+                        onClick={() => handleToggleDeactivate(user)}
+                        disabled={deactivatingId === user.id}
+                        className={`px-3 py-1 text-white text-sm rounded transition disabled:opacity-50 ${
+                          user.isDeactivated
+                            ? 'bg-green-500 hover:bg-green-600'
+                            : 'bg-orange-500 hover:bg-orange-600'
+                        }`}
+                      >
+                        {deactivatingId === user.id
+                          ? '...'
+                          : user.isDeactivated
+                          ? 'Activate'
+                          : 'Deactivate'}
                       </button>
                       <button
                         onClick={() => onDeleteUser(user.id)}

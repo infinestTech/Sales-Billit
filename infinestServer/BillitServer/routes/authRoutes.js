@@ -161,7 +161,14 @@ router.post('/billit-login', async (req, res) => {
     // Handle specific error responses from auth server
     if (err?.response?.data?.message) {
       const errorMessage = err.response.data.message;
-      
+
+      if (err.response.data.accountDeactivated) {
+        return res.status(403).json({
+          message: errorMessage,
+          accountDeactivated: true
+        });
+      }
+
       // Check for subscription errors
       if (errorMessage.includes('already have an active') || 
           errorMessage.includes('upgrade') || 

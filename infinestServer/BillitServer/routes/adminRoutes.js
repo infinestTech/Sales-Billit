@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const mongoose = require('mongoose');
 const { blacklistUser } = require('../utils/tokenBlacklist');
+const SessionManager = require('../utils/sessionManager');
 const {
     User,
     Shop,
@@ -33,6 +34,19 @@ const internalAuth = (req, res, next) => {
     }
     next();
 };
+
+// Force logout: terminate all active sessions for a user (used by admin deactivation).
+router.post('/invalidate-user-sessions/:userId', internalAuth, async (req, res) => {
+    try {
+        const { userId } = req.params;
+        if (!userId) return res.status(400).json({ success: false, message: 'userId is required' });
+        const result = await SessionManager.invalidateSession(userId);
+        res.json({ success: true, deletedCount: result?.deletedCount || 0 });
+    } catch (err) {
+        console.error('❌ Failed to invalidate user sessions:', err);
+        res.status(500).json({ success: false, message: 'Failed to invalidate sessions', error: err.message });
+    }
+});
 
 // Get active users (users with recent record creation activity)
 router.get('/active-users', internalAuth, async (req, res) => {

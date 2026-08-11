@@ -40,10 +40,10 @@ app.use(cors({
     'http://localhost:3020',
     'http://127.0.0.1:3020',
     // Production domains
-    'https://sales.infinestech.com',    // ✅ Production sales frontend
-    'http://sales.infinestech.com',     // ✅ Fallback for sales frontend
-    'https://auth.infinestech.com',     // ✅ Production auth server
-    'http://auth.infinestech.com',      // ✅ Fallback for auth server
+    'https://sales.mobilebillingsoftware.com',    // ✅ Production sales frontend
+    'http://sales.mobilebillingsoftware.com',     // ✅ Fallback for sales frontend
+    'https://auth.mobilebillingsoftware.com',     // ✅ Production auth server
+    'http://auth.mobilebillingsoftware.com',      // ✅ Fallback for auth server
     // Local development
     'http://localhost:7000',            // ✅ Local auth server
     'http://127.0.0.1:7000',

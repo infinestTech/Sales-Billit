@@ -39,6 +39,13 @@ function LoginPageContent() {
       const data = await response.json();
 
       if (!response.ok) {
+        // Account has been deactivated by admin
+        if (data.accountDeactivated) {
+          setError(data.message || "Your account has been deactivated by the admin. Please contact the admin.");
+          setIsLoading(false);
+          return;
+        }
+
         // Check for trial expiry
         if (data.trialExpired && data.redirectToPricing) {
           setError(data.message || "Your trial has expired. Please upgrade to continue.");

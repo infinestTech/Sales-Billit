@@ -104,8 +104,8 @@ const server = http.createServer((req, res) => {
 // This file provides environment variables globally
 
 window.ENV_CONFIG = {
-  SALES_API_URL: '\${process.env.VITE_SALES_API_URL || 'https://sales.infinestech.com'}',
-  AUTH_API_URL: '\${process.env.VITE_AUTH_API_URL || 'https://auth.infinestech.com'}',
+  SALES_API_URL: '\${process.env.VITE_SALES_API_URL || 'https://sales.mobilebillingsoftware.com'}',
+  AUTH_API_URL: '\${process.env.VITE_AUTH_API_URL || 'https://auth.mobilebillingsoftware.com'}',
   WHATSAPP_WEB_URL: '\${process.env.VITE_WHATSAPP_WEB_URL || 'https://web.whatsapp.com'}'
 };
 
@@ -162,8 +162,8 @@ console.log('🔧 Environment config loaded:', window.ENV_CONFIG);\`;
 server.listen(PORT, '0.0.0.0', () => {
   console.log(\`🚀 Sales Frontend running on http://0.0.0.0:\${PORT}\`);
   console.log(\`📡 Environment: \${process.env.NODE_ENV || 'development'}\`);
-  console.log(\`🔗 Sales API: \${process.env.VITE_SALES_API_URL || 'https://sales.infinestech.com'}\`);
-  console.log(\`🔐 Auth API: \${process.env.VITE_AUTH_API_URL || 'https://auth.infinestech.com'}\`);
+  console.log(\`🔗 Sales API: \${process.env.VITE_SALES_API_URL || 'https://sales.mobilebillingsoftware.com'}\`);
+  console.log(\`🔐 Auth API: \${process.env.VITE_AUTH_API_URL || 'https://auth.mobilebillingsoftware.com'}\`);
 });
 `;
 

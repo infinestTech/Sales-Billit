@@ -22,12 +22,19 @@ const authenticateToken = async (req, res, next) => {
         // Verify user still exists in database
         const userExists = await prisma.user.findUnique({
             where: { id: decodedUser.userId },
-            select: { id: true }
+            select: { id: true, isDeactivated: true }
         });
 
         if (!userExists) {
             return res.status(403).json({ 
                 message: "Account no longer exists. Please contact support if you believe this is an error." 
+            });
+        }
+
+        if (userExists.isDeactivated) {
+            return res.status(403).json({
+                message: "Your account has been deactivated by the admin. Please contact the admin.",
+                accountDeactivated: true
             });
         }
 

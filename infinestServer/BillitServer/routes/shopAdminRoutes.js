@@ -2187,7 +2187,7 @@ router.get('/essl/device-status', shopAdminAuth, async (req, res) => {
         const hasEverConnected = !!device?.last_seen;
 
         // ADMS server URL that must be configured in the device
-        const admsServerUrl = process.env.ADMS_SERVER_URL || 'http://billit.infinestech.com/iclock/';
+        const admsServerUrl = process.env.ADMS_SERVER_URL || 'http://billit.mobilebillingsoftware.com/iclock/';
 
         res.json({
             success: true,
