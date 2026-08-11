@@ -7,6 +7,7 @@ import api from "@/components/api"
 import { Smartphone, Filter, Users, Phone, Wrench, User, Hash, AlertCircle, Edit3, Search, Calendar, Download, ChevronDown } from "lucide-react"
 import jsPDF from "jspdf"
 import autoTable from "jspdf-autotable"
+import { PAYMENT_METHOD_OPTIONS } from "@/constants/paymentMethods"
 
 const MobileNamePage = ({ shopId }) => {
   const searchParams = useSearchParams()
@@ -25,6 +26,11 @@ const MobileNamePage = ({ shopId }) => {
   const [editingTechnician, setEditingTechnician] = useState(null)
   const [technicianName, setTechnicianName] = useState("")
   const [imeiSearch, setImeiSearch] = useState("")
+  // { open, mobile, mode: 'ready'|'delivered'|'sbrd'|'returnedChoice' }
+  const [statusModal, setStatusModal] = useState({ open: false, mobile: null, mode: null })
+  const [statusUpdating, setStatusUpdating] = useState(false)
+  const [deliverPayAmount, setDeliverPayAmount] = useState("")
+  const [deliverPayMethod, setDeliverPayMethod] = useState("")
 
   // Set status and IMEI from URL params on mount
   useEffect(() => {
@@ -72,6 +78,12 @@ const MobileNamePage = ({ shopId }) => {
           isDelivered: mobile.delivered,
           isReturn: mobile.returned,
           isShouldBeReturned: mobile.should_be_returned,
+          totalPaid:
+            Number(mobile.total_paid) ||
+            (Array.isArray(mobile.payments)
+              ? mobile.payments.reduce((s, p) => s + (Number(p.amount) || 0), 0)
+              : 0) ||
+            Number(mobile.paid_amount) || 0,
           addedDate: mobile.added_date,
           index,
         })),
@@ -129,7 +141,117 @@ const MobileNamePage = ({ shopId }) => {
     fetchMobileData()
   }, [shopId])
 
-  // Close client dropdown on outside click
+  const applyMobileUpdate = (mobileId, updated) => {
+    setMobileData((prev) =>
+      prev.map((m) =>
+        m.id === mobileId
+          ? {
+              ...m,
+              isReady: updated.ready,
+              isDelivered: updated.delivered,
+              isReturn: updated.returned,
+              isShouldBeReturned: updated.should_be_returned,
+            }
+          : m,
+      ),
+    )
+  }
+
+  const callToggle = async (mobileId, field) => {
+    const token = localStorage.getItem("token")
+    const res = await api.post(
+      "/api/toggle-status",
+      { id: mobileId, field },
+      { headers: { Authorization: `Bearer ${token}` } },
+    )
+    return res.data.updatedMobile
+  }
+
+  const openStatusModal = (mobile) => {
+    let mode = null
+    if (mobile.isDelivered) mode = null
+    else if (mobile.isReturn) mode = "returnedChoice"
+    else if (mobile.isShouldBeReturned) mode = "sbrd"
+    else if (mobile.isReady) mode = "delivered"
+    else mode = "ready"
+
+    if (!mode) return
+    setDeliverPayAmount("")
+    setDeliverPayMethod("")
+    setStatusModal({ open: true, mobile, mode })
+  }
+
+  const closeStatusModal = () => {
+    if (statusUpdating) return
+    setDeliverPayAmount("")
+    setDeliverPayMethod("")
+    setStatusModal({ open: false, mobile: null, mode: null })
+  }
+
+  const performStatusAction = async (action) => {
+    const mobile = statusModal.mobile
+    if (!mobile) return
+    setStatusUpdating(true)
+    try {
+      if (action === "ready") {
+        const updated = await callToggle(mobile.id, "ready")
+        applyMobileUpdate(mobile.id, updated)
+      } else if (action === "delivered") {
+        const existingPaid = Number(mobile.totalPaid) || 0
+        const addAmount = Number(deliverPayAmount) || 0
+        if (addAmount <= 0 && existingPaid <= 0) {
+          alert("Please enter the paid amount before marking this device as Delivered.")
+          setStatusUpdating(false)
+          return
+        }
+        if (addAmount > 0 && !deliverPayMethod) {
+          alert("Please select a payment method.")
+          setStatusUpdating(false)
+          return
+        }
+        if (addAmount > 0) {
+          const token = localStorage.getItem("token")
+          await api.post(
+            "/api/add-payment-entry",
+            {
+              id: mobile.id,
+              amount: addAmount,
+              method: deliverPayMethod,
+              date: new Date().toISOString(),
+            },
+            { headers: { Authorization: `Bearer ${token}` } },
+          )
+          setMobileData((prev) =>
+            prev.map((m) =>
+              m.id === mobile.id ? { ...m, totalPaid: (Number(m.totalPaid) || 0) + addAmount } : m,
+            ),
+          )
+        }
+        const updated = await callToggle(mobile.id, "delivered")
+        applyMobileUpdate(mobile.id, updated)
+      } else if (action === "sbrdToReturned") {
+        // SBRd → Returned (single cycle step)
+        const updated = await callToggle(mobile.id, "returned")
+        applyMobileUpdate(mobile.id, updated)
+      } else if (action === "returnedToNone") {
+        // Returned → None (single cycle step)
+        const updated = await callToggle(mobile.id, "returned")
+        applyMobileUpdate(mobile.id, updated)
+      } else if (action === "returnedToSbrd") {
+        // Returned → None → SBRd (two cycle steps)
+        await callToggle(mobile.id, "returned")
+        const updated = await callToggle(mobile.id, "returned")
+        applyMobileUpdate(mobile.id, updated)
+      }
+      setStatusModal({ open: false, mobile: null, mode: null })
+    } catch (error) {
+      const msg = error.response?.data?.error || "Failed to update status."
+      alert(msg)
+    } finally {
+      setStatusUpdating(false)
+    }
+  }
+
   useEffect(() => {
     const handler = (e) => {
       if (clientDropdownRef.current && !clientDropdownRef.current.contains(e.target)) {
@@ -620,17 +742,32 @@ const MobileNamePage = ({ shopId }) => {
                         </span>
                       </td>
                       <td className="px-6 py-4 border-b border-gray-200">
-                        {data.isDelivered ? (
-                          <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold bg-green-100 text-green-800">Delivered</span>
-                        ) : data.isReturn ? (
-                          <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold bg-yellow-100 text-yellow-800">Returned</span>
-                        ) : data.isShouldBeReturned ? (
-                          <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold bg-amber-100 text-amber-800">SBRd</span>
-                        ) : data.isReady ? (
-                          <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold bg-blue-100 text-blue-800">Ready</span>
-                        ) : (
-                          <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold bg-red-100 text-red-800">Not Ready</span>
-                        )}
+                        {(() => {
+                          const clickable = !data.isDelivered
+                          const badge = data.isDelivered ? (
+                            <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold bg-green-100 text-green-800">Delivered</span>
+                          ) : data.isReturn ? (
+                            <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold bg-yellow-100 text-yellow-800">Returned</span>
+                          ) : data.isShouldBeReturned ? (
+                            <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold bg-amber-100 text-amber-800">SBRd</span>
+                          ) : data.isReady ? (
+                            <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold bg-blue-100 text-blue-800">Ready</span>
+                          ) : (
+                            <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold bg-red-100 text-red-800">Not Ready</span>
+                          )
+                          return clickable ? (
+                            <button
+                              type="button"
+                              onClick={() => openStatusModal(data)}
+                              className="focus:outline-none focus:ring-2 focus:ring-blue-500 rounded-full hover:opacity-80 transition-opacity"
+                              title="Click to update status"
+                            >
+                              {badge}
+                            </button>
+                          ) : (
+                            badge
+                          )
+                        })()}
                       </td>
                     </tr>
                   ))}
@@ -650,6 +787,116 @@ const MobileNamePage = ({ shopId }) => {
           </div>
         )}
       </div>
+
+      {statusModal.open && statusModal.mobile && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-xl shadow-2xl w-full max-w-md">
+            <div className="px-6 py-4 border-b border-gray-200">
+              <h3 className="text-lg font-semibold text-gray-900">Update Status</h3>
+              <p className="text-sm text-gray-500 mt-1">
+                {statusModal.mobile.clientName} — {statusModal.mobile.mobileName}
+                {statusModal.mobile.model ? ` (${statusModal.mobile.model})` : ""}
+              </p>
+            </div>
+            <div className="px-6 py-5 space-y-3">
+              {statusModal.mode === "ready" && (
+                <>
+                  <p className="text-sm text-gray-700">Mark this device as <span className="font-semibold text-blue-700">Ready</span>?</p>
+                  <div className="flex justify-end gap-2 pt-2">
+                    <button onClick={closeStatusModal} disabled={statusUpdating} className="px-4 py-2 text-sm text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 disabled:opacity-50">Cancel</button>
+                    <button onClick={() => performStatusAction("ready")} disabled={statusUpdating} className="px-4 py-2 text-sm text-white bg-blue-600 rounded-lg hover:bg-blue-700 disabled:opacity-50">
+                      {statusUpdating ? "Updating…" : "Mark as Ready"}
+                    </button>
+                  </div>
+                </>
+              )}
+              {statusModal.mode === "delivered" && (
+                <>
+                  <p className="text-sm text-gray-700">Mark this device as <span className="font-semibold text-green-700">Delivered</span>?</p>
+                  <div className="rounded-lg bg-gray-50 border border-gray-200 p-3 text-xs text-gray-600">
+                    Already paid: <span className="font-semibold text-gray-900">₹{(Number(statusModal.mobile.totalPaid) || 0).toLocaleString("en-IN")}</span>
+                  </div>
+                  {(Number(statusModal.mobile.totalPaid) || 0) <= 0 && (
+                    <p className="text-xs text-red-600">
+                      No payment recorded yet. Enter the paid amount below — otherwise the status cannot be changed.
+                    </p>
+                  )}
+                  <div className="grid grid-cols-2 gap-3 pt-1">
+                    <div>
+                      <label className="block text-xs font-medium text-gray-700 mb-1">Paid Amount (₹)</label>
+                      <input
+                        type="number"
+                        min="0"
+                        value={deliverPayAmount}
+                        onChange={(e) => setDeliverPayAmount(e.target.value)}
+                        placeholder="0"
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 text-sm"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium text-gray-700 mb-1">Payment Method</label>
+                      <select
+                        value={deliverPayMethod}
+                        onChange={(e) => setDeliverPayMethod(e.target.value)}
+                        disabled={!Number(deliverPayAmount)}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 text-sm bg-white disabled:bg-gray-100"
+                      >
+                        {PAYMENT_METHOD_OPTIONS.map((o) => (
+                          <option key={o.value} value={o.value}>{o.label}</option>
+                        ))}
+                      </select>
+                    </div>
+                  </div>
+                  <p className="text-xs text-gray-500">
+                    Leave amount blank only if a payment is already recorded.
+                  </p>
+                  <div className="flex justify-end gap-2 pt-2">
+                    <button onClick={closeStatusModal} disabled={statusUpdating} className="px-4 py-2 text-sm text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 disabled:opacity-50">Cancel</button>
+                    <button onClick={() => performStatusAction("delivered")} disabled={statusUpdating} className="px-4 py-2 text-sm text-white bg-green-600 rounded-lg hover:bg-green-700 disabled:opacity-50">
+                      {statusUpdating ? "Updating…" : "Mark as Delivered"}
+                    </button>
+                  </div>
+                </>
+              )}
+              {statusModal.mode === "sbrd" && (
+                <>
+                  <p className="text-sm text-gray-700">Mark this device as <span className="font-semibold text-yellow-700">Returned</span>?</p>
+                  <div className="flex justify-end gap-2 pt-2">
+                    <button onClick={closeStatusModal} disabled={statusUpdating} className="px-4 py-2 text-sm text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 disabled:opacity-50">Cancel</button>
+                    <button onClick={() => performStatusAction("sbrdToReturned")} disabled={statusUpdating} className="px-4 py-2 text-sm text-white bg-yellow-600 rounded-lg hover:bg-yellow-700 disabled:opacity-50">
+                      {statusUpdating ? "Updating…" : "Mark as Returned"}
+                    </button>
+                  </div>
+                </>
+              )}
+              {statusModal.mode === "returnedChoice" && (
+                <>
+                  <p className="text-sm text-gray-700">Change status of this returned device to:</p>
+                  <div className="grid grid-cols-1 gap-2 pt-1">
+                    <button
+                      onClick={() => performStatusAction("returnedToSbrd")}
+                      disabled={statusUpdating}
+                      className="px-4 py-3 text-sm font-medium text-amber-800 bg-amber-100 rounded-lg hover:bg-amber-200 disabled:opacity-50 text-left"
+                    >
+                      Move to <span className="font-semibold">SBRd</span> (Should Be Returned)
+                    </button>
+                    <button
+                      onClick={() => performStatusAction("returnedToNone")}
+                      disabled={statusUpdating}
+                      className="px-4 py-3 text-sm font-medium text-red-800 bg-red-100 rounded-lg hover:bg-red-200 disabled:opacity-50 text-left"
+                    >
+                      Move to <span className="font-semibold">Not Ready</span>
+                    </button>
+                  </div>
+                  <div className="flex justify-end pt-2">
+                    <button onClick={closeStatusModal} disabled={statusUpdating} className="px-4 py-2 text-sm text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 disabled:opacity-50">Cancel</button>
+                  </div>
+                </>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
