@@ -191,7 +191,7 @@ exports.updateSupplier = async (req, res) => {
       update.totalAmount = amt;
     }
     if (typeof lastPaymentMethod === "string" && lastPaymentMethod.trim() !== "") {
-      const allowedMethods = ["cash", "UPI", "card", "UPI-h", "UPI-s", "Cash + Card", "UPI H + CASH", "UPI S + CASH", "UPI H + CARD", "UPI S + CARD"];
+      const allowedMethods = ["cash", "Gpay", "UPI", "card", "Gpay-h", "UPI-h", "Gpay-s", "UPI-s", "Cash + Card", "Gpay H + CASH", "UPI H + CASH", "Gpay S + CASH", "UPI S + CASH", "Gpay H + CARD", "UPI H + CARD", "Gpay S + CARD", "UPI S + CARD"];
       const pm = allowedMethods.includes(lastPaymentMethod) ? lastPaymentMethod : "cash";
       update.lastPaymentMethod = pm;
     }

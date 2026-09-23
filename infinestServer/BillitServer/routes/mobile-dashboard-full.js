@@ -77,9 +77,10 @@ router.get("/mobile-summary-detailed", authenticateToken, async (req, res) => {
     const netProfit = todayRevenue - todayExpenseAmount
 
     // Fetch mobile repairs data
-    const [totalMobiles, pendingRepairs, readyForDelivery, deliveredToday] = await Promise.all([
+    const [totalMobiles, pendingRepairs, processingRepairs, readyForDelivery, deliveredToday] = await Promise.all([
       Mobile.countDocuments({ shop_id: shopId }),
-      Mobile.countDocuments({ shop_id: shopId, ready: false, delivered: false }),
+      Mobile.countDocuments({ shop_id: shopId, processing: false, ready: false, delivered: false }),
+      Mobile.countDocuments({ shop_id: shopId, processing: true, ready: false }),
       Mobile.countDocuments({ shop_id: shopId, ready: true, delivered: false }),
       Mobile.countDocuments({
         shop_id: shopId,
@@ -116,6 +117,7 @@ router.get("/mobile-summary-detailed", authenticateToken, async (req, res) => {
       mobileRepairs: {
         totalMobiles,
         pendingRepairs,
+        processingRepairs,
         readyForDelivery,
         deliveredToday,
       },

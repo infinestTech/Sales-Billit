@@ -3,6 +3,7 @@ const { fireWaEvent } = require("../../utils/msg91Whatsapp");
 
 // Map field -> WA event for the (false -> true) transition only.
 const FIELD_TO_EVENT = {
+  processing: "mobile_processing",
   ready: "mobile_ready",
   delivered: "mobile_delivered",
   returned: "mobile_returned",
@@ -10,7 +11,7 @@ const FIELD_TO_EVENT = {
 
 
 const toggleMobileStatus = async (req, res) => {
-  const { id, field, skipWhatsapp } = req.body;
+  const { id, field, skipWhatsapp, hasWarranty, warrantyMonths } = req.body;
 
 
   if (!id || !field) {
@@ -18,7 +19,7 @@ const toggleMobileStatus = async (req, res) => {
   }
 
 
-  if (!["ready", "delivered", "returned"].includes(field)) {
+  if (!["processing", "ready", "delivered", "returned"].includes(field)) {
     return res.status(400).json({ error: "Invalid field parameter" });
   }
 
@@ -30,6 +31,7 @@ const toggleMobileStatus = async (req, res) => {
     }
 
     const prev = {
+      processing: !!mobile.processing,
       ready: !!mobile.ready,
       delivered: !!mobile.delivered,
       returned: !!mobile.returned,
@@ -46,19 +48,22 @@ const toggleMobileStatus = async (req, res) => {
         // State 2 → State 0: Undo returned, fully reset
         updateData.returned = false;
         updateData.should_be_returned = false;
+        updateData.delivery_date = null;
       } else if (prev.should_be_returned) {
-        // State 1 → State 2: Actually returned to customer
+        // State 1 → State 2: Actually returned to customer — record the delivery date same as an actual delivery
         updateData.should_be_returned = false;
         updateData.returned = true;
-        if (prev.ready || prev.delivered) {
+        updateData.delivery_date = new Date();
+        if (prev.processing || prev.ready || prev.delivered) {
+          updateData.processing = false;
           updateData.ready = false;
           updateData.delivered = false;
-          updateData.delivery_date = null;
         }
       } else {
         // State 0 → State 1: Mark as Should Be Returned (SBRd)
         updateData.should_be_returned = true;
-        if (prev.ready || prev.delivered) {
+        if (prev.processing || prev.ready || prev.delivered) {
+          updateData.processing = false;
           updateData.ready = false;
           updateData.delivered = false;
           updateData.delivery_date = null;
@@ -79,8 +84,28 @@ const toggleMobileStatus = async (req, res) => {
       }
       updateData.delivered = newValue;
       updateData.delivery_date = newValue ? new Date() : null;
+      if (newValue) {
+        const warrantyApplies = !!hasWarranty;
+        const months = warrantyApplies ? Number(warrantyMonths) : null;
+        updateData.has_warranty = warrantyApplies;
+        updateData.warranty_months = warrantyApplies && months > 0 ? months : null;
+        updateData.warranty_expiry_date =
+          warrantyApplies && months > 0
+            ? new Date(new Date().setMonth(new Date().getMonth() + months))
+            : null;
+      } else {
+        // Undoing delivery — clear the warranty that was recorded for it
+        updateData.has_warranty = false;
+        updateData.warranty_months = null;
+        updateData.warranty_expiry_date = null;
+      }
     } else if (field === "ready") {
-      updateData.ready = !prev.ready;
+      const newValue = !prev.ready;
+      updateData.ready = newValue;
+      // Repair work is done once ready — technician is no longer "processing"
+      if (newValue && prev.processing) updateData.processing = false;
+    } else if (field === "processing") {
+      updateData.processing = !prev.processing;
     }
 
 
@@ -89,7 +114,7 @@ const toggleMobileStatus = async (req, res) => {
     // ---- WhatsApp triggers (only on false -> true transitions, unless skipWhatsapp) ----
     // For 'returned': WA fires only on State1→State2 (should_be_returned=true → returned=true)
     try {
-      const transitions = ["ready", "delivered", "returned"].filter(
+      const transitions = ["processing", "ready", "delivered", "returned"].filter(
         (f) => updateData[f] === true && prev[f] === false
       );
 
@@ -117,7 +142,19 @@ const toggleMobileStatus = async (req, res) => {
             const event = FIELD_TO_EVENT[f];
             // Vars are positional — order must exactly match the MSG91 template placeholders.
             let vars;
-            if (event === "mobile_ready") {
+            if (event === "mobile_processing") {
+              // {{1}} customer_name {{2}} shop_name {{3}} mobile_name {{4}} model
+              // {{5}} bill_no {{6}} shop_address {{7}} shop_phone
+              vars = {
+                customer_name: customer.client_name,
+                shop_name: shop.shop_name || "",
+                mobile_name: updatedMobile.mobile_name || "",
+                model: updatedMobile.model || "",
+                bill_no: customer.bill_no || "-",
+                shop_address: shop.address || "",
+                shop_phone: shop.phone || "",
+              };
+            } else if (event === "mobile_ready") {
               // {{1}} customer_name {{2}} shop_name {{3}} mobile_name {{4}} model
               // {{5}} bill_no {{6}} shop_address {{7}} shop_phone
               vars = {

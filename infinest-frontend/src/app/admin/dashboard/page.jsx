@@ -1596,6 +1596,7 @@ function ShopAdminsTab({ getAuthHeaders, adminEmail }) {
 const WA_EVENT_LABELS = {
   record_created: 'Record created',
   mobiles_appended: 'Mobiles appended to existing record',
+  mobile_processing: 'Repair started (processing)',
   mobile_ready: 'Mobile ready for pickup',
   mobile_delivered: 'Mobile delivered (billing)',
   mobile_returned: 'Mobile returned',

@@ -20,7 +20,8 @@ export default function MobileRegistryPanel({ currentShopId }) {
   useEffect(() => { if (currentShopId) fetch(); /* eslint-disable-next-line */ }, [currentShopId]);
 
   const filtered = list.filter(m => {
-    if (filter === "pending" && (m.ready || m.delivered)) return false;
+    if (filter === "pending" && (m.processing || m.ready || m.delivered)) return false;
+    if (filter === "processing" && (!m.processing || m.ready)) return false;
     if (filter === "ready" && !m.ready) return false;
     if (filter === "delivered" && !m.delivered) return false;
     if (filter === "returned" && !m.returned) return false;
@@ -33,7 +34,8 @@ export default function MobileRegistryPanel({ currentShopId }) {
 
   const counts = {
     all: list.length,
-    pending: list.filter(m => !m.ready && !m.delivered).length,
+    pending: list.filter(m => !m.processing && !m.ready && !m.delivered).length,
+    processing: list.filter(m => m.processing && !m.ready).length,
     ready: list.filter(m => m.ready).length,
     delivered: list.filter(m => m.delivered).length,
     returned: list.filter(m => m.returned).length,
@@ -46,7 +48,7 @@ export default function MobileRegistryPanel({ currentShopId }) {
       <PanelCard className="p-4 mb-4">
         <div className="flex flex-wrap items-center gap-3">
           <div className="flex bg-slate-100 rounded-lg p-1 flex-wrap">
-            {["all", "pending", "ready", "delivered", "returned"].map(t => (
+            {["all", "pending", "processing", "ready", "delivered", "returned"].map(t => (
               <button key={t} onClick={() => setFilter(t)} className={`px-3 py-1.5 rounded-md text-xs font-medium capitalize ${filter === t ? "bg-white text-emerald-700 shadow-sm" : "text-slate-600"}`}>
                 {t} ({counts[t]})
               </button>
@@ -93,9 +95,10 @@ export default function MobileRegistryPanel({ currentShopId }) {
                   <td className="px-4 py-3 text-center">
                     <div className="flex justify-center gap-1 flex-wrap">
                       {m.ready && <span className="px-2 py-0.5 bg-amber-50 text-amber-700 text-xs rounded">Ready</span>}
+                      {m.processing && !m.ready && <span className="px-2 py-0.5 bg-amber-50 text-amber-700 text-xs rounded">Processing</span>}
                       {m.delivered && <span className="px-2 py-0.5 bg-emerald-50 text-emerald-700 text-xs rounded">Delivered</span>}
                       {m.returned && <span className="px-2 py-0.5 bg-red-50 text-red-700 text-xs rounded">Returned</span>}
-                      {!m.ready && !m.delivered && !m.returned && <span className="px-2 py-0.5 bg-slate-100 text-slate-600 text-xs rounded">Pending</span>}
+                      {!m.processing && !m.ready && !m.delivered && !m.returned && <span className="px-2 py-0.5 bg-slate-100 text-slate-600 text-xs rounded">Pending</span>}
                     </div>
                   </td>
                 </tr>

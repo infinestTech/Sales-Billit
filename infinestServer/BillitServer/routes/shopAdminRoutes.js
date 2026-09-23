@@ -292,6 +292,7 @@ router.get('/customer-details', shopAdminAuth, async (req, res) => {
             total_mobiles:   { $sum: 1 },
             ready_count:     { $sum: { $cond: ['$ready', 1, 0] } },
             not_ready_count: { $sum: { $cond: [{ $eq: ['$ready', false] }, 1, 0] } },
+            processing_count: { $sum: { $cond: ['$processing', 1, 0] } },
             delivered_count: { $sum: { $cond: ['$delivered', 1, 0] } },
             // Per-mobile pay: use payments array sum if present, else paid_amount field
             total_paid: { $sum: {
@@ -827,6 +828,7 @@ router.get('/analytics/service', shopAdminAuth, async (req, res) => {
             {
                 $group: {
                     _id: {
+                        processing: "$processing",
                         ready: "$ready",
                         delivered: "$delivered",
                         returned: "$returned"
@@ -2057,6 +2059,49 @@ router.patch('/shop-settings/revenue-visibility', shopAdminAuth, async (req, res
 });
 
 // ==============================
+// 📄 Receipt Terms & Conditions
+// ==============================
+// GET current terms & conditions text
+router.get('/shop-settings/terms', shopAdminAuth, async (req, res) => {
+    try {
+        const shop = await Shop.findById(req.shopId).select('terms_and_conditions').lean();
+        if (!shop) {
+            return res.status(404).json({ success: false, message: 'Shop not found' });
+        }
+        res.json({ success: true, termsAndConditions: shop.terms_and_conditions || '' });
+    } catch (error) {
+        console.error('Get terms & conditions error:', error);
+        res.status(500).json({ success: false, message: 'Failed to get setting', error: error.message });
+    }
+});
+
+// PATCH update terms & conditions text
+router.patch('/shop-settings/terms', shopAdminAuth, async (req, res) => {
+    try {
+        const { termsAndConditions } = req.body;
+        if (typeof termsAndConditions !== 'string') {
+            return res.status(400).json({ success: false, message: 'termsAndConditions must be a string' });
+        }
+        const shop = await Shop.findByIdAndUpdate(
+            req.shopId,
+            { terms_and_conditions: termsAndConditions.slice(0, 2000) },
+            { new: true }
+        );
+        if (!shop) {
+            return res.status(404).json({ success: false, message: 'Shop not found' });
+        }
+        res.json({
+            success: true,
+            message: 'Terms & conditions updated',
+            termsAndConditions: shop.terms_and_conditions
+        });
+    } catch (error) {
+        console.error('Update terms & conditions error:', error);
+        res.status(500).json({ success: false, message: 'Failed to update setting', error: error.message });
+    }
+});
+
+// ==============================
 // 📡 eSSL M20 Attendance Settings
 // ==============================
 const { EsslDevice, EsslPunchLog } = require('../models/mongoModels');
@@ -2607,12 +2652,29 @@ router.get('/records', shopAdminAuth, async (req, res) => {
 
 router.post('/records/toggle-status', shopAdminAuth, async (req, res) => {
     try {
-        const { mobileId, status, value } = req.body;
-        if (!['ready', 'delivered', 'returned'].includes(status)) {
+        const { mobileId, status, value, hasWarranty, warrantyMonths } = req.body;
+        if (!['processing', 'ready', 'delivered', 'returned'].includes(status)) {
             return res.status(400).json({ success: false, message: 'invalid status' });
         }
         const update = { [status]: !!value };
         if (status === 'delivered' && value) update.delivery_date = new Date();
+        if (status === 'returned' && value) update.delivery_date = new Date();
+        if (status === 'ready' && value) update.processing = false; // repair done, no longer "processing"
+        if (status === 'delivered') {
+            if (value) {
+                const warrantyApplies = !!hasWarranty;
+                const months = warrantyApplies ? Number(warrantyMonths) : null;
+                update.has_warranty = warrantyApplies;
+                update.warranty_months = warrantyApplies && months > 0 ? months : null;
+                update.warranty_expiry_date = warrantyApplies && months > 0
+                    ? new Date(new Date().setMonth(new Date().getMonth() + months))
+                    : null;
+            } else {
+                update.has_warranty = false;
+                update.warranty_months = null;
+                update.warranty_expiry_date = null;
+            }
+        }
         const mobile = await Mobile.findOneAndUpdate({ _id: mobileId, shop_id: req.shopId }, update, { new: true });
         if (!mobile) return res.status(404).json({ success: false, message: 'Mobile not found' });
         res.json({ success: true, mobile });
@@ -2707,6 +2769,42 @@ router.delete('/records/payment', shopAdminAuth, async (req, res) => {
         res.json({ success: true, mobile });
     } catch (err) {
         console.error('delete payment error:', err);
+        res.status(500).json({ success: false, message: 'Server error' });
+    }
+});
+
+// Direct edit of the total paid amount shown in All Records — also reconciles the split payments[]
+// history so the "Payment Breakdown" (grouped by method) reflects the new total instead of the stale one.
+router.put('/records/paid-amount', shopAdminAuth, async (req, res) => {
+    try {
+        const { mobileId, paidAmount } = req.body;
+        const amt = Number(paidAmount);
+        if (!mobileId || Number.isNaN(amt) || amt < 0) {
+            return res.status(400).json({ success: false, message: 'mobileId and a valid paidAmount are required' });
+        }
+        const mobile = await Mobile.findOne({ _id: mobileId, shop_id: req.shopId });
+        if (!mobile) return res.status(404).json({ success: false, message: 'Mobile not found' });
+
+        const payments = mobile.payments || [];
+        if (payments.length === 0) {
+            if (amt > 0) payments.push({ amount: amt, method: mobile.payment || 'Cash', date: new Date() });
+        } else if (payments.length === 1) {
+            payments[0].amount = amt;
+        } else {
+            // Multiple split entries: apply the difference to the last entry so earlier entries stay intact
+            const currentTotal = payments.reduce((s, p) => s + (Number(p.amount) || 0), 0);
+            const delta = amt - currentTotal;
+            const lastIdx = payments.length - 1;
+            payments[lastIdx].amount = Math.max(0, (Number(payments[lastIdx].amount) || 0) + delta);
+        }
+
+        mobile.payments = payments;
+        mobile.paid_amount = amt;
+        mobile.total_paid = amt;
+        await mobile.save();
+        res.json({ success: true, mobile });
+    } catch (err) {
+        console.error('update paid-amount error:', err);
         res.status(500).json({ success: false, message: 'Server error' });
     }
 });

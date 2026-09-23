@@ -8,6 +8,7 @@ import Pagination from "../tables/Pagination"
 import VendorHistoryPopup from "../tables/VendorHistoryPopup"
 import api from "../api"
 import ReceiptGenerator from "./ReceiptGenerator"
+import { formatPaymentMethodLabel } from "@/constants/paymentMethods"
 import {
   Database,
   Users,
@@ -37,6 +38,7 @@ const AllRecordTable = ({ shopId, filterDate }) => {
   const [shopPhoneNumberState, setShopPhoneNumberState] = useState("")
   const [totals, setTotals] = useState({
     notReadyCount: 0,
+    processingCount: 0,
     deliveredCount: 0,
     notReadyFalseCount: 0,
     notDeliveredFalseCount: 0,
@@ -147,6 +149,7 @@ const [shopAddressState, setShopAddressState] = useState("")
 
   const calculateTotals = (data) => {
     let notReadyCount = 0,
+      processingCount = 0,
       deliveredCount = 0,
       notReadyFalseCount = 0,
       notDeliveredFalseCount = 0,
@@ -161,7 +164,10 @@ const [shopAddressState, setShopAddressState] = useState("")
         } else if (mobile.should_be_returned) {
           shouldBeReturnedCount++
         } else {
-          if (!mobile.ready) notReadyFalseCount++
+          if (!mobile.ready) {
+            notReadyFalseCount++
+            if (mobile.processing) processingCount++
+          }
           else notReadyCount++
 
 
@@ -172,7 +178,7 @@ const [shopAddressState, setShopAddressState] = useState("")
     })
 
 
-    setTotals({ notReadyCount, deliveredCount, notReadyFalseCount, notDeliveredFalseCount, returnCount, shouldBeReturnedCount })
+    setTotals({ notReadyCount, processingCount, deliveredCount, notReadyFalseCount, notDeliveredFalseCount, returnCount, shouldBeReturnedCount })
   }
 
 
@@ -300,6 +306,10 @@ const [shopAddressState, setShopAddressState] = useState("")
                     <CheckCircle className="h-4 w-4 text-green-600 mr-1" />
                     <span className="text-lg font-bold text-green-700">{totals.notReadyCount}</span>
                     <span className="text-sm text-gray-500 ml-1">Ready</span>
+                  </div>
+                  <div className="flex items-center">
+                    <span className="text-lg font-bold text-amber-600">{totals.processingCount}</span>
+                    <span className="text-sm text-gray-500 ml-1">Processing</span>
                   </div>
                   <div className="flex items-center">
                     <XCircle className="h-4 w-4 text-red-600 mr-1" />
@@ -491,7 +501,7 @@ const [shopAddressState, setShopAddressState] = useState("")
                                   <div className="space-y-0.5">
                                     {methods.map(([method, amount], idx) => (
                                       <div key={idx} className="flex items-center gap-2">
-                                        <span className="text-gray-600">{method}</span>
+                                        <span className="text-gray-600">{formatPaymentMethodLabel(method)}</span>
                                         <span className="font-medium">₹{amount.toLocaleString("en-IN")}</span>
                                       </div>
                                     ))}
@@ -632,6 +642,9 @@ const [shopAddressState, setShopAddressState] = useState("")
                   payments: m.payments || [],
                   total_paid: m.total_paid || 0,
                   paid_amount: typeof m.paid_amount !== 'undefined' && m.paid_amount !== null ? m.paid_amount : 0,
+                  has_warranty: m.has_warranty || false,
+                  warranty_months: m.warranty_months || null,
+                  warranty_expiry_date: m.warranty_expiry_date || null,
                 })),  
           }}
           shopPhoneNumber={shopPhoneNumberState}

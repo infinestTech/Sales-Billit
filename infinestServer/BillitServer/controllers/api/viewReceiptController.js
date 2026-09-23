@@ -41,8 +41,12 @@ const viewReceiptController = async (req, res) => {
       delivery_date: m.delivery_date || null,
       returned: m.returned || false,
       delivered: m.delivered || false,
+      processing: m.processing || false,
       ready: m.ready || false,
   paid_amount: m.paid_amount || 0,
+  has_warranty: m.has_warranty || false,
+  warranty_months: m.warranty_months || null,
+  warranty_expiry_date: m.warranty_expiry_date || null,
   _id: m._id, // Include ID for receipt links
     }));
 
@@ -52,6 +56,7 @@ const viewReceiptController = async (req, res) => {
       shop_phone: shop.phone || "N/A",
       shop_email: shop.email || null, // Added shop_email
       shop_address: shop.address || null, // Added shop_address
+      terms_and_conditions: shop.terms_and_conditions || "",
       client_name: client.client_name || "N/A",
       mobile_number: client.mobile_number || "N/A",
       bill_no: client.bill_no || mobile.bill_no || "N/A",
@@ -112,8 +117,12 @@ const viewPublicReceiptController = async (req, res) => {
       delivery_date: m.delivery_date || null,
       returned: m.returned || false,
       delivered: m.delivered || false,
+      processing: m.processing || false,
       ready: m.ready || false,
   paid_amount: m.paid_amount || 0,
+  has_warranty: m.has_warranty || false,
+  warranty_months: m.warranty_months || null,
+  warranty_expiry_date: m.warranty_expiry_date || null,
   _id: m._id,
     }));
 

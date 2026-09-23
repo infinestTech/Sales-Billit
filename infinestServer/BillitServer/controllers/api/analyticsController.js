@@ -163,7 +163,8 @@ exports.getAnalyticsData = async (req, res) => {
 
     // 2. Repair Status Distribution
     const statusDistribution = {
-      pending: mobilesInRange.filter(m => !m.ready && !m.delivered && !m.returned && !m.should_be_returned).length,
+      pending: mobilesInRange.filter(m => !m.processing && !m.ready && !m.delivered && !m.returned && !m.should_be_returned).length,
+      processing: mobilesInRange.filter(m => m.processing && !m.ready && !m.delivered).length,
       ready: mobilesInRange.filter(m => m.ready && !m.delivered).length,
       delivered: mobilesInRange.filter(m => m.delivered).length,
       shouldBeReturned: mobilesInRange.filter(m => m.should_be_returned && !m.returned).length,

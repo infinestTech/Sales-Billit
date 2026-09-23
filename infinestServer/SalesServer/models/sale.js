@@ -28,7 +28,7 @@ const SaleSchema = new mongoose.Schema({
   sgstAmount: { type: Number, default: 0 }, // SGST amount
   igstAmount: { type: Number, default: 0 }, // IGST amount
   totalAmount: { type: Number, default: 0 },
-  paymentMethod: { type: String, enum: ['Cash','cash','UPI','upi','Card','card','UPI-H','UPI-h','upi-h','UPI-S','UPI-s','upi-s','Cash + Card','UPI H + CASH','UPI S + CASH','UPI H + CARD','UPI S + CARD','online',''], default: 'Cash' },
+  paymentMethod: { type: String, enum: ['Cash','cash','Gpay','gpay','UPI','upi','Card','card','Gpay-H','Gpay-h','gpay-h','UPI-H','UPI-h','upi-h','Gpay-S','Gpay-s','gpay-s','UPI-S','UPI-s','upi-s','Cash + Card','Gpay H + CASH','UPI H + CASH','Gpay S + CASH','UPI S + CASH','Gpay H + CARD','UPI H + CARD','Gpay S + CARD','UPI S + CARD','online',''], default: 'Cash' },
   amountPaid: { type: Number, default: 0 },
   bank_id: { type: String, default: '' },
   createdBy: { type: String, default: '' }

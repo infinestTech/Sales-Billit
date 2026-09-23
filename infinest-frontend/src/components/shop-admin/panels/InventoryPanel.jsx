@@ -130,7 +130,7 @@ export default function InventoryPanel({ currentShopId }) {
               <Field label="Quantity" required><Input type="number" value={form.quantity} onChange={e => setForm({ ...form, quantity: e.target.value })} /></Field>
               <Field label="Payment Method">
                 <Select value={form.paymentMethod} onChange={e => setForm({ ...form, paymentMethod: e.target.value })}>
-                  {["Cash", "UPI", "Card", "Bank Transfer", "Cheque"].map(m => <option key={m}>{m}</option>)}
+                  {["Cash", "Gpay", "Card", "Bank Transfer", "Cheque"].map(m => <option key={m}>{m}</option>)}
                 </Select>
               </Field>
             </div>

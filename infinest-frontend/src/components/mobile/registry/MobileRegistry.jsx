@@ -21,6 +21,7 @@ import { logAndNotify, logError } from "@/utils/logger"
 
 const STATUS_CHIPS = [
   { id: "all", label: "All" },
+  { id: "processing", label: "Processing", tone: "amber" },
   { id: "ready", label: "Ready", tone: "emerald" },
   { id: "delivered", label: "Delivered", tone: "blue" },
   { id: "shouldBeReturned", label: "SBRd", tone: "amber" },
@@ -57,6 +58,7 @@ export default function MobileRegistry({ shopId: shopIdProp }) {
           imei: m.imei || "",
           issue: m.issue || "",
           technician: m.technician_name || "",
+          processing: m.processing,
           ready: m.ready,
           delivered: m.delivered,
           returned: m.returned,
@@ -91,10 +93,11 @@ export default function MobileRegistry({ shopId: shopIdProp }) {
       )
     }
     if (filter === "ready") list = list.filter((r) => r.ready && !r.delivered)
+    else if (filter === "processing") list = list.filter((r) => r.processing && !r.ready)
     else if (filter === "delivered") list = list.filter((r) => r.delivered)
     else if (filter === "shouldBeReturned") list = list.filter((r) => r.should_be_returned && !r.returned)
     else if (filter === "returned") list = list.filter((r) => r.returned)
-    else if (filter === "pending") list = list.filter((r) => !r.ready && !r.delivered && !r.returned && !r.should_be_returned)
+    else if (filter === "pending") list = list.filter((r) => !r.processing && !r.ready && !r.delivered && !r.returned && !r.should_be_returned)
     return list
   }, [rows, search, filter])
 
@@ -250,6 +253,7 @@ function StatusBadges({ row }) {
   const tags = []
   if (row.delivered) tags.push({ label: "Delivered", cls: "bg-indigo-100 text-indigo-700", Icon: Truck })
   else if (row.ready) tags.push({ label: "Ready", cls: "bg-emerald-100 text-emerald-700", Icon: CheckCircle2 })
+  else if (row.processing) tags.push({ label: "Processing", cls: "bg-amber-100 text-amber-700", Icon: Wrench })
   else tags.push({ label: "Pending", cls: "bg-amber-100 text-amber-700", Icon: Wrench })
   if (row.should_be_returned && !row.returned) tags.push({ label: "SBRd", cls: "bg-amber-100 text-amber-700", Icon: AlertTriangle })
   if (row.returned) tags.push({ label: "Returned", cls: "bg-rose-100 text-rose-700", Icon: RotateCcw })

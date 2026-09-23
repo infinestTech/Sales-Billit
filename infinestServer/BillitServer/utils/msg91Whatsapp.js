@@ -31,6 +31,7 @@ const MSG91_URL =
 const EVENT_TEMPLATE_ENV = {
   record_created: "MSG91_TPL_RECORD_CREATED",
   mobiles_appended: "MSG91_TPL_MOBILES_APPENDED",
+  mobile_processing: "MSG91_TPL_PROCESSING",
   mobile_ready: "MSG91_TPL_READY",
   mobile_delivered: "MSG91_TPL_DELIVERED",
   mobile_returned: "MSG91_TPL_RETURNED",

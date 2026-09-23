@@ -18,7 +18,7 @@ const addProduct = async (req, res) => {
     const costPriceVal = qty > 0 ? totalCost / qty : Number(costPrice || 0);
 
     const normalizedPM = isCredit ? 'credit' : (
-      ["cash", "upi"].includes(String(paymentMethod || '').toLowerCase())
+      ["cash", "gpay", "upi"].includes(String(paymentMethod || '').toLowerCase())
         ? String(paymentMethod).toLowerCase()
         : "cash"
     );

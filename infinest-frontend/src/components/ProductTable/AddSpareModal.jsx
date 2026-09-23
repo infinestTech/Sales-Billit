@@ -204,7 +204,7 @@ const AddSpareModal = ({ shop_id, onClose, onSuccess }) => {
                 }`}
               >
                 <Banknote className="h-4 w-4" />
-                Cash / UPI
+                Cash / Gpay
                 <span className="text-xs font-normal">(Paid now)</span>
               </button>
               <button

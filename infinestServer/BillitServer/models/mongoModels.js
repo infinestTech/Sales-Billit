@@ -61,6 +61,8 @@ const shopSchema = new mongoose.Schema({
   address: { type: String },
   owner_name: { type: String }, // ✅ new field for MySQL name
   revenue_visible_to_users: { type: Boolean, default: true }, // Toggle: show/hide revenue & analytics for regular users
+  // Custom Terms & Conditions text shown beneath the A4 receipt (set by shop admin; falls back to a default on the frontend if empty)
+  terms_and_conditions: { type: String, default: '' },
   // Feature flag: show legacy sell-focused product inventory UI (for specific shops that still need it)
   use_legacy_product_ui: { type: Boolean, default: false },
   // eSSL M20 Biometric Attendance Integration
@@ -94,6 +96,7 @@ const shopSchema = new mongoose.Schema({
     events: {
       record_created: { type: Boolean, default: true },
       mobiles_appended: { type: Boolean, default: true },
+      mobile_processing: { type: Boolean, default: true },
       mobile_ready: { type: Boolean, default: true },
       mobile_delivered: { type: Boolean, default: true },
       mobile_returned: { type: Boolean, default: false },
@@ -168,12 +171,13 @@ const mobileSchema = new mongoose.Schema({
   technician_name: { type: String },
   added_date: { type: Date, default: Date.now },
   update_date: { type: Date },
+  processing: { type: Boolean, default: false }, // Technician has started repairing (between received and ready)
   ready: { type: Boolean, default: false },
   delivered: { type: Boolean, default: false },
   returned: { type: Boolean, default: false },
   should_be_returned: { type: Boolean, default: false },
   paid_amount: { type: Number, default: 0 }, // Customer payment amount (legacy, kept for backward compatibility)
-  payment: { type: String, enum: ["cash", "UPI", "card", "UPI-h", "UPI-s", "Cash + Card", "UPI H + CASH", "UPI S + CASH", "UPI H + CARD", "UPI S + CARD", ""], default: "" },
+  payment: { type: String, enum: ["cash", "Gpay", "gpay", "UPI", "upi", "card", "Gpay-h", "Gpay-s", "UPI-h", "UPI-s", "Cash + Card", "Gpay H + CASH", "Gpay S + CASH", "Gpay H + CARD", "Gpay S + CARD", "UPI H + CASH", "UPI S + CASH", "UPI H + CARD", "UPI S + CARD", ""], default: "" },
   // Split payment tracking
   payments: [{
     amount: { type: Number, required: true },
@@ -182,6 +186,10 @@ const mobileSchema = new mongoose.Schema({
   }],
   total_paid: { type: Number, default: 0 }, // Sum of all payment entries
   delivery_date: { type: Date },
+  // Warranty captured when marking a device Delivered (distinct from the spare-part `warranty` field below)
+  has_warranty: { type: Boolean, default: false },
+  warranty_months: { type: Number, default: null },
+  warranty_expiry_date: { type: Date, default: null },
   // Supplier-related fields for tracking product/supplier usage
   supplierId: { type: mongoose.Schema.Types.ObjectId, ref: "Supplier" },
   supplierName: { type: String },
@@ -199,7 +207,41 @@ mobileSchema.index({ shop_id: 1, customer_id: 1 });
 mobileSchema.index({ shop_id: 1, dealer_id: 1 });
 
 // ==============================
-// 🔧 Technician Schema
+// � Rework Schema
+// ==============================
+// Tracks devices a customer brings back with a new complaint after delivery.
+// Stores a snapshot of the original job's details so history stays intact even if the
+// underlying Mobile record changes later.
+const reworkRecordSchema = new mongoose.Schema({
+  shop_id: { type: mongoose.Schema.Types.ObjectId, ref: "Shop", required: true },
+  mobile_id: { type: mongoose.Schema.Types.ObjectId, ref: "Mobile", required: true },
+  customer_id: { type: mongoose.Schema.Types.ObjectId, ref: "Customer" },
+  dealer_id: { type: mongoose.Schema.Types.ObjectId, ref: "Dealer" },
+  client_name: { type: String },
+  mobile_number: { type: String },
+  customer_type: { type: String, default: "Customer" },
+  mobile_name: { type: String },
+  model: { type: String },
+  imei: { type: String },
+  previous_issue: { type: String },
+  previous_added_date: { type: Date },
+  previous_delivery_date: { type: Date },
+  technician_name: { type: String },
+  has_warranty: { type: Boolean, default: false },
+  warranty_months: { type: Number, default: null },
+  warranty_expiry_date: { type: Date, default: null },
+  productName: { type: String },
+  supplierName: { type: String },
+  complaint: { type: String, required: true },
+  status: { type: String, enum: ["added", "working_on", "completed"], default: "added" },
+  added_date: { type: Date, default: Date.now },
+  started_at: { type: Date, default: null },
+  completed_at: { type: Date, default: null },
+});
+reworkRecordSchema.index({ shop_id: 1, status: 1 });
+
+// ==============================
+// �🔧 Technician Schema
 // ==============================
 const technicianSchema = new mongoose.Schema({
   shop_id: { type: mongoose.Schema.Types.ObjectId, ref: "Shop", required: true },
@@ -356,6 +398,7 @@ const Shop = mongoose.model("Shop", shopSchema);
 const Dealer = mongoose.model("Dealer", dealerSchema);
 const Customer = mongoose.model("Customer", customerSchema);
 const Mobile = mongoose.model("Mobile", mobileSchema);
+const ReworkRecord = mongoose.model("ReworkRecord", reworkRecordSchema);
 const Technician = mongoose.model("Technician", technicianSchema);
 const PlanCategory = mongoose.model("PlanCategory", planCategorySchema);
 const Plan = mongoose.model("Plan", planSchema);
@@ -676,7 +719,7 @@ const whatsAppLogSchema = new mongoose.Schema({
 const WhatsAppLog = mongoose.model("WhatsAppLog", whatsAppLogSchema);
 
 module.exports = {
-  Role, User, Manager, Branch, Shop, Dealer, Customer, Notification, Mobile, Technician,
+  Role, User, Manager, Branch, Shop, Dealer, Customer, Notification, Mobile, ReworkRecord, Technician,
   PlanCategory, Plan, DailySummary, Expense, ProductHistory, Product,
   MobileBrand, MobileIssue, AdminSale, SupplierHistory, Employee, Attendance, ShopAdmin, Supplier,
   EsslDevice, EsslPunchLog, HrPunch, HrDailyAttendance, HrSalaryRecord,

@@ -13,7 +13,7 @@ import {
 } from "lucide-react"
 import api from "@/components/api"
 import { logAndNotify, logError, logSuccess } from "@/utils/logger"
-import { PAYMENT_METHOD_OPTIONS } from "@/constants/paymentMethods"
+import { PAYMENT_METHOD_OPTIONS, formatPaymentMethodLabel } from "@/constants/paymentMethods"
 import BottomSheet from "./BottomSheet"
 import { formatDateTime, formatINR } from "./utils"
 
@@ -207,7 +207,7 @@ export default function MobilePaymentSheet({
                     {formatINR(p.amount)}
                   </p>
                   <p className="truncate text-xs text-gray-500">
-                    {p.method || "Other"} • {formatDateTime(p.date)}
+                    {formatPaymentMethodLabel(p.method) || "Other"} • {formatDateTime(p.date)}
                   </p>
                 </div>
                 <button

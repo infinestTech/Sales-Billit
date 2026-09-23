@@ -662,6 +662,7 @@ router.get('/shops/whatsapp', internalAuth, async (req, res) => {
         const defaultEvents = {
             record_created: true,
             mobiles_appended: true,
+            mobile_processing: true,
             mobile_ready: true,
             mobile_delivered: true,
             mobile_returned: false,
@@ -730,6 +731,7 @@ router.patch('/shops/:shopId/whatsapp', internalAuth, async (req, res) => {
             const allowed = [
                 'record_created',
                 'mobiles_appended',
+                'mobile_processing',
                 'mobile_ready',
                 'mobile_delivered',
                 'mobile_returned',

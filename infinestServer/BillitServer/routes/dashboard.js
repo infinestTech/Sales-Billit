@@ -180,8 +180,14 @@ router.get("/mobile-summary", authenticateToken, async (req, res) => {
       const totalMobiles = await Mobile.countDocuments({ shop_id: shopObjectId })
       const pendingRepairs = await Mobile.countDocuments({
         shop_id: shopObjectId,
+        processing: false,
         ready: false,
         delivered: false,
+      })
+      const processingRepairs = await Mobile.countDocuments({
+        shop_id: shopObjectId,
+        processing: true,
+        ready: false,
       })
       const readyForDelivery = await Mobile.countDocuments({
         shop_id: shopObjectId,
@@ -266,6 +272,7 @@ router.get("/mobile-summary", authenticateToken, async (req, res) => {
         mobileRepairs: {
           totalMobiles,
           pendingRepairs,
+          processingRepairs,
           readyForDelivery,
           deliveredToday,
         },

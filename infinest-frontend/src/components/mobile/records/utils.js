@@ -1,6 +1,12 @@
 // Shared helpers for the mobile Records experience.
 // Keep this file dependency-free so it can be imported by any subcomponent.
 
+// Displays legacy "UPI" records (saved before the Gpay rename) as "Gpay" without touching stored data
+const formatPaymentMethodLabel = (method) => {
+  if (!method) return method
+  return String(method).replace(/upi/gi, 'Gpay')
+}
+
 export const getShopIdFromToken = () => {
   if (typeof window === "undefined") return null
   try {
@@ -60,6 +66,7 @@ export const todayIST = () => {
 
 // Compute summary status for a client-row, given the array of mobiles.
 export const summarizeMobiles = (mobiles = []) => {
+  let processing = 0
   let ready = 0
   let delivered = 0
   let returned = 0
@@ -71,10 +78,12 @@ export const summarizeMobiles = (mobiles = []) => {
     else if (m.should_be_returned) shouldBeReturned += 1
     else if (m.delivered) delivered += 1
     else if (m.ready) ready += 1
+    else if (m.processing) processing += 1
     else pending += 1
     totalPaid += Number(m.total_paid || m.paid_amount || 0)
   }
   return {
+    processing,
     ready,
     delivered,
     returned,
@@ -93,11 +102,11 @@ export const aggregatePaymentsByMethod = (mobiles = []) => {
     const payments = Array.isArray(m.payments) ? m.payments : []
     if (payments.length > 0) {
       for (const p of payments) {
-        const key = p.method || "Other"
+        const key = formatPaymentMethodLabel(p.method) || "Other"
         map.set(key, (map.get(key) || 0) + Number(p.amount || 0))
       }
     } else if (m.paid_amount) {
-      const key = m.payment || "Other"
+      const key = formatPaymentMethodLabel(m.payment) || "Other"
       map.set(key, (map.get(key) || 0) + Number(m.paid_amount || 0))
     }
   }

@@ -330,7 +330,7 @@ function SupplierCredits({ salesUrl, token }) {
                 type="text"
                 value={payNote}
                 onChange={(e) => setPayNote(e.target.value)}
-                placeholder="e.g. Paid via UPI"
+                placeholder="e.g. Paid via Gpay"
                 style={{ width: '100%', padding: '12px 16px', border: '2px solid #e5e7eb', borderRadius: '8px', fontSize: '14px', outline: 'none' }}
                 onFocus={(e) => e.target.style.borderColor = '#059669'}
                 onBlur={(e) => e.target.style.borderColor = '#e5e7eb'}

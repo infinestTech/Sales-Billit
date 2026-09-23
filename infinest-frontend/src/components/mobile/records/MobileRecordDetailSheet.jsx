@@ -50,9 +50,15 @@ export default function MobileRecordDetailSheet({
   const [balance, setBalance] = useState("")
   const [savingBalance, setSavingBalance] = useState(false)
   const [editingBalance, setEditingBalance] = useState(false)
-  const [waConfirmState, setWaConfirmState] = useState({ open: false, mobile: null, field: null })
+  const [waConfirmState, setWaConfirmState] = useState({ open: false, mobile: null, field: null, warrantyInfo: null })
   // Whether WhatsApp automation is enabled for this shop (drives dialog visibility)
   const waShopEnabled = useShopWhatsappConfig()
+
+  // Warranty modal state — shown when marking a device Delivered
+  const [warrantyModal, setWarrantyModal] = useState({ open: false, mobile: null })
+  const [warrantyHasInput, setWarrantyHasInput] = useState(null) // true | false | null (undecided)
+  const [warrantyMonthsInput, setWarrantyMonthsInput] = useState(6) // 3 | 6 | "custom"
+  const [warrantyCustomMonths, setWarrantyCustomMonths] = useState("")
 
   useEffect(() => {
     if (record) {
@@ -73,15 +79,15 @@ export default function MobileRecordDetailSheet({
     setWorking((prev) => ({ ...prev, [id]: val }))
 
   // WA-triggering fields — only false→true transitions fire a WhatsApp message
-  const WA_TRIGGER_FIELDS = ["ready", "delivered", "returned"]
-  const WA_FIELD_LABELS = { ready: "Ready for Pickup", delivered: "Delivered", returned: "Returned" }
+  const WA_TRIGGER_FIELDS = ["processing", "ready", "delivered", "returned"]
+  const WA_FIELD_LABELS = { processing: "Processing", ready: "Ready for Pickup", delivered: "Delivered", returned: "Returned" }
 
-  const executeToggle = async (mobile, field, skipWhatsapp = false) => {
+  const executeToggle = async (mobile, field, skipWhatsapp = false, warrantyInfo = null) => {
     setBusy(mobile._id, true)
     try {
       const res = await api.post(
         "/api/toggle-status",
-        { id: mobile._id, field, skipWhatsapp },
+        { id: mobile._id, field, skipWhatsapp, ...(warrantyInfo || {}) },
         { headers }
       )
       onChanged?.({ type: "mobile", mobile: res.data?.updatedMobile })
@@ -96,16 +102,45 @@ export default function MobileRecordDetailSheet({
     }
   }
 
-  const handleToggle = (mobile, field) => {
-    // For false→true on WA-triggering fields, ask about WA only when WA is enabled for this shop
-    // For 'returned': only show WA dialog on the actual returned transition (should_be_returned=true → returned=true)
+  // WA-check step, shared by the direct toggle path and the post-warranty-modal path
+  const proceedAfterWarranty = (mobile, field, warrantyInfo = null) => {
     const isActualReturnTransition = field === "returned" && !mobile.returned && !!mobile.should_be_returned
     const isOtherWaTrigger = WA_TRIGGER_FIELDS.includes(field) && field !== "returned" && !mobile[field]
     if ((isActualReturnTransition || isOtherWaTrigger) && waShopEnabled === true) {
-      setWaConfirmState({ open: true, mobile, field })
+      setWaConfirmState({ open: true, mobile, field, warrantyInfo })
       return
     }
-    executeToggle(mobile, field)
+    executeToggle(mobile, field, false, warrantyInfo)
+  }
+
+  const handleToggle = (mobile, field) => {
+    // Ask for warranty details before marking Delivered (false→true only)
+    if (field === "delivered" && !mobile.delivered) {
+      setWarrantyHasInput(null)
+      setWarrantyMonthsInput(6)
+      setWarrantyCustomMonths("")
+      setWarrantyModal({ open: true, mobile })
+      return
+    }
+
+    proceedAfterWarranty(mobile, field)
+  }
+
+  const closeWarrantyModal = () => setWarrantyModal({ open: false, mobile: null })
+
+  const confirmWarrantyModal = () => {
+    const { mobile } = warrantyModal
+    if (warrantyHasInput === null) return
+    let warrantyInfo
+    if (warrantyHasInput === true) {
+      const months = warrantyMonthsInput === "custom" ? Number(warrantyCustomMonths) : Number(warrantyMonthsInput)
+      if (!months || months <= 0) return
+      warrantyInfo = { hasWarranty: true, warrantyMonths: months }
+    } else {
+      warrantyInfo = { hasWarranty: false, warrantyMonths: null }
+    }
+    setWarrantyModal({ open: false, mobile: null })
+    proceedAfterWarranty(mobile, "delivered", warrantyInfo)
   }
 
   const handleDelete = async (mobile, mobileIndex) => {
@@ -316,7 +351,14 @@ export default function MobileRecordDetailSheet({
                 </div>
 
                 {/* Status toggles */}
-                <div className="mt-2 grid grid-cols-3 gap-2 px-4">
+                <div className="mt-2 grid grid-cols-4 gap-2 px-4">
+                  <StatusButton
+                    label="Processing"
+                    active={!!m.processing}
+                    busy={busy}
+                    onClick={() => handleToggle(m, "processing")}
+                    color="amber"
+                  />
                   <StatusButton
                     label="Ready"
                     active={!!m.ready}
@@ -421,9 +463,9 @@ export default function MobileRecordDetailSheet({
               <button
                 className="flex-1 rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
                 onClick={() => {
-                  const { mobile, field } = waConfirmState
-                  setWaConfirmState({ open: false, mobile: null, field: null })
-                  executeToggle(mobile, field, true)
+                  const { mobile, field, warrantyInfo } = waConfirmState
+                  setWaConfirmState({ open: false, mobile: null, field: null, warrantyInfo: null })
+                  executeToggle(mobile, field, true, warrantyInfo)
                 }}
               >
                 Skip WhatsApp
@@ -431,12 +473,117 @@ export default function MobileRecordDetailSheet({
               <button
                 className="flex-1 rounded-lg bg-green-600 px-4 py-2 text-sm font-semibold text-white hover:bg-green-700"
                 onClick={() => {
-                  const { mobile, field } = waConfirmState
-                  setWaConfirmState({ open: false, mobile: null, field: null })
-                  executeToggle(mobile, field, false)
+                  const { mobile, field, warrantyInfo } = waConfirmState
+                  setWaConfirmState({ open: false, mobile: null, field: null, warrantyInfo: null })
+                  executeToggle(mobile, field, false, warrantyInfo)
                 }}
               >
                 Send WhatsApp
+              </button>
+            </div>
+          </div>
+        </>
+      )}
+
+      {/* Warranty Modal — shown before marking a device Delivered */}
+      {warrantyModal.open && (
+        <>
+          <div className="fixed inset-0 bg-black/40 z-[60]" />
+          <div className="fixed left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 bg-white rounded-xl shadow-2xl border border-gray-200 w-[calc(100%-2rem)] max-w-sm z-[60]">
+            <div className="px-5 py-4 border-b border-gray-200">
+              <h4 className="text-base font-semibold text-gray-900">Warranty Details</h4>
+              <p className="text-xs text-gray-500 mt-0.5">Does this repair/product carry a warranty?</p>
+            </div>
+            <div className="p-5 space-y-4">
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  type="button"
+                  onClick={() => setWarrantyHasInput(true)}
+                  className={`py-2.5 rounded-lg border-2 text-sm font-semibold transition-colors ${
+                    warrantyHasInput === true
+                      ? "border-emerald-500 bg-emerald-50 text-emerald-700"
+                      : "border-gray-200 bg-white text-gray-500"
+                  }`}
+                >
+                  Warranty
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setWarrantyHasInput(false)}
+                  className={`py-2.5 rounded-lg border-2 text-sm font-semibold transition-colors ${
+                    warrantyHasInput === false
+                      ? "border-gray-500 bg-gray-100 text-gray-700"
+                      : "border-gray-200 bg-white text-gray-500"
+                  }`}
+                >
+                  No Warranty
+                </button>
+              </div>
+
+              {warrantyHasInput === true && (
+                <div>
+                  <label className="block text-xs font-medium text-gray-700 mb-1.5">Duration</label>
+                  <div className="grid grid-cols-3 gap-2">
+                    {[3, 6].map((m) => (
+                      <button
+                        key={m}
+                        type="button"
+                        onClick={() => setWarrantyMonthsInput(m)}
+                        className={`py-2 rounded-lg border-2 text-sm font-medium transition-colors ${
+                          warrantyMonthsInput === m
+                            ? "border-emerald-500 bg-emerald-50 text-emerald-700"
+                            : "border-gray-200 bg-white text-gray-600"
+                        }`}
+                      >
+                        {m} Months
+                      </button>
+                    ))}
+                    <button
+                      type="button"
+                      onClick={() => setWarrantyMonthsInput("custom")}
+                      className={`py-2 rounded-lg border-2 text-sm font-medium transition-colors ${
+                        warrantyMonthsInput === "custom"
+                          ? "border-emerald-500 bg-emerald-50 text-emerald-700"
+                          : "border-gray-200 bg-white text-gray-600"
+                      }`}
+                    >
+                      Custom
+                    </button>
+                  </div>
+                  {warrantyMonthsInput === "custom" && (
+                    <input
+                      type="number"
+                      inputMode="numeric"
+                      min="1"
+                      value={warrantyCustomMonths}
+                      onChange={(e) => setWarrantyCustomMonths(e.target.value)}
+                      placeholder="Months"
+                      autoFocus
+                      className="mt-2 w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                    />
+                  )}
+                </div>
+              )}
+            </div>
+            <div className="flex justify-end gap-2 px-5 py-4 border-t border-gray-200">
+              <button
+                onClick={closeWarrantyModal}
+                className="px-4 py-2 text-sm text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={confirmWarrantyModal}
+                disabled={
+                  warrantyHasInput === null ||
+                  (warrantyHasInput === true &&
+                    (warrantyMonthsInput === "custom"
+                      ? !warrantyCustomMonths || Number(warrantyCustomMonths) <= 0
+                      : !warrantyMonthsInput))
+                }
+                className="px-4 py-2 text-sm text-white bg-emerald-600 rounded-lg hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                Continue
               </button>
             </div>
           </div>
@@ -468,6 +615,10 @@ export default function MobileRecordDetailSheet({
 const colorMap = {
   blue: {
     on: "bg-indigo-50 border-indigo-300 text-indigo-700",
+    off: "bg-white border-gray-200 text-gray-500",
+  },
+  amber: {
+    on: "bg-amber-50 border-amber-300 text-amber-700",
     off: "bg-white border-gray-200 text-gray-500",
   },
   emerald: {

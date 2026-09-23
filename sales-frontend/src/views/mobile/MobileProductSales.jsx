@@ -1,15 +1,15 @@
 // Constant payment methods used across the application
 window.__MOBILE_PAYMENT_METHODS__ = [
   { value: 'Cash', label: 'Cash' },
-  { value: 'UPI', label: 'UPI' },
+  { value: 'Gpay', label: 'Gpay' },
   { value: 'Card', label: 'Card' },
-  { value: 'UPI-H', label: 'UPI-H' },
-  { value: 'UPI-S', label: 'UPI-S' },
+  { value: 'Gpay-H', label: 'Gpay-H' },
+  { value: 'Gpay-S', label: 'Gpay-S' },
   { value: 'Cash + Card', label: 'Cash + Card' },
-  { value: 'UPI H + CASH', label: 'UPI H + Cash' },
-  { value: 'UPI S + CASH', label: 'UPI S + Cash' },
-  { value: 'UPI H + CARD', label: 'UPI H + Card' },
-  { value: 'UPI S + CARD', label: 'UPI S + Card' }
+  { value: 'Gpay H + CASH', label: 'Gpay H + Cash' },
+  { value: 'Gpay S + CASH', label: 'Gpay S + Cash' },
+  { value: 'Gpay H + CARD', label: 'Gpay H + Card' },
+  { value: 'Gpay S + CARD', label: 'Gpay S + Card' }
 ];
 window.__MOBILE_PAYMENT_METHOD_VALUES__ = window.__MOBILE_PAYMENT_METHODS__.map(function(m) { return m.value; });
 
@@ -930,15 +930,15 @@ function MobileProductSales({ salesUrl, token }) {
         <select value={selectedBank} onChange={(e) => setSelectedBank(e.target.value)} style={{ width: '100%', marginTop: 6 }}>
           <option value="select">Select</option>
           <option value="Cash">Cash</option>
-          <option value="UPI">UPI</option>
+          <option value="Gpay">Gpay</option>
           <option value="Card">Card</option>
-          <option value="UPI-H">UPI-H</option>
-          <option value="UPI-S">UPI-S</option>
+          <option value="Gpay-H">Gpay-H</option>
+          <option value="Gpay-S">Gpay-S</option>
           <option value="Cash + Card">Cash + Card</option>
-          <option value="UPI H + CASH">UPI H + Cash</option>
-          <option value="UPI S + CASH">UPI S + Cash</option>
-          <option value="UPI H + CARD">UPI H + Card</option>
-          <option value="UPI S + CARD">UPI S + Card</option>
+          <option value="Gpay H + CASH">Gpay H + Cash</option>
+          <option value="Gpay S + CASH">Gpay S + Cash</option>
+          <option value="Gpay H + CARD">Gpay H + Card</option>
+          <option value="Gpay S + CARD">Gpay S + Card</option>
         </select>
       </div>
 

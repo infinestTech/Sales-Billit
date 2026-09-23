@@ -17,6 +17,7 @@ async function computeDashboardRecords(shop_id, fromDate, toDate) {
     ]);
 
     const totalMobiles = mobiles.length;
+    const processingCount = mobiles.filter(m => m.processing).length;
     const readyCount = mobiles.filter(m => m.ready).length;
     const notReadyCount = mobiles.filter(m => !m.ready).length;
     const deliveredCount = mobiles.filter(m => m.delivered).length;
@@ -27,6 +28,7 @@ async function computeDashboardRecords(shop_id, fromDate, toDate) {
 
     return {
         totalMobiles,
+        processingCount,
         readyCount,
         notReadyCount,
         deliveredCount,

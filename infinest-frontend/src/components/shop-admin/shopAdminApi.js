@@ -55,13 +55,14 @@ const shopAdminApi = {
   createCustomer: (payload) => request("post", "/records/customer", { data: payload }),
   createDealer: (payload) => request("post", "/records/dealer", { data: payload }),
   listRecords: ({ tab = 'customers', page = 1, limit = 20, q = '' } = {}) => request("get", "/records", { params: { tab, page, limit, q } }),
-  toggleMobileStatus: (mobileId, status, value) => request("post", "/records/toggle-status", { data: { mobileId, status, value } }),
+  toggleMobileStatus: (mobileId, status, value, extra = {}) => request("post", "/records/toggle-status", { data: { mobileId, status, value, ...extra } }),
   deleteMobile: (mobileId) => request("delete", `/records/mobile/${mobileId}`),
   updateBalance: (id, balanceAmount, type) => request("put", "/records/balance", { data: { id, balanceAmount, type } }),
   deleteCustomer: (id) => request("delete", `/records/customer/${id}`),
   deleteDealer: (id) => request("delete", `/records/dealer/${id}`),
   addPayment: (mobileId, amount, method) => request("post", "/records/payment", { data: { mobileId, amount, method } }),
   removePayment: (mobileId, paymentIndex) => request("delete", "/records/payment", { data: { mobileId, paymentIndex } }),
+  updatePaidAmount: (mobileId, paidAmount) => request("put", "/records/paid-amount", { data: { mobileId, paidAmount } }),
 
   // suppliers
   listSuppliers: () => request("get", "/suppliers"),

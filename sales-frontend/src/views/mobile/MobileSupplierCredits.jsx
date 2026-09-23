@@ -289,7 +289,7 @@ function MobileSupplierCredits({ salesUrl, token }) {
                 type="text"
                 value={payNote}
                 onChange={(e) => setPayNote(e.target.value)}
-                placeholder="e.g. Paid via UPI"
+                placeholder="e.g. Paid via Gpay"
               />
             </div>
 

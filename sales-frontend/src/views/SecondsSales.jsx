@@ -579,15 +579,15 @@ function SecondsSales({ salesUrl, token }) {
                 >
                   <option value="">Select payment method</option>
                   <option value="Cash">Cash</option>
-                  <option value="UPI">UPI</option>
+                  <option value="Gpay">Gpay</option>
                   <option value="Card">Card</option>
-                  <option value="UPI-H">UPI-H</option>
-                  <option value="UPI-S">UPI-S</option>
+                  <option value="Gpay-H">Gpay-H</option>
+                  <option value="Gpay-S">Gpay-S</option>
                   <option value="Cash + Card">Cash + Card</option>
-                  <option value="UPI H + CASH">UPI H + Cash</option>
-                  <option value="UPI S + CASH">UPI S + Cash</option>
-                  <option value="UPI H + CARD">UPI H + Card</option>
-                  <option value="UPI S + CARD">UPI S + Card</option>
+                  <option value="Gpay H + CASH">Gpay H + Cash</option>
+                  <option value="Gpay S + CASH">Gpay S + Cash</option>
+                  <option value="Gpay H + CARD">Gpay H + Card</option>
+                  <option value="Gpay S + CARD">Gpay S + Card</option>
                 </select>
               </div>
             </div>

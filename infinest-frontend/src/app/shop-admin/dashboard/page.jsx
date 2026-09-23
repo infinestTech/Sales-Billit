@@ -23,6 +23,7 @@ import CreateCustomerPanel from '@/components/shop-admin/panels/CreateCustomerPa
 import CreateDealerPanel from '@/components/shop-admin/panels/CreateDealerPanel';
 import AllRecordsPanel from '@/components/shop-admin/panels/AllRecordsPanel';
 import SuppliersPanel from '@/components/shop-admin/panels/SuppliersPanel';
+import { formatPaymentMethodLabel } from '@/constants/paymentMethods';
 import * as XLSX from 'xlsx';
 
 // Sidebar navigation config: standalone items + collapsible groups
@@ -37,9 +38,9 @@ const NAV = [
   },
   {
     type: 'group', key: 'records', label: 'Records', icon: ClipboardList, children: [
+      { id: 'all-records', label: 'All Records', icon: Phone },
       { id: 'customer-create', label: 'Create Customer', icon: UserPlus },
       { id: 'dealer-create', label: 'Create Dealer', icon: Briefcase },
-      { id: 'all-records', label: 'All Records', icon: Phone },
     ]
   },
   {
@@ -115,6 +116,12 @@ export default function ShopAdminDashboard() {
   const [revenueVisibleToUsers, setRevenueVisibleToUsers] = useState(true);
   const [togglingRevenue, setTogglingRevenue] = useState(false);
 
+  // Receipt Terms & Conditions state
+  const [termsAndConditions, setTermsAndConditions] = useState('');
+  const [termsDraft, setTermsDraft] = useState('');
+  const [savingTerms, setSavingTerms] = useState(false);
+  const [termsSaved, setTermsSaved] = useState(false);
+
   const API_URL = process.env.NEXT_PUBLIC_API_URL_BILLIT || 'http://localhost:8000';
 
   // Check if mobile on mount and window resize
@@ -161,6 +168,7 @@ export default function ShopAdminDashboard() {
     if (currentShopId) {
       fetchDashboardData();
       fetchRevenueVisibility();
+      fetchTermsAndConditions();
     }
   }, [currentShopId]);
 
@@ -289,6 +297,51 @@ export default function ShopAdminDashboard() {
       alert('Failed to update revenue visibility setting');
     } finally {
       setTogglingRevenue(false);
+    }
+  };
+
+  // Fetch custom Terms & Conditions text for receipts
+  const fetchTermsAndConditions = async () => {
+    try {
+      const token = localStorage.getItem('shopAdminToken');
+      const res = await axios.get(`${API_URL}/api/shop-admin/shop-settings/terms`, {
+        headers: { 'Authorization': `Bearer ${token}` },
+        params: { shop_id: currentShopId }
+      });
+      if (res.data.success) {
+        setTermsAndConditions(res.data.termsAndConditions || '');
+        setTermsDraft(res.data.termsAndConditions || '');
+      }
+    } catch (error) {
+      console.error('Error fetching terms & conditions:', error);
+    }
+  };
+
+  // Save custom Terms & Conditions text for receipts
+  const saveTermsAndConditions = async () => {
+    setSavingTerms(true);
+    setTermsSaved(false);
+    try {
+      const token = localStorage.getItem('shopAdminToken');
+      const res = await axios.patch(
+        `${API_URL}/api/shop-admin/shop-settings/terms`,
+        { termsAndConditions: termsDraft },
+        {
+          headers: { 'Authorization': `Bearer ${token}` },
+          params: { shop_id: currentShopId }
+        }
+      );
+      if (res.data.success) {
+        setTermsAndConditions(res.data.termsAndConditions);
+        setTermsDraft(res.data.termsAndConditions);
+        setTermsSaved(true);
+        setTimeout(() => setTermsSaved(false), 2500);
+      }
+    } catch (error) {
+      console.error('Error saving terms & conditions:', error);
+      alert('Failed to save terms & conditions');
+    } finally {
+      setSavingTerms(false);
     }
   };
 
@@ -611,9 +664,10 @@ export default function ShopAdminDashboard() {
         },
         service: {
           totalRepairs: serviceData.statusBreakdown?.reduce((sum, item) => sum + (item.count || 0), 0) || 0,
-          pendingRepairs: serviceData.statusBreakdown?.find(item => !item._id?.ready)?.count || 0,
+          pendingRepairs: serviceData.statusBreakdown?.find(item => !item._id?.processing && !item._id?.ready)?.count || 0,
+          processingRepairs: serviceData.statusBreakdown?.find(item => item._id?.processing && !item._id?.ready)?.count || 0,
           byStatus: serviceData.statusBreakdown?.reduce((acc, item) => {
-            const status = item._id?.ready ? 'completed' : item._id?.delivered ? 'delivered' : 'pending';
+            const status = item._id?.ready ? 'completed' : item._id?.delivered ? 'delivered' : item._id?.processing ? 'processing' : 'pending';
             acc[status] = (acc[status] || 0) + (item.count || 0);
             return acc;
           }, {}) || {}
@@ -1009,7 +1063,7 @@ export default function ShopAdminDashboard() {
           <div class="payment-breakdown">
             ${reportData.paymentBreakdown.map(payment => `
               <div class="payment-box">
-                <div class="method">${payment.method}</div>
+                <div class="method">${formatPaymentMethodLabel(payment.method)}</div>
                 <div class="amount">₹${payment.total?.toLocaleString()}</div>
                 <div class="count">${payment.count} transactions</div>
               </div>
@@ -1134,13 +1188,13 @@ export default function ShopAdminDashboard() {
 
       // Pure single methods
       if (m === 'cash') return { cash: amt, gpay: '', card: '' };
-      if (m === 'upi' || m === 'upi-h' || m === 'upi-s') return { cash: '', gpay: amt, card: '' };
+      if (m === 'upi' || m === 'upi-h' || m === 'upi-s' || m === 'gpay' || m === 'gpay-h' || m === 'gpay-s') return { cash: '', gpay: amt, card: '' };
       if (m === 'card') return { cash: '', gpay: '', card: amt };
 
       // Combined methods - split evenly between the two
       if (m === 'cash + card') return { cash: half, gpay: '', card: otherHalf };
-      if (m === 'upi h + cash' || m === 'upi s + cash') return { cash: otherHalf, gpay: half, card: '' };
-      if (m === 'upi h + card' || m === 'upi s + card') return { cash: '', gpay: half, card: otherHalf };
+      if (m === 'upi h + cash' || m === 'upi s + cash' || m === 'gpay h + cash' || m === 'gpay s + cash') return { cash: otherHalf, gpay: half, card: '' };
+      if (m === 'upi h + card' || m === 'upi s + card' || m === 'gpay h + card' || m === 'gpay s + card') return { cash: '', gpay: half, card: otherHalf };
 
       // Default: put in cash
       return { cash: amt, gpay: '', card: '' };
@@ -1704,6 +1758,46 @@ export default function ShopAdminDashboard() {
                     }`}
                   />
                 </button>
+              </div>
+            </div>
+
+            {/* Receipt Terms & Conditions */}
+            <div className="bg-white border border-gray-200 rounded-xl p-6 shadow-sm">
+              <div className="flex items-center gap-3 mb-2">
+                <div className="p-3 rounded-lg bg-blue-100">
+                  <FileText className="h-6 w-6 text-blue-600" />
+                </div>
+                <div>
+                  <h3 className="text-gray-900 font-semibold text-lg">Receipt Terms &amp; Conditions</h3>
+                  <p className="text-gray-500 text-sm">
+                    Shown at the bottom of the A4 invoice/receipt. Leave blank to use the default terms.
+                  </p>
+                </div>
+              </div>
+              <textarea
+                value={termsDraft}
+                onChange={(e) => setTermsDraft(e.target.value)}
+                placeholder={"e.g.\n1. No guarantee for liquid / water damage.\n2. Collect your device within 30 days of completion.\n3. We are not responsible for any data loss.\n4. Advance payment required before ordering parts."}
+                rows={5}
+                maxLength={2000}
+                className="w-full mt-3 border border-gray-300 rounded-lg p-3 text-sm text-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-y"
+              />
+              <div className="flex items-center justify-between mt-3">
+                <span className="text-xs text-gray-400">{termsDraft.length}/2000 characters</span>
+                <div className="flex items-center gap-3">
+                  {termsSaved && (
+                    <span className="text-sm text-green-600 font-medium flex items-center gap-1">
+                      <CheckCircle className="h-4 w-4" /> Saved
+                    </span>
+                  )}
+                  <button
+                    onClick={saveTermsAndConditions}
+                    disabled={savingTerms || termsDraft === termsAndConditions}
+                    className="px-4 py-2 rounded-lg bg-blue-600 text-white text-sm font-medium hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition"
+                  >
+                    {savingTerms ? 'Saving...' : 'Save'}
+                  </button>
+                </div>
               </div>
             </div>
 
@@ -2720,7 +2814,7 @@ export default function ShopAdminDashboard() {
                   <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
                     {reportData.paymentBreakdown?.map((payment, idx) => (
                       <div key={idx} className="p-4 bg-gray-50 rounded-lg border border-gray-200">
-                        <div className="text-sm text-gray-600 font-medium">{payment.method}</div>
+                        <div className="text-sm text-gray-600 font-medium">{formatPaymentMethodLabel(payment.method)}</div>
                         <div className="text-xl font-bold text-gray-900 mt-1">₹{payment.total?.toLocaleString()}</div>
                         <div className="text-xs text-gray-500 mt-1">{payment.count} transactions</div>
                       </div>

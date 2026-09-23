@@ -2,13 +2,51 @@
 import React, { useRef, useState, useEffect } from "react";
 import { useReactToPrint } from "react-to-print";
 import jsPDF from "jspdf";
-import autoTable from "jspdf-autotable";
-import { IoMdPrint } from "react-icons/io";
-import { MdPreview } from "react-icons/md";
-import { FaDownload } from "react-icons/fa";
+import html2canvas from "html2canvas";
 import { IoCloseCircleOutline } from "react-icons/io5";
-import { BsPrinterFill } from "react-icons/bs";
+import { Receipt, Smartphone, ShieldCheck, ShieldOff, FileText, ArrowLeft, Printer, Download } from "lucide-react";
 import authApi from "../authApi";
+import api from "../api";
+import { formatPaymentMethodLabel } from "@/constants/paymentMethods";
+
+const DEFAULT_TERMS_AND_CONDITIONS = [
+  "No guarantee for liquid / water damage.",
+  "Collect your device within 30 days of completion.",
+  "We are not responsible for any data loss.",
+  "Advance payment required before ordering parts.",
+];
+
+// Formats a warranty value for display, e.g. "6 Months (till 12 Jun 2026)" or "No Warranty"
+const formatWarranty = (mobile) => {
+  if (!mobile?.has_warranty) return "No Warranty";
+  const months = mobile.warranty_months;
+  const expiry = mobile.warranty_expiry_date
+    ? new Date(mobile.warranty_expiry_date).toLocaleDateString("en-IN")
+    : null;
+  return `${months ? `${months} Month${months === 1 ? "" : "s"}` : "Yes"}${expiry ? ` (till ${expiry})` : ""}`;
+};
+
+const RECEIPT_TYPE_OPTIONS = [
+  { id: "a4", label: "A4 Invoice", description: "Full-page invoice with warranty & terms", icon: FileText },
+  { id: "jobcard", label: "Job Card", description: "A5 landscape service job card", icon: Smartphone },
+  { id: "thermal", label: "Thermal Receipt", description: "80mm receipt printer slip", icon: Printer },
+];
+
+// Sizing (mm) for the on-screen scaled preview — not the actual print/PDF dimensions
+const MM_TO_PX = 3.7795275591;
+const PREVIEW_STAGE_WIDTH = 460;
+const PREVIEW_DIMENSIONS_MM = {
+  jobcard: { w: 210, h: 148 },
+  a4: { w: 210, h: 297 },
+};
+
+const getScaledPreviewStyle = (type) => {
+  const dims = PREVIEW_DIMENSIONS_MM[type] || PREVIEW_DIMENSIONS_MM.a4;
+  const contentWidth = dims.w * MM_TO_PX;
+  const contentHeight = dims.h * MM_TO_PX;
+  const scale = PREVIEW_STAGE_WIDTH / contentWidth;
+  return { wrapperWidth: contentWidth * scale, wrapperHeight: contentHeight * scale, contentWidth, scale };
+};
 
 // Single Job Card for one mobile device (used when only 1 mobile is selected)
 const SingleJobCard = ({ clientData, mobile, shopPhoneNumber, shopAddress, shopEmail, shopName, profilePhoto }) => {
@@ -455,7 +493,7 @@ const ThermalReceipt = ({ clientData, mobiles, shopPhoneNumber, shopAddress, sho
       {/* Payment method (show if single mobile) */}
       {mobiles.length === 1 && mobiles[0].paymentMethod && (
         <div style={{ fontSize: '10px', textAlign: 'center', margin: '1mm 0' }}>
-          Paid via: {mobiles[0].paymentMethod}
+          Paid via: {formatPaymentMethodLabel(mobiles[0].paymentMethod)}
         </div>
       )}
 
@@ -494,7 +532,7 @@ const PrintableThermalReceipt = React.forwardRef(({ clientData, shopPhoneNumber,
 PrintableThermalReceipt.displayName = "PrintableThermalReceipt";
 
 // ─── A4 Receipt (210mm × 297mm portrait) ─────────────────────────────────────
-const A4Receipt = ({ clientData, mobiles, shopPhoneNumber, shopAddress, shopEmail, shopName, profilePhoto }) => {
+const A4Receipt = ({ clientData, mobiles, shopPhoneNumber, shopAddress, shopEmail, shopName, profilePhoto, termsAndConditions }) => {
   const totalPaid = mobiles.reduce((sum, m) => {
     const paid = m.total_paid || (m.payments && m.payments.length > 0 ? m.payments.reduce((s, p) => s + (p.amount || 0), 0) : 0) || m.paid_amount || 0;
     return sum + paid;
@@ -514,8 +552,8 @@ const A4Receipt = ({ clientData, mobiles, shopPhoneNumber, shopAddress, shopEmai
       }}
     >
       {/* Header */}
-      <div style={{ display: 'flex', alignItems: 'center', borderBottom: '3px solid #222', paddingBottom: '10px', marginBottom: '10px' }}>
-        <div style={{ width: '70px', height: '70px', flexShrink: 0, marginRight: '14px', border: '1px solid #ccc', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#f7f7f7' }}>
+      <div style={{ display: 'flex', alignItems: 'center', borderBottom: '3px solid #222', paddingBottom: '12px', marginBottom: '10px' }}>
+        <div style={{ width: '72px', height: '72px', flexShrink: 0, marginRight: '16px', border: '1px solid #ddd', borderRadius: '6px', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#f7f7f7', overflow: 'hidden' }}>
           {profilePhoto ? (
             <img src={profilePhoto} alt="Logo" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
           ) : (
@@ -523,7 +561,7 @@ const A4Receipt = ({ clientData, mobiles, shopPhoneNumber, shopAddress, shopEmai
           )}
         </div>
         <div style={{ flex: 1, textAlign: 'center' }}>
-          <div style={{ fontSize: '22px', fontWeight: 'bold', textTransform: 'uppercase', color: '#8B4513', letterSpacing: '1px' }}>
+          <div style={{ fontSize: '23px', fontWeight: 'bold', textTransform: 'uppercase', color: '#8B4513', letterSpacing: '1px' }}>
             {shopName || clientData.owner_name || 'MOBILE SERVICE CENTER'}
           </div>
           <div style={{ fontSize: '11px', color: '#555', marginTop: '3px' }}>{shopAddress || 'Address Not Provided'}</div>
@@ -535,13 +573,13 @@ const A4Receipt = ({ clientData, mobiles, shopPhoneNumber, shopAddress, shopEmai
       </div>
 
       {/* Title bar */}
-      <div style={{ background: '#222', color: '#fff', textAlign: 'center', padding: '5px', fontSize: '13px', fontWeight: 'bold', letterSpacing: '3px', marginBottom: '12px' }}>
+      <div style={{ background: 'linear-gradient(135deg, #222 0%, #3a3a3a 100%)', color: '#fff', textAlign: 'center', padding: '7px', fontSize: '14px', fontWeight: 'bold', letterSpacing: '3px', marginBottom: '12px', borderRadius: '3px' }}>
         SERVICE RECEIPT / JOB CARD
       </div>
 
       {/* Bill info row */}
       <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '12px', fontSize: '11px', gap: '20px' }}>
-        <div style={{ flex: 1 }}>
+        <div style={{ flex: 1, border: '1px solid #e2e2e2', borderRadius: '4px', padding: '8px 10px', background: '#fcfcfc' }}>
           <div style={{ marginBottom: '4px' }}><strong>Customer Name :</strong>&nbsp;{clientData.client_name || ''}</div>
           <div><strong>Phone / Mobile :</strong>&nbsp;{clientData.mobile_number || ''}</div>
         </div>
@@ -562,6 +600,7 @@ const A4Receipt = ({ clientData, mobiles, shopPhoneNumber, shopAddress, shopEmai
             <th style={cell}>Complaint / Issue</th>
             <th style={{ ...cell, whiteSpace: 'nowrap' }}>Date Added</th>
             <th style={{ ...cell, whiteSpace: 'nowrap' }}>Delivery Date</th>
+            <th style={{ ...cell, whiteSpace: 'nowrap' }}>Warranty</th>
             <th style={{ ...cell, textAlign: 'right', whiteSpace: 'nowrap' }}>Amount (₹)</th>
           </tr>
         </thead>
@@ -577,12 +616,13 @@ const A4Receipt = ({ clientData, mobiles, shopPhoneNumber, shopAddress, shopEmai
                 <td style={cell}>{mobile.issue || '-'}</td>
                 <td style={cell}>{mobile.added_date ? new Date(mobile.added_date).toLocaleDateString('en-IN') : '-'}</td>
                 <td style={cell}>{mobile.delivery_date ? new Date(mobile.delivery_date).toLocaleDateString('en-IN') : '-'}</td>
+                <td style={{ ...cell, color: mobile.has_warranty ? '#166534' : '#888', fontWeight: mobile.has_warranty ? 600 : 400, whiteSpace: 'nowrap' }}>{formatWarranty(mobile)}</td>
                 <td style={{ ...cell, textAlign: 'right' }}>₹{paid}</td>
               </tr>
             );
           })}
           <tr style={{ background: '#f0f0f0', fontWeight: 'bold' }}>
-            <td colSpan={7} style={{ ...cell, textAlign: 'right', borderTop: '2px solid #333' }}>Total Amount</td>
+            <td colSpan={8} style={{ ...cell, textAlign: 'right', borderTop: '2px solid #333' }}>Total Amount</td>
             <td style={{ ...cell, textAlign: 'right', borderTop: '2px solid #333' }}>₹{totalPaid}</td>
           </tr>
         </tbody>
@@ -613,30 +653,23 @@ const A4Receipt = ({ clientData, mobiles, shopPhoneNumber, shopAddress, shopEmai
       </div>
 
       {/* Terms */}
-      <div style={{ fontSize: '9px', color: '#666', borderTop: '1px solid #ddd', paddingTop: '6px', marginBottom: '20px', lineHeight: '1.6' }}>
-        <strong style={{ color: '#333' }}>Terms &amp; Conditions: </strong>
-        1. No guarantee for liquid / water damage. &nbsp;
-        2. Collect your device within 30 days of completion. &nbsp;
-        3. We are not responsible for any data loss. &nbsp;
-        4. Advance payment required before ordering parts.
-      </div>
-
-      {/* Signatures */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', paddingTop: '10px' }}>
-        <div style={{ textAlign: 'center', minWidth: '140px' }}>
-          <div style={{ borderTop: '1px solid #333', paddingTop: '4px', fontSize: '10px' }}>Authorised Signature</div>
-          <div style={{ fontSize: '9px', color: '#777', marginTop: '2px' }}>{shopName || clientData.owner_name || 'MOBILE SERVICE'}</div>
-        </div>
-        <div style={{ textAlign: 'center', minWidth: '140px' }}>
-          <div style={{ borderTop: '1px solid #333', paddingTop: '4px', fontSize: '10px' }}>Customer Signature</div>
-          <div style={{ fontSize: '9px', color: '#777', marginTop: '2px' }}>{clientData.client_name || ''}</div>
-        </div>
+      <div style={{ fontSize: '12px', color: '#555', borderTop: '1px solid #ddd', paddingTop: '8px', marginBottom: '10px', lineHeight: '1.7' }}>
+        <div style={{ color: '#333', fontWeight: 'bold', marginBottom: '3px', fontSize: '13px' }}>Terms &amp; Conditions:</div>
+        {termsAndConditions && termsAndConditions.trim() !== '' ? (
+          <div style={{ whiteSpace: 'pre-line' }}>{termsAndConditions}</div>
+        ) : (
+          <div>
+            {DEFAULT_TERMS_AND_CONDITIONS.map((line, idx) => (
+              <span key={idx}>{idx + 1}. {line} &nbsp;</span>
+            ))}
+          </div>
+        )}
       </div>
     </div>
   );
 };
 
-const PrintableA4Receipt = React.forwardRef(({ clientData, shopPhoneNumber, shopAddress, shopEmail, shopName, profilePhoto }, ref) => {
+const PrintableA4Receipt = React.forwardRef(({ clientData, shopPhoneNumber, shopAddress, shopEmail, shopName, profilePhoto, termsAndConditions }, ref) => {
   const mobiles = clientData.MobileName || [];
   return (
     <div ref={ref}>
@@ -648,292 +681,30 @@ const PrintableA4Receipt = React.forwardRef(({ clientData, shopPhoneNumber, shop
         shopEmail={shopEmail}
         shopName={shopName}
         profilePhoto={profilePhoto}
+        termsAndConditions={termsAndConditions}
       />
     </div>
   );
 });
 PrintableA4Receipt.displayName = 'PrintableA4Receipt';
 
-// PDF Generation: single-mobile uses original job card layout, multi-mobile uses table layout on one page
-const generateEnhancedPDF = (clientData, shopPhoneNumber, shopAddress, shopEmail, shopName, profilePhoto) => {
-  const doc = new jsPDF({
-    orientation: "landscape",
-    unit: "mm",
-    format: "a5",
-  });
-
-  const mobiles = clientData.MobileName || [];
-  const today = new Date().toLocaleDateString('en-IN');
-  const pageWidth = 210;
-  const pageHeight = 148;
-  const margin = 4;
-  const displayName = (shopName || clientData.owner_name || "MOBILE SERVICE").toUpperCase();
-
-  // ---- Helper: draw shop header, returns yPosition after header ----
-  const drawHeader = () => {
-    let yPosition = margin + 1;
-    const headerHeight = 22;
-    doc.rect(margin + 2, yPosition, pageWidth - 2 * margin - 4, headerHeight);
-
-    if (profilePhoto) {
-      try { doc.addImage(profilePhoto, 'JPEG', margin + 3, yPosition + 1, 16, 16); }
-      catch (e) { doc.rect(margin + 3, yPosition + 1, 16, 16); doc.setFontSize(5); doc.text('LOGO', margin + 11, yPosition + 10, { align: 'center' }); }
-    } else {
-      doc.rect(margin + 3, yPosition + 1, 16, 16);
-      doc.setFontSize(5);
-      doc.text('LOGO', margin + 11, yPosition + 10, { align: 'center' });
-    }
-
-    doc.setFontSize(13);
-    doc.setFont(undefined, 'bold');
-    doc.setTextColor(139, 69, 19);
-    doc.text(displayName, pageWidth / 2, yPosition + 7.5, { align: 'center' });
-    doc.setFontSize(9);
-    doc.setFont(undefined, 'normal');
-    doc.setTextColor(0, 0, 0);
-    doc.text(shopAddress || "Address Not Provided", pageWidth / 2, yPosition + 14, { align: 'center' });
-    doc.text(`Ph: ${shopPhoneNumber || "N/A"}`, pageWidth / 2, yPosition + 18, { align: 'center' });
-    if (shopEmail && shopEmail.trim() !== "" && shopEmail !== "N/A") {
-      doc.text(`Email: ${shopEmail}`, pageWidth / 2, yPosition + 21, { align: 'center' });
-    }
-    return yPosition + headerHeight + 1;
-  };
-
-  if (mobiles.length <= 1) {
-    // ---- Single mobile: original job card layout ----
-    const mobile = mobiles[0] || {};
-    doc.rect(margin, margin, pageWidth - 2 * margin, pageHeight - 2 * margin);
-    let yPosition = drawHeader();
-
-    const contentHeight = pageHeight - yPosition - margin - 1;
-    doc.rect(margin + 2, yPosition, pageWidth - 2 * margin - 4, contentHeight);
-    const leftColWidth = (pageWidth - 2 * margin - 4) * 0.7;
-    const rightColX = margin + 2 + leftColWidth;
-    doc.line(rightColX, yPosition, rightColX, pageHeight - margin - 1);
-
-    let leftY = yPosition;
-    const rowHeight = 6.5;
-    const labelWidth = 36;
-    doc.setFontSize(7);
-
-    const drawRow = (label, value) => {
-      doc.setFont(undefined, 'bold');
-      doc.line(margin + 2, leftY + rowHeight, rightColX, leftY + rowHeight);
-      doc.text(label, margin + 3, leftY + 4.6);
-      doc.setFont(undefined, 'normal');
-      const lines = doc.splitTextToSize(value || '', leftColWidth - labelWidth - 5);
-      doc.text(lines, margin + 3 + labelWidth, leftY + 4.6);
-      leftY += rowHeight;
-    };
-
-    drawRow('Customer Name :', clientData.client_name || '');
-    drawRow('Phone / Mobile No :', clientData.mobile_number || '');
-    drawRow('Mobile Make :', mobile.mobile_name || '');
-    drawRow('Model No. :', mobile.model || '');
-    drawRow('IMEI No. :', mobile.imei || '');
-    drawRow('Complaint :', mobile.issue || '');
-
-    // Flashing row
-    doc.setFont(undefined, 'bold');
-    doc.line(margin + 2, leftY + rowHeight, rightColX, leftY + rowHeight);
-    doc.text('Flashing :', margin + 3, leftY + 4.6);
-    doc.setFont(undefined, 'normal');
-    doc.setFontSize(5.5);
-    doc.text('Backup - Yes / No', rightColX - 20, leftY + 4.6);
-    doc.setFontSize(7);
-    leftY += rowHeight;
-
-    drawRow('Date of Delivery :', mobile.delivery_date ? new Date(mobile.delivery_date).toLocaleDateString('en-IN') : '');
-    drawRow('Estimate Amount :', mobile.estimate_amount || '');
-
-    doc.setFontSize(6.5);
-    doc.text(`For ${displayName}`, margin + 3, pageHeight - margin - 4);
-
-    // Right column
-    let rightY = yPosition;
-    const rightColWidth = pageWidth - 2 * margin - 4 - leftColWidth;
-    doc.setFillColor(240, 240, 240);
-    doc.rect(rightColX, rightY, rightColWidth, 8, 'F');
-    doc.line(rightColX, rightY + 8, pageWidth - margin - 2, rightY + 8);
-    doc.setFontSize(9); doc.setFont(undefined, 'bold'); doc.setTextColor(139, 69, 19);
-    doc.text('JOB CARD', rightColX + rightColWidth / 2, rightY + 5.5, { align: 'center' });
-    doc.setTextColor(0, 0, 0); rightY += 8;
-
-    doc.setFontSize(6.5); doc.setFont(undefined, 'bold');
-    doc.text('Sl. No.', rightColX + 2, rightY + 3.5);
-    doc.setFontSize(11);
-    doc.text(clientData.bill_no || '', rightColX + rightColWidth / 2, rightY + 10, { align: 'center' });
-    doc.line(rightColX, rightY + 13, pageWidth - margin - 2, rightY + 13); rightY += 13;
-
-    doc.setFontSize(6); doc.setFont(undefined, 'normal');
-    doc.text('Comp. No. ................', rightColX + 2, rightY + 3.5);
-    doc.line(rightColX, rightY + 6, pageWidth - margin - 2, rightY + 6); rightY += 6;
-    doc.text(`Date: ${today}`, rightColX + 2, rightY + 3.5);
-    doc.line(rightColX, rightY + 6, pageWidth - margin - 2, rightY + 6); rightY += 6;
-
-    doc.setFontSize(6.5); doc.setFont(undefined, 'bold');
-    doc.text('ACCESSORIES', rightColX + 2, rightY + 3.5); rightY += 5;
-    doc.setFontSize(6); doc.setFont(undefined, 'normal');
-    const accessories = ['Battery', 'Back Door', 'Sim Card', 'Memory Card', 'Head Set', 'Charger', 'Bluetooth', 'Others'];
-    accessories.forEach((item, idx) => {
-      doc.rect(rightColX + 2, rightY + (idx * 2.8), 1.3, 1.3);
-      doc.text(item, rightColX + 4, rightY + (idx * 2.8) + 1.1);
-    });
-    rightY += accessories.length * 2.8 + 1;
-    doc.line(rightColX, rightY, pageWidth - margin - 2, rightY); rightY += 9;
-    doc.line(rightColX, rightY, pageWidth - margin - 2, rightY);
-
-    doc.setFontSize(6);
-    doc.text('Signature of Customer', rightColX + rightColWidth / 2, pageHeight - margin - 4, { align: 'center' });
-    doc.line(rightColX + 3, pageHeight - margin - 6, pageWidth - margin - 5, pageHeight - margin - 6);
-
-  } else {
-    // ---- Multi-mobile: single page with table of all devices ----
-    doc.rect(margin, margin, pageWidth - 2 * margin, pageHeight - 2 * margin);
-    let yPosition = drawHeader();
-
-    // Customer info + Job Card bar
-    const infoHeight = 14;
-    doc.rect(margin + 2, yPosition, pageWidth - 2 * margin - 4, infoHeight);
-    const infoRightX = pageWidth - margin - 2 - 50;
-    doc.line(infoRightX, yPosition, infoRightX, yPosition + infoHeight);
-
-    doc.setFontSize(8); doc.setFont(undefined, 'bold');
-    doc.text('Customer Name :', margin + 3, yPosition + 5);
-    doc.setFont(undefined, 'normal');
-    doc.text(clientData.client_name || '', margin + 3 + 32, yPosition + 5);
-
-    doc.setFont(undefined, 'bold');
-    doc.text('Phone / Mobile No :', margin + 3, yPosition + 11);
-    doc.setFont(undefined, 'normal');
-    doc.text(clientData.mobile_number || '', margin + 3 + 32, yPosition + 11);
-
-    // Job card mini section on right
-    doc.setFontSize(9); doc.setFont(undefined, 'bold'); doc.setTextColor(139, 69, 19);
-    doc.text('JOB CARD', infoRightX + 25, yPosition + 5, { align: 'center' });
-    doc.setTextColor(0, 0, 0); doc.setFontSize(10);
-    doc.text(clientData.bill_no || '', infoRightX + 25, yPosition + 10, { align: 'center' });
-    doc.setFontSize(6); doc.setFont(undefined, 'normal');
-    doc.text(`Date: ${today}`, infoRightX + 25, yPosition + 13, { align: 'center' });
-
-    yPosition += infoHeight + 1;
-
-    // Devices table using autoTable
-    const tableBody = mobiles.map((mobile, idx) => {
-      const paid = mobile.total_paid || (mobile.payments && mobile.payments.length > 0 ? mobile.payments.reduce((s, p) => s + (p.amount || 0), 0) : 0) || mobile.paid_amount || 0;
-      return [
-        idx + 1,
-        mobile.mobile_name || '-',
-        mobile.model || '-',
-        mobile.imei || '-',
-        mobile.issue || '-',
-        mobile.added_date ? new Date(mobile.added_date).toLocaleDateString('en-IN') : '-',
-        mobile.delivery_date ? new Date(mobile.delivery_date).toLocaleDateString('en-IN') : '-',
-        `Rs.${paid}`,
-      ];
-    });
-
-    const totalPaid = mobiles.reduce((sum, m) => {
-      const paid = m.total_paid || (m.payments && m.payments.length > 0 ? m.payments.reduce((s, p) => s + (p.amount || 0), 0) : 0) || m.paid_amount || 0;
-      return sum + paid;
-    }, 0);
-    tableBody.push(['', '', '', '', '', '', 'Total', `Rs.${totalPaid}`]);
-
-    autoTable(doc, {
-      startY: yPosition,
-      margin: { left: margin + 2, right: margin + 2 },
-      head: [['#', 'Mobile Make', 'Model', 'IMEI No.', 'Complaint', 'Date Added', 'Delivery', 'Amount']],
-      body: tableBody,
-      theme: 'grid',
-      styles: { fontSize: 7.5, cellPadding: 2, lineColor: [80, 80, 80], lineWidth: 0.2, textColor: [0, 0, 0] },
-      headStyles: { fillColor: [240, 240, 240], textColor: [0, 0, 0], fontStyle: 'bold', fontSize: 7.5 },
-      columnStyles: {
-        0: { cellWidth: 8, halign: 'center' },
-        7: { halign: 'right' },
-      },
-      didParseCell: (data) => {
-        // Bold total row
-        if (data.row.index === tableBody.length - 1) {
-          data.cell.styles.fontStyle = 'bold';
-          data.cell.styles.fillColor = [245, 245, 245];
-        }
-      },
-    });
-
-    const finalY = doc.lastAutoTable.finalY || yPosition + 30;
-
-    // Bottom details section - Flashing, Accessories, Estimate Amount
-    const bottomY = finalY + 2;
-    const bottomHeight = 18;
-    const contentWidth = pageWidth - 2 * margin - 4;
-    const leftSectionW = contentWidth * 0.4;
-    const midSectionW = contentWidth * 0.35;
-    const rightSectionW = contentWidth * 0.25;
-
-    doc.rect(margin + 2, bottomY, contentWidth, bottomHeight);
-    // Left: Flashing
-    doc.line(margin + 2 + leftSectionW, bottomY, margin + 2 + leftSectionW, bottomY + bottomHeight);
-    // Mid: Accessories
-    doc.line(margin + 2 + leftSectionW + midSectionW, bottomY, margin + 2 + leftSectionW + midSectionW, bottomY + bottomHeight);
-
-    doc.setFontSize(7); doc.setFont(undefined, 'bold');
-    doc.text('Flashing :', margin + 3, bottomY + 4);
-    doc.setFont(undefined, 'normal'); doc.setFontSize(5.5);
-    doc.text('Backup - Yes / No', margin + 3 + leftSectionW - 22, bottomY + 4);
-    doc.setFontSize(6);
-    doc.text('Comp. No. ................', margin + 3, bottomY + 9);
-    doc.text('Notes:', margin + 3, bottomY + 14);
-
-    // Middle: Accessories
-    const accX = margin + 2 + leftSectionW + 2;
-    doc.setFontSize(6.5); doc.setFont(undefined, 'bold');
-    doc.text('ACCESSORIES', accX, bottomY + 4);
-    doc.setFontSize(5.5); doc.setFont(undefined, 'normal');
-    const accessories = ['Battery', 'Back Door', 'Sim Card', 'Memory Card', 'Head Set', 'Charger', 'Bluetooth', 'Others'];
-    const accColWidth = midSectionW / 2 - 3;
-    accessories.forEach((item, idx) => {
-      const col = idx < 4 ? 0 : 1;
-      const row = idx < 4 ? idx : idx - 4;
-      const ax = accX + col * accColWidth;
-      const ay = bottomY + 7 + row * 2.6;
-      doc.rect(ax, ay, 1.3, 1.3);
-      doc.text(item, ax + 2, ay + 1.1);
-    });
-
-    // Right: Estimate Amount
-    const estX = margin + 2 + leftSectionW + midSectionW;
-    doc.setFontSize(6.5); doc.setFont(undefined, 'bold');
-    doc.text('Estimate Amount', estX + rightSectionW / 2, bottomY + 6, { align: 'center' });
-    doc.setFontSize(10); doc.setFont(undefined, 'bold');
-    doc.text(`Rs.${totalPaid}`, estX + rightSectionW / 2, bottomY + 13, { align: 'center' });
-
-    // Footer
-    const footerY = bottomY + bottomHeight + 6;
-    doc.setFontSize(6.5); doc.setFont(undefined, 'normal');
-    doc.text(`For ${displayName}`, margin + 3, Math.min(footerY, pageHeight - margin - 4));
-
-    doc.setFontSize(6);
-    const sigY = Math.min(footerY, pageHeight - margin - 4);
-    doc.text('Signature of Customer', pageWidth - margin - 2 - 25, sigY, { align: 'center' });
-    doc.line(pageWidth - margin - 2 - 40, sigY - 2, pageWidth - margin - 2 - 10, sigY - 2);
-  }
-
-  return doc;
-};
+// PDF downloads for all receipt types are generated by capturing the printable DOM node
+// with html2canvas and embedding it into a jsPDF document (see handleDownloadPDF below).
 
 // Main Enhanced ReceiptGenerator Component with Mobile Selection
 const ReceiptGenerator = ({ clientData, shopPhoneNumber, closeModal, shopAddress }) => {
   const receiptRef = useRef(null);
   const thermalRef = useRef(null);
   const a4Ref = useRef(null);
-  const [previewURL, setPreviewURL] = useState(null);
-  const [showPreviewModal, setShowPreviewModal] = useState(false);
   const [shopEmail, setShopEmail] = useState(null);
   const [shopName, setShopName] = useState(null);
   const [profileAddress, setProfileAddress] = useState(null);
   const [profilePhoneNumber, setProfilePhoneNumber] = useState(null);
   const [profilePhoto, setProfilePhoto] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [termsAndConditions, setTermsAndConditions] = useState('');
+  const [activeReceiptType, setActiveReceiptType] = useState('a4'); // 'a4' | 'jobcard' | 'thermal'
+  const [downloading, setDownloading] = useState(false);
 
   // Mobile selection state
   const allMobiles = clientData.MobileName || [];
@@ -1018,14 +789,25 @@ const ReceiptGenerator = ({ clientData, shopPhoneNumber, closeModal, shopAddress
     fetchShopDetails();
   }, []);
 
-  // Cleanup function to revoke object URLs
+  // Fetch shop-configured receipt Terms & Conditions
   useEffect(() => {
-    return () => {
-      if (previewURL) {
-        URL.revokeObjectURL(previewURL);
+    const fetchReceiptTerms = async () => {
+      try {
+        const token = localStorage.getItem("token");
+        if (!token) return;
+        const res = await api.get("/api/shop/receipt-settings", {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        if (res.data && typeof res.data.termsAndConditions === "string") {
+          setTermsAndConditions(res.data.termsAndConditions);
+        }
+      } catch (err) {
+        console.error("Error fetching receipt terms:", err);
       }
     };
-  }, [previewURL]);
+
+    fetchReceiptTerms();
+  }, []);
 
   const handlePrint = useReactToPrint({
     contentRef: receiptRef,
@@ -1049,41 +831,6 @@ const ReceiptGenerator = ({ clientData, shopPhoneNumber, closeModal, shopAddress
       .a4-receipt-root { width: 210mm; min-height: 297mm; margin: 0 auto; }
     `,
   });
-
-  // Manual print fallback: serialize the receipt node into a new window and print it
-  const printManual = () => {
-    try {
-      const node = receiptRef && receiptRef.current;
-      if (!node) return;
-      // Attempt to include app stylesheet (if available) and provide fallback inline styles
-      const cssHref = (typeof window !== 'undefined' && window.location) ? `${window.location.origin}/styles.css` : '/styles.css';
-      const fallbackStyles = `
-        body{font-family: Arial,Helvetica,sans-serif; margin:0; padding:8px; color:#111}
-        .receipt-wrap{ width:80mm; box-sizing:border-box; margin:0 auto; }
-        h2{ margin:0 0 6px; font-size:16px; text-align:center }
-        .shop{ text-align:center; margin-bottom:6px }
-        table{ width:100%; border-collapse:collapse; margin-top:6px; font-size:12px }
-        th, td{ border:1px solid #333; padding:6px }
-        thead th{ background:#f3f3f3; font-weight:700; }
-        .right{ text-align:right }
-        .total{ text-align:right; font-weight:700; margin-top:8px }
-        footer{ margin-top:12px; text-align:center; font-size:11px; color:#555 }
-      `;
-
-      const html = `<!doctype html><html><head><meta charset="utf-8"><title>Receipt</title>` +
-        `<link rel="stylesheet" href="${cssHref}">` +
-        `<style>${fallbackStyles}</style></head><body><div class="receipt-wrap">${node.outerHTML}</div></body></html>`;
-      const w = window.open('', '_blank');
-      if (!w) { alert('Popup blocked: allow popups to print'); return; }
-      w.document.open();
-      w.document.write(html);
-      w.document.close();
-      w.focus();
-      setTimeout(() => { try { w.print(); w.close(); } catch (e) { /* ignore */ } }, 300);
-    } catch (e) {
-      console.error('Manual print failed:', e);
-    }
-  };
 
   // Guarded print handler: wait briefly for the forwarded ref to mount before invoking print
   const printIfReady = () => {
@@ -1150,22 +897,45 @@ const ReceiptGenerator = ({ clientData, shopPhoneNumber, closeModal, shopAddress
     setTimeout(() => { try { w.print(); w.close(); } catch (e) { /* ignore */ } }, 400);
   };
 
-  const handlePreview = () => {
-    const finalAddress = profileAddress || shopAddress;
-    const finalPhoneNumber = profilePhoneNumber || shopPhoneNumber;
-    const doc = generateEnhancedPDF(filteredClientData, finalPhoneNumber, finalAddress, shopEmail, shopName, profilePhoto);
-    const blob = doc.output("blob");
-    const pdfURL = URL.createObjectURL(blob);
-    setPreviewURL(pdfURL);
-    setShowPreviewModal(true);
+  // Prints whichever receipt type is currently selected in the sidebar
+  const handlePrintActive = () => {
+    if (activeReceiptType === 'a4') return handleA4PrintIfReady();
+    if (activeReceiptType === 'thermal') return handleThermalPrint();
+    return printIfReady();
   };
 
-  const handleDownloadPDF = () => {
-    const finalAddress = profileAddress || shopAddress;
-    const finalPhoneNumber = profilePhoneNumber || shopPhoneNumber;
-    const doc = generateEnhancedPDF(filteredClientData, finalPhoneNumber, finalAddress, shopEmail, shopName, profilePhoto);
-    const fileName = `JobCard-${filteredClientData.bill_no || filteredClientData.client_name || 'Service'}.pdf`;
-    doc.save(fileName);
+  const REFS_BY_TYPE = { jobcard: receiptRef, a4: a4Ref, thermal: thermalRef };
+  const PDF_PAGE_WIDTH_MM = { jobcard: 210, a4: 210, thermal: 80 };
+  const DOWNLOAD_FILE_PREFIX = { jobcard: 'JobCard', a4: 'A4-Receipt', thermal: 'Thermal-Receipt' };
+
+  // Unified PDF download: captures the actual (full-size, off-screen) printable node for the
+  // active receipt type with html2canvas and embeds it into a correctly-sized jsPDF document.
+  const handleDownloadPDF = async () => {
+    const ref = REFS_BY_TYPE[activeReceiptType];
+    const node = ref && ref.current;
+    if (!node) {
+      console.warn('Receipt element not mounted yet, please try again.');
+      return;
+    }
+    setDownloading(true);
+    try {
+      const canvas = await html2canvas(node, { scale: 2, useCORS: true, backgroundColor: '#ffffff' });
+      const imgData = canvas.toDataURL('image/png');
+      const pageWidth = PDF_PAGE_WIDTH_MM[activeReceiptType];
+      const pageHeight = (canvas.height * pageWidth) / canvas.width;
+      const doc = new jsPDF({
+        orientation: pageWidth <= pageHeight ? 'portrait' : 'landscape',
+        unit: 'mm',
+        format: [pageWidth, pageHeight],
+      });
+      doc.addImage(imgData, 'PNG', 0, 0, pageWidth, pageHeight);
+      const fileName = `${DOWNLOAD_FILE_PREFIX[activeReceiptType]}-${filteredClientData.bill_no || filteredClientData.client_name || 'Service'}.pdf`;
+      doc.save(fileName);
+    } catch (err) {
+      console.error('Failed to generate PDF:', err);
+    } finally {
+      setDownloading(false);
+    }
   };
 
   return (
@@ -1185,18 +955,23 @@ const ReceiptGenerator = ({ clientData, shopPhoneNumber, closeModal, shopAddress
         <div className="fixed inset-0 bg-black bg-opacity-60 flex justify-center items-center z-[9998] p-4">
           <div className="bg-white rounded-xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
             {/* Header */}
-            <div className="flex justify-between items-center p-6 border-b border-gray-200">
-              <div>
-                <h2 className="text-2xl font-bold text-gray-800 flex items-center gap-2">
-                  📱 Select Mobiles for Receipt
-                </h2>
-                <p className="text-sm text-gray-500 mt-1">
-                  Customer: <span className="font-semibold text-gray-700">{clientData.client_name}</span> &nbsp;|&nbsp; Bill: <span className="font-semibold text-gray-700">{clientData.bill_no || "N/A"}</span>
-                </p>
+            <div className="flex justify-between items-center p-6 border-b border-gray-200 bg-gradient-to-r from-blue-600 to-indigo-600 rounded-t-xl">
+              <div className="flex items-center gap-3">
+                <div className="bg-white/15 p-2.5 rounded-lg">
+                  <Smartphone size={22} className="text-white" />
+                </div>
+                <div>
+                  <h2 className="text-xl font-bold text-white">
+                    Select Mobiles for Receipt
+                  </h2>
+                  <p className="text-sm text-blue-100 mt-0.5">
+                    {clientData.client_name} &nbsp;•&nbsp; Bill: {clientData.bill_no || "N/A"}
+                  </p>
+                </div>
               </div>
               <button
                 onClick={closeModal}
-                className="text-gray-500 hover:text-red-600 transition-colors duration-200"
+                className="text-white/80 hover:text-white transition-colors duration-200"
               >
                 <IoCloseCircleOutline size={28} />
               </button>
@@ -1269,6 +1044,15 @@ const ReceiptGenerator = ({ clientData, shopPhoneNumber, closeModal, shopAddress
                         {mobile.delivery_date && (
                           <span>Delivery: {new Date(mobile.delivery_date).toLocaleDateString("en-IN")}</span>
                         )}
+                        {mobile.has_warranty ? (
+                          <span className="flex items-center gap-1 text-emerald-600 font-medium">
+                            <ShieldCheck size={14} /> {formatWarranty(mobile)}
+                          </span>
+                        ) : (
+                          <span className="flex items-center gap-1 text-gray-400">
+                            <ShieldOff size={14} /> No Warranty
+                          </span>
+                        )}
                       </div>
                     </div>
 
@@ -1303,25 +1087,26 @@ const ReceiptGenerator = ({ clientData, shopPhoneNumber, closeModal, shopAddress
       {/* Receipt View (after selection or when single mobile) */}
       {!loading && showReceipt && (
         <div className="fixed inset-0 bg-black bg-opacity-60 flex justify-center items-center z-[9998] p-4">
-          <div className="bg-white rounded-xl shadow-2xl w-full max-w-5xl max-h-[90vh] overflow-y-auto">
+          <div className="bg-white rounded-xl shadow-2xl w-full max-w-6xl h-[88vh] flex flex-col overflow-hidden">
             {/* Modal Header */}
-            <div className="flex justify-between items-center p-6 border-b border-gray-200">
+            <div className="flex justify-between items-center p-5 border-b border-gray-200 bg-gradient-to-r from-blue-600 to-indigo-600 flex-shrink-0">
               <div className="flex items-center gap-3">
                 {allMobiles.length > 1 && (
                   <button
                     onClick={goBackToSelection}
-                    className="text-gray-500 hover:text-blue-600 transition-colors duration-200 p-1"
+                    className="text-white/80 hover:text-white transition-colors duration-200 p-1"
                     title="Back to mobile selection"
                   >
-                    <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
-                    </svg>
+                    <ArrowLeft size={22} />
                   </button>
                 )}
-                <h2 className="text-2xl font-bold text-gray-800 flex items-center gap-2">
-                  🧾 Receipt Generator
+                <div className="bg-white/15 p-2.5 rounded-lg">
+                  <Receipt size={22} className="text-white" />
+                </div>
+                <h2 className="text-xl font-bold text-white flex items-center gap-2">
+                  Receipt Generator
                   {filteredClientData.MobileName.length > 1 && (
-                    <span className="text-sm font-normal text-gray-500 bg-gray-100 px-2 py-1 rounded-full">
+                    <span className="text-xs font-medium text-white bg-white/20 px-2 py-1 rounded-full">
                       {filteredClientData.MobileName.length} mobiles
                     </span>
                   )}
@@ -1329,145 +1114,143 @@ const ReceiptGenerator = ({ clientData, shopPhoneNumber, closeModal, shopAddress
               </div>
               <button
                 onClick={closeModal}
-                className="text-gray-500 hover:text-red-600 transition-colors duration-200"
+                className="text-white/80 hover:text-white transition-colors duration-200"
               >
                 <IoCloseCircleOutline size={28} />
               </button>
             </div>
 
-            {/* Receipt Preview */}
-            <div className="p-6 bg-gray-50">
-              <div className="mb-6 space-y-4">
-                <PrintableReceipt
-                  ref={receiptRef}
-                  clientData={filteredClientData}
-                  shopPhoneNumber={profilePhoneNumber || shopPhoneNumber}
-                  shopAddress={profileAddress || shopAddress}
-                  shopEmail={shopEmail}
-                  shopName={shopName}
-                  profilePhoto={profilePhoto}
-                />
-
-                {/* Hidden thermal receipt for printing (off-screen) */}
-                <div style={{ position: 'absolute', left: '-9999px', top: 0 }}>
-                  <PrintableThermalReceipt
-                    ref={thermalRef}
-                    clientData={filteredClientData}
-                    shopPhoneNumber={profilePhoneNumber || shopPhoneNumber}
-                    shopAddress={profileAddress || shopAddress}
-                    shopEmail={shopEmail}
-                    shopName={shopName}
-                  />
+            {/* Body: sidebar + live preview */}
+            <div className="flex-1 flex overflow-hidden">
+              {/* Sidebar */}
+              <div className="w-64 flex-shrink-0 border-r border-gray-200 bg-white flex flex-col">
+                <div className="p-4 overflow-y-auto flex-1">
+                  <div className="text-xs font-semibold uppercase text-gray-400 mb-3 tracking-wide">Receipt Type</div>
+                  <div className="space-y-2">
+                    {RECEIPT_TYPE_OPTIONS.map((opt) => {
+                      const Icon = opt.icon;
+                      const isActive = activeReceiptType === opt.id;
+                      return (
+                        <button
+                          key={opt.id}
+                          onClick={() => setActiveReceiptType(opt.id)}
+                          className={`w-full flex items-start gap-3 p-3 rounded-lg border-2 text-left transition-all duration-150 ${
+                            isActive ? "border-blue-500 bg-blue-50 shadow-sm" : "border-gray-200 hover:border-gray-300 hover:bg-gray-50"
+                          }`}
+                        >
+                          <div className={`p-2 rounded-md flex-shrink-0 ${isActive ? "bg-blue-600 text-white" : "bg-gray-100 text-gray-500"}`}>
+                            <Icon size={18} />
+                          </div>
+                          <div className="min-w-0">
+                            <div className={`text-sm font-semibold ${isActive ? "text-blue-700" : "text-gray-700"}`}>{opt.label}</div>
+                            <div className="text-xs text-gray-500 mt-0.5">{opt.description}</div>
+                          </div>
+                        </button>
+                      );
+                    })}
+                  </div>
                 </div>
 
-                {/* Hidden A4 receipt for printing (off-screen) */}
-                <div style={{ position: 'absolute', left: '-9999px', top: 0 }}>
-                  <PrintableA4Receipt
-                    ref={a4Ref}
-                    clientData={filteredClientData}
-                    shopPhoneNumber={profilePhoneNumber || shopPhoneNumber}
-                    shopAddress={profileAddress || shopAddress}
-                    shopEmail={shopEmail}
-                    shopName={shopName}
-                    profilePhoto={profilePhoto}
-                  />
+                {/* Sidebar action buttons */}
+                <div className="p-4 border-t border-gray-200 space-y-2 flex-shrink-0">
+                  <button
+                    onClick={handlePrintActive}
+                    className="w-full bg-blue-600 hover:bg-blue-700 text-white px-4 py-2.5 rounded-lg flex items-center justify-center gap-2 transition-colors duration-200 font-medium text-sm"
+                  >
+                    <Printer size={17} />
+                    Print
+                  </button>
+                  <button
+                    onClick={handleDownloadPDF}
+                    disabled={downloading}
+                    className="w-full bg-purple-600 hover:bg-purple-700 disabled:opacity-60 disabled:cursor-not-allowed text-white px-4 py-2.5 rounded-lg flex items-center justify-center gap-2 transition-colors duration-200 font-medium text-sm"
+                  >
+                    <Download size={17} />
+                    {downloading ? "Generating..." : "Download PDF"}
+                  </button>
                 </div>
               </div>
 
-              {/* Action Buttons */}
-              <div className="flex flex-wrap justify-center gap-3">
-                <button 
-                  onClick={printIfReady} 
-                  className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-lg flex items-center gap-2 transition-all duration-200 shadow-md hover:shadow-lg"
-                  title="Print A5 landscape job card"
-                >
-                  <IoMdPrint size={20} />
-                  <span className="font-medium">Print</span>
-                </button>
-
-                <button 
-                  onClick={handleA4PrintIfReady} 
-                  className="bg-teal-600 hover:bg-teal-700 text-white px-6 py-3 rounded-lg flex items-center gap-2 transition-all duration-200 shadow-md hover:shadow-lg"
-                  title="Print full A4 service receipt"
-                >
-                  <IoMdPrint size={20} />
-                  <span className="font-medium">A4 Print</span>
-                </button>
-
-                <button 
-                  onClick={handleThermalPrint} 
-                  className="bg-orange-600 hover:bg-orange-700 text-white px-6 py-3 rounded-lg flex items-center gap-2 transition-all duration-200 shadow-md hover:shadow-lg"
-                >
-                  <BsPrinterFill size={18} />
-                  <span className="font-medium">Thermal Print</span>
-                </button>
-
-                <button 
-                  onClick={handlePreview} 
-                  className="bg-gray-700 hover:bg-gray-800 text-white px-6 py-3 rounded-lg flex items-center gap-2 transition-all duration-200 shadow-md hover:shadow-lg"
-                >
-                  <MdPreview size={20} />
-                  <span className="font-medium">Preview</span>
-                </button>
-
-                <button 
-                  onClick={handleDownloadPDF} 
-                  className="bg-purple-600 hover:bg-purple-700 text-white px-6 py-3 rounded-lg flex items-center gap-2 transition-all duration-200 shadow-md hover:shadow-lg"
-                >
-                  <FaDownload size={18} />
-                  <span className="font-medium">Download</span>
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Preview Modal */}
-      {showPreviewModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-70 z-[99999] flex items-center justify-center p-4">
-          <div className="bg-white w-full max-w-4xl h-[90vh] rounded-xl shadow-2xl flex flex-col">
-            {/* Preview Header */}
-            <div className="flex justify-between items-center p-4 border-b border-gray-200">
-              <h3 className="text-xl font-bold text-gray-800">📄 Receipt Preview</h3>
-              <div className="flex gap-2">
-                <button 
-                  onClick={handleDownloadPDF} 
-                  className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg flex items-center gap-2 transition-colors duration-200"
-                >
-                  <FaDownload size={16} />
-                  Download
-                </button>
-                <button 
-                  onClick={() => {
-                    setShowPreviewModal(false);
-                    if (previewURL) {
-                      URL.revokeObjectURL(previewURL);
-                      setPreviewURL(null);
-                    }
-                  }} 
-                  className="bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded-lg flex items-center gap-2 transition-colors duration-200"
-                >
-                  <IoCloseCircleOutline size={18} />
-                  Close
-                </button>
+              {/* Preview stage */}
+              <div className="flex-1 overflow-auto bg-gray-100 p-8 flex flex-col items-center">
+                {activeReceiptType === "thermal" ? (
+                  <div className="bg-white shadow-xl rounded-sm p-2" style={{ width: '320px' }}>
+                    <PrintableThermalReceipt
+                      clientData={filteredClientData}
+                      shopPhoneNumber={profilePhoneNumber || shopPhoneNumber}
+                      shopAddress={profileAddress || shopAddress}
+                      shopEmail={shopEmail}
+                      shopName={shopName}
+                    />
+                  </div>
+                ) : (
+                  (() => {
+                    const { wrapperWidth, wrapperHeight, contentWidth, scale } = getScaledPreviewStyle(activeReceiptType);
+                    return (
+                      <div className="bg-white shadow-xl rounded-sm" style={{ width: wrapperWidth, height: wrapperHeight, overflow: 'hidden' }}>
+                        <div style={{ width: contentWidth, transform: `scale(${scale})`, transformOrigin: 'top left' }}>
+                          {activeReceiptType === "jobcard" ? (
+                            <PrintableReceipt
+                              clientData={filteredClientData}
+                              shopPhoneNumber={profilePhoneNumber || shopPhoneNumber}
+                              shopAddress={profileAddress || shopAddress}
+                              shopEmail={shopEmail}
+                              shopName={shopName}
+                              profilePhoto={profilePhoto}
+                            />
+                          ) : (
+                            <PrintableA4Receipt
+                              clientData={filteredClientData}
+                              shopPhoneNumber={profilePhoneNumber || shopPhoneNumber}
+                              shopAddress={profileAddress || shopAddress}
+                              shopEmail={shopEmail}
+                              shopName={shopName}
+                              profilePhoto={profilePhoto}
+                              termsAndConditions={termsAndConditions}
+                            />
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })()
+                )}
+                <p className="text-xs text-gray-400 mt-4">Preview only — actual print/PDF size may differ slightly</p>
               </div>
             </div>
 
-            {/* Preview Content */}
-            <div className="flex-1 p-4">
-              {previewURL ? (
-                <iframe 
-                  src={previewURL} 
-                  title="PDF Preview" 
-                  className="w-full h-full border rounded-lg shadow-inner"
-                  style={{ minHeight: '500px' }}
-                />
-              ) : (
-                <div className="w-full h-full flex items-center justify-center">
-                  <div className="text-gray-500">Loading preview...</div>
-                </div>
-              )}
+            {/* Hidden full-size printable nodes used for actual printing & PDF capture */}
+            <div style={{ position: 'absolute', left: '-9999px', top: 0 }}>
+              <PrintableReceipt
+                ref={receiptRef}
+                clientData={filteredClientData}
+                shopPhoneNumber={profilePhoneNumber || shopPhoneNumber}
+                shopAddress={profileAddress || shopAddress}
+                shopEmail={shopEmail}
+                shopName={shopName}
+                profilePhoto={profilePhoto}
+              />
+            </div>
+            <div style={{ position: 'absolute', left: '-9999px', top: 0 }}>
+              <PrintableThermalReceipt
+                ref={thermalRef}
+                clientData={filteredClientData}
+                shopPhoneNumber={profilePhoneNumber || shopPhoneNumber}
+                shopAddress={profileAddress || shopAddress}
+                shopEmail={shopEmail}
+                shopName={shopName}
+              />
+            </div>
+            <div style={{ position: 'absolute', left: '-9999px', top: 0 }}>
+              <PrintableA4Receipt
+                ref={a4Ref}
+                clientData={filteredClientData}
+                shopPhoneNumber={profilePhoneNumber || shopPhoneNumber}
+                shopAddress={profileAddress || shopAddress}
+                shopEmail={shopEmail}
+                shopName={shopName}
+                profilePhoto={profilePhoto}
+                termsAndConditions={termsAndConditions}
+              />
             </div>
           </div>
         </div>

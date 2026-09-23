@@ -16,6 +16,18 @@ router.get("/shop/whatsapp-config", authenticateToken, async (req, res) => {
   }
 });
 
+// Return the shop's custom Terms & Conditions text for receipts (set via the shop-admin dashboard)
+router.get("/shop/receipt-settings", authenticateToken, async (req, res) => {
+  try {
+    const shop = await Shop.findById(req.user.shop_id).select("terms_and_conditions").lean();
+    if (!shop) return res.status(404).json({ error: "Shop not found" });
+    return res.json({ termsAndConditions: shop.terms_and_conditions || "" });
+  } catch (err) {
+    console.error("shop/receipt-settings error:", err);
+    return res.status(500).json({ error: "Internal server error" });
+  }
+});
+
 const { createCustomerController } = require("../controllers/api/createCustomerController");
 router.post("/createcustomer", authenticateToken, createCustomerController);
 const { searchCustomersByMobile } = require("../controllers/api/searchCustomersByMobileController");
@@ -88,6 +100,22 @@ const { getFilteredRecords } = require("../controllers/api/getFilteredRecordsCon
 
 
 router.post("/records",authenticateToken, getFilteredRecords);
+
+
+// ======================================
+// 🔁 Rework Routes
+// ======================================
+const {
+  searchDeliveredMobiles,
+  addReworkRecord,
+  getReworkRecords,
+  updateReworkStatus,
+} = require("../controllers/api/reworkController");
+
+router.post("/rework/search-delivered", authenticateToken, searchDeliveredMobiles);
+router.post("/rework/add", authenticateToken, addReworkRecord);
+router.post("/rework/list", authenticateToken, getReworkRecords);
+router.put("/rework/status", authenticateToken, updateReworkStatus);
 
 
 

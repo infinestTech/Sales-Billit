@@ -4,7 +4,7 @@ import { useParams } from "next/navigation"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Separator } from "@/components/ui/separator"
-import { Phone, Calendar, Store, Smartphone, Clock, CheckCircle, Truck, RotateCcw, AlertCircle, FileText, MapPin, Mail, Globe } from 'lucide-react'
+import { Phone, Calendar, Store, Smartphone, Clock, CheckCircle, Truck, RotateCcw, AlertCircle, FileText, MapPin, Mail, Globe, Wrench } from 'lucide-react'
 export default function ReceiptViewPage() {
   const { id } = useParams()
   const [data, setData] = useState(null)
@@ -72,6 +72,16 @@ export default function ReceiptViewPage() {
         bgColor: "bg-blue-50",
         icon: Truck,
         progress: 75,
+      }
+    }
+    if (mobile.processing) {
+      return {
+        status: "Repairing",
+        color: "bg-purple-500",
+        textColor: "text-purple-700",
+        bgColor: "bg-purple-50",
+        icon: Wrench,
+        progress: 50,
       }
     }
     return {

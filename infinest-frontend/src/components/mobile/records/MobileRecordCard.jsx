@@ -68,6 +68,13 @@ export default function MobileRecordCard({ record, onOpen, onReceipt }) {
           icon={<CheckCircle2 className="h-3 w-3" />}
           label={`Delivered ${stats.delivered}/${stats.total}`}
         />
+        {stats.processing > 0 && (
+          <Chip
+            color="amber"
+            icon={<Clock className="h-3 w-3" />}
+            label={`Processing ${stats.processing}`}
+          />
+        )}
         {stats.ready > 0 && (
           <Chip
             color="blue"

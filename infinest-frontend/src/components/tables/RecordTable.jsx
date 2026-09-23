@@ -7,6 +7,7 @@ import VendorHistoryPopup from "./VendorHistoryPopup"
 import api from "../api"
 import { usePlanFeatures } from "@/context/PlanFeatureContext"
 import { useRouter } from "next/navigation"
+import { formatPaymentMethodLabel } from "@/constants/paymentMethods"
 
 const RecordTable = ({ shop_id, setIsLimitReached }) => {
   const { features } = usePlanFeatures()
@@ -147,6 +148,7 @@ const RecordTable = ({ shop_id, setIsLimitReached }) => {
 
   const computeTotals = () => {
     let notReady = 0,
+      processing = 0,
       ready = 0,
       delivered = 0,
       pending = 0,
@@ -158,13 +160,14 @@ const RecordTable = ({ shop_id, setIsLimitReached }) => {
         else if (m.should_be_returned) shouldBeReturned++
         else {
           if (m.ready) ready++
+          else if (m.processing) processing++
           else notReady++
           if (m.delivered) delivered++
           else if (m.ready && !m.delivered) pending++ // Only count ready but not delivered
         }
       })
     })
-    return { ready, notReady, delivered, pending, returned, shouldBeReturned }
+    return { ready, processing, notReady, delivered, pending, returned, shouldBeReturned }
   }
 
   const totals = computeTotals()
@@ -180,8 +183,9 @@ const RecordTable = ({ shop_id, setIsLimitReached }) => {
         {/* Ready/Not Ready Card */}
         <div className="bg-white border border-gray-200 rounded-lg p-4">
           <div className="text-sm text-gray-600 mb-2">Ready/Not Ready</div>
-          <div className="flex items-center justify-between">
+          <div className="flex items-center justify-between gap-2 flex-wrap">
             <span className="text-green-600 font-medium">{totals.ready} Ready</span>
+            <span className="bg-amber-100 text-amber-800 px-2 py-1 rounded text-sm font-medium">{totals.processing} Processing</span>
             <button
               onClick={() => router.push('/mobilename?status=notReady')}
               className="bg-red-100 text-red-800 px-2 py-1 rounded text-sm font-medium hover:bg-red-200 transition-colors"
@@ -303,7 +307,7 @@ const RecordTable = ({ shop_id, setIsLimitReached }) => {
                               <div className="space-y-0.5">
                                 {methods.map(([method, amount], idx) => (
                                   <div key={idx} className="flex items-center gap-2">
-                                    <span className="text-gray-600">{method}</span>
+                                    <span className="text-gray-600">{formatPaymentMethodLabel(method)}</span>
                                     <span className="font-medium">₹{amount.toLocaleString("en-IN")}</span>
                                   </div>
                                 ))}

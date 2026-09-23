@@ -35,7 +35,7 @@ export default function MobileRecordsList({ shopId, refreshKey }) {
   const [filters, setFilters] = useState(emptyFilters)
   const [quickQuery, setQuickQuery] = useState("")
   const [showFilters, setShowFilters] = useState(false)
-  const [activeChip, setActiveChip] = useState("all") // all | pending | ready | delivered | shouldBeReturned | returned | balance
+  const [activeChip, setActiveChip] = useState("all") // all | pending | processing | ready | delivered | shouldBeReturned | returned | balance
 
   const [openRecord, setOpenRecord] = useState(null)
   const [receiptRecord, setReceiptRecord] = useState(null)
@@ -134,6 +134,8 @@ export default function MobileRecordsList({ shopId, refreshKey }) {
       switch (activeChip) {
         case "pending":
           return stats.pending > 0
+        case "processing":
+          return stats.processing > 0
         case "ready":
           return stats.ready > 0
         case "delivered":
@@ -153,6 +155,7 @@ export default function MobileRecordsList({ shopId, refreshKey }) {
   // Top-of-list aggregate stats
   const totals = useMemo(() => {
     let pending = 0,
+      processing = 0,
       ready = 0,
       delivered = 0,
       returned = 0,
@@ -162,6 +165,7 @@ export default function MobileRecordsList({ shopId, refreshKey }) {
     for (const r of records) {
       const s = summarizeMobiles(r.mobiles || [])
       pending += s.pending
+      processing += s.processing
       ready += s.ready
       delivered += s.delivered
       returned += s.returned
@@ -169,7 +173,7 @@ export default function MobileRecordsList({ shopId, refreshKey }) {
       paid += s.totalPaid
       balance += Number(r.balance_amount || 0)
     }
-    return { pending, ready, delivered, returned, shouldBeReturned, paid, balance }
+    return { pending, processing, ready, delivered, returned, shouldBeReturned, paid, balance }
   }, [records])
 
   const handleRecordChanged = useCallback(
@@ -316,6 +320,7 @@ export default function MobileRecordsList({ shopId, refreshKey }) {
           {[
             { id: "all", label: "All" },
             { id: "pending", label: "Pending" },
+            { id: "processing", label: "Processing" },
             { id: "ready", label: "Ready" },
             { id: "delivered", label: "Delivered" },
             { id: "shouldBeReturned", label: "SBRd" },

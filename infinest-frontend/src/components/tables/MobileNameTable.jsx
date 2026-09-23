@@ -5,11 +5,11 @@
 import { useEffect, useState } from "react"
 import Pagination from "./Pagination"
 import api from "../api"
-import { Calendar, Smartphone, AlertCircle, CheckCircle, RotateCcw, DollarSign, Truck, Package, Eye, Banknote, CreditCard } from "lucide-react"
+import { Calendar, Smartphone, AlertCircle, CheckCircle, RotateCcw, DollarSign, Truck, Package, Eye, Banknote, CreditCard, Wrench } from "lucide-react"
 import { useRouter } from "next/navigation"
 import { jwtDecode } from "jwt-decode"
 import { useShopWhatsappConfig } from "@/hooks/useShopWhatsappConfig"
-import { PAYMENT_METHOD_OPTIONS, DEFAULT_PAYMENT_METHOD } from "@/constants/paymentMethods"
+import { PAYMENT_METHOD_OPTIONS, DEFAULT_PAYMENT_METHOD, formatPaymentMethodLabel } from "@/constants/paymentMethods"
 
 
 
@@ -49,9 +49,15 @@ const MobileNameTable = ({ mobileData, setMobileData, onRevenueUpdate, hideActio
   const [viewPopupPosition, setViewPopupPosition] = useState({ top: 0, left: 0 })
 
   // WhatsApp confirmation dialog state
-  const [waConfirmState, setWaConfirmState] = useState({ open: false, index: null, field: null })
+  const [waConfirmState, setWaConfirmState] = useState({ open: false, index: null, field: null, warrantyInfo: null })
   // Whether WhatsApp automation is enabled for this shop (drives dialog visibility)
   const waShopEnabled = useShopWhatsappConfig()
+
+  // Warranty modal state — shown when marking a device Delivered
+  const [warrantyModal, setWarrantyModal] = useState({ open: false, index: null })
+  const [warrantyHasInput, setWarrantyHasInput] = useState(null) // true | false | null (undecided)
+  const [warrantyMonthsInput, setWarrantyMonthsInput] = useState(6) // 3 | 6 | "custom"
+  const [warrantyCustomMonths, setWarrantyCustomMonths] = useState("")
 
   // Console log all mobile data with model values
   useEffect(() => {
@@ -103,17 +109,17 @@ const MobileNameTable = ({ mobileData, setMobileData, onRevenueUpdate, hideActio
 
 
   // WA-triggering fields — only false→true transitions fire a WhatsApp message
-  const WA_TRIGGER_FIELDS = ["ready", "delivered", "returned"]
-  const WA_FIELD_LABELS = { ready: "Ready for Pickup", delivered: "Delivered", returned: "Returned" }
+  const WA_TRIGGER_FIELDS = ["processing", "ready", "delivered", "returned"]
+  const WA_FIELD_LABELS = { processing: "Processing", ready: "Ready for Pickup", delivered: "Delivered", returned: "Returned" }
 
-  const executeToggle = async (index, field, skipWhatsapp = false) => {
+  const executeToggle = async (index, field, skipWhatsapp = false, warrantyInfo = null) => {
     const mobile = currentMobileData[index]
     const globalIndex = indexOfFirstItem + index
     try {
       const token = localStorage.getItem("token")
       const response = await api.post(
         "/api/toggle-status",
-        { id: mobile._id, field, skipWhatsapp },
+        { id: mobile._id, field, skipWhatsapp, ...(warrantyInfo || {}) },
         { headers: { Authorization: `Bearer ${token}` } },
       )
       const updated = response.data.updatedMobile
@@ -137,6 +143,18 @@ const MobileNameTable = ({ mobileData, setMobileData, onRevenueUpdate, hideActio
     }
   }
 
+  // WA-check step, shared by the direct toggle path and the post-warranty-modal path
+  const proceedAfterWarranty = async (index, field, warrantyInfo = null) => {
+    const mobile = currentMobileData[index]
+    const isActualReturnTransition = field === "returned" && !mobile.returned && !!mobile.should_be_returned
+    const isOtherWaTrigger = WA_TRIGGER_FIELDS.includes(field) && field !== "returned" && !mobile[field]
+    if ((isActualReturnTransition || isOtherWaTrigger) && waShopEnabled === true) {
+      setWaConfirmState({ open: true, index, field, warrantyInfo })
+      return
+    }
+    await executeToggle(index, field, false, warrantyInfo)
+  }
+
   const toggleStatus = async (index, field) => {
     if (hideActions) return
 
@@ -151,18 +169,32 @@ const MobileNameTable = ({ mobileData, setMobileData, onRevenueUpdate, hideActio
         }))
         return
       }
-    }
-
-    // Show WhatsApp confirmation for false→true transitions — only when WA is enabled for this shop
-    // For 'returned': only show WA dialog on the actual returned transition (should_be_returned=true → returned=true)
-    const isActualReturnTransition = field === "returned" && !mobile.returned && !!mobile.should_be_returned
-    const isOtherWaTrigger = WA_TRIGGER_FIELDS.includes(field) && field !== "returned" && !mobile[field]
-    if ((isActualReturnTransition || isOtherWaTrigger) && waShopEnabled === true) {
-      setWaConfirmState({ open: true, index, field })
+      // Ask about warranty before marking as Delivered
+      setWarrantyHasInput(null)
+      setWarrantyMonthsInput(6)
+      setWarrantyCustomMonths("")
+      setWarrantyModal({ open: true, index })
       return
     }
 
-    await executeToggle(index, field)
+    await proceedAfterWarranty(index, field)
+  }
+
+  const closeWarrantyModal = () => setWarrantyModal({ open: false, index: null })
+
+  const confirmWarrantyModal = async () => {
+    const { index } = warrantyModal
+    if (warrantyHasInput === null) return
+    let warrantyInfo
+    if (warrantyHasInput === true) {
+      const months = warrantyMonthsInput === "custom" ? Number(warrantyCustomMonths) : Number(warrantyMonthsInput)
+      if (!months || months <= 0) return
+      warrantyInfo = { hasWarranty: true, warrantyMonths: months }
+    } else {
+      warrantyInfo = { hasWarranty: false, warrantyMonths: null }
+    }
+    setWarrantyModal({ open: false, index: null })
+    await proceedAfterWarranty(index, "delivered", warrantyInfo)
   }
 
 
@@ -451,7 +483,8 @@ const MobileNameTable = ({ mobileData, setMobileData, onRevenueUpdate, hideActio
       alert("Please enter the spare cost")
       return
     }
-    if (!selectedProductId && !paymentMethod) {
+    // Payment method is required for cash purchases only — credit purchases owe the supplier, no method needed
+    if (sparePurchaseType === "cash" && !selectedProductId && !paymentMethod) {
       alert("Please select a Payment Method")
       return
     }
@@ -594,6 +627,12 @@ const MobileNameTable = ({ mobileData, setMobileData, onRevenueUpdate, hideActio
               </th>
               <th className="px-6 py-4 text-left text-sm font-bold text-gray-700 border-b border-gray-300">
                 <div className="flex items-center">
+                  <Wrench className="h-4 w-4 mr-2 text-amber-600" />
+                  Processing
+                </div>
+              </th>
+              <th className="px-6 py-4 text-left text-sm font-bold text-gray-700 border-b border-gray-300">
+                <div className="flex items-center">
                   <CheckCircle className="h-4 w-4 mr-2 text-green-600" />
                   Ready
                 </div>
@@ -657,6 +696,19 @@ const MobileNameTable = ({ mobileData, setMobileData, onRevenueUpdate, hideActio
                 </td>
                 <td className="px-6 py-4 border-b border-gray-200">
                   <span className="text-sm text-gray-600">{mobile.issue || "N/A"}</span>
+                </td>
+                <td className="px-6 py-4 border-b border-gray-200">
+                  <button
+                    onClick={() => toggleStatus(index, "processing")}
+                    disabled={hideActions || mobile.ready || mobile.delivered}
+                    className={`px-3 py-1 text-xs font-semibold rounded-full transition-all duration-200 ${
+                      mobile.processing
+                        ? "bg-amber-100 text-amber-800 hover:bg-amber-200"
+                        : "bg-gray-100 text-gray-500 hover:bg-gray-200"
+                    } ${hideActions || mobile.ready || mobile.delivered ? "cursor-not-allowed opacity-60" : "cursor-pointer"}`}
+                  >
+                    {mobile.processing ? "Yes" : "No"}
+                  </button>
                 </td>
                 <td className="px-6 py-4 border-b border-gray-200">
                   <button
@@ -877,7 +929,7 @@ const MobileNameTable = ({ mobileData, setMobileData, onRevenueUpdate, hideActio
                   <div key={payment._id || pIdx} className="border-b border-gray-100 pb-2 last:border-0">
                     <div className="flex items-center justify-between mb-1">
                       <span className="text-xs font-medium text-gray-600 bg-gray-100 px-2 py-0.5 rounded">
-                        {payment.method || 'N/A'}
+                        {formatPaymentMethodLabel(payment.method) || 'N/A'}
                       </span>
                       <span className="text-sm font-semibold text-gray-900">
                         ₹{(payment.amount || 0).toLocaleString("en-IN")}
@@ -960,7 +1012,7 @@ const MobileNameTable = ({ mobileData, setMobileData, onRevenueUpdate, hideActio
               {mobileData[activeMobileIndex]?.paymentMethod && (
                 <div className="border-b border-gray-100 pb-3">
                   <p className="text-xs text-gray-600 mb-1">Payment Method</p>
-                  <p className="text-sm font-medium text-gray-900">{mobileData[activeMobileIndex].paymentMethod}</p>
+                  <p className="text-sm font-medium text-gray-900">{formatPaymentMethodLabel(mobileData[activeMobileIndex].paymentMethod)}</p>
                 </div>
               )}
               {mobileData[activeMobileIndex]?.warranty && (
@@ -1038,11 +1090,15 @@ const MobileNameTable = ({ mobileData, setMobileData, onRevenueUpdate, hideActio
                   }}
                   onFocus={() => setShowProductDropdown(true)}
                 />
-                {showProductDropdown && productNameInput && (
-                  <div className="absolute z-50 left-0 right-0 mt-1 bg-white border border-gray-200 rounded-lg shadow-lg max-h-44 overflow-auto">
-                    {products
-                      .filter(p => (p.name || "").toLowerCase().includes(productNameInput.toLowerCase()))
-                      .map(p => (
+                {showProductDropdown && productNameInput && (() => {
+                  const matches = products.filter(p => (p.name || "").toLowerCase().includes(productNameInput.toLowerCase()))
+                  if (matches.length === 0) {
+                    // Static (non-overlay) hint so it doesn't cover the fields below it
+                    return <p className="mt-1 text-xs text-gray-500">No inventory match — will save as custom product</p>
+                  }
+                  return (
+                    <div className="absolute z-50 left-0 right-0 mt-1 bg-white border border-gray-200 rounded-lg shadow-lg max-h-44 overflow-auto">
+                      {matches.map(p => (
                         <div
                           key={p._id}
                           className="px-3 py-2 hover:bg-blue-50 cursor-pointer flex justify-between items-center"
@@ -1059,13 +1115,10 @@ const MobileNameTable = ({ mobileData, setMobileData, onRevenueUpdate, hideActio
                             Stock: {p.quantity}
                           </span>
                         </div>
-                      ))
-                    }
-                    {products.filter(p => (p.name || "").toLowerCase().includes(productNameInput.toLowerCase())).length === 0 && (
-                      <div className="px-3 py-2 text-sm text-gray-500">No inventory match — will save as custom product</div>
-                    )}
-                  </div>
-                )}
+                      ))}
+                    </div>
+                  )
+                })()}
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Quantity</label>
@@ -1105,7 +1158,7 @@ const MobileNameTable = ({ mobileData, setMobileData, onRevenueUpdate, hideActio
                     }`}
                   >
                     <Banknote className="h-4 w-4" />
-                    Cash / UPI
+                    Cash / Gpay
                     <span className="text-xs font-normal">(already paid)</span>
                   </button>
                 </div>
@@ -1198,9 +1251,9 @@ const MobileNameTable = ({ mobileData, setMobileData, onRevenueUpdate, hideActio
               <button
                 className="flex-1 rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
                 onClick={() => {
-                  const { index, field } = waConfirmState
-                  setWaConfirmState({ open: false, index: null, field: null })
-                  executeToggle(index, field, true)
+                  const { index, field, warrantyInfo } = waConfirmState
+                  setWaConfirmState({ open: false, index: null, field: null, warrantyInfo: null })
+                  executeToggle(index, field, true, warrantyInfo)
                 }}
               >
                 Skip WhatsApp
@@ -1208,9 +1261,9 @@ const MobileNameTable = ({ mobileData, setMobileData, onRevenueUpdate, hideActio
               <button
                 className="flex-1 rounded-lg bg-green-600 px-4 py-2 text-sm font-semibold text-white hover:bg-green-700"
                 onClick={() => {
-                  const { index, field } = waConfirmState
-                  setWaConfirmState({ open: false, index: null, field: null })
-                  executeToggle(index, field, false)
+                  const { index, field, warrantyInfo } = waConfirmState
+                  setWaConfirmState({ open: false, index: null, field: null, warrantyInfo: null })
+                  executeToggle(index, field, false, warrantyInfo)
                 }}
               >
                 Send WhatsApp
@@ -1218,6 +1271,109 @@ const MobileNameTable = ({ mobileData, setMobileData, onRevenueUpdate, hideActio
             </div>
           </div>
         </>
+      )}
+
+      {/* Warranty Modal — shown before marking a device Delivered */}
+      {warrantyModal.open && (
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-xl shadow-2xl w-full max-w-sm">
+            <div className="px-5 py-4 border-b border-gray-200">
+              <h3 className="text-base font-semibold text-gray-900">Warranty Details</h3>
+              <p className="text-xs text-gray-500 mt-0.5">Does this repair/product carry a warranty?</p>
+            </div>
+            <div className="p-5 space-y-4">
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  type="button"
+                  onClick={() => setWarrantyHasInput(true)}
+                  className={`py-2.5 rounded-lg border-2 text-sm font-semibold transition-colors ${
+                    warrantyHasInput === true
+                      ? "border-emerald-500 bg-emerald-50 text-emerald-700"
+                      : "border-gray-200 bg-white text-gray-500 hover:border-gray-300"
+                  }`}
+                >
+                  Warranty
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setWarrantyHasInput(false)}
+                  className={`py-2.5 rounded-lg border-2 text-sm font-semibold transition-colors ${
+                    warrantyHasInput === false
+                      ? "border-gray-500 bg-gray-100 text-gray-700"
+                      : "border-gray-200 bg-white text-gray-500 hover:border-gray-300"
+                  }`}
+                >
+                  No Warranty
+                </button>
+              </div>
+
+              {warrantyHasInput === true && (
+                <div>
+                  <label className="block text-xs font-medium text-gray-700 mb-1.5">Duration</label>
+                  <div className="grid grid-cols-3 gap-2">
+                    {[3, 6].map((m) => (
+                      <button
+                        key={m}
+                        type="button"
+                        onClick={() => setWarrantyMonthsInput(m)}
+                        className={`py-2 rounded-lg border-2 text-sm font-medium transition-colors ${
+                          warrantyMonthsInput === m
+                            ? "border-emerald-500 bg-emerald-50 text-emerald-700"
+                            : "border-gray-200 bg-white text-gray-600 hover:border-gray-300"
+                        }`}
+                      >
+                        {m} Months
+                      </button>
+                    ))}
+                    <button
+                      type="button"
+                      onClick={() => setWarrantyMonthsInput("custom")}
+                      className={`py-2 rounded-lg border-2 text-sm font-medium transition-colors ${
+                        warrantyMonthsInput === "custom"
+                          ? "border-emerald-500 bg-emerald-50 text-emerald-700"
+                          : "border-gray-200 bg-white text-gray-600 hover:border-gray-300"
+                      }`}
+                    >
+                      Custom
+                    </button>
+                  </div>
+                  {warrantyMonthsInput === "custom" && (
+                    <input
+                      type="number"
+                      min="1"
+                      value={warrantyCustomMonths}
+                      onChange={(e) => setWarrantyCustomMonths(e.target.value)}
+                      placeholder="Months"
+                      autoFocus
+                      className="mt-2 w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                    />
+                  )}
+                </div>
+              )}
+            </div>
+            <div className="flex justify-end gap-2 px-5 py-4 border-t border-gray-200">
+              <button
+                onClick={closeWarrantyModal}
+                className="px-4 py-2 text-sm text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={confirmWarrantyModal}
+                disabled={
+                  warrantyHasInput === null ||
+                  (warrantyHasInput === true &&
+                    (warrantyMonthsInput === "custom"
+                      ? !warrantyCustomMonths || Number(warrantyCustomMonths) <= 0
+                      : !warrantyMonthsInput))
+                }
+                className="px-4 py-2 text-sm text-white bg-emerald-600 rounded-lg hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                Continue
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   )

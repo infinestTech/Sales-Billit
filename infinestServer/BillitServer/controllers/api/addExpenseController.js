@@ -15,7 +15,7 @@ const addExpense = async (req, res) => {
       userId: shop_id,
       title,
       amount,
-      paymentMethod: ["upi", "cash"].includes(String(paymentMethod || '').toLowerCase())
+      paymentMethod: ["gpay", "upi", "cash"].includes(String(paymentMethod || '').toLowerCase())
         ? String(paymentMethod).toLowerCase()
         : "cash",
       createdAt: createdAt ? new Date(createdAt) : undefined,

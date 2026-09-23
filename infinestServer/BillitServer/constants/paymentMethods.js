@@ -3,40 +3,47 @@
 
 const PAYMENT_METHODS = {
   CASH: 'Cash',
-  UPI: 'UPI',
+  GPAY: 'Gpay',
   CARD: 'Card',
-  UPI_H: 'UPI-H',
-  UPI_S: 'UPI-S',
+  GPAY_H: 'Gpay-H',
+  GPAY_S: 'Gpay-S',
   CASH_CARD: 'Cash + Card',
-  UPI_H_CASH: 'UPI H + CASH',
-  UPI_S_CASH: 'UPI S + CASH',
-  UPI_H_CARD: 'UPI H + CARD',
-  UPI_S_CARD: 'UPI S + CARD'
+  GPAY_H_CASH: 'Gpay H + CASH',
+  GPAY_S_CASH: 'Gpay S + CASH',
+  GPAY_H_CARD: 'Gpay H + CARD',
+  GPAY_S_CARD: 'Gpay S + CARD'
 };
 
 // Array of all valid payment methods for validation
 const VALID_PAYMENT_METHODS = [
   PAYMENT_METHODS.CASH,
-  PAYMENT_METHODS.UPI,
+  PAYMENT_METHODS.GPAY,
   PAYMENT_METHODS.CARD,
-  PAYMENT_METHODS.UPI_H,
-  PAYMENT_METHODS.UPI_S,
+  PAYMENT_METHODS.GPAY_H,
+  PAYMENT_METHODS.GPAY_S,
   PAYMENT_METHODS.CASH_CARD,
-  PAYMENT_METHODS.UPI_H_CASH,
-  PAYMENT_METHODS.UPI_S_CASH,
-  PAYMENT_METHODS.UPI_H_CARD,
-  PAYMENT_METHODS.UPI_S_CARD,
+  PAYMENT_METHODS.GPAY_H_CASH,
+  PAYMENT_METHODS.GPAY_S_CASH,
+  PAYMENT_METHODS.GPAY_H_CARD,
+  PAYMENT_METHODS.GPAY_S_CARD,
   '' // Allow empty string for optional fields
 ];
 
-// For Mongoose enum validation (includes lowercase and mixed case variations)
+// For Mongoose enum validation (includes lowercase, mixed case, and legacy "UPI" values from before the Gpay rename)
 const PAYMENT_METHOD_ENUM = [
   'Cash', 'cash',
+  'Gpay', 'gpay',
   'UPI', 'upi',
   'Card', 'card',
+  'Gpay-H', 'Gpay-h', 'gpay-h',
+  'Gpay-S', 'Gpay-s', 'gpay-s',
   'UPI-H', 'UPI-h', 'upi-h',
   'UPI-S', 'UPI-s', 'upi-s',
   'Cash + Card',
+  'Gpay H + CASH',
+  'Gpay S + CASH',
+  'Gpay H + CARD',
+  'Gpay S + CARD',
   'UPI H + CASH',
   'UPI S + CASH',
   'UPI H + CARD',

@@ -414,11 +414,11 @@ export default function MobileDashboard({
       const otherHalf = amt - half;
 
       if (m === 'cash') return { cash: amt, gpay: '', card: '' };
-      if (m === 'upi' || m === 'upi-h' || m === 'upi-s') return { cash: '', gpay: amt, card: '' };
+      if (m === 'upi' || m === 'upi-h' || m === 'upi-s' || m === 'gpay' || m === 'gpay-h' || m === 'gpay-s') return { cash: '', gpay: amt, card: '' };
       if (m === 'card') return { cash: '', gpay: '', card: amt };
       if (m === 'cash + card') return { cash: half, gpay: '', card: otherHalf };
-      if (m === 'upi h + cash' || m === 'upi s + cash') return { cash: otherHalf, gpay: half, card: '' };
-      if (m === 'upi h + card' || m === 'upi s + card') return { cash: '', gpay: half, card: otherHalf };
+      if (m === 'upi h + cash' || m === 'upi s + cash' || m === 'gpay h + cash' || m === 'gpay s + cash') return { cash: otherHalf, gpay: half, card: '' };
+      if (m === 'upi h + card' || m === 'upi s + card' || m === 'gpay h + card' || m === 'gpay s + card') return { cash: '', gpay: half, card: otherHalf };
       return { cash: amt, gpay: '', card: '' };
     };
 
@@ -901,6 +901,9 @@ export default function MobileDashboard({
                       <div className="flex gap-2 mt-2">
                         <span className="px-2 py-1 bg-green-100 text-green-700 rounded text-xs font-semibold">
                           Ready: {customer.ready_count || 0}
+                        </span>
+                        <span className="px-2 py-1 bg-amber-100 text-amber-700 rounded text-xs font-semibold">
+                          Processing: {customer.processing_count || 0}
                         </span>
                         <span className="px-2 py-1 bg-red-100 text-red-700 rounded text-xs font-semibold">
                           Pending: {customer.not_ready_count || 0}

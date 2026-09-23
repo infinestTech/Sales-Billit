@@ -31,6 +31,9 @@ const MobileNamePage = ({ shopId }) => {
   const [statusUpdating, setStatusUpdating] = useState(false)
   const [deliverPayAmount, setDeliverPayAmount] = useState("")
   const [deliverPayMethod, setDeliverPayMethod] = useState("")
+  const [warrantyHasInput, setWarrantyHasInput] = useState(null) // true | false | null (undecided)
+  const [warrantyMonthsInput, setWarrantyMonthsInput] = useState(6) // 3 | 6 | "custom"
+  const [warrantyCustomMonths, setWarrantyCustomMonths] = useState("")
 
   // Set status and IMEI from URL params on mount
   useEffect(() => {
@@ -74,6 +77,7 @@ const MobileNamePage = ({ shopId }) => {
           imei: mobile.imei || "",
           issues: mobile.issue || "No issues specified",
           technician: mobile.technician_name || "",
+          isProcessing: mobile.processing,
           isReady: mobile.ready,
           isDelivered: mobile.delivered,
           isReturn: mobile.returned,
@@ -147,6 +151,7 @@ const MobileNamePage = ({ shopId }) => {
         m.id === mobileId
           ? {
               ...m,
+              isProcessing: updated.processing,
               isReady: updated.ready,
               isDelivered: updated.delivered,
               isReturn: updated.returned,
@@ -157,11 +162,11 @@ const MobileNamePage = ({ shopId }) => {
     )
   }
 
-  const callToggle = async (mobileId, field) => {
+  const callToggle = async (mobileId, field, extra = {}) => {
     const token = localStorage.getItem("token")
     const res = await api.post(
       "/api/toggle-status",
-      { id: mobileId, field },
+      { id: mobileId, field, ...extra },
       { headers: { Authorization: `Bearer ${token}` } },
     )
     return res.data.updatedMobile
@@ -173,11 +178,15 @@ const MobileNamePage = ({ shopId }) => {
     else if (mobile.isReturn) mode = "returnedChoice"
     else if (mobile.isShouldBeReturned) mode = "sbrd"
     else if (mobile.isReady) mode = "delivered"
-    else mode = "ready"
+    else if (mobile.isProcessing) mode = "ready"
+    else mode = "processing"
 
     if (!mode) return
     setDeliverPayAmount("")
     setDeliverPayMethod("")
+    setWarrantyHasInput(null)
+    setWarrantyMonthsInput(6)
+    setWarrantyCustomMonths("")
     setStatusModal({ open: true, mobile, mode })
   }
 
@@ -185,6 +194,9 @@ const MobileNamePage = ({ shopId }) => {
     if (statusUpdating) return
     setDeliverPayAmount("")
     setDeliverPayMethod("")
+    setWarrantyHasInput(null)
+    setWarrantyMonthsInput(6)
+    setWarrantyCustomMonths("")
     setStatusModal({ open: false, mobile: null, mode: null })
   }
 
@@ -193,7 +205,10 @@ const MobileNamePage = ({ shopId }) => {
     if (!mobile) return
     setStatusUpdating(true)
     try {
-      if (action === "ready") {
+      if (action === "processing") {
+        const updated = await callToggle(mobile.id, "processing")
+        applyMobileUpdate(mobile.id, updated)
+      } else if (action === "ready") {
         const updated = await callToggle(mobile.id, "ready")
         applyMobileUpdate(mobile.id, updated)
       } else if (action === "delivered") {
@@ -208,6 +223,20 @@ const MobileNamePage = ({ shopId }) => {
           alert("Please select a payment method.")
           setStatusUpdating(false)
           return
+        }
+        if (warrantyHasInput === null) {
+          alert("Please specify whether this device has a warranty.")
+          setStatusUpdating(false)
+          return
+        }
+        let warrantyMonths = null
+        if (warrantyHasInput === true) {
+          warrantyMonths = warrantyMonthsInput === "custom" ? Number(warrantyCustomMonths) : Number(warrantyMonthsInput)
+          if (!warrantyMonths || warrantyMonths <= 0) {
+            alert("Please enter a valid warranty duration.")
+            setStatusUpdating(false)
+            return
+          }
         }
         if (addAmount > 0) {
           const token = localStorage.getItem("token")
@@ -227,7 +256,10 @@ const MobileNamePage = ({ shopId }) => {
             ),
           )
         }
-        const updated = await callToggle(mobile.id, "delivered")
+        const updated = await callToggle(mobile.id, "delivered", {
+          hasWarranty: warrantyHasInput,
+          warrantyMonths,
+        })
         applyMobileUpdate(mobile.id, updated)
       } else if (action === "sbrdToReturned") {
         // SBRd → Returned (single cycle step)
@@ -314,7 +346,9 @@ const MobileNamePage = ({ shopId }) => {
       if (imeiSearch.trim()) return true
       switch (selectedStatus) {
         case "notReady":
-          return !mobile.isReady && !mobile.isDelivered && !mobile.isShouldBeReturned && !mobile.isReturn
+          return !mobile.isProcessing && !mobile.isReady && !mobile.isDelivered && !mobile.isShouldBeReturned && !mobile.isReturn
+        case "processing":
+          return mobile.isProcessing && !mobile.isReady
         case "readyNotDelivered":
           return mobile.isReady && !mobile.isDelivered
         case "return":
@@ -355,7 +389,7 @@ const MobileNamePage = ({ shopId }) => {
     else if (clientFilter === "__dealers__") filterParts.push("Type: Dealer")
     else if (clientFilter) filterParts.push(`Dealer: ${clientFilter}`)
     if (selectedStatus && !imeiSearch.trim()) {
-      const statusLabels = { notReady: "Not Ready", readyNotDelivered: "Pending", return: "Return", shouldBeReturned: "Should Be Returned" }
+      const statusLabels = { notReady: "Not Ready", processing: "Processing", readyNotDelivered: "Pending", return: "Return", shouldBeReturned: "Should Be Returned" }
       filterParts.push(`Status: ${statusLabels[selectedStatus] || selectedStatus}`)
     }
     if (dateFrom) filterParts.push(`From: ${dateFrom}`)
@@ -380,7 +414,7 @@ const MobileNamePage = ({ shopId }) => {
         m.imei || "-",
         m.issues,
         m.technician || "-",
-        m.isDelivered ? "Delivered" : m.isReturn ? "Returned" : m.isShouldBeReturned ? "Should Be Returned" : m.isReady ? "Ready" : "Not Ready",
+        m.isDelivered ? "Delivered" : m.isReturn ? "Returned" : m.isShouldBeReturned ? "Should Be Returned" : m.isReady ? "Ready" : m.isProcessing ? "Processing" : "Not Ready",
         m.addedDate ? new Date(m.addedDate).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" }) : "N/A",
       ]),
       styles: { fontSize: 8, cellPadding: 3 },
@@ -510,6 +544,7 @@ const MobileNamePage = ({ shopId }) => {
                 disabled={!!imeiSearch.trim()}
               >
                 <option value="notReady">Not Ready</option>
+                <option value="processing">Processing</option>
                 <option value="readyNotDelivered">Pending</option>
                 <option value="shouldBeReturned">Should Be Returned (SBRd)</option>
                 <option value="return">Return</option>
@@ -752,6 +787,8 @@ const MobileNamePage = ({ shopId }) => {
                             <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold bg-amber-100 text-amber-800">SBRd</span>
                           ) : data.isReady ? (
                             <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold bg-blue-100 text-blue-800">Ready</span>
+                          ) : data.isProcessing ? (
+                            <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold bg-purple-100 text-purple-800">Processing</span>
                           ) : (
                             <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold bg-red-100 text-red-800">Not Ready</span>
                           )
@@ -799,6 +836,17 @@ const MobileNamePage = ({ shopId }) => {
               </p>
             </div>
             <div className="px-6 py-5 space-y-3">
+              {statusModal.mode === "processing" && (
+                <>
+                  <p className="text-sm text-gray-700">Mark this device as <span className="font-semibold text-purple-700">Processing</span> (technician has started the repair)?</p>
+                  <div className="flex justify-end gap-2 pt-2">
+                    <button onClick={closeStatusModal} disabled={statusUpdating} className="px-4 py-2 text-sm text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 disabled:opacity-50">Cancel</button>
+                    <button onClick={() => performStatusAction("processing")} disabled={statusUpdating} className="px-4 py-2 text-sm text-white bg-purple-600 rounded-lg hover:bg-purple-700 disabled:opacity-50">
+                      {statusUpdating ? "Updating…" : "Mark as Processing"}
+                    </button>
+                  </div>
+                </>
+              )}
               {statusModal.mode === "ready" && (
                 <>
                   <p className="text-sm text-gray-700">Mark this device as <span className="font-semibold text-blue-700">Ready</span>?</p>
@@ -850,6 +898,74 @@ const MobileNamePage = ({ shopId }) => {
                   <p className="text-xs text-gray-500">
                     Leave amount blank only if a payment is already recorded.
                   </p>
+                  <div className="pt-1 border-t border-gray-100">
+                    <label className="block text-xs font-medium text-gray-700 mb-1.5 mt-2">Warranty</label>
+                    <div className="grid grid-cols-2 gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setWarrantyHasInput(true)}
+                        className={`py-2 rounded-lg border-2 text-sm font-semibold transition-colors ${
+                          warrantyHasInput === true
+                            ? "border-emerald-500 bg-emerald-50 text-emerald-700"
+                            : "border-gray-200 bg-white text-gray-500 hover:border-gray-300"
+                        }`}
+                      >
+                        Warranty
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setWarrantyHasInput(false)}
+                        className={`py-2 rounded-lg border-2 text-sm font-semibold transition-colors ${
+                          warrantyHasInput === false
+                            ? "border-gray-500 bg-gray-100 text-gray-700"
+                            : "border-gray-200 bg-white text-gray-500 hover:border-gray-300"
+                        }`}
+                      >
+                        No Warranty
+                      </button>
+                    </div>
+                    {warrantyHasInput === true && (
+                      <div className="mt-2">
+                        <div className="grid grid-cols-3 gap-2">
+                          {[3, 6].map((m) => (
+                            <button
+                              key={m}
+                              type="button"
+                              onClick={() => setWarrantyMonthsInput(m)}
+                              className={`py-1.5 rounded-lg border-2 text-xs font-medium transition-colors ${
+                                warrantyMonthsInput === m
+                                  ? "border-emerald-500 bg-emerald-50 text-emerald-700"
+                                  : "border-gray-200 bg-white text-gray-600"
+                              }`}
+                            >
+                              {m} Months
+                            </button>
+                          ))}
+                          <button
+                            type="button"
+                            onClick={() => setWarrantyMonthsInput("custom")}
+                            className={`py-1.5 rounded-lg border-2 text-xs font-medium transition-colors ${
+                              warrantyMonthsInput === "custom"
+                                ? "border-emerald-500 bg-emerald-50 text-emerald-700"
+                                : "border-gray-200 bg-white text-gray-600"
+                            }`}
+                          >
+                            Custom
+                          </button>
+                        </div>
+                        {warrantyMonthsInput === "custom" && (
+                          <input
+                            type="number"
+                            min="1"
+                            value={warrantyCustomMonths}
+                            onChange={(e) => setWarrantyCustomMonths(e.target.value)}
+                            placeholder="Months"
+                            className="mt-2 w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                          />
+                        )}
+                      </div>
+                    )}
+                  </div>
                   <div className="flex justify-end gap-2 pt-2">
                     <button onClick={closeStatusModal} disabled={statusUpdating} className="px-4 py-2 text-sm text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 disabled:opacity-50">Cancel</button>
                     <button onClick={() => performStatusAction("delivered")} disabled={statusUpdating} className="px-4 py-2 text-sm text-white bg-green-600 rounded-lg hover:bg-green-700 disabled:opacity-50">

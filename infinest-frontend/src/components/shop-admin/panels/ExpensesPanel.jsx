@@ -5,7 +5,7 @@ import shopAdminApi from "../shopAdminApi";
 import { PanelHeader, PanelCard, Btn, Field, Input, Select, Modal, Toast, useToast, EmptyState, LoadingRow } from "./_ui";
 
 const EMPTY = { title: "", amount: 0, paymentMethod: "Cash" };
-const METHODS = ["Cash", "UPI", "Card", "Bank Transfer", "Cheque", "Other"];
+const METHODS = ["Cash", "Gpay", "Card", "Bank Transfer", "Cheque", "Other"];
 
 export default function ExpensesPanel({ currentShopId }) {
   const { toast, show, clear } = useToast();
