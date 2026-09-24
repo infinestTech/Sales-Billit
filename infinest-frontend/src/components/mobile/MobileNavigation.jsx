@@ -8,7 +8,6 @@ import {
   Smartphone,
   Wallet,
   Package,
-  CalendarCheck,
   Receipt,
   Menu,
   X,
@@ -22,7 +21,6 @@ const NAV_ITEMS = [
   { id: "registry", label: "Mobile Registry", icon: Smartphone, description: "All devices" },
   { id: "balance", label: "Balance Summary", icon: Wallet, description: "Outstanding balances" },
   { id: "stock", label: "Service Inventory", icon: Package, description: "Inventory & history" },
-  { id: "attendance", label: "Attendance", icon: CalendarCheck, description: "Employee attendance" },
   { id: "expenses", label: "Expenses", icon: Receipt, description: "Track expenses" },
 ]
 
@@ -31,7 +29,6 @@ const BOTTOM_TABS = [
   { id: "records", label: "Home", icon: Plus },
   { id: "balance", label: "Balance", icon: Wallet },
   { id: "stock", label: "Stock", icon: Package },
-  { id: "attendance", label: "Staff", icon: CalendarCheck },
   { id: "expenses", label: "Costs", icon: Receipt },
 ]
 
@@ -40,17 +37,11 @@ export default function MobileNavigation({
   setActiveView,
   profileImage,
   profileName,
-  useEsslAttendance = false,
 }) {
   const [isMenuOpen, setIsMenuOpen] = useState(false)
 
-  // Filter out attendance if eSSL device is managing it
-  const visibleNavItems = NAV_ITEMS.filter(
-    (item) => !(useEsslAttendance && item.id === "attendance")
-  )
-  const visibleBottomTabs = BOTTOM_TABS.filter(
-    (tab) => !(useEsslAttendance && tab.id === "attendance")
-  )
+  const visibleNavItems = NAV_ITEMS
+  const visibleBottomTabs = BOTTOM_TABS
 
   const go = (id) => {
     setActiveView(id)

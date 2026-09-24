@@ -8,6 +8,8 @@ import api from "../api"
 import { usePlanFeatures } from "@/context/PlanFeatureContext"
 import { useRouter } from "next/navigation"
 import { formatPaymentMethodLabel } from "@/constants/paymentMethods"
+import StatCard from "@/components/ui/StatCard"
+import { Package, Truck, RotateCcw, IndianRupee } from "lucide-react"
 
 const RecordTable = ({ shop_id, setIsLimitReached }) => {
   const { features } = usePlanFeatures()
@@ -174,56 +176,76 @@ const RecordTable = ({ shop_id, setIsLimitReached }) => {
   const currentData = filteredData.slice((currentPage - 1) * ROWS_PER_PAGE, currentPage * ROWS_PER_PAGE)
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4">
       {/* Today's Record Header */}
-      <h2 className="text-xl font-semibold text-gray-900">Today's Record</h2>
+      <div className="flex items-end justify-between border-t border-gray-200 pt-6">
+        <div>
+          <h2 className="text-lg font-semibold text-gray-900">Today&apos;s Record</h2>
+          <p className="text-sm text-gray-500">
+            {new Date().toLocaleDateString("en-IN", { weekday: "long", day: "2-digit", month: "short", year: "numeric" })}
+          </p>
+        </div>
+        <span className="rounded-full bg-gray-100 px-3 py-1 text-xs font-medium text-gray-600">
+          {data.length} record{data.length !== 1 ? "s" : ""} today
+        </span>
+      </div>
 
       {/* Statistics Cards */}
-      <div className="grid grid-cols-2 gap-3 md:grid-cols-4 lg:grid-cols-2 xl:grid-cols-4 xl:gap-4">
-        {/* Ready/Not Ready Card */}
-        <div className="bg-white border border-gray-200 rounded-lg p-4">
-          <div className="text-sm text-gray-600 mb-2">Ready/Not Ready</div>
-          <div className="flex items-center justify-between gap-2 flex-wrap">
-            <span className="text-green-600 font-medium">{totals.ready} Ready</span>
-            <span className="bg-amber-100 text-amber-800 px-2 py-1 rounded text-sm font-medium">{totals.processing} Processing</span>
-            <button
-              onClick={() => router.push('/mobilename?status=notReady')}
-              className="bg-red-100 text-red-800 px-2 py-1 rounded text-sm font-medium hover:bg-red-200 transition-colors"
-            >
-              {totals.notReady} Not Ready
-            </button>
-          </div>
-        </div>
-
-        {/* Delivery Status Card */}
-        <div className="bg-white border border-gray-200 rounded-lg p-4">
-          <div className="text-sm text-gray-600 mb-2">Delivery Status</div>
-          <div className="flex items-center justify-between">
-            <span className="text-green-600 font-medium">{totals.delivered} Delivered</span>
-            <button
-              onClick={() => router.push('/mobilename?status=pending')}
-              className="bg-orange-100 text-orange-800 px-2 py-1 rounded text-sm font-medium hover:bg-orange-200 transition-colors"
-            >
-              {totals.pending} Pending
-            </button>
-          </div>
-        </div>
-
-        {/* Return Status Card */}
-        <div className="bg-white border border-gray-200 rounded-lg p-4">
-          <div className="text-sm text-gray-600 mb-2">Return Status</div>
-          <div className="flex items-center justify-between">
-            <span className="text-amber-600 font-medium">{totals.shouldBeReturned} SBRd</span>
-            <span className="text-red-600 font-medium">{totals.returned} Returned</span>
-          </div>
-        </div>
-
-        {/* Today's Revenue Card - Hidden when shop admin disables revenue visibility */}
+      <div className={`grid grid-cols-1 gap-4 sm:grid-cols-2 ${revenueVisible ? "xl:grid-cols-4" : "xl:grid-cols-3"}`}>
+        <StatCard
+          title="Repair Status"
+          icon={Package}
+          iconClass="bg-blue-50 text-blue-600"
+          metrics={[
+            { label: "Ready", value: totals.ready, textClass: "text-emerald-600", barClass: "bg-emerald-500" },
+            { label: "Processing", value: totals.processing, textClass: "text-amber-600", barClass: "bg-amber-400" },
+            {
+              label: "Not Ready",
+              value: totals.notReady,
+              textClass: "text-rose-600",
+              barClass: "bg-rose-500",
+              onClick: () => router.push("/mobilename?status=notReady"),
+              hint: "View not-ready devices in Mobile Registry",
+            },
+          ]}
+        />
+        <StatCard
+          title="Delivery Status"
+          icon={Truck}
+          iconClass="bg-emerald-50 text-emerald-600"
+          metrics={[
+            { label: "Delivered", value: totals.delivered, textClass: "text-emerald-600", barClass: "bg-emerald-500" },
+            {
+              label: "Pending",
+              value: totals.pending,
+              textClass: "text-orange-600",
+              barClass: "bg-orange-400",
+              onClick: () => router.push("/mobilename?status=pending"),
+              hint: "View ready-but-undelivered devices in Mobile Registry",
+            },
+          ]}
+        />
+        <StatCard
+          title="Return Status"
+          icon={RotateCcw}
+          iconClass="bg-violet-50 text-violet-600"
+          metrics={[
+            { label: "Should Return", value: totals.shouldBeReturned, textClass: "text-amber-600", barClass: "bg-amber-400" },
+            { label: "Returned", value: totals.returned, textClass: "text-violet-600", barClass: "bg-violet-500" },
+          ]}
+        />
+        {/* Hidden when shop admin disables revenue visibility */}
         {revenueVisible && (
-          <div className="bg-white border border-gray-200 rounded-lg p-4">
-            <div className="text-sm text-gray-600 mb-2">Today's Revenue</div>
-            <div className="text-green-600 font-medium text-lg">₹{todayRevenue.toLocaleString("en-IN")}</div>
-          </div>
+          <StatCard
+            title="Today's Revenue"
+            icon={IndianRupee}
+            iconClass="bg-indigo-50 text-indigo-600"
+            showBar={false}
+            metrics={[
+              { label: "Collected today", value: `₹${todayRevenue.toLocaleString("en-IN")}`, textClass: "text-gray-900" },
+            ]}
+            footer="Service payments + spare sales"
+          />
         )}
       </div>
 

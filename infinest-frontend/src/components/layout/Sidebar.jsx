@@ -2,9 +2,16 @@
 import { useState, useEffect, useRef } from "react"
 import { usePathname } from "next/navigation"
 import Link from "next/link"
-import { Plus, Database,User, Smartphone, Wallet, Shield, Package, Receipt, X, Power, BarChart3, CalendarCheck, RotateCcw } from "lucide-react"
+import { Plus, Database, User, Smartphone, Wallet, Shield, Package, Receipt, Power, BarChart3, RotateCcw, ChevronDown, ChevronLeft, ChevronRight } from "lucide-react"
 import { usePlanFeatures } from "@/context/PlanFeatureContext"
 import authApi from "../authApi"
+
+const DEFAULT_WIDTH = 320
+const MIN_WIDTH = 240
+const MAX_WIDTH = 440
+// Releasing a drag narrower than this hides the sidebar completely
+const COLLAPSE_AT = 170
+const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v))
 
 export function AppSidebar({ sidebarOpen, setSidebarOpen, role }) {
   const pathname = usePathname()
@@ -16,7 +23,6 @@ export function AppSidebar({ sidebarOpen, setSidebarOpen, role }) {
   const [isHovered, setIsHovered] = useState(false)
   const [shopId, setShopId] = useState(null)
   const [revenueVisible, setRevenueVisible] = useState(true)
-  const [useEsslAttendance, setUseEsslAttendance] = useState(false)
 
   useEffect(() => {
     const fetchProfile = async () => {
@@ -40,19 +46,6 @@ export function AppSidebar({ sidebarOpen, setSidebarOpen, role }) {
           }
         } catch (rvErr) {
           console.error("Failed to check revenue visibility:", rvErr);
-        }
-
-        // Fetch eSSL attendance source
-        try {
-          const esslRes = await fetch(`${process.env.NEXT_PUBLIC_API_URL_BILLIT}/api/dashboard/attendance-source`, {
-            headers: { Authorization: `Bearer ${token}` }
-          });
-          if (esslRes.ok) {
-            const esslData = await esslRes.json();
-            setUseEsslAttendance(esslData.useEsslAttendance === true);
-          }
-        } catch (esslErr) {
-          console.error("Failed to check attendance source:", esslErr);
         }
 
         const res = await authApi.get("/profile/get", {
@@ -148,17 +141,121 @@ export function AppSidebar({ sidebarOpen, setSidebarOpen, role }) {
 
   const navigationItems = [
     { title: "Create", url: "/application", icon: Plus },
-    { title: "All Records", url: "/allrecord", icon: Database },
-    { title: "Rework", url: "/rework", icon: RotateCcw },
+    {
+      group: "Records & Repairs",
+      icon: Database,
+      items: [
+        { title: "All Records", url: "/allrecord", icon: Database },
+        { title: "Rework", url: "/rework", icon: RotateCcw },
+        { title: "Mobile Registry", url: "/mobilename", icon: Smartphone },
+      ],
+    },
+    {
+      group: "Suppliers & Inventory",
+      icon: Package,
+      items: [
         { title: "Supplier", url: "/supplier", icon: User },
-    { title: "Mobile Registry", url: "/mobilename", icon: Smartphone },
-    { title: "Balance Summary", url: "/balanceamount", icon: Wallet },
+        { title: "Service Inventory", url: "/product", icon: Package, featureKey: "product_inventory_enabled" },
+      ],
+    },
     ...(revenueVisible ? [{ title: "Analytics Dashboard", url: "/analytics", icon: BarChart3, featureKey: "analytics_dashboard_enabled" }] : []),
     ...(role === "admin" ? [{ title: "Admin Dashboard", url: "/admin-dashboard", icon: Shield }] : []),
-    { title: "Service Inventory", url: "/product", icon: Package, featureKey: "product_inventory_enabled" },
-     ...(useEsslAttendance ? [] : [{ title: "Attendance", url: "/attendance", icon: CalendarCheck }]),
-    { title: "Expenses", url: "/todayexpenses", icon: Receipt, featureKey: "expense_tracker_enabled" },
+    {
+      group: "Finance",
+      icon: Wallet,
+      items: [
+        { title: "Balance Summary", url: "/balanceamount", icon: Wallet },
+        { title: "Expenses", url: "/todayexpenses", icon: Receipt, featureKey: "expense_tracker_enabled" },
+      ],
+    },
   ]
+
+  // Groups auto-expand once when the active route falls inside them; users can still toggle freely afterwards
+  const [openGroups, setOpenGroups] = useState({})
+  useEffect(() => {
+    setOpenGroups((prev) => {
+      const next = { ...prev }
+      navigationItems.forEach((entry) => {
+        if (entry.group && entry.items.some((it) => pathname.startsWith(it.url))) {
+          next[entry.group] = true
+        }
+      })
+      return next
+    })
+  }, [pathname])
+
+  const toggleGroup = (name) => setOpenGroups((prev) => ({ ...prev, [name]: !prev[name] }))
+
+  // ---- Resizable / collapsible sidebar ----
+  const [width, setWidth] = useState(DEFAULT_WIDTH)
+  const [collapsed, setCollapsed] = useState(false)
+  const [dragWidth, setDragWidth] = useState(null) // non-null only while dragging
+  const dragState = useRef({ active: false, moved: false, startX: 0, last: 0, fromTab: false })
+  const prefsLoaded = useRef(false)
+
+  useEffect(() => {
+    try {
+      const savedWidth = Number(localStorage.getItem("sidebar_width"))
+      if (savedWidth) setWidth(clamp(savedWidth, MIN_WIDTH, MAX_WIDTH))
+      setCollapsed(localStorage.getItem("sidebar_collapsed") === "1")
+    } catch {}
+    prefsLoaded.current = true
+  }, [])
+
+  useEffect(() => {
+    if (!prefsLoaded.current) return
+    try {
+      localStorage.setItem("sidebar_width", String(width))
+      localStorage.setItem("sidebar_collapsed", collapsed ? "1" : "0")
+    } catch {}
+  }, [width, collapsed])
+
+  const startDrag = (e, fromTab = false) => {
+    e.preventDefault()
+    const initial = fromTab ? 0 : width
+    dragState.current = { active: true, moved: false, startX: e.clientX, last: initial, fromTab }
+    setDragWidth(initial)
+    document.body.style.cursor = "col-resize"
+    document.body.style.userSelect = "none"
+
+    const onMove = (ev) => {
+      const s = dragState.current
+      if (!s.active) return
+      if (Math.abs(ev.clientX - s.startX) > 4) s.moved = true
+      s.last = clamp(ev.clientX, 0, MAX_WIDTH)
+      setDragWidth(s.last)
+    }
+    const onUp = () => {
+      const s = dragState.current
+      s.active = false
+      window.removeEventListener("pointermove", onMove)
+      window.removeEventListener("pointerup", onUp)
+      document.body.style.cursor = ""
+      document.body.style.userSelect = ""
+
+      if (s.fromTab && !s.moved) {
+        // Plain click on the pull tab: restore the last width
+        setCollapsed(false)
+      } else if (s.moved) {
+        if (s.last < COLLAPSE_AT) {
+          setCollapsed(true)
+        } else {
+          setCollapsed(false)
+          setWidth(clamp(s.last, MIN_WIDTH, MAX_WIDTH))
+        }
+      }
+      setDragWidth(null)
+    }
+    window.addEventListener("pointermove", onMove)
+    window.addEventListener("pointerup", onUp)
+  }
+
+  const isDragging = dragWidth !== null
+  const displayWidth = isDragging ? dragWidth : collapsed ? 0 : width
+  // Inner panel keeps a usable width and is right-anchored, so shrinking the wrapper reads as a slide
+  const innerWidth = isDragging ? clamp(dragWidth, MIN_WIDTH, MAX_WIDTH) : width
+  const willCollapse = isDragging && dragWidth < COLLAPSE_AT
+  const compact = innerWidth < 300
 
   useEffect(() => {
     const handleClickOutside = (e) => {
@@ -187,42 +284,90 @@ export function AppSidebar({ sidebarOpen, setSidebarOpen, role }) {
 
   return (
     <>
+      <div
+        className={`relative h-screen flex-shrink-0 overflow-hidden ${isDragging ? "" : "transition-[width] duration-300 ease-[cubic-bezier(0.4,0,0.2,1)]"}`}
+        style={{ width: displayWidth }}
+      >
       <aside
         ref={sidebar}
-        className={`fixed left-0 top-0 z-50 flex h-screen w-80 flex-col overflow-y-auto overflow-x-hidden bg-gradient-to-b from-gray-900 via-gray-900 to-black shadow-2xl transition-transform duration-300 ease-in-out lg:static lg:translate-x-0 border-r border-gray-700/50 backdrop-blur-xl scrollbar-hide ${sidebarOpen ? "translate-x-0" : "-translate-x-full"
-          }`}
+        className={`absolute right-0 top-0 flex h-screen flex-col overflow-y-auto overflow-x-hidden bg-gradient-to-b from-gray-900 via-gray-900 to-black shadow-2xl border-r border-gray-700/50 backdrop-blur-xl scrollbar-hide transition-opacity duration-200 ${willCollapse ? "opacity-60" : "opacity-100"}`}
+        style={{ width: innerWidth }}
       >
         {/* Header */}
-        <div className="relative z-10 flex items-center justify-between border-b border-gray-700/50 bg-gray-900/80 backdrop-blur-xl px-8 py-6">
+        <div className={`relative z-10 flex items-center justify-between border-b border-gray-700/50 bg-gray-900/80 backdrop-blur-xl py-6 ${compact ? "px-6" : "px-8"}`}>
           <Link href="/" className="flex items-center group">
             <div className="relative">
-              <span className="text-7xl font-black bg-gradient-to-r from-blue-300 via-indigo-300 to-blue-400 bg-clip-text text-transparent tracking-wide group-hover:from-blue-200 group-hover:to-indigo-200 transition-all duration-300 drop-shadow-lg">
+              <span className={`${compact ? "text-5xl" : "text-7xl"} font-black bg-gradient-to-r from-blue-300 via-indigo-300 to-blue-400 bg-clip-text text-transparent tracking-wide group-hover:from-blue-200 group-hover:to-indigo-200 transition-all duration-300 drop-shadow-lg`}>
                 Fixel
               </span>
             </div>
           </Link>
           <button
             ref={trigger}
-            onClick={() => setSidebarOpen(!sidebarOpen)}
-            className="lg:hidden text-gray-400 hover:text-white hover:bg-gray-700/50 p-2 rounded-lg transition-all duration-200 backdrop-blur-sm border border-gray-700/30 hover:border-gray-600/50"
+            onClick={() => setCollapsed(true)}
+            title="Hide sidebar"
+            className="text-gray-400 hover:text-white hover:bg-gray-700/50 p-2 rounded-lg transition-all duration-200 backdrop-blur-sm border border-gray-700/30 hover:border-gray-600/50"
           >
-            <X className="h-5 w-5" />
+            <ChevronLeft className="h-5 w-5" />
           </button>
         </div>
 
         {/* Navigation */}
         <nav className="relative z-10 flex-1 px-6 py-6">
           <ul className="space-y-2">
-            {navigationItems.map((item) => {
-              const isActive = item.url === "/" ? pathname === "/" : pathname.startsWith(item.url)
-              // All features are available during 10-day trial
-              const featureEnabled = true
-              const showLock = false
+            {navigationItems.map((entry) => {
+              if (entry.group) {
+                const isOpen = !!openGroups[entry.group]
+                const groupActive = entry.items.some((it) => pathname.startsWith(it.url))
+
+                return (
+                  <li key={entry.group}>
+                    <button
+                      type="button"
+                      onClick={() => toggleGroup(entry.group)}
+                      className={`group flex w-full items-center space-x-4 rounded-xl px-4 py-3.5 transition-all duration-300 font-medium ${groupActive
+                          ? "text-white"
+                          : "text-gray-300 hover:text-white hover:bg-gray-800/50 border border-transparent"
+                        }`}
+                    >
+                      <div className={`relative z-10 p-2 rounded-lg transition-all duration-300 ${groupActive ? "bg-gradient-to-r from-blue-500/30 to-indigo-500/30 shadow-lg" : "group-hover:bg-gray-700/50"}`}>
+                        <entry.icon className={`h-5 w-5 ${groupActive ? "text-blue-300" : "text-gray-400 group-hover:text-blue-300"}`} />
+                      </div>
+                      <span className="flex-1 truncate text-left text-base">{entry.group}</span>
+                      <ChevronDown className={`h-4 w-4 text-gray-500 transition-transform duration-300 ${isOpen ? "rotate-180" : ""}`} />
+                    </button>
+                    {isOpen && (
+                      <ul className="mt-1 space-y-1 border-l border-gray-700/50 pl-4 ml-5">
+                        {entry.items.map((item) => {
+                          const isActive = pathname.startsWith(item.url)
+                          return (
+                            <li key={item.title}>
+                              <Link
+                                href={item.url}
+                                onClick={() => setSidebarOpen(false)}
+                                className={`group relative flex items-center space-x-3 rounded-lg px-3 py-2.5 transition-all duration-300 font-medium ${isActive
+                                    ? "bg-gradient-to-r from-blue-500/20 to-indigo-500/20 text-white border border-blue-400/30"
+                                    : "text-gray-400 hover:text-white hover:bg-gray-800/50 border border-transparent"
+                                  }`}
+                              >
+                                <item.icon className={`h-4 w-4 ${isActive ? "text-blue-300" : "text-gray-500 group-hover:text-blue-300"}`} />
+                                <span className="text-sm">{item.title}</span>
+                              </Link>
+                            </li>
+                          )
+                        })}
+                      </ul>
+                    )}
+                  </li>
+                )
+              }
+
+              const isActive = entry.url === "/" ? pathname === "/" : pathname.startsWith(entry.url)
 
               return (
-                <li key={item.title}>
+                <li key={entry.title}>
                   <Link
-                    href={item.url}
+                    href={entry.url}
                     onClick={() => setSidebarOpen(false)}
                     className={`group relative flex items-center space-x-4 rounded-xl px-4 py-3.5 transition-all duration-300 font-medium overflow-hidden ${isActive
                         ? "bg-gradient-to-r from-blue-500/20 to-indigo-500/20 text-white shadow-lg backdrop-blur-sm border border-blue-400/30 transform scale-[1.02]"
@@ -235,7 +380,7 @@ export function AppSidebar({ sidebarOpen, setSidebarOpen, role }) {
                           : "group-hover:bg-gray-700/50"
                         }`}
                     >
-                      <item.icon
+                      <entry.icon
                         className={`h-5 w-5 transition-all duration-300 ${isActive ? "text-blue-300 drop-shadow-sm" : "text-gray-400 group-hover:text-blue-300"
                           }`}
                       />
@@ -244,9 +389,8 @@ export function AppSidebar({ sidebarOpen, setSidebarOpen, role }) {
                       className={`relative z-10 text-base transition-all duration-300 ${isActive ? "text-white font-semibold" : "group-hover:text-white"
                         }`}
                     >
-                      {item.title}
+                      {entry.title}
                     </span>
-                    {showLock && <Lock className="h-4 w-4 text-yellow-400" />}
                   </Link>
                 </li>
               )
@@ -312,6 +456,34 @@ export function AppSidebar({ sidebarOpen, setSidebarOpen, role }) {
           </div>
         </div>
       </aside>
+
+        {/* Drag handle on the right edge */}
+        <div
+          onPointerDown={(e) => startDrag(e)}
+          onDoubleClick={() => setWidth(DEFAULT_WIDTH)}
+          title="Drag to resize • double-click to reset"
+          className="group/handle absolute right-0 top-0 z-20 flex h-full w-2 cursor-col-resize touch-none justify-end"
+        >
+          <div
+            className={`h-full w-0.5 transition-colors duration-150 ${
+              isDragging ? (willCollapse ? "bg-red-400/80" : "bg-blue-400") : "bg-transparent group-hover/handle:bg-blue-400/60"
+            }`}
+          />
+        </div>
+      </div>
+
+      {/* Pull-out tab shown while the sidebar is hidden (click or drag it outward) */}
+      <button
+        type="button"
+        onPointerDown={(e) => startDrag(e, true)}
+        title="Show sidebar"
+        aria-label="Show sidebar"
+        className={`fixed left-0 top-1/2 z-50 flex h-16 w-5 -translate-y-1/2 cursor-col-resize touch-none items-center justify-center rounded-r-lg border border-l-0 border-gray-700/60 bg-gradient-to-b from-gray-900 to-black text-gray-400 shadow-lg transition-all duration-300 hover:w-7 hover:text-white ${
+          collapsed && !isDragging ? "translate-x-0 opacity-100" : "pointer-events-none -translate-x-full opacity-0"
+        }`}
+      >
+        <ChevronRight className="h-4 w-4" />
+      </button>
 
       <style jsx global>{`
         .scrollbar-hide {

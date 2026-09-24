@@ -1,7 +1,8 @@
 "use client"
 import { useState, useEffect } from 'react'
-import { Plus, X, ChevronDown } from 'lucide-react'
+import { Plus, X, ChevronDown, Camera } from 'lucide-react'
 import api from '@/components/api'
+import CameraCaptureModal from './CameraCaptureModal'
 
 export default function MobileEntryTable({ rows, setRows }) {
   const [mobileBrands, setMobileBrands] = useState([])
@@ -15,6 +16,16 @@ export default function MobileEntryTable({ rows, setRows }) {
   const [loading, setLoading] = useState(true)
   const [focusedModelIndex, setFocusedModelIndex] = useState(null)
   const [modelSearchTerm, setModelSearchTerm] = useState({})
+  const [cameraRowIndex, setCameraRowIndex] = useState(null)
+
+  const handlePhotosCaptured = (shots) => {
+    const index = cameraRowIndex
+    setCameraRowIndex(null)
+    if (index === null) return
+    const old = rows[index]?.photos
+    Object.values(old || {}).forEach((p) => p?.url && URL.revokeObjectURL(p.url))
+    setRows(rows.map((r, i) => (i === index ? { ...r, photos: shots } : r)))
+  }
 
   // Get shopId from localStorage token
   const getShopId = () => {
@@ -244,6 +255,7 @@ export default function MobileEntryTable({ rows, setRows }) {
                 </div>
               </th>
               <th className="px-3 py-3 xl:px-6 text-left text-sm font-medium text-gray-700 border-b border-gray-200">Date</th>
+              <th className="px-3 py-3 xl:px-6 text-left text-sm font-medium text-gray-700 border-b border-gray-200">Photos</th>
             </tr>
           </thead>
           <tbody>
@@ -351,11 +363,36 @@ export default function MobileEntryTable({ rows, setRows }) {
                 <td className="px-3 py-3 xl:px-6 xl:py-4 border-b border-gray-200">
                   <span className="text-sm text-gray-900">{row.date}</span>
                 </td>
+                <td className="px-3 py-3 xl:px-6 xl:py-4 border-b border-gray-200">
+                  <div className="flex items-center gap-2">
+                    {row.photos?.front && (
+                      <img src={row.photos.front.url} alt="Front" className="h-9 w-9 rounded border object-cover" />
+                    )}
+                    {row.photos?.back && (
+                      <img src={row.photos.back.url} alt="Back" className="h-9 w-9 rounded border object-cover" />
+                    )}
+                    <button
+                      type="button"
+                      onClick={() => setCameraRowIndex(index)}
+                      className="flex items-center gap-1 whitespace-nowrap rounded-md border border-blue-600 px-2.5 py-1.5 text-xs font-medium text-blue-600 hover:bg-blue-50"
+                    >
+                      <Camera className="h-3.5 w-3.5" />
+                      {row.photos?.front ? 'Retake' : 'Add Pic'}
+                    </button>
+                  </div>
+                </td>
               </tr>
             ))}
           </tbody>
         </table>
       </div>
+
+      <CameraCaptureModal
+        open={cameraRowIndex !== null}
+        title={cameraRowIndex !== null ? `Mobile ${cameraRowIndex + 1} Photos` : undefined}
+        onClose={() => setCameraRowIndex(null)}
+        onDone={handlePhotosCaptured}
+      />
 
       {/* Add Brand Modal */}
       {showBrandModal && (

@@ -1,12 +1,17 @@
 "use client"
 
 import { useState, useEffect, useRef } from "react"
-import { PlusCircle, User, Hash, Smartphone, FileText, Wrench, Users, RefreshCw, UserCheck, Phone, Search, ChevronDown } from "lucide-react"
+import { PlusCircle, User, Hash, Smartphone, FileText, Wrench, RefreshCw, UserCheck, Phone, Search, ChevronDown, Store, X } from "lucide-react"
 import { logAndNotify, logSuccess } from "@/utils/logger"
+
+const labelCls = "mb-1.5 flex items-center gap-1.5 text-sm font-medium text-gray-700"
+const inputCls =
+  "w-full rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-sm text-gray-900 placeholder:text-gray-400 shadow-sm transition-colors focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20 disabled:cursor-not-allowed disabled:bg-gray-50 disabled:opacity-60"
 
 export default function DealerForm({ dealers, formData, setFormData, handleCreateDealer, disabled, onBillNumberChange, onRegenerateBillNumber }) {
   const [dealerSearch, setDealerSearch] = useState("")
   const [dealerDropdownOpen, setDealerDropdownOpen] = useState(false)
+  const [showCreate, setShowCreate] = useState(false)
   const dealerDropdownRef = useRef(null)
 
   const filteredDealers = dealers.filter((dealer) =>
@@ -31,12 +36,12 @@ export default function DealerForm({ dealers, formData, setFormData, handleCreat
 
   const handleDealerCreate = async () => {
     // Add validation for dealerName and dealerNumber
-    if (!formData.dealerName.trim()) {
+    if (!(formData.dealerName || "").trim()) {
       logAndNotify("Dealer Name cannot be empty.", "warning")
       return
     }
 
-    if (!formData.dealerNumber.trim()) {
+    if (!(formData.dealerNumber || "").trim()) {
       logAndNotify("Dealer Number cannot be empty.", "warning")
       return
     }
@@ -48,94 +53,115 @@ export default function DealerForm({ dealers, formData, setFormData, handleCreat
       logSuccess("Dealer created successfully!")
       setFormData((prev) => ({
         ...prev,
+        selectedDealer: prev.dealerName.trim(),
         dealerName: "",
         dealerNumber: "",
       }))
+      setShowCreate(false)
     }
   }
 
   return (
-    <div className="space-y-4 xl:space-y-8">
-      {/* Create New Dealer Section */}
-      <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-4 xl:p-6 shadow-sm">
-        <div className="flex items-center gap-2 mb-4 xl:mb-6">
-          <PlusCircle className="h-5 w-5 text-blue-600" />
-          <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Create New Dealer</h3>
+    <div className="rounded-xl border border-gray-200 bg-white shadow-sm">
+      <div className="flex items-center justify-between gap-2 border-b border-gray-100 px-5 py-3">
+        <div className="flex items-center gap-2">
+          <div className="rounded-lg bg-blue-50 p-1.5 text-blue-600">
+            <Store className="h-4 w-4" />
+          </div>
+          <h4 className="text-sm font-semibold text-gray-900">Dealer Details</h4>
         </div>
+        {!showCreate && (
+          <button
+            type="button"
+            onClick={() => setShowCreate(true)}
+            disabled={disabled}
+            className="flex items-center gap-1.5 rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-xs font-medium text-gray-700 shadow-sm transition-colors hover:border-blue-400 hover:bg-blue-50 hover:text-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            <PlusCircle className="h-3.5 w-3.5" />
+            New Dealer
+          </button>
+        )}
+      </div>
 
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-2 xl:grid-cols-3">
-          <div className="space-y-2">
-            <label className="flex items-center gap-2 text-sm font-medium text-gray-700 dark:text-gray-200">
-              <User className="h-4 w-4 text-gray-500" />
-              Dealer Name
-            </label>
-            <input
-              type="text"
-              value={formData.dealerName || ""}
-              onChange={(e) => setFormData((prev) => ({ ...prev, dealerName: e.target.value }))}
-              placeholder="Enter dealer name"
-              disabled={disabled}
-              className="w-full rounded-md border border-gray-300 dark:border-gray-600 px-4 py-3 dark:bg-gray-700 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
-            />
-          </div>
-
-          <div className="space-y-2">
-            <label className="flex items-center gap-2 text-sm font-medium text-gray-700 dark:text-gray-200">
-              <Hash className="h-4 w-4 text-gray-500" />
-              Dealer Number
-            </label>
-            <input
-              type="text"
-              value={formData.dealerNumber || ""}
-              onChange={(e) => setFormData((prev) => ({ ...prev, dealerNumber: e.target.value }))}
-              placeholder="Enter dealer number"
-              disabled={disabled}
-              className="w-full rounded-md border border-gray-300 dark:border-gray-600 px-4 py-3 dark:bg-gray-700 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
-            />
-          </div>
-
-          <div className="flex items-end">
+      {/* Inline create-dealer panel */}
+      {showCreate && (
+        <div className="border-b border-gray-100 bg-blue-50/40 px-5 py-4">
+          <div className="mb-3 flex items-center justify-between">
+            <p className="text-xs font-semibold uppercase tracking-wider text-blue-700">Add a new dealer</p>
             <button
+              type="button"
+              onClick={() => setShowCreate(false)}
+              className="rounded-md p-1 text-gray-400 transition-colors hover:bg-white hover:text-gray-600"
+              title="Cancel"
+            >
+              <X className="h-4 w-4" />
+            </button>
+          </div>
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-[1fr_1fr_auto] sm:items-end">
+            <div>
+              <label className={labelCls}>
+                <User className="h-3.5 w-3.5 text-gray-400" />
+                Dealer Name
+              </label>
+              <input
+                type="text"
+                value={formData.dealerName || ""}
+                onChange={(e) => setFormData((prev) => ({ ...prev, dealerName: e.target.value }))}
+                placeholder="Enter dealer name"
+                disabled={disabled}
+                autoFocus
+                className={inputCls}
+              />
+            </div>
+            <div>
+              <label className={labelCls}>
+                <Hash className="h-3.5 w-3.5 text-gray-400" />
+                Dealer Number
+              </label>
+              <input
+                type="text"
+                value={formData.dealerNumber || ""}
+                onChange={(e) => setFormData((prev) => ({ ...prev, dealerNumber: e.target.value }))}
+                placeholder="Enter dealer number"
+                disabled={disabled}
+                className={inputCls}
+              />
+            </div>
+            <button
+              type="button"
               onClick={handleDealerCreate}
               disabled={disabled}
-              className="w-full flex items-center justify-center gap-2 rounded-md bg-blue-600 px-6 py-3 text-white hover:bg-blue-700 focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition-all font-medium"
+              className="flex items-center justify-center gap-2 rounded-lg bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
             >
               <PlusCircle className="h-4 w-4" />
               Create Dealer
             </button>
           </div>
         </div>
-      </div>
+      )}
 
-      {/* Select Existing Dealer Section */}
-      <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-4 xl:p-6 shadow-sm">
-        <div className="flex items-center gap-2 mb-4 xl:mb-6">
-          <Users className="h-5 w-5 text-green-600" />
-          <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Dealer Information</h3>
-        </div>
-
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-2 xl:grid-cols-3">
-          <div className="space-y-2" ref={dealerDropdownRef}>
-            <label className="flex items-center gap-2 text-sm font-medium text-gray-700 dark:text-gray-200">
-              <User className="h-4 w-4 text-gray-500" />
-              Select Dealer
+      <div className="grid grid-cols-1 gap-x-4 gap-y-5 p-5 sm:grid-cols-2 xl:grid-cols-3">
+          <div ref={dealerDropdownRef}>
+            <label className={labelCls}>
+              <User className="h-3.5 w-3.5 text-gray-400" />
+              Select Dealer <span className="text-rose-500">*</span>
             </label>
             <div className="relative">
               <button
                 type="button"
                 onClick={() => !disabled && setDealerDropdownOpen((prev) => !prev)}
                 disabled={disabled}
-                className="w-full flex items-center justify-between rounded-md border border-gray-300 dark:border-gray-600 px-4 py-3 bg-white dark:bg-gray-700 text-left text-gray-900 dark:text-white focus:ring-2 focus:ring-green-500 focus:border-transparent transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                className={`${inputCls} flex items-center justify-between text-left`}
               >
-                <span className={formData.selectedDealer ? "" : "text-gray-400 dark:text-gray-500"}>
+                <span className={formData.selectedDealer ? "" : "text-gray-400"}>
                   {formData.selectedDealer || "Select Dealer"}
                 </span>
                 <ChevronDown className={`h-4 w-4 text-gray-500 transition-transform ${dealerDropdownOpen ? "rotate-180" : ""}`} />
               </button>
 
               {dealerDropdownOpen && (
-                <div className="absolute z-50 mt-1 w-full rounded-md border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-700 shadow-lg">
-                  <div className="p-2 border-b border-gray-200 dark:border-gray-600">
+                <div className="absolute z-50 mt-1 w-full rounded-lg border border-gray-200 bg-white shadow-lg">
+                  <div className="p-2 border-b border-gray-100">
                     <div className="relative">
                       <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
                       <input
@@ -144,7 +170,7 @@ export default function DealerForm({ dealers, formData, setFormData, handleCreat
                         onChange={(e) => setDealerSearch(e.target.value)}
                         placeholder="Search dealer..."
                         autoFocus
-                        className="w-full pl-8 pr-3 py-2 text-sm rounded border border-gray-300 dark:border-gray-500 dark:bg-gray-600 dark:text-white focus:outline-none focus:ring-2 focus:ring-green-500"
+                        className="w-full pl-8 pr-3 py-2 text-sm rounded-md border border-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
                       />
                     </div>
                   </div>
@@ -153,7 +179,7 @@ export default function DealerForm({ dealers, formData, setFormData, handleCreat
                       <button
                         type="button"
                         onClick={() => handleDealerSelect("")}
-                        className="w-full text-left px-4 py-2 text-sm text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-600"
+                        className="w-full text-left px-4 py-2 text-sm text-gray-500 hover:bg-gray-50"
                       >
                         Select Dealer
                       </button>
@@ -164,14 +190,26 @@ export default function DealerForm({ dealers, formData, setFormData, handleCreat
                           <button
                             type="button"
                             onClick={() => handleDealerSelect(dealer.clientName)}
-                            className={`w-full text-left px-4 py-2 text-sm hover:bg-green-50 dark:hover:bg-gray-600 text-gray-900 dark:text-white ${formData.selectedDealer === dealer.clientName ? "bg-green-50 dark:bg-gray-600 font-medium" : ""}`}
+                            className={`w-full text-left px-4 py-2 text-sm hover:bg-blue-50 text-gray-900 ${formData.selectedDealer === dealer.clientName ? "bg-blue-50 font-medium text-blue-700" : ""}`}
                           >
                             {dealer.clientName}
                           </button>
                         </li>
                       ))
                     ) : (
-                      <li className="px-4 py-2 text-sm text-gray-400 dark:text-gray-500">No dealers found</li>
+                      <li className="px-4 py-2 text-sm text-gray-400">
+                        No dealers found —{" "}
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setDealerDropdownOpen(false)
+                            setShowCreate(true)
+                          }}
+                          className="font-medium text-blue-600 hover:underline"
+                        >
+                          create one
+                        </button>
+                      </li>
                     )}
                   </ul>
                 </div>
@@ -179,26 +217,28 @@ export default function DealerForm({ dealers, formData, setFormData, handleCreat
             </div>
           </div>
 
-          <div className="space-y-2">
-            <label className="flex items-center gap-2 text-sm font-medium text-gray-700 dark:text-gray-200">
-              <Smartphone className="h-4 w-4 text-gray-500" />
-              No. of Mobile
+          <div>
+            <label className={labelCls}>
+              <Smartphone className="h-3.5 w-3.5 text-gray-400" />
+              No. of Mobiles <span className="text-rose-500">*</span>
             </label>
             <input
               type="number"
               value={formData.noOfMobile || ""}
               disabled={disabled}
+              placeholder="Number of devices"
+              min="1"
               onChange={(e) =>
                 setFormData((prev) => ({ ...prev, noOfMobile: Number.parseInt(e.target.value, 10) || 0 }))
               }
-              className="w-full rounded-md border border-gray-300 dark:border-gray-600 px-4 py-3 dark:bg-gray-700 dark:text-white focus:ring-2 focus:ring-green-500 focus:border-transparent transition-all"
+              className={inputCls}
             />
           </div>
 
-          <div className="space-y-2">
-            <label className="flex items-center gap-2 text-sm font-medium text-gray-700 dark:text-gray-200">
-              <FileText className="h-4 w-4 text-gray-500" />
-              Bill Number
+          <div>
+            <label className={labelCls}>
+              <FileText className="h-3.5 w-3.5 text-gray-400" />
+              Bill Number <span className="text-rose-500">*</span>
             </label>
             <div className="flex gap-2">
               <input
@@ -207,38 +247,39 @@ export default function DealerForm({ dealers, formData, setFormData, handleCreat
                 placeholder="e.g., DEAL-0001"
                 onChange={(e) => onBillNumberChange(e.target.value)}
                 disabled={disabled}
-                className="flex-1 rounded-md border border-gray-300 dark:border-gray-600 px-4 py-3 dark:bg-gray-700 dark:text-white focus:ring-2 focus:ring-green-500 focus:border-transparent transition-all"
+                className={`${inputCls} flex-1 font-mono`}
               />
               <button
                 type="button"
                 onClick={onRegenerateBillNumber}
                 disabled={disabled}
-                className="px-3 py-3 bg-green-100 hover:bg-green-200 text-green-700 border border-green-300 rounded-md transition-colors disabled:opacity-50 disabled:cursor-not-allowed dark:bg-green-800 dark:hover:bg-green-700 dark:text-green-200 dark:border-green-600"
+                className="rounded-lg border border-gray-300 bg-white px-3 text-gray-600 shadow-sm transition-colors hover:border-blue-400 hover:bg-blue-50 hover:text-blue-600 disabled:cursor-not-allowed disabled:opacity-50"
                 title="Generate new sequential bill number"
               >
                 <RefreshCw className="h-4 w-4" />
               </button>
             </div>
-            <p className="text-xs text-gray-500 dark:text-gray-400">Auto-generated, but editable</p>
+            <p className="mt-1 text-xs text-gray-400">Auto-generated, but editable</p>
           </div>
 
-          <div className="space-y-2">
-            <label className="flex items-center gap-2 text-sm font-medium text-gray-700 dark:text-gray-200">
-              <Wrench className="h-4 w-4 text-gray-500" />
+          <div>
+            <label className={labelCls}>
+              <Wrench className="h-3.5 w-3.5 text-gray-400" />
               Technician Name
             </label>
             <input
               type="text"
               value={formData.technician || ""}
               disabled={disabled}
+              placeholder="Optional"
               onChange={(e) => setFormData((prev) => ({ ...prev, technician: e.target.value }))}
-              className="w-full rounded-md border border-gray-300 dark:border-gray-600 px-4 py-3 dark:bg-gray-700 dark:text-white focus:ring-2 focus:ring-green-500 focus:border-transparent transition-all"
+              className={inputCls}
             />
           </div>
 
-          <div className="space-y-2">
-            <label className="flex items-center gap-2 text-sm font-medium text-gray-700 dark:text-gray-200">
-              <UserCheck className="h-4 w-4 text-gray-500" />
+          <div>
+            <label className={labelCls}>
+              <UserCheck className="h-3.5 w-3.5 text-gray-400" />
               Vendor Name
             </label>
             <input
@@ -246,14 +287,14 @@ export default function DealerForm({ dealers, formData, setFormData, handleCreat
               value={formData.vendorName || ""}
               disabled={disabled}
               onChange={(e) => setFormData((prev) => ({ ...prev, vendorName: e.target.value }))}
-              placeholder="Enter vendor name"
-              className="w-full rounded-md border border-gray-300 dark:border-gray-600 px-4 py-3 dark:bg-gray-700 dark:text-white focus:ring-2 focus:ring-green-500 focus:border-transparent transition-all"
+              placeholder="Optional"
+              className={inputCls}
             />
           </div>
 
-          <div className="space-y-2">
-            <label className="flex items-center gap-2 text-sm font-medium text-gray-700 dark:text-gray-200">
-              <Phone className="h-4 w-4 text-gray-500" />
+          <div>
+            <label className={labelCls}>
+              <Phone className="h-3.5 w-3.5 text-gray-400" />
               Vendor Number
             </label>
             <input
@@ -261,11 +302,10 @@ export default function DealerForm({ dealers, formData, setFormData, handleCreat
               value={formData.vendorNumber || ""}
               disabled={disabled}
               onChange={(e) => setFormData((prev) => ({ ...prev, vendorNumber: e.target.value }))}
-              placeholder="Enter vendor number"
-              className="w-full rounded-md border border-gray-300 dark:border-gray-600 px-4 py-3 dark:bg-gray-700 dark:text-white focus:ring-2 focus:ring-green-500 focus:border-transparent transition-all"
+              placeholder="Optional"
+              className={inputCls}
             />
           </div>
-        </div>
       </div>
     </div>
   )

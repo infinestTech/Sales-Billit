@@ -17,15 +17,12 @@ import {
   Smartphone,
   DollarSign,
   Hash,
-  CheckCircle,
-  XCircle,
   RotateCcw,
-  TrendingUp,
-  TrendingDown,
   Package,
   Calculator,
   MessageCircle,
 } from "lucide-react"
+import StatCard from "@/components/ui/StatCard"
 
 
 const AllRecordTable = ({ shopId, filterDate }) => {
@@ -296,79 +293,36 @@ const [shopAddressState, setShopAddressState] = useState("")
 
       {/* Summary Cards */}
       <div className="px-4 py-4 xl:px-8 xl:py-6 bg-gradient-to-r from-gray-50 to-blue-50 border-b border-gray-200">
-        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-2 xl:grid-cols-3 gap-4 xl:gap-6 mb-4 xl:mb-6">
-          <div className="bg-white rounded-xl p-4 xl:p-6 shadow-lg border border-gray-200 hover:shadow-xl transition-shadow duration-200">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-semibold text-gray-600 mb-1">Ready Status</p>
-                <div className="flex items-center space-x-4">
-                  <div className="flex items-center">
-                    <CheckCircle className="h-4 w-4 text-green-600 mr-1" />
-                    <span className="text-lg font-bold text-green-700">{totals.notReadyCount}</span>
-                    <span className="text-sm text-gray-500 ml-1">Ready</span>
-                  </div>
-                  <div className="flex items-center">
-                    <span className="text-lg font-bold text-amber-600">{totals.processingCount}</span>
-                    <span className="text-sm text-gray-500 ml-1">Processing</span>
-                  </div>
-                  <div className="flex items-center">
-                    <XCircle className="h-4 w-4 text-red-600 mr-1" />
-                    <span className="text-lg font-bold text-red-700">{totals.notReadyFalseCount}</span>
-                    <span className="text-sm text-gray-500 ml-1">Not Ready</span>
-                  </div>
-                </div>
-              </div>
-              <div className="p-3 bg-blue-100 rounded-xl">
-                <Package className="h-8 w-8 text-blue-600" />
-              </div>
-            </div>
-          </div>
-
-
-          <div className="bg-white rounded-xl p-4 xl:p-6 shadow-lg border border-gray-200 hover:shadow-xl transition-shadow duration-200">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-semibold text-gray-600 mb-1">Delivery Status</p>
-                <div className="flex items-center space-x-4">
-                  <div className="flex items-center">
-                    <TrendingUp className="h-4 w-4 text-green-600 mr-1" />
-                    <span className="text-lg font-bold text-green-700">{totals.deliveredCount}</span>
-                    <span className="text-sm text-gray-500 ml-1">Delivered</span>
-                  </div>
-                  <div className="flex items-center">
-                    <TrendingDown className="h-4 w-4 text-orange-600 mr-1" />
-                    <span className="text-lg font-bold text-orange-700">{totals.notDeliveredFalseCount}</span>
-                    <span className="text-sm text-gray-500 ml-1">Pending</span>
-                  </div>
-                </div>
-              </div>
-              <div className="p-3 bg-green-100 rounded-xl">
-                <Smartphone className="h-8 w-8 text-green-600" />
-              </div>
-            </div>
-          </div>
-
-
-          <div className="bg-white rounded-xl p-4 xl:p-6 shadow-lg border border-gray-200 hover:shadow-xl transition-shadow duration-200">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-semibold text-gray-600 mb-1">Return Status</p>
-                <div className="flex items-center space-x-4">
-                  <div className="flex items-center">
-                    <span className="text-lg font-bold text-amber-600">{totals.shouldBeReturnedCount}</span>
-                    <span className="text-sm text-gray-500 ml-1">SBRd</span>
-                  </div>
-                  <div className="flex items-center">
-                    <span className="text-lg font-bold text-purple-700">{totals.returnCount}</span>
-                    <span className="text-sm text-gray-500 ml-1">Returned</span>
-                  </div>
-                </div>
-              </div>
-              <div className="p-3 bg-purple-100 rounded-xl">
-                <RotateCcw className="h-8 w-8 text-purple-600" />
-              </div>
-            </div>
-          </div>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4 xl:mb-6">
+          <StatCard
+            title="Repair Status"
+            icon={Package}
+            iconClass="bg-blue-50 text-blue-600"
+            metrics={[
+              { label: "Ready", value: totals.notReadyCount, textClass: "text-emerald-600", barClass: "bg-emerald-500" },
+              { label: "Processing", value: totals.processingCount, textClass: "text-amber-600", barClass: "bg-amber-400" },
+              // notReadyFalseCount includes processing devices; show only untouched ones here
+              { label: "Not Ready", value: Math.max(0, totals.notReadyFalseCount - totals.processingCount), textClass: "text-rose-600", barClass: "bg-rose-500" },
+            ]}
+          />
+          <StatCard
+            title="Delivery Status"
+            icon={Smartphone}
+            iconClass="bg-emerald-50 text-emerald-600"
+            metrics={[
+              { label: "Delivered", value: totals.deliveredCount, textClass: "text-emerald-600", barClass: "bg-emerald-500" },
+              { label: "Pending", value: totals.notDeliveredFalseCount, textClass: "text-orange-600", barClass: "bg-orange-400" },
+            ]}
+          />
+          <StatCard
+            title="Return Status"
+            icon={RotateCcw}
+            iconClass="bg-violet-50 text-violet-600"
+            metrics={[
+              { label: "Should Return", value: totals.shouldBeReturnedCount, textClass: "text-amber-600", barClass: "bg-amber-400" },
+              { label: "Returned", value: totals.returnCount, textClass: "text-violet-600", barClass: "bg-violet-500" },
+            ]}
+          />
         </div>
 
 

@@ -101,6 +101,10 @@ const { getFilteredRecords } = require("../controllers/api/getFilteredRecordsCon
 
 router.post("/records",authenticateToken, getFilteredRecords);
 
+// Paginated, filterable Mobile Registry listing (safe for shops with thousands of entries)
+const { getMobileRegistry } = require("../controllers/api/mobileRegistryController");
+router.post("/mobile-registry", authenticateToken, getMobileRegistry);
+
 
 // ======================================
 // 🔁 Rework Routes
@@ -342,6 +346,13 @@ router.get("/mobile-issues/:shopId", authenticateToken, getMobileIssues);
 router.post("/mobile-issues", authenticateToken, addMobileIssue);
 
 // ======================================
+// 📷 Mobile Entry Photos (Cloudflare R2)
+// ======================================
+const { presignMobileImageUpload, getMobileImages } = require("../controllers/api/mobileImagesController");
+router.post("/mobile-images/presign-upload", authenticateToken, presignMobileImageUpload);
+router.get("/mobile-images/:mobileId", authenticateToken, getMobileImages);
+
+// ======================================
 // 🧾 Bill Number Management Routes
 // ======================================
 const { generateNextBillNumber, checkBillNumberExists } = require("../controllers/api/billNumberController");
@@ -351,20 +362,6 @@ router.post("/next-bill-number", authenticateToken, generateNextBillNumber);
 
 // Check if bill number exists
 router.post("/check-bill-number", authenticateToken, checkBillNumberExists);
-
-// ======================================
-// 👥 Employee Routes
-// ======================================
-const { addEmployee, listEmployees } = require("../controllers/api/employeeController");
-router.post("/employees/add", authenticateToken, addEmployee);
-router.get("/employees/:shopId", authenticateToken, listEmployees);
-
-// ======================================
-// 🗓️ Attendance Routes
-// ======================================
-const { listTodayAttendance, markAttendance } = require("../controllers/api/attendanceController");
-router.get("/employees/attendance/:shopId", authenticateToken, listTodayAttendance); // optional ?date=YYYY-MM-DD
-router.post("/employees/attendance/mark", authenticateToken, markAttendance);
 
 module.exports = router;
 

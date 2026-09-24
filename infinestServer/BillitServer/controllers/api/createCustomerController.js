@@ -2,6 +2,7 @@
 const { Customer, Mobile, Shop } = require("../../models/mongoModels");
 const moment = require("moment-timezone");
 const { fireWaEvent } = require("../../utils/msg91Whatsapp");
+const { sanitizeMobileImages } = require("./mobileImagesController");
 
 
 // POST /api/createcustomer
@@ -51,6 +52,7 @@ const createCustomerController = async (req, res) => {
           model: mobile.model || "",
           imei: mobile.imei || "",
           issue: mobile.issues || null,
+          images: sanitizeMobileImages(mobile.images, userId),
           added_date: istDate,
           technician_name: techName,
         });
@@ -132,6 +134,7 @@ const createCustomerController = async (req, res) => {
         model: mobile.model || "",
         imei: mobile.imei || "",
         issue: mobile.issues || null,
+        images: sanitizeMobileImages(mobile.images, userId),
         added_date: istDate,
         technician_name: techName,
       });

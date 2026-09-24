@@ -1,4 +1,5 @@
 const { Dealer, Mobile } = require("../../models/mongoModels");
+const { sanitizeMobileImages } = require("./mobileImagesController");
 
 // POST /api/updatedealer
 const updateDealer = async (req, res) => {
@@ -48,6 +49,7 @@ const updateDealer = async (req, res) => {
         model: mobile.model || "",
         imei: mobile.imei || "",
         issue: mobile.issues,
+        images: sanitizeMobileImages(mobile.images, dealer.shop_id),
         added_date: new Date(mobile.date),
         technician_name: technicianname,
       });

@@ -1,8 +1,12 @@
 "use client"
 
 import { useEffect, useRef, useState } from "react"
-import { MessageCircle, RefreshCw, UserCheck, UserPlus } from "lucide-react"
+import { MessageCircle, RefreshCw, UserCheck, UserPlus, User, Phone, Smartphone, FileText, Wrench, IndianRupee } from "lucide-react"
 import { useShopWhatsappConfig } from "@/hooks/useShopWhatsappConfig"
+
+const labelCls = "mb-1.5 flex items-center gap-1.5 text-sm font-medium text-gray-700"
+const inputCls =
+  "w-full rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-sm text-gray-900 placeholder:text-gray-400 shadow-sm transition-colors focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20 disabled:cursor-not-allowed disabled:bg-gray-50 disabled:opacity-60"
 
 export default function CustomerForm({ formData, setFormData, disabled, onBillNumberChange, onRegenerateBillNumber, shopId }) {
   const [suggestions, setSuggestions] = useState([])
@@ -100,10 +104,19 @@ export default function CustomerForm({ formData, setFormData, disabled, onBillNu
   }
 
   return (
-    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-2 xl:grid-cols-3 gap-4 mb-4">
-      {/* First Row */}
+    <div className="rounded-xl border border-gray-200 bg-white shadow-sm">
+      <div className="flex items-center gap-2 border-b border-gray-100 px-5 py-3">
+        <div className="rounded-lg bg-blue-50 p-1.5 text-blue-600">
+          <User className="h-4 w-4" />
+        </div>
+        <h4 className="text-sm font-semibold text-gray-900">Customer Details</h4>
+      </div>
+    <div className="grid grid-cols-1 gap-x-4 gap-y-5 p-5 sm:grid-cols-2 xl:grid-cols-3">
       <div>
-        <label className="block text-gray-700 font-medium mb-2">Client Name</label>
+        <label className={labelCls}>
+          <User className="h-3.5 w-3.5 text-gray-400" />
+          Client Name <span className="text-rose-500">*</span>
+        </label>
         <input
           type="text"
           name="clientName"
@@ -111,7 +124,7 @@ export default function CustomerForm({ formData, setFormData, disabled, onBillNu
           value={formData.clientName || ""}
           onChange={handleInputChange}
           disabled={disabled}
-          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:opacity-50 disabled:cursor-not-allowed"
+          className={inputCls}
         />
         {selectedExisting && (
           <p className="text-xs text-green-600 mt-1 flex items-center gap-1">
@@ -122,7 +135,10 @@ export default function CustomerForm({ formData, setFormData, disabled, onBillNu
       </div>
 
       <div className="relative" ref={dropdownRef}>
-        <label className="block text-gray-700 font-medium mb-2">Mobile Number</label>
+        <label className={labelCls}>
+          <Phone className="h-3.5 w-3.5 text-gray-400" />
+          Mobile Number <span className="text-rose-500">*</span>
+        </label>
         <div className="relative">
           <input
             type="tel"
@@ -132,7 +148,7 @@ export default function CustomerForm({ formData, setFormData, disabled, onBillNu
             onChange={handleInputChange}
             disabled={disabled}
             autoComplete="off"
-            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:opacity-50 disabled:cursor-not-allowed"
+            className={inputCls}
           />
           {searchLoading && (
             <div className="absolute right-3 top-1/2 -translate-y-1/2">
@@ -174,23 +190,28 @@ export default function CustomerForm({ formData, setFormData, disabled, onBillNu
       </div>
 
       <div>
-        <label className="block text-gray-700 font-medium mb-2">No. of Mobile</label>
+        <label className={labelCls}>
+          <Smartphone className="h-3.5 w-3.5 text-gray-400" />
+          No. of Mobiles <span className="text-rose-500">*</span>
+        </label>
         <input
           type="number"
           name="noOfMobile"
-          placeholder="Enter number of mobiles"
+          placeholder="1 – 15"
           min="1"
           max="15"
           value={formData.noOfMobile || ""}
           onChange={handleInputChange}
           disabled={disabled}
-          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:opacity-50 disabled:cursor-not-allowed"
+          className={inputCls}
         />
       </div>
 
-      {/* Second Row */}
       <div>
-        <label className="block text-gray-700 font-medium mb-2">Bill Number</label>
+        <label className={labelCls}>
+          <FileText className="h-3.5 w-3.5 text-gray-400" />
+          Bill Number <span className="text-rose-500">*</span>
+        </label>
         <div className="flex gap-2">
           <input
             type="text"
@@ -199,71 +220,80 @@ export default function CustomerForm({ formData, setFormData, disabled, onBillNu
             value={formData.billNo || ""}
             onChange={handleInputChange}
             disabled={disabled}
-            className="flex-1 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:opacity-50 disabled:cursor-not-allowed"
+            className={`${inputCls} flex-1 font-mono`}
           />
           <button
             type="button"
             onClick={onRegenerateBillNumber}
             disabled={disabled}
-            className="px-3 py-2 bg-blue-100 hover:bg-blue-200 text-blue-700 border border-blue-300 rounded-md transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            className="rounded-lg border border-gray-300 bg-white px-3 text-gray-600 shadow-sm transition-colors hover:border-blue-400 hover:bg-blue-50 hover:text-blue-600 disabled:cursor-not-allowed disabled:opacity-50"
             title="Generate new sequential bill number"
           >
             <RefreshCw className="h-4 w-4" />
           </button>
         </div>
-        <p className="text-xs text-gray-500 mt-1">Auto-generated, but editable</p>
+        <p className="mt-1 text-xs text-gray-400">Auto-generated, but editable</p>
       </div>
 
       <div>
-        <label className="block text-gray-700 font-medium mb-2">Technician Name</label>
+        <label className={labelCls}>
+          <Wrench className="h-3.5 w-3.5 text-gray-400" />
+          Technician Name
+        </label>
         <input
           type="text"
           name="technician"
-          placeholder="Enter technician name"
+          placeholder="Optional"
           value={formData.technician || ""}
           onChange={handleInputChange}
           disabled={disabled}
-          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:opacity-50 disabled:cursor-not-allowed"
+          className={inputCls}
         />
       </div>
 
       <div>
-        <label className="block text-gray-700 font-medium mb-2">Estimated Cost</label>
+        <label className={labelCls}>
+          <IndianRupee className="h-3.5 w-3.5 text-gray-400" />
+          Estimated Cost
+        </label>
         <input
           type="number"
           name="estimatedCost"
-          placeholder="Enter estimated cost (₹)"
+          placeholder="₹ 0"
           min="0"
           value={formData.estimatedCost ?? ""}
           onChange={handleInputChange}
           disabled={disabled}
-          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:opacity-50 disabled:cursor-not-allowed"
+          className={inputCls}
         />
       </div>
 
       <div>
-        <label className={`block font-medium mb-2 flex items-center gap-1.5 ${waShopEnabled === true ? 'text-gray-700' : 'text-gray-400'}`}>
-          <MessageCircle className={`h-4 w-4 ${waShopEnabled === true ? 'text-green-600' : 'text-gray-400'}`} />
+        <label className={`${labelCls} ${waShopEnabled === true ? "" : "text-gray-400"}`}>
+          <MessageCircle className={`h-3.5 w-3.5 ${waShopEnabled === true ? "text-green-600" : "text-gray-400"}`} />
           WhatsApp Number
           {waShopEnabled !== true && (
-            <span className="text-xs font-normal text-gray-400 ml-1">(WhatsApp not enabled for your shop)</span>
+            <span className="ml-auto rounded bg-gray-100 px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-gray-500">
+              Disabled
+            </span>
           )}
         </label>
         <input
           type="tel"
           name="whatsappNumber"
-          placeholder="Leave empty if mobile number is WhatsApp number"
+          placeholder="Same as mobile number if empty"
           value={formData.whatsappNumber || ""}
           onChange={handleInputChange}
           disabled={waFieldDisabled}
-          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent disabled:opacity-50 disabled:cursor-not-allowed"
+          className={inputCls}
         />
-        <p className="text-xs text-gray-400 mt-1">
+        <p className="mt-1 text-xs text-gray-400">
           {waShopEnabled === true
             ? "Used for WhatsApp notifications \u2014 overrides mobile number if provided"
             : "Enable WhatsApp in the admin portal to use this field"}
         </p>
       </div>
+    </div>
     </div>
   )
 }

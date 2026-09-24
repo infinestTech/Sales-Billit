@@ -5,9 +5,10 @@ import CustomerForm from "./CustomerForm"
 import DealerForm from "./DealerForm"
 import MobileEntryTable from "./MobileEntryTable"
 import RecordTable from "@/components/tables/RecordTable"
-import { Plus, Check, X, AlertTriangle } from "lucide-react"
+import { Plus, Check, X, AlertTriangle, User, Store, ArrowRight } from "lucide-react"
 import { usePlanFeatures } from "@/context/PlanFeatureContext"
 import { logAndNotify, logError, logSuccess, logSystem } from "@/utils/logger"
+import { uploadMobilePhoto } from "@/utils/mobileImagesApi"
 
 
 export default function CreateRecordForm({ shopId, isLimitReached, setIsLimitReached }) {
@@ -242,6 +243,21 @@ export default function CreateRecordForm({ shopId, isLimitReached, setIsLimitRea
     )
     setIsTableVisible(true)
   }
+
+  // Caches keys on the photo so a failed submit can be retried without re-uploading
+  const uploadRowPhotos = async (photos) => {
+    const uploaded = []
+    for (const side of ["front", "back"]) {
+      const photo = photos?.[side]
+      if (!photo?.blob) continue
+      if (!photo.key) {
+        photo.key = (await uploadMobilePhoto(photo.blob, side)).key
+      }
+      uploaded.push({ key: photo.key, side })
+    }
+    return uploaded
+  }
+
   const handleSubmit = async () => {
     if (isSubmitting) return
     setIsSubmitting(true)
@@ -270,6 +286,15 @@ export default function CreateRecordForm({ shopId, isLimitReached, setIsLimitRea
       const emptyBrandIndex = mobileNameIssues.findIndex((m) => !m.mobileName || !m.mobileName.trim())
       if (emptyBrandIndex !== -1) {
         logAndNotify(`Row ${emptyBrandIndex + 1}: Mobile Name is required. Please select a brand.`, "warning", shopId)
+        return
+      }
+
+      try {
+        for (let i = 0; i < rows.length; i++) {
+          mobileNameIssues[i].images = await uploadRowPhotos(rows[i].photos)
+        }
+      } catch (uploadError) {
+        logAndNotify(`Photo upload failed: ${uploadError.message}`, "error", shopId)
         return
       }
 
@@ -343,18 +368,35 @@ export default function CreateRecordForm({ shopId, isLimitReached, setIsLimitRea
       )}
 
       {/* Customer Type Selection */}
-      <div className="mb-6">
-        <div className="flex items-center space-x-4">
-          <label className="text-gray-700 font-medium">Customer Type:</label>
-          <select
-            value={customerType}
-            onChange={(e) => setCustomerType(e.target.value)}
-            disabled={isLimitReached}
-            className="px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            <option value="Customer">Customer</option>
-            <option value="Dealer">Dealer</option>
-          </select>
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <h3 className="text-base font-semibold text-gray-900">New Service Record</h3>
+          <p className="text-sm text-gray-500">Choose who is handing over the device, then fill in the details.</p>
+        </div>
+        <div className="inline-flex rounded-lg border border-gray-200 bg-gray-100 p-1" role="tablist">
+          {[
+            { value: "Customer", label: "Customer", icon: User },
+            { value: "Dealer", label: "Dealer", icon: Store },
+          ].map((opt) => {
+            const active = customerType === opt.value
+            const Icon = opt.icon
+            return (
+              <button
+                key={opt.value}
+                type="button"
+                role="tab"
+                aria-selected={active}
+                disabled={isLimitReached}
+                onClick={() => setCustomerType(opt.value)}
+                className={`flex items-center gap-2 rounded-md px-4 py-1.5 text-sm font-medium transition-all disabled:cursor-not-allowed disabled:opacity-50 ${
+                  active ? "bg-white text-blue-700 shadow-sm" : "text-gray-600 hover:text-gray-900"
+                }`}
+              >
+                <Icon className="h-4 w-4" />
+                {opt.label}
+              </button>
+            )
+          })}
         </div>
       </div>
 
@@ -383,7 +425,8 @@ export default function CreateRecordForm({ shopId, isLimitReached, setIsLimitRea
       </div>
 
       {/* Add Mobile Entries Button */}
-      <div className="mb-6">
+      <div className="flex items-center justify-end gap-3">
+        <p className="hidden text-xs text-gray-500 sm:block">Next: add brand, model, issue and photos for each device</p>
         <button
           onClick={() => {
             if (loading) {
@@ -402,10 +445,11 @@ export default function CreateRecordForm({ shopId, isLimitReached, setIsLimitRea
             generateRows(formData.noOfMobile)
           }}
           disabled={isLimitReached}
-          className="bg-black hover:bg-gray-800 text-white px-4 py-2 rounded-md font-medium transition-colors duration-200 flex items-center space-x-2 disabled:opacity-50 disabled:cursor-not-allowed"
+          className="flex items-center gap-2 rounded-lg bg-blue-600 px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition-colors duration-200 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
         >
           <Plus className="h-4 w-4" />
           <span>Add Mobile Entries</span>
+          <ArrowRight className="h-4 w-4" />
         </button>
       </div>
 

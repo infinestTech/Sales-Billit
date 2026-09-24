@@ -169,6 +169,13 @@ const mobileSchema = new mongoose.Schema({
   imei: { type: String },
   issue: { type: String },
   technician_name: { type: String },
+  // Photos captured at intake; files live in Cloudflare R2, only the object keys are stored here
+  images: [{
+    _id: false,
+    key: { type: String, required: true },
+    side: { type: String, enum: ["front", "back"], required: true },
+    uploaded_at: { type: Date, default: Date.now }
+  }],
   added_date: { type: Date, default: Date.now },
   update_date: { type: Date },
   processing: { type: Boolean, default: false }, // Technician has started repairing (between received and ready)
@@ -205,6 +212,8 @@ const mobileSchema = new mongoose.Schema({
 // - mobiles-first grouping uses shop_id prefix; customer_id/dealer_id for the $group key
 mobileSchema.index({ shop_id: 1, customer_id: 1 });
 mobileSchema.index({ shop_id: 1, dealer_id: 1 });
+// Mobile Registry listing sorts newest-first per shop — keeps pagination fast even at 1000s of records
+mobileSchema.index({ shop_id: 1, added_date: -1 });
 
 // ==============================
 // � Rework Schema
