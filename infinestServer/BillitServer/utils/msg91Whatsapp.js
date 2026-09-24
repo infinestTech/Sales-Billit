@@ -16,6 +16,7 @@
  *   MSG91_LANG_CODE             — defaults to "en"
  *   MSG91_TPL_RECORD_CREATED
  *   MSG91_TPL_MOBILES_APPENDED
+ *   MSG91_TPL_PROCESSING
  *   MSG91_TPL_READY
  *   MSG91_TPL_DELIVERED
  *   MSG91_TPL_RETURNED
@@ -49,7 +50,7 @@ function normalizePhone(raw) {
   return digits; // pass through whatever the user stored
 }
 
-function buildBodyComponents(vars) {
+function buildBodyComponents(vars, header) {
   const components = {};
   Object.keys(vars || {}).forEach((key, idx) => {
     // MSG91 expects body_1, body_2, ... in order. Allow callers to either pass
@@ -61,6 +62,14 @@ function buildBodyComponents(vars) {
       value: vars[key] == null ? "" : String(vars[key]),
     };
   });
+  // Optional header component (e.g. a document/PDF attached to the template's header)
+  if (header && header.value) {
+    components.header_1 = {
+      type: header.type || "document",
+      value: header.value,
+      ...(header.filename ? { filename: header.filename } : {}),
+    };
+  }
   return components;
 }
 
@@ -78,9 +87,10 @@ async function logAttempt(entry) {
  * @param {string} opts.event   — key in EVENT_TEMPLATE_ENV
  * @param {string} opts.to      — customer phone (any format)
  * @param {Object} opts.vars    — { name: 'X', amount: '500', ... } or { body_1: ... }
+ * @param {Object} [opts.header] — optional template header attachment, e.g. { type: 'document', value: '<public URL>', filename: 'Receipt.pdf' }
  * @returns {Promise<{status: 'sent'|'skipped'|'error', reason?: string, messageId?: string}>}
  */
-async function sendWaEvent({ shopId, event, to, vars = {} }) {
+async function sendWaEvent({ shopId, event, to, vars = {}, header = null }) {
   const base = { shop_id: shopId, event, to: String(to || ""), vars };
 
   if (!EVENT_TEMPLATE_ENV[event]) {
@@ -146,7 +156,7 @@ async function sendWaEvent({ shopId, event, to, vars = {} }) {
         to_and_components: [
           {
             to: [phone],
-            components: buildBodyComponents(vars),
+            components: buildBodyComponents(vars, header),
           },
         ],
       },

@@ -143,16 +143,14 @@ const toggleMobileStatus = async (req, res) => {
             // Vars are positional — order must exactly match the MSG91 template placeholders.
             let vars;
             if (event === "mobile_processing") {
-              // {{1}} customer_name {{2}} shop_name {{3}} mobile_name {{4}} model
-              // {{5}} bill_no {{6}} shop_address {{7}} shop_phone
+              // Template "fixel_device_processing":
+              // {{1}} customer_name {{2}} mobile_name {{3}} model {{4}} bill_no {{5}} issue
               vars = {
                 customer_name: customer.client_name,
-                shop_name: shop.shop_name || "",
                 mobile_name: updatedMobile.mobile_name || "",
                 model: updatedMobile.model || "",
                 bill_no: customer.bill_no || "-",
-                shop_address: shop.address || "",
-                shop_phone: shop.phone || "",
+                issue: updatedMobile.issue || "-",
               };
             } else if (event === "mobile_ready") {
               // {{1}} customer_name {{2}} shop_name {{3}} mobile_name {{4}} model
@@ -197,11 +195,22 @@ const toggleMobileStatus = async (req, res) => {
               };
             }
 
+            // Delivery notice attaches the A4 receipt/invoice as a document header
+            const header =
+              event === "mobile_delivered" && process.env.BILLIT_BACKEND_URL
+                ? {
+                    type: "document",
+                    value: `${process.env.BILLIT_BACKEND_URL}/api/receipt/pdf/${updatedMobile._id}`,
+                    filename: `Receipt-${customer.bill_no || updatedMobile._id}.pdf`,
+                  }
+                : null;
+
             fireWaEvent({
               shopId: shop._id,
               event,
               to: waTo,
               vars,
+              header,
             });
           });
         }

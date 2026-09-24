@@ -304,6 +304,11 @@ const {viewPublicReceiptController} = require("../controllers/api/viewReceiptCon
 // Add this new route WITHOUT authentication middleware
 router.get("/receipt/public/:id", viewPublicReceiptController);
 
+const { getReceiptPdf } = require("../controllers/api/receiptPdfController");
+
+// Public PDF version of the A4 receipt — used as the document attachment for WhatsApp delivery messages
+router.get("/receipt/pdf/:id", getReceiptPdf);
+
 
 
 
