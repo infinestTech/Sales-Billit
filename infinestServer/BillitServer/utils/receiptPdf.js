@@ -194,3 +194,4 @@ function generateReceiptPdfBuffer({ shop, client, mobiles, billNo, termsAndCondi
 
 module.exports = { generateReceiptPdfBuffer };
 
+
