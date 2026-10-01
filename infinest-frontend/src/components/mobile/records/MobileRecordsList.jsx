@@ -1,6 +1,6 @@
 "use client"
 
-import { useCallback, useEffect, useMemo, useState } from "react"
+import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import {
   Search,
   Filter,
@@ -20,6 +20,19 @@ import MobileRecordCard from "./MobileRecordCard"
 import MobileRecordDetailSheet from "./MobileRecordDetailSheet"
 import { formatINR, summarizeMobiles } from "./utils"
 
+const PAGE_SIZE = 20
+const EMPTY_TOTALS = { pending: 0, ready: 0, delivered: 0, balance: 0 }
+
+const statsDelta = (beforeMobiles, afterMobiles) => {
+  const b = summarizeMobiles(beforeMobiles || [])
+  const a = summarizeMobiles(afterMobiles || [])
+  return {
+    pending: a.pending - b.pending,
+    ready: a.ready - b.ready,
+    delivered: a.delivered - b.delivered,
+  }
+}
+
 /**
  * Mobile-native All-Records / View tab.
  * Mirrors the desktop AllRecordTable feature set:
@@ -36,6 +49,19 @@ export default function MobileRecordsList({ shopId, refreshKey }) {
   const [quickQuery, setQuickQuery] = useState("")
   const [showFilters, setShowFilters] = useState(false)
   const [activeChip, setActiveChip] = useState("all") // all | pending | processing | ready | delivered | shouldBeReturned | returned | balance
+  const [debouncedQuery, setDebouncedQuery] = useState("")
+  const [page, setPage] = useState(1)
+  const [hasMore, setHasMore] = useState(false)
+  const [loadingMore, setLoadingMore] = useState(false)
+  const [totals, setTotals] = useState(EMPTY_TOTALS)
+
+  const queryRef = useRef("")
+  const chipRef = useRef("all")
+  const filtersRef = useRef(emptyFilters)
+  const abortRef = useRef(null)
+  // Set after local edits so the next server request regroups instead of using its short-lived cache
+  const needsFreshRef = useRef(false)
+  const sentinelRef = useRef(null)
 
   const [openRecord, setOpenRecord] = useState(null)
   const [receiptRecord, setReceiptRecord] = useState(null)
@@ -46,72 +72,114 @@ export default function MobileRecordsList({ shopId, refreshKey }) {
     owner: "",
   })
 
-  const fetchRecords = useCallback(
-    async (currentFilters = filters, silent = false) => {
+  // Loads one page; page 1 replaces the list, later pages append (infinite scroll)
+  const loadPage = useCallback(
+    async ({ pageToLoad = 1, fresh = false, mode = "replace", silent = false } = {}) => {
       if (!shopId) return
-      if (!silent) setLoading(true)
+      abortRef.current?.abort()
+      const controller = new AbortController()
+      abortRef.current = controller
+
+      if (mode === "append") setLoadingMore(true)
+      else if (!silent) setLoading(true)
       else setRefreshing(true)
+
+      const forceFresh = fresh || needsFreshRef.current
       try {
-        const payload = { shopId, ...currentFilters }
+        const payload = {
+          shopId,
+          ...filtersRef.current,
+          view: "mobile",
+          page: pageToLoad,
+          limit: PAGE_SIZE,
+          q: queryRef.current,
+          chip: chipRef.current,
+          fresh: forceFresh,
+        }
         const res = await api.post("/api/records", payload, {
           headers: {
             Authorization: `Bearer ${localStorage.getItem("token")}`,
           },
+          signal: controller.signal,
         })
-        const { mobiles = [], customers = [], dealers = [] } = res.data || {}
+        if (forceFresh) needsFreshRef.current = false
         setShopMeta({
           phone: res.data?.shopPhone || "",
           address: res.data?.shopaddress || "",
           owner: res.data?.shopOwnerName || "",
         })
 
-        // Group mobiles by client (customer or dealer)
-        const groups = new Map()
-        for (const c of customers) {
-          groups.set(`c_${c._id}`, {
-            ...c,
-            customer_type: "Customer",
-            mobiles: [],
+        const incoming = res.data?.records || []
+        if (mode === "append") {
+          setRecords((prev) => {
+            const seen = new Set(prev.map((r) => r._id))
+            return [...prev, ...incoming.filter((r) => !seen.has(r._id))]
           })
+        } else {
+          setRecords(incoming)
+          setTotals({ ...EMPTY_TOTALS, ...(res.data?.totals || {}) })
         }
-        for (const d of dealers) {
-          groups.set(`d_${d._id}`, {
-            ...d,
-            customer_type: "Dealer",
-            mobiles: [],
-          })
-        }
-        for (const m of mobiles) {
-          const key = m.customer_id
-            ? `c_${m.customer_id}`
-            : m.dealer_id
-            ? `d_${m.dealer_id}`
-            : null
-          if (key && groups.has(key)) {
-            groups.get(key).mobiles.push(m)
-          }
-        }
-        const list = Array.from(groups.values()).sort((a, b) => {
-          const ad = a.mobiles[0]?.added_date || a.createdAt || 0
-          const bd = b.mobiles[0]?.added_date || b.createdAt || 0
-          return new Date(bd) - new Date(ad)
-        })
-        setRecords(list)
+        setPage(pageToLoad)
+        setHasMore(!!res.data?.hasMore)
       } catch (err) {
+        if (err?.code === "ERR_CANCELED" || err?.name === "CanceledError") return
         logError("Failed to load records", err, shopId)
       } finally {
-        setLoading(false)
-        setRefreshing(false)
+        if (abortRef.current === controller) {
+          setLoading(false)
+          setRefreshing(false)
+          setLoadingMore(false)
+        }
       }
     },
-    // eslint-disable-next-line react-hooks/exhaustive-deps
     [shopId]
   )
 
+  const fetchRecords = useCallback(
+    (currentFilters = filtersRef.current, silent = false) => {
+      filtersRef.current = currentFilters
+      return loadPage({ pageToLoad: 1, fresh: true, mode: "replace", silent })
+    },
+    [loadPage]
+  )
+
   useEffect(() => {
-    fetchRecords(filters)
+    fetchRecords(filtersRef.current)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [shopId, refreshKey])
+
+  useEffect(() => () => abortRef.current?.abort(), [])
+
+  useEffect(() => {
+    const t = setTimeout(() => setDebouncedQuery(quickQuery.trim()), 300)
+    return () => clearTimeout(t)
+  }, [quickQuery])
+
+  // Search text / chip changes re-query the server (the loaded list is also filtered instantly below)
+  useEffect(() => {
+    if (queryRef.current === debouncedQuery && chipRef.current === activeChip) return
+    queryRef.current = debouncedQuery
+    chipRef.current = activeChip
+    loadPage({ pageToLoad: 1, mode: "replace", silent: true })
+  }, [debouncedQuery, activeChip, loadPage])
+
+  const loadMore = useCallback(() => {
+    if (!hasMore || loading || loadingMore || refreshing) return
+    loadPage({ pageToLoad: page + 1, mode: "append" })
+  }, [hasMore, loading, loadingMore, refreshing, page, loadPage])
+
+  useEffect(() => {
+    const node = sentinelRef.current
+    if (!node || !hasMore) return
+    const observer = new IntersectionObserver(
+      (items) => {
+        if (items.some((i) => i.isIntersecting)) loadMore()
+      },
+      { rootMargin: "400px 0px" }
+    )
+    observer.observe(node)
+    return () => observer.disconnect()
+  }, [hasMore, loadMore])
 
   // Quick query (client-side) and chip filtering
   const visible = useMemo(() => {
@@ -152,34 +220,24 @@ export default function MobileRecordsList({ shopId, refreshKey }) {
     })
   }, [records, quickQuery, activeChip])
 
-  // Top-of-list aggregate stats
-  const totals = useMemo(() => {
-    let pending = 0,
-      processing = 0,
-      ready = 0,
-      delivered = 0,
-      returned = 0,
-      shouldBeReturned = 0,
-      paid = 0,
-      balance = 0
-    for (const r of records) {
-      const s = summarizeMobiles(r.mobiles || [])
-      pending += s.pending
-      processing += s.processing
-      ready += s.ready
-      delivered += s.delivered
-      returned += s.returned
-      shouldBeReturned += s.shouldBeReturned
-      paid += s.totalPaid
-      balance += Number(r.balance_amount || 0)
-    }
-    return { pending, processing, ready, delivered, returned, shouldBeReturned, paid, balance }
-  }, [records])
+  const adjustTotals = (delta) =>
+    setTotals((prev) => ({
+      pending: Math.max(0, prev.pending + (delta.pending || 0)),
+      ready: Math.max(0, prev.ready + (delta.ready || 0)),
+      delivered: Math.max(0, prev.delivered + (delta.delivered || 0)),
+      balance: prev.balance + (delta.balance || 0),
+    }))
 
   const handleRecordChanged = useCallback(
     (event) => {
       if (!event) return
+      needsFreshRef.current = true
       if (event.type === "mobile" && event.mobile) {
+        const owner = records.find((r) => (r.mobiles || []).some((m) => m._id === event.mobile._id))
+        if (owner) {
+          const after = owner.mobiles.map((m) => (m._id === event.mobile._id ? { ...m, ...event.mobile } : m))
+          adjustTotals(statsDelta(owner.mobiles, after))
+        }
         setRecords((prev) =>
           prev.map((r) => ({
             ...r,
@@ -200,6 +258,14 @@ export default function MobileRecordsList({ shopId, refreshKey }) {
             : cur
         )
       } else if (event.type === "deleted-mobile" && event.mobileId) {
+        const owner = records.find((r) => (r.mobiles || []).some((m) => m._id === event.mobileId))
+        if (owner) {
+          const after = owner.mobiles.filter((m) => m._id !== event.mobileId)
+          const delta = statsDelta(owner.mobiles, after)
+          // A record that loses its last mobile is dropped from the list, and from the balance total
+          if (after.length === 0) delta.balance = -Number(owner.balance_amount || 0)
+          adjustTotals(delta)
+        }
         setRecords((prev) =>
           prev
             .map((r) => ({
@@ -222,6 +288,12 @@ export default function MobileRecordsList({ shopId, refreshKey }) {
             : cur
         )
       } else if (event.type === "record" && event.recordId && event.patch) {
+        const target = records.find((r) => r._id === event.recordId)
+        if (target && "balance_amount" in event.patch) {
+          adjustTotals({
+            balance: Number(event.patch.balance_amount || 0) - Number(target.balance_amount || 0),
+          })
+        }
         setRecords((prev) =>
           prev.map((r) =>
             r._id === event.recordId ? { ...r, ...event.patch } : r
@@ -231,10 +303,10 @@ export default function MobileRecordsList({ shopId, refreshKey }) {
           cur && cur._id === event.recordId ? { ...cur, ...event.patch } : cur
         )
       } else if (event.type === "refresh") {
-        fetchRecords(filters, true)
+        fetchRecords(filtersRef.current, true)
       }
     },
-    [fetchRecords, filters]
+    [fetchRecords, records]
   )
 
   const handleApplyFilters = (next) => {
@@ -367,6 +439,24 @@ export default function MobileRecordsList({ shopId, refreshKey }) {
               onReceipt={(rec) => setReceiptRecord(rec)}
             />
           ))}
+        </div>
+      )}
+
+      {!loading && hasMore && (
+        <div ref={sentinelRef} className="flex items-center justify-center py-6 text-sm text-gray-500">
+          {loadingMore ? (
+            <>
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Loading more…
+            </>
+          ) : (
+            <button
+              type="button"
+              onClick={loadMore}
+              className="rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700"
+            >
+              Load more
+            </button>
+          )}
         </div>
       )}
 

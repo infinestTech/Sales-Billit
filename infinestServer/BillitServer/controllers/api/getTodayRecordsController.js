@@ -18,15 +18,37 @@ const getTodayRecords = async (req, res) => {
     const endOfDay = today.endOf('day').toDate();
 
 
-    const customers = await Customer.find({ shop_id: actualUserId }).lean();
-    const dealers = await Dealer.find({ shop_id: actualUserId }).lean();
+    const todayRange = { $gte: startOfDay, $lte: endOfDay };
 
+    // Revenue only needs mobiles that can contribute today: a payment dated today, or (legacy, no payments)
+    // added/created today. The exact rule is still applied below, so this is a safe superset.
+    const [mobiles, revenueMobiles, shopDoc] = await Promise.all([
+      Mobile.find({
+        shop_id: actualUserId,
+        added_date: todayRange
+      }).lean(),
+      Mobile.find({
+        shop_id: actualUserId,
+        $or: [
+          { "payments.date": todayRange },
+          { added_date: todayRange },
+          { created_at: todayRange }
+        ]
+      }).select("payments added_date created_at total_paid paid_amount").lean(),
+      Shop.findById(actualUserId).select('revenue_visible_to_users').lean()
+    ]);
 
-    // Fetch mobiles added today
-    const mobiles = await Mobile.find({
-      shop_id: actualUserId,
-      added_date: { $gte: startOfDay, $lte: endOfDay }
-    }).lean();
+    const customerIds = [...new Set(mobiles.filter((m) => m.customer_id).map((m) => String(m.customer_id)))];
+    const dealerIds = [...new Set(mobiles.filter((m) => m.dealer_id).map((m) => String(m.dealer_id)))];
+
+    const [customers, dealers] = await Promise.all([
+      customerIds.length
+        ? Customer.find({ shop_id: actualUserId, _id: { $in: customerIds } }).sort({ _id: 1 }).lean()
+        : [],
+      dealerIds.length
+        ? Dealer.find({ shop_id: actualUserId, _id: { $in: dealerIds } }).sort({ _id: 1 }).lean()
+        : []
+    ]);
 
 
     const mobilesByCustomer = {};
@@ -45,14 +67,8 @@ const getTodayRecords = async (req, res) => {
     });
 
 
-    // Calculate today's revenue from payments made TODAY (same logic as shop-admin portal)
-    // Fetch ALL mobiles to capture all payments made today
-    const allMobiles = await Mobile.find({
-      shop_id: actualUserId
-    }).lean();
-
     let todayRevenue = 0;
-    allMobiles.forEach((m) => {
+    revenueMobiles.forEach((m) => {
       if (m.payments && m.payments.length > 0) {
         // Sum up all payments made today (regardless of when mobile was created)
         const todaysPayments = m.payments.filter(p => {
@@ -100,7 +116,6 @@ const getTodayRecords = async (req, res) => {
 
 
     // Check if revenue is visible to users for this shop
-    const shopDoc = await Shop.findById(actualUserId).select('revenue_visible_to_users').lean();
     const revenueVisible = shopDoc?.revenue_visible_to_users !== false; // default true
 
 

@@ -1,7 +1,7 @@
 "use client"
 
 
-import React, { useState, useEffect, useCallback } from "react"
+import React, { useState, useEffect, useCallback, useRef } from "react"
 import Filters from "./Filters"
 import MobileNameTable from "../tables/MobileNameTable"
 import Pagination from "../tables/Pagination"
@@ -24,24 +24,51 @@ import {
 } from "lucide-react"
 import StatCard from "@/components/ui/StatCard"
 
+const EMPTY_TOTALS = {
+  notReadyCount: 0,
+  processingCount: 0,
+  deliveredCount: 0,
+  notReadyFalseCount: 0,
+  notDeliveredFalseCount: 0,
+  returnCount: 0,
+  shouldBeReturnedCount: 0,
+}
+
+// Same per-mobile rules the server uses for the summary cards
+const countMobiles = (mobiles = []) => {
+  const t = { ...EMPTY_TOTALS }
+  mobiles.forEach((mobile) => {
+    if (mobile.returned) {
+      t.returnCount++
+    } else if (mobile.should_be_returned) {
+      t.shouldBeReturnedCount++
+    } else {
+      if (!mobile.ready) {
+        t.notReadyFalseCount++
+        if (mobile.processing) t.processingCount++
+      } else t.notReadyCount++
+
+      if (mobile.delivered) t.deliveredCount++
+      else t.notDeliveredFalseCount++
+    }
+  })
+  return t
+}
+
 
 const AllRecordTable = ({ shopId, filterDate }) => {
   const [filteredInvoices, setFilteredInvoices] = useState([])
+  const [totalRecords, setTotalRecords] = useState(0)
+  const [loading, setLoading] = useState(true)
+  const activeFiltersRef = useRef({})
+  const abortRef = useRef(null)
   const [currentPage, setCurrentPage] = useState(1)
   const [invoicesPerPage] = useState(7)
   const [expandedRow, setExpandedRow] = useState(null)
   const [selectedClient, setSelectedClient] = useState(null)
   const [vendorPopup, setVendorPopup] = useState(null)
   const [shopPhoneNumberState, setShopPhoneNumberState] = useState("")
-  const [totals, setTotals] = useState({
-    notReadyCount: 0,
-    processingCount: 0,
-    deliveredCount: 0,
-    notReadyFalseCount: 0,
-    notDeliveredFalseCount: 0,
-    returnCount: 0,
-    shouldBeReturnedCount: 0,
-  })
+  const [totals, setTotals] = useState(EMPTY_TOTALS)
   const [shopOwnerName, setShopOwnerName] = useState("")
 const [shopAddressState, setShopAddressState] = useState("")
 
@@ -57,30 +84,37 @@ const [shopAddressState, setShopAddressState] = useState("")
 
 
   const fetchInvoices = useCallback(
-    async (filters = {}) => {
+    async (filters = {}, page = 1) => {
+      if (!shopId) {
+        console.error("Shop ID is missing.")
+        return
+      }
+
+      // Only the latest request may update the table
+      abortRef.current?.abort()
+      const controller = new AbortController()
+      abortRef.current = controller
+      setLoading(true)
+
       try {
-        if (!shopId) {
-          console.error("Shop ID is missing.")
-          return
-        }
-
-
         const token = localStorage.getItem("token")
         const response = await api.post(
           "/api/records",
           {
             shopId,
             ...filters,
+            page,
+            limit: invoicesPerPage,
           },
           {
             headers: {
               Authorization: `Bearer ${token}`,
             },
+            signal: controller.signal,
           },
         )
 
-
-      const { mobiles, customers, dealers, shopOwnerName, shopPhone, shopaddress } = response.data;
+      const { records, total, totals: serverTotals, shopOwnerName, shopPhone, shopaddress } = response.data;
 
 
         if ((shopPhone || "9876543210") !== shopPhoneNumberState) {
@@ -98,32 +132,12 @@ const [shopAddressState, setShopAddressState] = useState("")
 }
 
 
-        const customersWithMobiles = customers.map((customer) => ({
-          ...customer,
-          owner_name: shopOwnerName,
-          MobileName: mobiles.filter((mobile) => mobile.customer_id === customer._id),
-        }))
-
-
-        const dealersWithMobiles = dealers.map((dealer) => ({
-          ...dealer,
-          owner_name: shopOwnerName,
-          MobileName: mobiles.filter((mobile) => mobile.dealer_id === dealer._id),
-        }))
-
-
-        const data = [...customersWithMobiles, ...dealersWithMobiles]
-          .filter((record) => record.MobileName.length > 0)
-          .sort((a, b) => {
-            const dateA = new Date(a.MobileName[0]?.added_date || 0)
-            const dateB = new Date(b.MobileName[0]?.added_date || 0)
-            return dateB - dateA
-          })
-
-
-        setFilteredInvoices(data)
-        calculateTotals(data)
+        setFilteredInvoices((records || []).map((record) => ({ ...record, owner_name: shopOwnerName })))
+        setTotalRecords(total || 0)
+        // Page 2+ keeps the totals from page 1 plus any local status edits since then
+        if (page === 1) setTotals({ ...EMPTY_TOTALS, ...(serverTotals || {}) })
       } catch (error) {
+        if (error?.code === "ERR_CANCELED" || error?.name === "CanceledError") return
         // ✅ Silently handle session expiry errors (user will be redirected)
         if (error.message === 'Session expired' || error.response?.data?.sessionExpired) {
           // Session expired, user will be redirected by interceptor
@@ -131,57 +145,37 @@ const [shopAddressState, setShopAddressState] = useState("")
         }
         // Log other errors
         console.error("Error fetching invoices:", error)
+      } finally {
+        if (abortRef.current === controller) setLoading(false)
       }
     },
-    [shopId],
+    [shopId, invoicesPerPage],
   )
 
 
   useEffect(() => {
     if (shopId) {
-      fetchInvoices()
+      activeFiltersRef.current = {}
+      setCurrentPage(1)
+      fetchInvoices({}, 1)
     }
   }, [shopId, fetchInvoices, filterDate])
 
-
-  const calculateTotals = (data) => {
-    let notReadyCount = 0,
-      processingCount = 0,
-      deliveredCount = 0,
-      notReadyFalseCount = 0,
-      notDeliveredFalseCount = 0,
-      returnCount = 0,
-      shouldBeReturnedCount = 0
-
-
-    data.forEach((invoice) => {
-      invoice.MobileName.forEach((mobile) => {
-        if (mobile.returned) {
-          returnCount++
-        } else if (mobile.should_be_returned) {
-          shouldBeReturnedCount++
-        } else {
-          if (!mobile.ready) {
-            notReadyFalseCount++
-            if (mobile.processing) processingCount++
-          }
-          else notReadyCount++
-
-
-          if (mobile.delivered) deliveredCount++
-          else notDeliveredFalseCount++
-        }
-      })
-    })
-
-
-    setTotals({ notReadyCount, processingCount, deliveredCount, notReadyFalseCount, notDeliveredFalseCount, returnCount, shouldBeReturnedCount })
-  }
+  useEffect(() => () => abortRef.current?.abort(), [])
 
 
   const applyFilters = (filters) => {
-    fetchInvoices(filters)
+    activeFiltersRef.current = filters
     setCurrentPage(1)
+    fetchInvoices(filters, 1)
+  }
+
+  const changePage = (page) => {
+    const totalPages = Math.max(1, Math.ceil(totalRecords / invoicesPerPage))
+    const next = Math.min(Math.max(1, page), totalPages)
+    if (next === currentPage) return
+    setCurrentPage(next)
+    fetchInvoices(activeFiltersRef.current, next)
   }
 
 
@@ -191,13 +185,22 @@ const [shopAddressState, setShopAddressState] = useState("")
 
 
   const updateMobileData = (invoiceIndex, updatedMobileData) => {
+    // Summary cards cover every matching record, so adjust them by this row's change only
+    const before = countMobiles(filteredInvoices[invoiceIndex]?.MobileName)
+    const after = countMobiles(updatedMobileData)
+    setTotals((prev) => {
+      const next = { ...prev }
+      Object.keys(EMPTY_TOTALS).forEach((key) => {
+        next[key] = Math.max(0, (prev[key] || 0) - before[key] + after[key])
+      })
+      return next
+    })
     setFilteredInvoices((prev) => {
       const updated = [...prev]
       updated[invoiceIndex] = {
         ...updated[invoiceIndex],
         MobileName: [...updatedMobileData],
       }
-      calculateTotals(updated)
       return updated
     })
   }
@@ -269,9 +272,8 @@ const [shopAddressState, setShopAddressState] = useState("")
   }
 
 
-  const indexOfLastInvoice = currentPage * invoicesPerPage
-  const indexOfFirstInvoice = indexOfLastInvoice - invoicesPerPage
-  const currentInvoices = filteredInvoices.slice(indexOfFirstInvoice, indexOfLastInvoice)
+  const indexOfFirstInvoice = (currentPage - 1) * invoicesPerPage
+  const currentInvoices = filteredInvoices
 
 
  
@@ -333,7 +335,12 @@ const [shopAddressState, setShopAddressState] = useState("")
 
       {/* Table Section - Now flows naturally */}
       <div className="px-4 py-4 xl:px-8 xl:py-6 bg-white">
-        {filteredInvoices.length === 0 ? (
+        {loading && filteredInvoices.length === 0 ? (
+          <div className="flex items-center justify-center py-12">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+            <span className="ml-3 text-gray-600">Loading records...</span>
+          </div>
+        ) : filteredInvoices.length === 0 ? (
           <div className="text-center py-12">
             <div className="inline-flex items-center justify-center w-20 h-20 bg-gradient-to-r from-blue-100 to-indigo-100 rounded-full mb-6">
               <Database className="h-10 w-10 text-blue-600" />
@@ -342,7 +349,7 @@ const [shopAddressState, setShopAddressState] = useState("")
             <p className="text-gray-600">No records found for the selected filters.</p>
           </div>
         ) : (
-          <div className="bg-white border border-gray-200 overflow-hidden shadow-lg rounded-xl">
+          <div className={`bg-white border border-gray-200 overflow-hidden shadow-lg rounded-xl transition-opacity ${loading ? "opacity-60" : ""}`}>
             <div className="overflow-x-auto">
               <table className="min-w-[960px] w-full">
                 <thead className="bg-gradient-to-r from-gray-100 to-gray-200">
@@ -475,7 +482,7 @@ const [shopAddressState, setShopAddressState] = useState("")
                               const val = e.target.value
                               if (/^\d{0,8}$/.test(val)) {
                                 const updated = [...filteredInvoices]
-                                updated[indexOfFirstInvoice + index].estimated_cost = val
+                                updated[index].estimated_cost = val
                                 setFilteredInvoices(updated)
                               }
                             }}
@@ -499,7 +506,7 @@ const [shopAddressState, setShopAddressState] = useState("")
                               const val = e.target.value
                               if (/^\d{0,8}$/.test(val)) {
                                 const updated = [...filteredInvoices]
-                                updated[indexOfFirstInvoice + index].balance_amount = val
+                                updated[index].balance_amount = val
                                 setFilteredInvoices(updated)
                               }
                             }}
@@ -547,7 +554,7 @@ const [shopAddressState, setShopAddressState] = useState("")
                               <MobileNameTable
                                 mobileData={invoice.MobileName}
                                 setMobileData={(updatedMobileData) =>
-                                  updateMobileData(indexOfFirstInvoice + index, updatedMobileData)
+                                  updateMobileData(index, updatedMobileData)
                                 }
                               />
                             </div>
@@ -565,8 +572,8 @@ const [shopAddressState, setShopAddressState] = useState("")
             <div className="px-6 py-4 bg-gray-50 border-t border-gray-200">
               <Pagination
                 invoicesPerPage={invoicesPerPage}
-                totalInvoices={filteredInvoices.length}
-                paginate={setCurrentPage}
+                totalInvoices={totalRecords}
+                paginate={changePage}
                 currentPage={currentPage}
               />
             </div>

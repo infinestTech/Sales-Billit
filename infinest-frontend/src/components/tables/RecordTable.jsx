@@ -40,7 +40,6 @@ const RecordTable = ({ shop_id, setIsLimitReached }) => {
   useEffect(() => {
     if (shop_id) {
       fetchRecords()
-      fetchTodayRevenue()
     }
   }, [shop_id])
 
@@ -108,7 +107,6 @@ const RecordTable = ({ shop_id, setIsLimitReached }) => {
         },
       )
       await fetchRecords()
-      await fetchTodayRevenue()
     } catch (error) {
       console.error("Error updating balance:", error.response?.data || error.message)
     }

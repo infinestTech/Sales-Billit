@@ -133,6 +133,7 @@ const dealerSchema = new mongoose.Schema({
   created_at: { type: Date, default: Date.now }
 });
 dealerSchema.index({ shop_id: 1 });
+dealerSchema.index({ shop_id: 1, bill_no: 1 });
 
 
 // ==============================
@@ -162,6 +163,7 @@ const customerSchema = new mongoose.Schema({
   created_at: { type: Date, default: Date.now }
 });
 customerSchema.index({ shop_id: 1 });
+customerSchema.index({ shop_id: 1, bill_no: 1 });
 
 // ==============================
 // 📱 Mobile Schema
@@ -220,6 +222,8 @@ mobileSchema.index({ shop_id: 1, customer_id: 1 });
 mobileSchema.index({ shop_id: 1, dealer_id: 1 });
 // Mobile Registry listing sorts newest-first per shop — keeps pagination fast even at 1000s of records
 mobileSchema.index({ shop_id: 1, added_date: -1 });
+// Today's-revenue lookup on the Create Record page (payments made today on older devices)
+mobileSchema.index({ shop_id: 1, "payments.date": 1 });
 
 // ==============================
 // � Rework Schema
