@@ -22,7 +22,8 @@ const {
     Expense,
     DailySummary,
     Branch,
-    WhatsAppLog
+    WhatsAppLog,
+    ShopAdmin
 } = require('../models/mongoModels');
 const { Supplier } = require('../models/supplier');
 
@@ -910,6 +911,64 @@ router.patch('/shops/:shopId/product-ui', internalAuth, async (req, res) => {
     } catch (error) {
         console.error('Toggle product UI error:', error);
         res.status(500).json({ message: 'Failed to update product UI setting', error: error.message });
+    }
+});
+
+// ==============================
+// 🖼️ Receipt Terms & Conditions Images permission (per shop admin)
+// ==============================
+
+// List all shop admins with their permission flag
+router.get('/shop-admins/receipt-terms-images', internalAuth, async (req, res) => {
+    try {
+        const admins = await ShopAdmin.find(
+            {},
+            'username full_name email is_active shop_ids can_manage_receipt_terms_images'
+        ).populate('shop_ids', 'shop_name').sort({ username: 1 }).lean();
+
+        res.json({
+            success: true,
+            shopAdmins: admins.map(a => ({
+                _id: a._id,
+                username: a.username,
+                full_name: a.full_name || '',
+                email: a.email || '',
+                is_active: !!a.is_active,
+                shops: (a.shop_ids || []).filter(Boolean).map(s => s.shop_name),
+                can_manage_receipt_terms_images: !!a.can_manage_receipt_terms_images,
+            }))
+        });
+    } catch (error) {
+        console.error('List shop admins terms-images permission error:', error);
+        res.status(500).json({ message: 'Failed to fetch shop admins' });
+    }
+});
+
+// Grant / revoke the permission. Body: { enabled: boolean }
+router.patch('/shop-admins/:adminId/receipt-terms-images', internalAuth, async (req, res) => {
+    try {
+        const { adminId } = req.params;
+        const { enabled } = req.body || {};
+        if (!mongoose.Types.ObjectId.isValid(adminId)) {
+            return res.status(400).json({ message: 'Invalid shop admin id' });
+        }
+        if (typeof enabled !== 'boolean') {
+            return res.status(400).json({ message: 'enabled must be a boolean' });
+        }
+        const admin = await ShopAdmin.findByIdAndUpdate(
+            adminId,
+            { $set: { can_manage_receipt_terms_images: enabled, updated_at: new Date() } },
+            { new: true }
+        ).lean();
+        if (!admin) return res.status(404).json({ message: 'Shop admin not found' });
+
+        res.json({
+            success: true,
+            shopAdmin: { _id: admin._id, can_manage_receipt_terms_images: !!admin.can_manage_receipt_terms_images }
+        });
+    } catch (error) {
+        console.error('Toggle shop admin terms-images permission error:', error);
+        res.status(500).json({ message: 'Failed to update permission' });
     }
 });
 

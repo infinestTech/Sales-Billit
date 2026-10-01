@@ -63,6 +63,12 @@ const shopSchema = new mongoose.Schema({
   revenue_visible_to_users: { type: Boolean, default: true }, // Toggle: show/hide revenue & analytics for regular users
   // Custom Terms & Conditions text shown beneath the A4 receipt (set by shop admin; falls back to a default on the frontend if empty)
   terms_and_conditions: { type: String, default: '' },
+  // Images shown after the Terms & Conditions on page 2 of the A4 receipt; files live in R2, only keys are stored
+  receipt_terms_images: [{
+    key: { type: String, required: true },
+    title: { type: String, required: true, trim: true, maxlength: 100 },
+    created_at: { type: Date, default: Date.now }
+  }],
   // Feature flag: show legacy sell-focused product inventory UI (for specific shops that still need it)
   use_legacy_product_ui: { type: Boolean, default: false },
   // eSSL M20 Biometric Attendance Integration
@@ -638,6 +644,8 @@ const shopAdminSchema = new mongoose.Schema({
   current_shop_id: { type: mongoose.Schema.Types.ObjectId, ref: 'Shop' }, // Currently selected shop
   created_by: { type: String }, // infinest admin email who created this
   sessionLimit: { type: Number, default: 1 }, // ✅ Maximum concurrent sessions allowed
+  // Granted by the infinest admin: allows managing "Receipt Terms & Conditions Images" in the shop-admin portal
+  can_manage_receipt_terms_images: { type: Boolean, default: false },
   created_at: { type: Date, default: Date.now },
   updated_at: { type: Date, default: Date.now }
 });

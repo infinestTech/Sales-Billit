@@ -2102,6 +2102,148 @@ router.patch('/shop-settings/terms', shopAdminAuth, async (req, res) => {
 });
 
 // ==============================
+// 🖼️ Receipt Terms & Conditions Images
+// ==============================
+const multer = require('multer');
+const crypto = require('crypto');
+const mongooseLib = require('mongoose');
+const r2 = require('../utils/r2Storage');
+
+const TERMS_IMAGE_MAX_BYTES = 1 * 1024 * 1024;
+const TERMS_IMAGE_MAX_COUNT = 12;
+const TERMS_IMAGE_TITLE_MAX = 100;
+
+// Only shop admins granted access by the infinest admin may manage terms images
+const requireTermsImagesPermission = (req, res, next) => {
+    if (!req.shopAdmin?.can_manage_receipt_terms_images) {
+        return res.status(403).json({ success: false, permissionDenied: true, message: 'You do not have permission to manage receipt terms images' });
+    }
+    next();
+};
+
+const termsImageUpload = multer({
+    storage: multer.memoryStorage(),
+    limits: { fileSize: TERMS_IMAGE_MAX_BYTES, files: 1, fields: 5 },
+}).single('image');
+
+const handleTermsImageUpload = (req, res, next) => termsImageUpload(req, res, (err) => {
+    if (!err) return next();
+    const message = err.code === 'LIMIT_FILE_SIZE' ? 'Image must be 1MB or smaller' : 'Invalid image upload';
+    return res.status(400).json({ success: false, message });
+});
+
+// Detects the type from file bytes (client MIME/extension are not trusted). Only JPEG/PNG are stored
+// because PDFKit can't embed WEBP — the dashboard converts WEBP to JPEG before uploading.
+const PNG_SIGNATURE = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
+const detectReceiptImageType = (buf) => {
+    if (!Buffer.isBuffer(buf) || buf.length < 12) return null;
+    if (buf[0] === 0xff && buf[1] === 0xd8 && buf[2] === 0xff) return { ext: 'jpg', mime: 'image/jpeg' };
+    if (buf.subarray(0, 8).equals(PNG_SIGNATURE)) return { ext: 'png', mime: 'image/png' };
+    return null;
+};
+
+const serializeTermsImages = (images = []) => Promise.all(images.map(async (img) => ({
+    id: String(img._id),
+    title: img.title,
+    createdAt: img.created_at,
+    url: r2.isConfigured() ? await r2.getSignedViewUrl(img.key) : null,
+})));
+
+// GET all receipt terms images for the shop
+router.get('/shop-settings/terms-images', shopAdminAuth, requireTermsImagesPermission, async (req, res) => {
+    try {
+        const shop = await Shop.findById(req.shopId).select('receipt_terms_images').lean();
+        if (!shop) {
+            return res.status(404).json({ success: false, message: 'Shop not found' });
+        }
+        res.json({ success: true, images: await serializeTermsImages(shop.receipt_terms_images || []) });
+    } catch (error) {
+        console.error('Get receipt terms images error:', error);
+        res.status(500).json({ success: false, message: 'Failed to get images' });
+    }
+});
+
+// POST upload one receipt terms image (multipart: image, title)
+router.post('/shop-settings/terms-images', shopAdminAuth, requireTermsImagesPermission, handleTermsImageUpload, async (req, res) => {
+    let uploadedKey = null;
+    try {
+        if (!r2.isConfigured()) {
+            return res.status(503).json({ success: false, message: 'Image storage is not configured' });
+        }
+        const title = typeof req.body?.title === 'string' ? req.body.title.trim() : '';
+        if (!title) {
+            return res.status(400).json({ success: false, message: 'Image title is required' });
+        }
+        if (title.length > TERMS_IMAGE_TITLE_MAX) {
+            return res.status(400).json({ success: false, message: `Title must be ${TERMS_IMAGE_TITLE_MAX} characters or fewer` });
+        }
+        if (!req.file) {
+            return res.status(400).json({ success: false, message: 'Image file is required' });
+        }
+        const type = detectReceiptImageType(req.file.buffer);
+        if (!type) {
+            return res.status(400).json({ success: false, message: 'Only JPG, PNG or WEBP images are allowed' });
+        }
+
+        const shop = await Shop.findById(req.shopId).select('receipt_terms_images').lean();
+        if (!shop) {
+            return res.status(404).json({ success: false, message: 'Shop not found' });
+        }
+        if ((shop.receipt_terms_images || []).length >= TERMS_IMAGE_MAX_COUNT) {
+            return res.status(400).json({ success: false, message: `You can add up to ${TERMS_IMAGE_MAX_COUNT} images` });
+        }
+
+        uploadedKey = `receipt-terms/${req.shopId}/${crypto.randomUUID()}.${type.ext}`;
+        await r2.uploadObject(uploadedKey, req.file.buffer, type.mime);
+
+        // Count guard in the filter keeps the limit atomic under concurrent uploads
+        const updated = await Shop.findOneAndUpdate(
+            { _id: req.shopId, [`receipt_terms_images.${TERMS_IMAGE_MAX_COUNT - 1}`]: { $exists: false } },
+            { $push: { receipt_terms_images: { key: uploadedKey, title } } },
+            { new: true }
+        ).select('receipt_terms_images').lean();
+        if (!updated) {
+            await r2.deleteObjects([uploadedKey]).catch(() => {});
+            return res.status(400).json({ success: false, message: `You can add up to ${TERMS_IMAGE_MAX_COUNT} images` });
+        }
+
+        const saved = updated.receipt_terms_images.find((img) => img.key === uploadedKey);
+        const [image] = await serializeTermsImages([saved]);
+        res.status(201).json({ success: true, image });
+    } catch (error) {
+        console.error('Upload receipt terms image error:', error);
+        if (uploadedKey) await r2.deleteObjects([uploadedKey]).catch(() => {});
+        res.status(500).json({ success: false, message: 'Failed to upload image' });
+    }
+});
+
+// DELETE one receipt terms image (DB record + R2 object)
+router.delete('/shop-settings/terms-images/:imageId', shopAdminAuth, requireTermsImagesPermission, async (req, res) => {
+    try {
+        const { imageId } = req.params;
+        if (!mongooseLib.Types.ObjectId.isValid(imageId)) {
+            return res.status(400).json({ success: false, message: 'Invalid image id' });
+        }
+        const before = await Shop.findOneAndUpdate(
+            { _id: req.shopId, 'receipt_terms_images._id': imageId },
+            { $pull: { receipt_terms_images: { _id: imageId } } },
+            { new: false }
+        ).select('receipt_terms_images').lean();
+        if (!before) {
+            return res.status(404).json({ success: false, message: 'Image not found' });
+        }
+        const removed = before.receipt_terms_images.find((img) => String(img._id) === imageId);
+        if (removed?.key && r2.isConfigured()) {
+            await r2.deleteObjects([removed.key]).catch((err) => console.error('R2 delete receipt terms image error:', err));
+        }
+        res.json({ success: true, id: imageId });
+    } catch (error) {
+        console.error('Delete receipt terms image error:', error);
+        res.status(500).json({ success: false, message: 'Failed to delete image' });
+    }
+});
+
+// ==============================
 // 📡 eSSL M20 Attendance Settings
 // ==============================
 const { EsslDevice, EsslPunchLog } = require('../models/mongoModels');

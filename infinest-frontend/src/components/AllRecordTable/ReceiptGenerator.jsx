@@ -8,6 +8,7 @@ import { Receipt, Smartphone, ShieldCheck, ShieldOff, FileText, ArrowLeft, Print
 import authApi from "../authApi";
 import api from "../api";
 import { formatPaymentMethodLabel } from "@/constants/paymentMethods";
+import { fetchMobileImages } from "@/utils/mobileImagesApi";
 
 const DEFAULT_TERMS_AND_CONDITIONS = [
   "No guarantee for liquid / water damage.",
@@ -37,13 +38,13 @@ const MM_TO_PX = 3.7795275591;
 const PREVIEW_STAGE_WIDTH = 460;
 const PREVIEW_DIMENSIONS_MM = {
   jobcard: { w: 210, h: 148 },
-  a4: { w: 210, h: 297 },
+  a4: { w: 210, h: 297 }, // per page; multiplied by the A4 page count
 };
 
-const getScaledPreviewStyle = (type) => {
+const getScaledPreviewStyle = (type, pageCount = 1) => {
   const dims = PREVIEW_DIMENSIONS_MM[type] || PREVIEW_DIMENSIONS_MM.a4;
   const contentWidth = dims.w * MM_TO_PX;
-  const contentHeight = dims.h * MM_TO_PX;
+  const contentHeight = dims.h * MM_TO_PX * (type === 'a4' ? pageCount : 1);
   const scale = PREVIEW_STAGE_WIDTH / contentWidth;
   return { wrapperWidth: contentWidth * scale, wrapperHeight: contentHeight * scale, contentWidth, scale };
 };
@@ -531,8 +532,260 @@ const PrintableThermalReceipt = React.forwardRef(({ clientData, shopPhoneNumber,
 });
 PrintableThermalReceipt.displayName = "PrintableThermalReceipt";
 
-// ─── A4 Receipt (210mm × 297mm portrait) ─────────────────────────────────────
-const A4Receipt = ({ clientData, mobiles, shopPhoneNumber, shopAddress, shopEmail, shopName, profilePhoto, termsAndConditions }) => {
+// ─── A4 Receipt (2 × A4 portrait: receipt + photos, then terms) ───────────────
+// Background-image + contain instead of <img object-fit>, which html2canvas doesn't honour.
+const A4PhotoBox = ({ url, label }) => {
+  const [failed, setFailed] = useState(false);
+  useEffect(() => {
+    setFailed(false);
+    if (!url) return;
+    const img = new Image();
+    img.onerror = () => setFailed(true);
+    img.src = url;
+  }, [url]);
+  const showImage = url && !failed;
+  return (
+    <div style={{ flex: 1, maxWidth: '170px', display: 'flex', flexDirection: 'column', minHeight: 0 }}>
+      <div style={{ fontSize: '9px', color: '#666', textAlign: 'center', marginBottom: '2px' }}>{label.replace(' Photo', '')}</div>
+      <div
+        style={{
+          flex: 1,
+          minHeight: 0,
+          border: '1px solid #999',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          backgroundColor: '#fff',
+          backgroundImage: showImage ? `url("${url}")` : 'none',
+          backgroundSize: 'contain',
+          backgroundRepeat: 'no-repeat',
+          backgroundPosition: 'center',
+          backgroundOrigin: 'content-box',
+          padding: '3px',
+        }}
+      >
+        {!showImage && <span style={{ fontSize: '9px', color: '#999' }}>{label}</span>}
+      </div>
+    </div>
+  );
+};
+
+const A4MobilePhotos = ({ mobiles, photosByMobile }) => {
+  const n = mobiles.length;
+  if (n === 0) return null;
+  const cols = n === 1 ? 1 : n <= 4 ? 2 : n <= 9 ? 3 : 4;
+  const rows = Math.ceil(n / cols);
+  return (
+    <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', borderTop: '1px solid #ddd', paddingTop: '6px' }}>
+      <div style={{ fontWeight: 'bold', fontSize: '13px', color: '#333', marginBottom: '6px' }}>Mobile Photos</div>
+      <div
+        style={{
+          flex: 1,
+          minHeight: 0,
+          display: 'grid',
+          gridTemplateColumns: `repeat(${cols}, minmax(0, 1fr))`,
+          gridTemplateRows: `repeat(${rows}, minmax(0, 1fr))`,
+          gap: '8px 14px',
+        }}
+      >
+        {mobiles.map((m, idx) => {
+          const photos = (m._id && photosByMobile[m._id]) || {};
+          return (
+            <div key={m._id || idx} style={{ display: 'flex', flexDirection: 'column', minHeight: 0 }}>
+              <div style={{ flex: 1, minHeight: 0, maxHeight: '240px', display: 'flex', gap: '8px', justifyContent: 'center' }}>
+                <A4PhotoBox url={photos.front} label="Front Photo" />
+                <A4PhotoBox url={photos.back} label="Back Photo" />
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+};
+
+const A4_PAGE_STYLE = {
+  width: '210mm',
+  height: '297mm',
+  padding: '12mm 14mm',
+  boxSizing: 'border-box',
+  background: '#fff',
+  overflow: 'hidden',
+};
+
+// Fixed geometry (px) for the terms-images grid; must match the pagination maths below.
+const A4_CONTENT_H_PX = (297 - 24) * MM_TO_PX;
+const TERMS_IMG_TITLE_MIN_H = 28;
+const TERMS_IMG_TITLE_LINE_H = 13;
+const TERMS_IMG_BOX_H = 150;
+const TERMS_IMG_HEAD_H = 34;
+const TERMS_IMG_GAP = 12;
+const TERMS_IMG_COLS = 3;
+// Conservative wrap estimate for 10px bold Arial in a ~215px cell, used only for pagination
+const TERMS_IMG_TITLE_CHARS_PER_LINE = 30;
+
+const termsTitleRowHeight = (row) => {
+  const lines = Math.max(1, ...row.map((item) => Math.ceil((item?.title || '').length / TERMS_IMG_TITLE_CHARS_PER_LINE)));
+  return Math.max(TERMS_IMG_TITLE_MIN_H, lines * TERMS_IMG_TITLE_LINE_H + 12);
+};
+const termsRowHeight = (row) => termsTitleRowHeight(row) + TERMS_IMG_BOX_H + 3; // + collapsed borders
+
+// Shop terms often start with their own "Terms & Conditions:" line, which duplicates the printed heading.
+const stripTermsHeading = (text) =>
+  (text || '').replace(/^\s*terms\s*(?:&|&amp;|and)\s*conditions\s*:?[ \t]*(?:\r?\n)*/i, '');
+
+// html2canvas measures font baselines with a 1px <img> in the *live* document; Tailwind preflight's
+// `img { display: block }` breaks that measurement and shifts all captured text down.
+const HTML2CANVAS_METRICS_IMG = 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7';
+const HTML2CANVAS_OPTIONS = { scale: 2, useCORS: true, backgroundColor: '#ffffff' };
+
+const captureToCanvas = async (node) => {
+  const fix = document.createElement('style');
+  fix.textContent = `img[src="${HTML2CANVAS_METRICS_IMG}"] { display: inline !important; }`;
+  document.head.appendChild(fix);
+  try {
+    return await html2canvas(node, HTML2CANVAS_OPTIONS);
+  } finally {
+    fix.remove();
+  }
+};
+
+// Fetches a (signed) URL and returns a data URL so html2canvas never re-requests cross-origin images.
+const urlToDataUrl = async (url) => {
+  if (!url) return null;
+  try {
+    const res = await fetch(url, { cache: 'no-store' });
+    if (!res.ok) return null;
+    const blob = await res.blob();
+    return await new Promise((resolve) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result);
+      reader.onerror = () => resolve(null);
+      reader.readAsDataURL(blob);
+    });
+  } catch (err) {
+    return null;
+  }
+};
+
+const TermsImagesGrid = ({ rows, withHeading }) => {
+  const cellBorder = '1px solid #555';
+  return (
+    <div>
+      {withHeading && (
+        <div style={{ height: `${TERMS_IMG_HEAD_H}px`, boxSizing: 'border-box', borderTop: '1px solid #ddd', paddingTop: '8px', fontSize: '13px', fontWeight: 'bold', color: '#333' }}>
+          Warranty Not Applicable
+        </div>
+      )}
+      <table style={{ width: '100%', tableLayout: 'fixed', borderCollapse: 'collapse' }}>
+        <colgroup>
+          {Array.from({ length: TERMS_IMG_COLS }).map((_, i) => <col key={i} style={{ width: `${100 / TERMS_IMG_COLS}%` }} />)}
+        </colgroup>
+        <tbody>
+          {rows.map((row, rIdx) => (
+            <React.Fragment key={rIdx}>
+              {/* Title row grows to the tallest wrapped title so no title is clipped */}
+              <tr>
+                {Array.from({ length: TERMS_IMG_COLS }).map((_, cIdx) => (
+                  <td
+                    key={cIdx}
+                    style={{
+                      border: cellBorder,
+                      background: '#f0f0f0',
+                      height: `${TERMS_IMG_TITLE_MIN_H}px`,
+                      padding: '6px 8px',
+                      verticalAlign: 'middle',
+                      textAlign: 'center',
+                      fontSize: '10px',
+                      lineHeight: `${TERMS_IMG_TITLE_LINE_H}px`,
+                      fontWeight: 'bold',
+                      color: '#111',
+                      whiteSpace: 'normal',
+                      overflowWrap: 'anywhere',
+                      wordBreak: 'break-word',
+                    }}
+                  >
+                    {row[cIdx]?.title || ''}
+                  </td>
+                ))}
+              </tr>
+              <tr>
+                {Array.from({ length: TERMS_IMG_COLS }).map((_, cIdx) => {
+                  const item = row[cIdx];
+                  return (
+                    <td key={cIdx} style={{ border: cellBorder, padding: 0, verticalAlign: 'top' }}>
+                      <div
+                        style={{
+                          height: `${TERMS_IMG_BOX_H}px`,
+                          boxSizing: 'border-box',
+                          padding: '6px',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          backgroundImage: item?.url ? `url("${item.url}")` : 'none',
+                          backgroundSize: 'contain',
+                          backgroundRepeat: 'no-repeat',
+                          backgroundPosition: 'center',
+                          backgroundOrigin: 'content-box',
+                        }}
+                      >
+                        {item && !item.url && <span style={{ fontSize: '9px', color: '#999' }}>Image unavailable</span>}
+                      </div>
+                    </td>
+                  );
+                })}
+              </tr>
+            </React.Fragment>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+};
+
+// Splits image rows across page 2 (after the terms) and extra pages, never splitting a row.
+const paginateTermsImages = (termsImages, termsHeight) => {
+  const rows = [];
+  for (let i = 0; i < termsImages.length; i += TERMS_IMG_COLS) rows.push(termsImages.slice(i, i + TERMS_IMG_COLS));
+  if (rows.length === 0) return { page2: null, extraPages: [] };
+
+  // Greedily fills a page with whole rows (title + image) until the next one wouldn't fit
+  const takeRows = (list, available) => {
+    let used = 0;
+    let count = 0;
+    while (count < list.length && used + termsRowHeight(list[count]) <= available) {
+      used += termsRowHeight(list[count]);
+      count += 1;
+    }
+    return count;
+  };
+
+  const page2Cap = takeRows(rows, A4_CONTENT_H_PX - termsHeight - TERMS_IMG_GAP - TERMS_IMG_HEAD_H);
+  const page2Rows = rows.slice(0, page2Cap);
+  let rest = rows.slice(page2Cap);
+  const extraPages = [];
+  let needsHeading = page2Rows.length === 0;
+  while (rest.length > 0) {
+    const cap = Math.max(1, takeRows(rest, A4_CONTENT_H_PX - (needsHeading ? TERMS_IMG_HEAD_H : 0)));
+    extraPages.push({ rows: rest.slice(0, cap), withHeading: needsHeading });
+    rest = rest.slice(cap);
+    needsHeading = false;
+  }
+  return { page2: page2Rows.length > 0 ? page2Rows : null, extraPages };
+};
+
+const A4Receipt = ({ clientData, mobiles, shopPhoneNumber, shopAddress, shopEmail, shopName, profilePhoto, termsAndConditions, photosByMobile = {}, termsImages = [], onPageCount }) => {
+  const termsRef = useRef(null);
+  const [termsHeight, setTermsHeight] = useState(0);
+  useEffect(() => {
+    if (termsRef.current) setTermsHeight(termsRef.current.offsetHeight);
+  }, [termsAndConditions]);
+  const { page2: termsImagesPage2, extraPages } = paginateTermsImages(termsImages, termsHeight);
+  const pageCount = 2 + extraPages.length;
+  useEffect(() => {
+    if (onPageCount) onPageCount(pageCount);
+  }, [pageCount, onPageCount]);
+
   const totalPaid = mobiles.reduce((sum, m) => {
     const paid = m.total_paid || (m.payments && m.payments.length > 0 ? m.payments.reduce((s, p) => s + (p.amount || 0), 0) : 0) || m.paid_amount || 0;
     return sum + paid;
@@ -543,14 +796,14 @@ const A4Receipt = ({ clientData, mobiles, shopPhoneNumber, shopAddress, shopEmai
       className="a4-receipt-root"
       style={{
         width: '210mm',
-        minHeight: '297mm',
         fontFamily: 'Arial, Helvetica, sans-serif',
         color: '#111',
-        padding: '12mm 14mm',
-        boxSizing: 'border-box',
         background: '#fff',
       }}
     >
+      {/* Page 1: receipt + mobile photos */}
+      <div className="a4-page" style={{ ...A4_PAGE_STYLE, display: 'flex', flexDirection: 'column' }}>
+      <div style={{ flexShrink: 0 }}>
       {/* Header */}
       <div style={{ display: 'flex', alignItems: 'center', borderBottom: '3px solid #222', paddingBottom: '12px', marginBottom: '10px' }}>
         <div style={{ width: '72px', height: '72px', flexShrink: 0, marginRight: '16px', border: '1px solid #ddd', borderRadius: '6px', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#f7f7f7', overflow: 'hidden' }}>
@@ -632,12 +885,13 @@ const A4Receipt = ({ clientData, mobiles, shopPhoneNumber, shopAddress, shopEmai
       <div style={{ display: 'flex', gap: '12px', marginBottom: '14px', fontSize: '10px' }}>
         <div style={{ flex: 1, border: '1px solid #ccc', padding: '7px', borderRadius: '3px' }}>
           <div style={{ fontWeight: 'bold', marginBottom: '5px', fontSize: '11px' }}>ACCESSORIES RECEIVED</div>
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px 18px' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, max-content)', justifyContent: 'start', columnGap: '18px', rowGap: '6px' }}>
+            {/* Drawn boxes instead of <input type="checkbox">, which html2canvas renders misaligned */}
             {['Battery', 'Back Door', 'Sim Card', 'Memory Card', 'Head Set', 'Charger', 'Bluetooth', 'Others'].map((item) => (
-              <label key={item} style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-                <input type="checkbox" disabled style={{ width: '11px', height: '11px' }} />
-                <span>{item}</span>
-              </label>
+              <div key={item} style={{ display: 'flex', alignItems: 'center', gap: '5px', height: '12px', whiteSpace: 'nowrap' }}>
+                <span style={{ display: 'block', width: '10px', height: '10px', border: '1px solid #777', borderRadius: '2px', boxSizing: 'border-box', flexShrink: 0 }} />
+                <span style={{ display: 'block', fontSize: '10px', lineHeight: '12px' }}>{item}</span>
+              </div>
             ))}
           </div>
           <div style={{ marginTop: '6px' }}>
@@ -651,12 +905,17 @@ const A4Receipt = ({ clientData, mobiles, shopPhoneNumber, shopAddress, shopEmai
           <div style={{ borderBottom: '1px dashed #bbb', minHeight: '22px' }} />
         </div>
       </div>
+      </div>
 
-      {/* Terms */}
-      <div style={{ fontSize: '12px', color: '#555', borderTop: '1px solid #ddd', paddingTop: '8px', marginBottom: '10px', lineHeight: '1.7' }}>
+      <A4MobilePhotos mobiles={mobiles} photosByMobile={photosByMobile} />
+      </div>
+
+      {/* Page 2: terms always start here */}
+      <div className="a4-page" style={A4_PAGE_STYLE}>
+      <div ref={termsRef} style={{ fontSize: '12px', color: '#555', borderTop: '1px solid #ddd', paddingTop: '8px', lineHeight: '1.7' }}>
         <div style={{ color: '#333', fontWeight: 'bold', marginBottom: '3px', fontSize: '13px' }}>Terms &amp; Conditions:</div>
-        {termsAndConditions && termsAndConditions.trim() !== '' ? (
-          <div style={{ whiteSpace: 'pre-line' }}>{termsAndConditions}</div>
+        {stripTermsHeading(termsAndConditions).trim() !== '' ? (
+          <div style={{ whiteSpace: 'pre-line' }}>{stripTermsHeading(termsAndConditions)}</div>
         ) : (
           <div>
             {DEFAULT_TERMS_AND_CONDITIONS.map((line, idx) => (
@@ -665,11 +924,23 @@ const A4Receipt = ({ clientData, mobiles, shopPhoneNumber, shopAddress, shopEmai
           </div>
         )}
       </div>
+      {termsImagesPage2 && (
+        <div style={{ marginTop: `${TERMS_IMG_GAP}px` }}>
+          <TermsImagesGrid rows={termsImagesPage2} withHeading />
+        </div>
+      )}
+      </div>
+
+      {extraPages.map((page, pIdx) => (
+        <div key={pIdx} className="a4-page" style={A4_PAGE_STYLE}>
+          <TermsImagesGrid rows={page.rows} withHeading={page.withHeading} />
+        </div>
+      ))}
     </div>
   );
 };
 
-const PrintableA4Receipt = React.forwardRef(({ clientData, shopPhoneNumber, shopAddress, shopEmail, shopName, profilePhoto, termsAndConditions }, ref) => {
+const PrintableA4Receipt = React.forwardRef(({ clientData, shopPhoneNumber, shopAddress, shopEmail, shopName, profilePhoto, termsAndConditions, photosByMobile, termsImages, onPageCount }, ref) => {
   const mobiles = clientData.MobileName || [];
   return (
     <div ref={ref}>
@@ -682,6 +953,9 @@ const PrintableA4Receipt = React.forwardRef(({ clientData, shopPhoneNumber, shop
         shopName={shopName}
         profilePhoto={profilePhoto}
         termsAndConditions={termsAndConditions}
+        photosByMobile={photosByMobile}
+        termsImages={termsImages}
+        onPageCount={onPageCount}
       />
     </div>
   );
@@ -705,6 +979,9 @@ const ReceiptGenerator = ({ clientData, shopPhoneNumber, closeModal, shopAddress
   const [termsAndConditions, setTermsAndConditions] = useState('');
   const [activeReceiptType, setActiveReceiptType] = useState('a4'); // 'a4' | 'jobcard' | 'thermal'
   const [downloading, setDownloading] = useState(false);
+  const [photosByMobile, setPhotosByMobile] = useState({});
+  const [termsImages, setTermsImages] = useState([]);
+  const [a4PageCount, setA4PageCount] = useState(2);
 
   // Mobile selection state
   const allMobiles = clientData.MobileName || [];
@@ -801,6 +1078,12 @@ const ReceiptGenerator = ({ clientData, shopPhoneNumber, closeModal, shopAddress
         if (res.data && typeof res.data.termsAndConditions === "string") {
           setTermsAndConditions(res.data.termsAndConditions);
         }
+        if (res.data && Array.isArray(res.data.termsImages) && res.data.termsImages.length > 0) {
+          const inlined = await Promise.all(
+            res.data.termsImages.map(async (img) => ({ id: img.id, title: img.title, url: await urlToDataUrl(img.url) }))
+          );
+          setTermsImages(inlined);
+        }
       } catch (err) {
         console.error("Error fetching receipt terms:", err);
       }
@@ -808,6 +1091,31 @@ const ReceiptGenerator = ({ clientData, shopPhoneNumber, closeModal, shopAddress
 
     fetchReceiptTerms();
   }, []);
+
+  // Front/back photos for the A4 invoice, inlined as data URLs so html2canvas never re-requests
+  // the signed R2 URLs (a cached non-CORS response made later downloads drop the photos).
+  const selectedMobileKey = selectedMobileIds.join(',');
+  useEffect(() => {
+    if (!showReceipt) return;
+    let cancelled = false;
+    const ids = filteredClientData.MobileName.map((m) => m._id).filter(Boolean);
+    Promise.all(
+      ids.map(async (id) => {
+        try {
+          const { images } = await fetchMobileImages(id);
+          const latest = (side) => [...images].reverse().find((img) => img.side === side)?.url || null;
+          const [front, back] = await Promise.all([urlToDataUrl(latest('front')), urlToDataUrl(latest('back'))]);
+          return [id, { front, back }];
+        } catch (err) {
+          return [id, {}];
+        }
+      })
+    ).then((entries) => {
+      if (!cancelled) setPhotosByMobile(Object.fromEntries(entries));
+    });
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [showReceipt, selectedMobileKey]);
 
   const handlePrint = useReactToPrint({
     contentRef: receiptRef,
@@ -828,7 +1136,9 @@ const ReceiptGenerator = ({ clientData, shopPhoneNumber, closeModal, shopAddress
     pageStyle: `
       @page { size: A4 portrait; margin: 0; }
       body { -webkit-print-color-adjust: exact; print-color-adjust: exact; margin: 0; }
-      .a4-receipt-root { width: 210mm; min-height: 297mm; margin: 0 auto; }
+      .a4-receipt-root { width: 210mm; margin: 0 auto; }
+      .a4-page { page-break-after: always; break-after: page; }
+      .a4-page:last-child { page-break-after: auto; break-after: auto; }
     `,
   });
 
@@ -918,8 +1228,20 @@ const ReceiptGenerator = ({ clientData, shopPhoneNumber, closeModal, shopAddress
       return;
     }
     setDownloading(true);
+    const fileName = `${DOWNLOAD_FILE_PREFIX[activeReceiptType]}-${filteredClientData.bill_no || filteredClientData.client_name || 'Service'}.pdf`;
     try {
-      const canvas = await html2canvas(node, { scale: 2, useCORS: true, backgroundColor: '#ffffff' });
+      if (activeReceiptType === 'a4') {
+        const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
+        const pages = node.querySelectorAll('.a4-page');
+        for (let i = 0; i < pages.length; i++) {
+          const pageCanvas = await captureToCanvas(pages[i]);
+          if (i > 0) doc.addPage();
+          doc.addImage(pageCanvas.toDataURL('image/png'), 'PNG', 0, 0, 210, 297);
+        }
+        doc.save(fileName);
+        return;
+      }
+      const canvas = await captureToCanvas(node);
       const imgData = canvas.toDataURL('image/png');
       const pageWidth = PDF_PAGE_WIDTH_MM[activeReceiptType];
       const pageHeight = (canvas.height * pageWidth) / canvas.width;
@@ -929,7 +1251,6 @@ const ReceiptGenerator = ({ clientData, shopPhoneNumber, closeModal, shopAddress
         format: [pageWidth, pageHeight],
       });
       doc.addImage(imgData, 'PNG', 0, 0, pageWidth, pageHeight);
-      const fileName = `${DOWNLOAD_FILE_PREFIX[activeReceiptType]}-${filteredClientData.bill_no || filteredClientData.client_name || 'Service'}.pdf`;
       doc.save(fileName);
     } catch (err) {
       console.error('Failed to generate PDF:', err);
@@ -1185,7 +1506,7 @@ const ReceiptGenerator = ({ clientData, shopPhoneNumber, closeModal, shopAddress
                   </div>
                 ) : (
                   (() => {
-                    const { wrapperWidth, wrapperHeight, contentWidth, scale } = getScaledPreviewStyle(activeReceiptType);
+                    const { wrapperWidth, wrapperHeight, contentWidth, scale } = getScaledPreviewStyle(activeReceiptType, a4PageCount);
                     return (
                       <div className="bg-white shadow-xl rounded-sm" style={{ width: wrapperWidth, height: wrapperHeight, overflow: 'hidden' }}>
                         <div style={{ width: contentWidth, transform: `scale(${scale})`, transformOrigin: 'top left' }}>
@@ -1207,6 +1528,9 @@ const ReceiptGenerator = ({ clientData, shopPhoneNumber, closeModal, shopAddress
                               shopName={shopName}
                               profilePhoto={profilePhoto}
                               termsAndConditions={termsAndConditions}
+                              photosByMobile={photosByMobile}
+                              termsImages={termsImages}
+                              onPageCount={setA4PageCount}
                             />
                           )}
                         </div>
@@ -1250,6 +1574,8 @@ const ReceiptGenerator = ({ clientData, shopPhoneNumber, closeModal, shopAddress
                 shopName={shopName}
                 profilePhoto={profilePhoto}
                 termsAndConditions={termsAndConditions}
+                photosByMobile={photosByMobile}
+                termsImages={termsImages}
               />
             </div>
           </div>

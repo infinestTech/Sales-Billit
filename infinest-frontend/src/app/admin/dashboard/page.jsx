@@ -172,7 +172,8 @@ export default function AdminDashboard() {
               { id: 'analytics', label: 'Analytics', icon: '📈' },
               { id: 'shop-admins', label: 'Shop Admins', icon: '🏪' },
               { id: 'whatsapp', label: 'WhatsApp', icon: '💬' },
-              { id: 'product-ui', label: 'Product UI', icon: '🖥️' }
+              { id: 'product-ui', label: 'Product UI', icon: '🖥️' },
+              { id: 'terms', label: 'Terms', icon: '🖼️' }
             ].map(tab => (
               <button
                 key={tab.id}
@@ -211,6 +212,7 @@ export default function AdminDashboard() {
         {activeTab === 'shop-admins' && <ShopAdminsTab getAuthHeaders={getAuthHeaders} adminEmail={adminEmail} />}
         {activeTab === 'whatsapp' && <WhatsAppTab getAuthHeaders={getAuthHeaders} />}
         {activeTab === 'product-ui' && <ProductUITab getAuthHeaders={getAuthHeaders} />}
+        {activeTab === 'terms' && <TermsImagesPermissionTab getAuthHeaders={getAuthHeaders} />}
       </div>
 
       {/* User Details Modal */}
@@ -2262,6 +2264,148 @@ function ProductUITab({ getAuthHeaders }) {
                         : shop.use_legacy_product_ui
                           ? 'Switch to Spares UI'
                           : 'Enable Legacy UI'}
+                    </button>
+                  </td>
+                </tr>
+              ))
+            )}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
+// ============================================================
+// 🖼️ Receipt Terms & Conditions Images permission Tab
+// ============================================================
+function TermsImagesPermissionTab({ getAuthHeaders }) {
+  const [admins, setAdmins] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState({});
+  const [search, setSearch] = useState('');
+  const API_URL = process.env.NEXT_PUBLIC_API_URL_AUTH || 'http://localhost:7000';
+
+  const fetchAdmins = async () => {
+    setLoading(true);
+    try {
+      const res = await axios.get(`${API_URL}/admin/shop-admins/receipt-terms-images`, getAuthHeaders());
+      setAdmins(res.data.shopAdmins || []);
+    } catch (err) {
+      console.error('Failed to load shop admins:', err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => { fetchAdmins(); }, []);
+
+  const togglePermission = async (adminId, currentValue) => {
+    setSaving(prev => ({ ...prev, [adminId]: true }));
+    try {
+      await axios.patch(
+        `${API_URL}/admin/shop-admins/${adminId}/receipt-terms-images`,
+        { enabled: !currentValue },
+        getAuthHeaders()
+      );
+      setAdmins(prev =>
+        prev.map(a => a._id === adminId ? { ...a, can_manage_receipt_terms_images: !currentValue } : a)
+      );
+    } catch (err) {
+      alert('Failed to update: ' + (err.response?.data?.message || err.message));
+    } finally {
+      setSaving(prev => ({ ...prev, [adminId]: false }));
+    }
+  };
+
+  const q = search.toLowerCase();
+  const filtered = admins.filter(a =>
+    search === '' ||
+    String(a._id).toLowerCase().includes(q) ||
+    a.username?.toLowerCase().includes(q) ||
+    a.full_name?.toLowerCase().includes(q) ||
+    a.email?.toLowerCase().includes(q)
+  );
+
+  if (loading) {
+    return (
+      <div className="text-center py-20">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-purple-500 mx-auto"></div>
+        <p className="text-gray-400 mt-4">Loading shop admins…</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-6">
+      <div className="bg-gray-800 rounded-xl p-6 border border-gray-700">
+        <h2 className="text-xl font-bold text-white mb-2">Receipt Terms &amp; Conditions Images</h2>
+        <p className="text-gray-400 text-sm mb-4">
+          Choose which shop admins can see and manage the <strong className="text-purple-400">Receipt Terms &amp; Conditions Images</strong> section in their Shop Admin Dashboard.
+          Shop admins without permission will not see the section.
+        </p>
+        <input
+          type="text"
+          placeholder="Search by ID, name, username or email..."
+          value={search}
+          onChange={e => setSearch(e.target.value)}
+          className="w-full max-w-md px-4 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-purple-500"
+        />
+      </div>
+
+      <div className="bg-gray-800 rounded-xl border border-gray-700 overflow-x-auto">
+        <table className="w-full">
+          <thead>
+            <tr className="border-b border-gray-700">
+              <th className="text-left px-6 py-4 text-gray-400 font-medium text-sm">Shop Admin ID</th>
+              <th className="text-left px-6 py-4 text-gray-400 font-medium text-sm">Name</th>
+              <th className="text-left px-6 py-4 text-gray-400 font-medium text-sm">Email</th>
+              <th className="text-left px-6 py-4 text-gray-400 font-medium text-sm">Shops</th>
+              <th className="text-left px-6 py-4 text-gray-400 font-medium text-sm">Permission</th>
+              <th className="text-left px-6 py-4 text-gray-400 font-medium text-sm">Toggle</th>
+            </tr>
+          </thead>
+          <tbody>
+            {filtered.length === 0 ? (
+              <tr>
+                <td colSpan={6} className="text-center text-gray-500 py-10">No shop admins found.</td>
+              </tr>
+            ) : (
+              filtered.map(admin => (
+                <tr key={admin._id} className="border-b border-gray-700 hover:bg-gray-750">
+                  <td className="px-6 py-4 text-gray-400 text-xs font-mono">{admin._id}</td>
+                  <td className="px-6 py-4">
+                    <div className="text-white font-medium">{admin.full_name || admin.username}</div>
+                    <div className="text-gray-500 text-xs">@{admin.username}{!admin.is_active && ' · inactive'}</div>
+                  </td>
+                  <td className="px-6 py-4 text-gray-400 text-sm">{admin.email || '—'}</td>
+                  <td className="px-6 py-4 text-gray-300 text-sm">{admin.shops?.length ? admin.shops.join(', ') : '—'}</td>
+                  <td className="px-6 py-4">
+                    {admin.can_manage_receipt_terms_images ? (
+                      <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold bg-green-900 text-green-300 border border-green-700">
+                        ✅ Allowed
+                      </span>
+                    ) : (
+                      <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold bg-gray-700 text-gray-300 border border-gray-600">
+                        🚫 Not allowed
+                      </span>
+                    )}
+                  </td>
+                  <td className="px-6 py-4">
+                    <button
+                      onClick={() => togglePermission(admin._id, admin.can_manage_receipt_terms_images)}
+                      disabled={saving[admin._id]}
+                      className={`px-4 py-2 rounded-lg text-sm font-medium transition whitespace-nowrap ${
+                        admin.can_manage_receipt_terms_images
+                          ? 'bg-red-600 hover:bg-red-500 text-white'
+                          : 'bg-green-600 hover:bg-green-500 text-white'
+                      } disabled:opacity-50 disabled:cursor-not-allowed`}
+                    >
+                      {saving[admin._id]
+                        ? 'Saving…'
+                        : admin.can_manage_receipt_terms_images
+                          ? 'Revoke Access'
+                          : 'Grant Access'}
                     </button>
                   </td>
                 </tr>

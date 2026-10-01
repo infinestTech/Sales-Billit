@@ -17,6 +17,7 @@ import {
 import MobileDashboard from '@/components/shop-admin/MobileDashboard';
 import SalaryManagement from '@/components/shop-admin/SalaryManagement';
 import EsslDeviceSettings from '@/components/shop-admin/EsslDeviceSettings';
+import ReceiptTermsImages from '@/components/shop-admin/ReceiptTermsImages';
 import EmployeeManagement from '@/components/shop-admin/EmployeeManagement';
 import AttendanceManagement from '@/components/shop-admin/AttendanceManagement';
 import CreateCustomerPanel from '@/components/shop-admin/panels/CreateCustomerPanel';
@@ -1800,6 +1801,9 @@ export default function ShopAdminDashboard() {
                 </div>
               </div>
             </div>
+
+            {/* Receipt Terms & Conditions Images */}
+            <ReceiptTermsImages shopId={currentShopId} />
 
             {/* eSSL M20 Biometric Attendance Settings */}
             <div className="bg-white border border-gray-200 rounded-xl p-6 shadow-sm">

@@ -1001,4 +1001,41 @@ router.patch('/shops/:shopId/product-ui', adminAuth, async (req, res) => {
     }
 });
 
+// ============================================================
+// 🖼️ Receipt Terms & Conditions Images permission — proxy to BillitServer
+// ============================================================
+
+router.get('/shop-admins/receipt-terms-images', adminAuth, async (req, res) => {
+    try {
+        const billitResp = await axios.get(
+            `${process.env.BILLIT_SERVER_URL}/api/admin/shop-admins/receipt-terms-images`,
+            { headers: { 'x-internal-key': process.env.INTERNAL_API_KEY }, timeout: 8000 }
+        );
+        return res.json(billitResp.data);
+    } catch (err) {
+        console.error('Admin proxy GET /shop-admins/receipt-terms-images error:', err.response?.data || err.message);
+        return res.status(err.response?.status || 500).json({
+            message: 'Failed to load shop admins',
+            error: err.response?.data || err.message,
+        });
+    }
+});
+
+router.patch('/shop-admins/:adminId/receipt-terms-images', adminAuth, async (req, res) => {
+    try {
+        const billitResp = await axios.patch(
+            `${process.env.BILLIT_SERVER_URL}/api/admin/shop-admins/${encodeURIComponent(req.params.adminId)}/receipt-terms-images`,
+            { enabled: req.body?.enabled },
+            { headers: { 'x-internal-key': process.env.INTERNAL_API_KEY }, timeout: 8000 }
+        );
+        return res.json(billitResp.data);
+    } catch (err) {
+        console.error('Admin proxy PATCH /shop-admins/:id/receipt-terms-images error:', err.response?.data || err.message);
+        return res.status(err.response?.status || 500).json({
+            message: 'Failed to update permission',
+            error: err.response?.data || err.message,
+        });
+    }
+});
+
 module.exports = router;

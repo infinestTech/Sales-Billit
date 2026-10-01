@@ -50,6 +50,12 @@ async function getSignedUploadUrl(key, contentType, contentLength, expiresIn = 3
   );
 }
 
+async function uploadObject(key, body, contentType) {
+  await getClient().send(
+    new PutObjectCommand({ Bucket: process.env.R2_BUCKET_NAME, Key: key, Body: body, ContentType: contentType })
+  );
+}
+
 async function deleteObjects(keys) {
   if (!keys || keys.length === 0) return;
   await getClient().send(
@@ -60,4 +66,4 @@ async function deleteObjects(keys) {
   );
 }
 
-module.exports = { isConfigured, getClient, getSignedViewUrl, getSignedUploadUrl, deleteObjects };
+module.exports = { isConfigured, getClient, getSignedViewUrl, getSignedUploadUrl, uploadObject, deleteObjects };

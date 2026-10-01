@@ -2,6 +2,7 @@ const express = require("express");
 const router = express.Router();
 const authenticateToken = require("../utils/authMiddleware");
 const { Shop } = require("../models/mongoModels");
+const r2 = require("../utils/r2Storage");
 
 // Return the WhatsApp config (enabled + events) for the authenticated user's shop
 router.get("/shop/whatsapp-config", authenticateToken, async (req, res) => {
@@ -16,12 +17,21 @@ router.get("/shop/whatsapp-config", authenticateToken, async (req, res) => {
   }
 });
 
-// Return the shop's custom Terms & Conditions text for receipts (set via the shop-admin dashboard)
+// Return the shop's custom Terms & Conditions text and images for receipts (set via the shop-admin dashboard)
 router.get("/shop/receipt-settings", authenticateToken, async (req, res) => {
   try {
-    const shop = await Shop.findById(req.user.shop_id).select("terms_and_conditions").lean();
+    const shop = await Shop.findById(req.user.shop_id).select("terms_and_conditions receipt_terms_images").lean();
     if (!shop) return res.status(404).json({ error: "Shop not found" });
-    return res.json({ termsAndConditions: shop.terms_and_conditions || "" });
+    const termsImages = r2.isConfigured()
+      ? await Promise.all(
+          (shop.receipt_terms_images || []).map(async (img) => ({
+            id: String(img._id),
+            title: img.title,
+            url: await r2.getSignedViewUrl(img.key),
+          }))
+        )
+      : [];
+    return res.json({ termsAndConditions: shop.terms_and_conditions || "", termsImages });
   } catch (err) {
     console.error("shop/receipt-settings error:", err);
     return res.status(500).json({ error: "Internal server error" });
