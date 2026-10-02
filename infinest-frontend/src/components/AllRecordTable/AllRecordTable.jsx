@@ -553,6 +553,9 @@ const [shopAddressState, setShopAddressState] = useState("")
                             <div className="bg-white rounded-lg border border-gray-200 p-4">
                               <MobileNameTable
                                 mobileData={invoice.MobileName}
+                                showWhatsApp
+                                clientName={invoice.client_name}
+                                clientPhone={(invoice.whatsapp_number && invoice.whatsapp_number.trim()) || invoice.mobile_number}
                                 setMobileData={(updatedMobileData) =>
                                   updateMobileData(index, updatedMobileData)
                                 }

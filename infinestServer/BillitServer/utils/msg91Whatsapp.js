@@ -21,6 +21,7 @@
  *   MSG91_TPL_DELIVERED
  *   MSG91_TPL_RETURNED
  *   MSG91_TPL_BALANCE_REMINDER
+ *   MSG91_TPL_CUSTOMER_MESSAGE  — defaults to "fixel_customer_message"
  */
 
 const axios = require("axios");
@@ -37,6 +38,12 @@ const EVENT_TEMPLATE_ENV = {
   mobile_delivered: "MSG91_TPL_DELIVERED",
   mobile_returned: "MSG91_TPL_RETURNED",
   balance_reminder: "MSG91_TPL_BALANCE_REMINDER",
+  customer_message: "MSG91_TPL_CUSTOMER_MESSAGE",
+};
+
+// Used when the env var for an event is not set
+const EVENT_TEMPLATE_DEFAULT = {
+  customer_message: "fixel_customer_message",
 };
 
 // Normalize to E.164 without "+", default country India (91) if 10 digits.
@@ -88,10 +95,11 @@ async function logAttempt(entry) {
  * @param {string} opts.to      — customer phone (any format)
  * @param {Object} opts.vars    — { name: 'X', amount: '500', ... } or { body_1: ... }
  * @param {Object} [opts.header] — optional template header attachment, e.g. { type: 'document', value: '<public URL>', filename: 'Receipt.pdf' }
- * @returns {Promise<{status: 'sent'|'skipped'|'error', reason?: string, messageId?: string}>}
+ * @param {Object} [opts.logVars] — what to store in WhatsAppLog instead of `vars` (e.g. to avoid storing free-text messages)
+ * @returns {Promise<{status: 'sent'|'skipped'|'error', reason?: string, messageId?: string, httpStatus?: number}>}
  */
-async function sendWaEvent({ shopId, event, to, vars = {}, header = null }) {
-  const base = { shop_id: shopId, event, to: String(to || ""), vars };
+async function sendWaEvent({ shopId, event, to, vars = {}, header = null, logVars }) {
+  const base = { shop_id: shopId, event, to: String(to || ""), vars: logVars !== undefined ? logVars : vars };
 
   if (!EVENT_TEMPLATE_ENV[event]) {
     const reason = `Unknown event '${event}'`;
@@ -134,7 +142,7 @@ async function sendWaEvent({ shopId, event, to, vars = {}, header = null }) {
   const authKey = process.env.MSG91_AUTH_KEY;
   const integratedNumber = process.env.MSG91_INTEGRATED_NUMBER;
   const namespace = process.env.MSG91_NAMESPACE || null;
-  const templateName = process.env[EVENT_TEMPLATE_ENV[event]];
+  const templateName = process.env[EVENT_TEMPLATE_ENV[event]] || EVENT_TEMPLATE_DEFAULT[event];
   const langCode = process.env.MSG91_LANG_CODE || "en";
 
   if (!authKey || !integratedNumber || !templateName) {
@@ -171,6 +179,12 @@ async function sendWaEvent({ shopId, event, to, vars = {}, header = null }) {
       },
       timeout: 8000,
     });
+    // MSG91 can answer HTTP 200 with a failure body (e.g. template/number problems)
+    if (resp.data && (resp.data.hasError === true || String(resp.data.status).toLowerCase() === "fail")) {
+      const reason = JSON.stringify(resp.data.errors || resp.data).slice(0, 500);
+      await logAttempt({ ...base, status: "error", template: templateName, error: reason });
+      return { status: "error", reason, httpStatus: resp.status };
+    }
     const messageId =
       resp.data?.message_id ||
       resp.data?.data?.message_id ||
@@ -193,7 +207,7 @@ async function sendWaEvent({ shopId, event, to, vars = {}, header = null }) {
       template: templateName,
       error: reason,
     });
-    return { status: "error", reason };
+    return { status: "error", reason, httpStatus: err.response?.status, code: err.code };
   }
 }
 
@@ -211,4 +225,4 @@ function fireWaEvent(opts) {
   });
 }
 
-module.exports = { sendWaEvent, fireWaEvent };
+module.exports = { sendWaEvent, fireWaEvent, normalizePhone };

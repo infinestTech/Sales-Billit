@@ -1,7 +1,38 @@
+const fs = require("fs");
+const path = require("path");
 const PDFDocument = require("pdfkit");
 const { GetObjectCommand } = require("@aws-sdk/client-s3");
 const r2 = require("./r2Storage");
 const axios = require("./axiosConfig");
+
+// Noto Sans (SIL OFL, see assets/fonts/OFL.txt) has the ₹ glyph that the built-in Helvetica lacks
+const FONT_DIR = path.join(__dirname, "..", "assets", "fonts");
+const FONT_FILES = {
+  Body: path.join(FONT_DIR, "NotoSans-Regular.ttf"),
+  "Body-Bold": path.join(FONT_DIR, "NotoSans-Bold.ttf"),
+};
+const HAS_BODY_FONT = Object.values(FONT_FILES).every((f) => fs.existsSync(f));
+if (!HAS_BODY_FONT) console.warn("⚠️ Receipt PDF: Noto Sans fonts missing, falling back to Helvetica (no ₹ sign).");
+const FONT = HAS_BODY_FONT
+  ? { regular: "Body", bold: "Body-Bold", italic: "Body" }
+  : { regular: "Helvetica", bold: "Helvetica-Bold", italic: "Helvetica-Oblique" };
+const RUPEE = HAS_BODY_FONT ? "\u20b9" : "Rs.";
+
+const registerFonts = (doc) => {
+  if (!HAS_BODY_FONT) return;
+  for (const [name, file] of Object.entries(FONT_FILES)) doc.registerFont(name, file);
+};
+
+// Top offset that visually centres one line of the current font/size inside a box of height h
+const centerInBox = (doc, h) => h / 2 - textMidOffset(doc);
+
+// Distance from a text line's top to the middle of its mixed-case letters (between x-height and cap height)
+const textMidOffset = (doc) => {
+  const f = doc._font;
+  const size = doc._fontSize;
+  if (!f || !f.ascender || !f.capHeight || !f.xHeight) return doc.currentLineHeight() / 2;
+  return ((f.ascender - (f.capHeight + f.xHeight) / 4) * size) / 1000;
+};
 
 const PHOTO_FETCH_TIMEOUT_MS = 8000;
 const PHOTO_MAX_BYTES = 10 * 1024 * 1024;
@@ -117,22 +148,22 @@ async function loadShopProfile(shop) {
 }
 
 function drawPhotoBox(doc, x, y, w, h, buf, label) {
-  doc.lineWidth(0.6).strokeColor("#999").rect(x, y, w, h).stroke();
+  doc.lineWidth(0.75).strokeColor("#999").rect(x, y, w, h).stroke();
   if (buf) {
     try {
-      doc.image(buf, x + 2, y + 2, { fit: [w - 4, h - 4], align: "center", valign: "center" });
+      doc.image(buf, x + 3, y + 3, { fit: [w - 6, h - 6], align: "center", valign: "center" });
       return;
     } catch (err) {
       console.warn(`⚠️ Receipt PDF: invalid ${label} image: ${err.message}`);
     }
   }
-  doc.font("Helvetica").fontSize(7).fillColor("#999");
-  doc.text(label, x, y + h / 2 - 4, { width: w, align: "center", lineBreak: false });
+  doc.font(FONT.regular).fontSize(6.75).fillColor("#999");
+  doc.text(label, x, y + centerInBox(doc, h), { width: w, align: "center", lineBreak: false });
 }
 
 const PAD = 3;
 
-const cellFont = (header, style) => (header || style?.bold ? "Helvetica-Bold" : "Helvetica");
+const cellFont = (header, style) => (header || style?.bold ? FONT.bold : FONT.regular);
 
 function measureTableRow(doc, columns, values, { header = false, height = 20, minHeight = 0, cellStyles = {} } = {}) {
   const heights = columns.map((col, idx) => {
@@ -184,8 +215,8 @@ function drawLogoBox(doc, x, y, size, logo) {
       console.warn(`⚠️ Receipt PDF: invalid shop logo: ${err.message}`);
     }
   }
-  doc.font("Helvetica").fontSize(7).fillColor("#999");
-  doc.text("LOGO", x, y + size / 2 - 3.5, { width: size, align: "center", lineBreak: false });
+  doc.font(FONT.regular).fontSize(7).fillColor("#999");
+  doc.text("LOGO", x, y + centerInBox(doc, size), { width: size, align: "center", lineBreak: false });
 }
 
 // "ACCESSORIES RECEIVED" checklist + "REMARKS / NOTES" lines, side by side (same as the web A4 Invoice).
@@ -195,25 +226,26 @@ function drawAccessoriesAndNotes(doc, x, y, width, height) {
   const IN = 6;
 
   doc.lineWidth(0.75).roundedRect(x, y, boxW, height, 2).stroke("#ccc");
-  doc.font("Helvetica-Bold").fontSize(8.5).fillColor("#111");
+  doc.font(FONT.bold).fontSize(8.5).fillColor("#111");
   doc.text("ACCESSORIES RECEIVED", x + IN, y + IN, { lineBreak: false });
   const colW = (boxW - IN * 2) / 4;
-  doc.font("Helvetica").fontSize(7.5);
+  const BOX = 7;
+  doc.font(FONT.regular).fontSize(7.5);
+  const boxTopOffset = textMidOffset(doc) - BOX / 2;
   ACCESSORIES.forEach((item, i) => {
     const ix = x + IN + (i % 4) * colW;
     const iy = y + 21 + Math.floor(i / 4) * 12;
-    // Box centred on the mixed-case text centre (~3.25pt below the line top at 7.5pt Helvetica)
-    doc.lineWidth(0.6).rect(ix, iy, 6.5, 6.5).stroke("#777");
-    doc.fillColor("#111").text(item, ix + 10, iy, { width: colW - 10, lineBreak: false });
+    doc.lineWidth(0.6).roundedRect(ix, iy + boxTopOffset, BOX, BOX, 1).stroke("#777");
+    doc.fillColor("#111").text(item, ix + BOX + 4, iy, { width: colW - BOX - 4, lineBreak: false });
   });
   const flashY = y + 49;
-  doc.font("Helvetica-Bold").fontSize(7.5).fillColor("#111").text("Flashing:", x + IN, flashY, { lineBreak: false });
+  doc.font(FONT.bold).fontSize(7.5).fillColor("#111").text("Flashing:", x + IN, flashY, { lineBreak: false });
   const labelW = doc.widthOfString("Flashing: ");
-  doc.font("Helvetica").fillColor("#777").text("Backup \u2014 Yes  /  No", x + IN + labelW, flashY, { lineBreak: false });
+  doc.font(FONT.regular).fillColor("#777").text("Backup \u2014 Yes  /  No", x + IN + labelW, flashY, { lineBreak: false });
 
   const rx = x + boxW + GAP;
   doc.lineWidth(0.75).roundedRect(rx, y, boxW, height, 2).stroke("#ccc");
-  doc.font("Helvetica-Bold").fontSize(8.5).fillColor("#111");
+  doc.font(FONT.bold).fontSize(8.5).fillColor("#111");
   doc.text("REMARKS / NOTES", rx + IN, y + IN, { lineBreak: false });
   doc.lineWidth(0.6).dash(2, { space: 2 });
   [y + 26, y + 42, y + 58].forEach((ly) => {
@@ -237,7 +269,7 @@ const termsTitleOpts = (w) => ({ width: w - TERMS_CELL_PAD * 2, align: "center" 
 
 // Title band height for a row = tallest wrapped title in it, so titles are never clipped
 function measureTermsTitleRow(doc, cellW, rowItems) {
-  doc.font("Helvetica-Bold").fontSize(8);
+  doc.font(FONT.bold).fontSize(8);
   const maxTextH = Math.max(0, ...rowItems.map((it) => (it ? doc.heightOfString(it.title || "", termsTitleOpts(cellW)) : 0)));
   return Math.max(TERMS_TITLE_MIN_H, Math.ceil(maxTextH) + TERMS_TITLE_PAD_Y * 2);
 }
@@ -249,7 +281,7 @@ function drawTermsImageCell(doc, x, y, w, titleH, item) {
   if (!item) return;
 
   const opts = termsTitleOpts(w);
-  doc.font("Helvetica-Bold").fontSize(8).fillColor("#111");
+  doc.font(FONT.bold).fontSize(8).fillColor("#111");
   const textH = doc.heightOfString(item.title || "", opts);
   doc.text(item.title || "", x + TERMS_CELL_PAD, y + (titleH - textH) / 2, opts);
 
@@ -265,8 +297,8 @@ function drawTermsImageCell(doc, x, y, w, titleH, item) {
       console.warn(`⚠️ Receipt PDF: invalid terms image "${item.title}": ${err.message}`);
     }
   }
-  doc.font("Helvetica").fontSize(7).fillColor("#999");
-  doc.text("Image unavailable", ix, iy + ih / 2 - 4, { width: iw, align: "center", lineBreak: false });
+  doc.font(FONT.regular).fontSize(7).fillColor("#999");
+  doc.text("Image unavailable", ix, iy + centerInBox(doc, ih), { width: iw, align: "center", lineBreak: false });
 }
 
 // Draws "Receipt Terms & Conditions Images" from y, adding pages only when a whole row can't fit.
@@ -288,8 +320,8 @@ function drawTermsImagesSection(doc, left, width, startY, items) {
     y = doc.page.margins.top;
   }
   doc.moveTo(left, y).lineTo(left + width, y).lineWidth(0.75).strokeColor("#ddd").stroke();
-  doc.font("Helvetica-Bold").fontSize(10).fillColor("#333");
-  doc.text("Warranty Not Applicable", left, y + 7, { width, lineBreak: false });
+  doc.font(FONT.bold).fontSize(10).fillColor("#333");
+  doc.text("Warranty Not Applicable", left, y + 6, { width, lineBreak: false });
   y += HEAD_H;
 
   for (const { rowItems, titleH } of rows) {
@@ -315,6 +347,7 @@ async function generateReceiptPdfBuffer({ shop, client, mobiles, billNo, termsAn
   return new Promise((resolve, reject) => {
     try {
       const doc = new PDFDocument({ size: "A4", margin: 40 });
+      registerFonts(doc);
       const chunks = [];
       doc.on("data", (c) => chunks.push(c));
       doc.on("end", () => resolve(Buffer.concat(chunks)));
@@ -335,18 +368,18 @@ async function generateReceiptPdfBuffer({ shop, client, mobiles, billNo, termsAn
       const textX = left + LOGO + 12;
       const textW = pageWidth - LOGO - 12;
       const contactLine = `Ph: ${shopPhone}${shopEmail && shopEmail !== "N/A" ? `  |  Email: ${shopEmail}` : ""}`;
-      doc.font("Helvetica-Bold").fontSize(17);
+      doc.font(FONT.bold).fontSize(17);
       const nameH = doc.heightOfString(shopName, { width: textW, align: "center", characterSpacing: 0.75 });
-      doc.font("Helvetica").fontSize(8.5);
+      doc.font(FONT.regular).fontSize(8.5);
       const addrH = doc.heightOfString(shopAddress, { width: textW, align: "center" });
       const contactH = doc.heightOfString(contactLine, { width: textW, align: "center" });
       const blockH = nameH + 2 + addrH + contactH;
       let ty = headerTop + Math.max(0, (LOGO - blockH) / 2);
 
-      doc.font("Helvetica-Bold").fontSize(17).fillColor("#8B4513");
+      doc.font(FONT.bold).fontSize(17).fillColor("#8B4513");
       doc.text(shopName, textX, ty, { width: textW, align: "center", characterSpacing: 0.75 });
       ty += nameH + 2;
-      doc.font("Helvetica").fontSize(8.5).fillColor("#555");
+      doc.font(FONT.regular).fontSize(8.5).fillColor("#555");
       doc.text(shopAddress, textX, ty, { width: textW, align: "center" });
       ty += addrH;
       doc.text(contactLine, textX, ty, { width: textW, align: "center" });
@@ -361,55 +394,61 @@ async function generateReceiptPdfBuffer({ shop, client, mobiles, billNo, termsAn
       const titleGrad = doc.linearGradient(left, titleY, left + pageWidth, titleY + TITLE_H);
       titleGrad.stop(0, "#222").stop(1, "#3a3a3a");
       doc.roundedRect(left, titleY, pageWidth, TITLE_H, 2).fill(titleGrad);
-      doc
-        .fillColor("#fff")
-        .font("Helvetica-Bold")
-        .fontSize(10.5)
-        .text("SERVICE RECEIPT / JOB CARD", left, titleY + 6, { width: pageWidth, align: "center", characterSpacing: 2.25, lineBreak: false });
+      doc.fillColor("#fff").font(FONT.bold).fontSize(10.5);
+      doc.text("SERVICE RECEIPT / JOB CARD", left, titleY + centerInBox(doc, TITLE_H), {
+        width: pageWidth,
+        align: "center",
+        characterSpacing: 2.25,
+        lineBreak: false,
+      });
 
-      // Bill info row: customer box (left) + bill box (right)
+      // Bill info row: customer box (left) + bill box (right); each box holds two lines centred as a block
       const infoY = titleY + TITLE_H + 9;
       const INFO_H = 36;
+      const LINE_GAP = 13;
+      const mid1 = infoY + INFO_H / 2 - LINE_GAP / 2;
+      const mid2 = mid1 + LINE_GAP;
       const billLine = `Bill No: ${billNo || "N/A"}`;
-      doc.font("Helvetica-Bold").fontSize(10);
+      doc.font(FONT.bold).fontSize(10);
       const billBoxW = Math.max(110, doc.widthOfString(billLine) + 22);
       const custBoxW = pageWidth - billBoxW - 15;
 
       doc.lineWidth(0.75).roundedRect(left, infoY, custBoxW, INFO_H, 3).fillAndStroke("#fcfcfc", "#e2e2e2");
-      const drawLabelValue = (label, value, yy) => {
-        doc.font("Helvetica-Bold").fontSize(8.5).fillColor("#111").text(label, left + 8, yy, { lineBreak: false });
+      const drawLabelValue = (label, value, mid) => {
+        doc.font(FONT.bold).fontSize(8.5).fillColor("#111");
+        const yy = mid - textMidOffset(doc);
+        doc.text(label, left + 8, yy, { lineBreak: false });
         const lw = doc.widthOfString(label);
-        doc.font("Helvetica").text(value, left + 8 + lw, yy, { width: custBoxW - 16 - lw, lineBreak: false, ellipsis: true });
+        doc.font(FONT.regular).text(value, left + 8 + lw, yy, { width: custBoxW - 16 - lw, lineBreak: false, ellipsis: true });
       };
-      drawLabelValue("Customer Name :  ", client?.client_name || "", infoY + 7);
-      drawLabelValue("Phone / Mobile :  ", client?.mobile_number || "", infoY + 20);
+      drawLabelValue("Customer Name :  ", client?.client_name || "", mid1);
+      drawLabelValue("Phone / Mobile :  ", client?.mobile_number || "", mid2);
 
       const billX = left + pageWidth - billBoxW;
       doc.lineWidth(0.75).roundedRect(billX, infoY, billBoxW, INFO_H, 3).fillAndStroke("#f9f9f9", "#999");
-      doc.font("Helvetica-Bold").fontSize(10).fillColor("#8B4513");
-      doc.text(billLine, billX, infoY + 7, { width: billBoxW - 10, align: "right", lineBreak: false });
-      doc.font("Helvetica").fontSize(8.5).fillColor("#555");
-      doc.text(`Date: ${formatDate(new Date())}`, billX, infoY + 21, { width: billBoxW - 10, align: "right", lineBreak: false });
+      doc.font(FONT.bold).fontSize(10).fillColor("#8B4513");
+      doc.text(billLine, billX, mid1 - textMidOffset(doc), { width: billBoxW - 10, align: "right", lineBreak: false });
+      doc.font(FONT.regular).fontSize(8.5).fillColor("#555");
+      doc.text(`Date: ${formatDate(new Date())}`, billX, mid2 - textMidOffset(doc), { width: billBoxW - 10, align: "right", lineBreak: false });
 
       doc.y = infoY + INFO_H + 9;
 
-      // Devices table
-      // Devices table  (total width = 515 = A4 content width)
+      // Devices table  (total width = 515 = A4 content width; IMEI fits 15 digits on one line)
 const columns = [
   { key: "#",         width: 20, align: "center" },
-  { key: "Make",      width: 55 },   // was 58
-  { key: "Model",     width: 40 },   // was 42
-  { key: "IMEI",      width: 65 },   // was 70
-  { key: "Issue",     width: 75 },   // was 80
-  { key: "Added",     width: 58 },   // was 55
-  { key: "Delivered", width: 58 },   // was 55
-  { key: "Warranty",  width: 78 },
-  { key: "Amount",    width: 66 },  // was 57
+  { key: "Make",      width: 55 },
+  { key: "Model",     width: 40 },
+  { key: "IMEI",      width: 72 },
+  { key: "Issue",     width: 75 },
+  { key: "Added",     width: 54 },
+  { key: "Delivered", width: 54 },
+  { key: "Warranty",  width: 86 },
+  { key: "Amount",    width: 59 },
 ];
 
 const headerLabels = [
   "#", "Mobile Make", "Model", "IMEI No.", "Complaint / Issue",
-  "Date Added", "Delivery Date", "Warranty", "Amount (Rs.)",
+  "Date Added", "Delivery Date", "Warranty", `Amount (${RUPEE})`,
 ];
 const drawHeader = (yy) =>
   drawTableRow(doc, left, yy, columns, headerLabels, { header: true, minHeight: 26 });
@@ -438,7 +477,7 @@ mobiles.forEach((m, idx) => {
     formatDate(m.added_date),
     formatDate(m.delivery_date),
     formatWarranty(m),
-    `${paid}`,
+    `${RUPEE}${paid}`,
   ];
 
   const rowOpts = {
@@ -458,8 +497,8 @@ mobiles.forEach((m, idx) => {
 if (hiddenRows > 0) {
   const tableWidth = columns.reduce((s, c) => s + c.width, 0);
   doc.lineWidth(0.5).rect(left, y, tableWidth, OVERFLOW_ROW_H).stroke("#555");
-  doc.fillColor("#555").font("Helvetica-Oblique").fontSize(8);
-  doc.text(`+ ${hiddenRows} more device(s) on this bill (included in total)`, left + PAD, y + 6, {
+  doc.fillColor("#555").font(FONT.italic).fontSize(8);
+  doc.text(`+ ${hiddenRows} more device(s) on this bill (included in total)`, left + PAD, y + OVERFLOW_ROW_H / 2 - textMidOffset(doc), {
     width: tableWidth - PAD * 2,
     lineBreak: false,
   });
@@ -475,84 +514,70 @@ doc.lineWidth(0.6);
 doc.rect(left, y, labelW, 22).fillAndStroke("#f0f0f0", "#555");
 doc.rect(left + labelW, y, lastW, 22).fillAndStroke("#f0f0f0", "#555");
 doc.moveTo(left, y).lineTo(left + tableW, y).lineWidth(1.5).strokeColor("#333").stroke();
-doc.fillColor("#111").font("Helvetica-Bold").fontSize(9);
-doc.text("Total Amount", left, y + 7, { width: labelW - 6, align: "right", lineBreak: false });
-doc.text(`${totalPaid}`, left + labelW, y + 7, { width: lastW - 6, align: "right", lineBreak: false });
+doc.fillColor("#111").font(FONT.bold).fontSize(9);
+const totalTextY = y + 11 - textMidOffset(doc);
+doc.text("Total Amount", left, totalTextY, { width: labelW - 6, align: "right", lineBreak: false });
+doc.text(`${RUPEE}${totalPaid}`, left + labelW, totalTextY, { width: lastW - 6, align: "right", lineBreak: false });
 y += 22 + 10;
 
 drawAccessoriesAndNotes(doc, left, y, pageWidth, ACC_H);
 y += ACC_H + 10;
 doc.y = y;
 
-      // Mobile Photos (page 1) — layout is sized to the space left above the bottom margin
-      const SECTION_HEAD_H = 22;
-      const LABEL_H = 20; // mobile label line + Front/Back captions
+      // Mobile Photos (page 1) — same grid as the web A4 Invoice, sized to the space left on page 1
+      const n = mobiles.length;
+      doc.font(FONT.bold).fontSize(9.75);
+      const SECTION_HEAD_H = 4.5 + doc.currentLineHeight() + 4.5;
+      doc.font(FONT.regular).fontSize(6.75);
+      const LABEL_H = doc.currentLineHeight() + 1.5; // "Front" / "Back" caption above each box
       const BOX_GAP = 6;
-      const CELL_GAP_X = 12;
-      const CELL_GAP_Y = 8;
-      const MAX_BOX_H = 170;
-      const MIN_BOX_H = 40;
-      const ASPECT = 3 / 4; // portrait phone photo, width / height
+      const CELL_GAP_X = 10.5;
+      const CELL_GAP_Y = 6;
+      const MAX_PAIR_H = 180;
+      const MAX_BOX_W = 127.5;
+      const MIN_BOX_H = 24;
 
       const gridTop = y + SECTION_HEAD_H;
       const availH = page1Bottom - gridTop;
-      const n = mobiles.length;
 
       if (n > 0 && availH >= LABEL_H + MIN_BOX_H) {
-        doc.moveTo(left, y).lineTo(left + pageWidth, y).lineWidth(0.5).strokeColor("#ddd").stroke();
-        doc.font("Helvetica-Bold").fontSize(11).fillColor("#333").text("Mobile Photos", left, y + 6, { lineBreak: false });
+        doc.moveTo(left, y).lineTo(left + pageWidth, y).lineWidth(0.75).strokeColor("#ddd").stroke();
+        doc.font(FONT.bold).fontSize(9.75).fillColor("#333").text("Mobile Photos", left, y + 4.5, { lineBreak: false });
 
-        const boxHFor = (cols) => {
-          const rows = Math.ceil(n / cols);
-          const cellW = (pageWidth - (cols - 1) * CELL_GAP_X) / cols;
-          const byWidth = ((cellW - BOX_GAP) / 2) / ASPECT;
-          const byHeight = (availH - rows * LABEL_H - (rows - 1) * CELL_GAP_Y) / rows;
-          return Math.min(byWidth, byHeight, MAX_BOX_H);
-        };
-
-        let cols = 1;
-        let boxH = boxHFor(1);
-        for (let c = 2; c <= n; c++) {
-          const h = boxHFor(c);
-          if (h > boxH) { boxH = h; cols = c; }
-        }
-
-        // Too many devices to fit every photo: keep a readable size and show as many as fit
-        let shown = n;
-        if (boxH < MIN_BOX_H) {
-          boxH = MIN_BOX_H;
-          const boxW = boxH * ASPECT;
-          cols = Math.max(1, Math.floor((pageWidth + CELL_GAP_X) / (boxW * 2 + BOX_GAP + CELL_GAP_X)));
-          const reserveNote = 12;
-          const rowsFit = Math.max(0, Math.floor((availH - reserveNote + CELL_GAP_Y) / (LABEL_H + boxH + CELL_GAP_Y)));
-          shown = Math.min(n, cols * rowsFit);
-        }
-
-        const boxW = boxH * ASPECT;
+        const cols = n === 1 ? 1 : n <= 4 ? 2 : n <= 9 ? 3 : 4;
         const cellW = (pageWidth - (cols - 1) * CELL_GAP_X) / cols;
+        const boxW = Math.min(MAX_BOX_W, (cellW - BOX_GAP) / 2);
         const pairW = boxW * 2 + BOX_GAP;
 
+        let rows = Math.ceil(n / cols);
+        let pairH = Math.min(MAX_PAIR_H, (availH - (rows - 1) * CELL_GAP_Y) / rows);
+        // Too many devices for readable photos: keep a minimum size and show as many rows as fit
+        let shown = n;
+        if (pairH - LABEL_H < MIN_BOX_H) {
+          pairH = LABEL_H + MIN_BOX_H;
+          const noteH = 12;
+          rows = Math.max(0, Math.floor((availH - noteH + CELL_GAP_Y) / (pairH + CELL_GAP_Y)));
+          shown = Math.min(n, rows * cols);
+        }
+        const boxH = pairH - LABEL_H;
+
         for (let i = 0; i < shown; i++) {
-          const m = mobiles[i];
           const col = i % cols;
           const row = Math.floor(i / cols);
           const cx = left + col * (cellW + CELL_GAP_X);
-          const cy = gridTop + row * (LABEL_H + boxH + CELL_GAP_Y);
+          const cy = gridTop + row * (pairH + CELL_GAP_Y);
           const bx = cx + (cellW - pairW) / 2;
 
-          const name = [m.mobile_name, m.model].filter(Boolean).join(" ");
-          doc.font("Helvetica-Bold").fontSize(8).fillColor("#111");
-          doc.text(`Mobile ${i + 1}${name ? `: ${name}` : ""}`, cx, cy, { width: cellW, lineBreak: false, ellipsis: true });
-          doc.font("Helvetica").fontSize(6.5).fillColor("#666");
-          doc.text("Front", bx, cy + 11, { width: boxW, align: "center", lineBreak: false });
-          doc.text("Back", bx + boxW + BOX_GAP, cy + 11, { width: boxW, align: "center", lineBreak: false });
+          doc.font(FONT.regular).fontSize(6.75).fillColor("#666");
+          doc.text("Front", bx, cy, { width: boxW, align: "center", lineBreak: false });
+          doc.text("Back", bx + boxW + BOX_GAP, cy, { width: boxW, align: "center", lineBreak: false });
 
           drawPhotoBox(doc, bx, cy + LABEL_H, boxW, boxH, photos[i]?.front, "Front Photo");
           drawPhotoBox(doc, bx + boxW + BOX_GAP, cy + LABEL_H, boxW, boxH, photos[i]?.back, "Back Photo");
         }
 
         if (shown < n) {
-          doc.font("Helvetica-Oblique").fontSize(8).fillColor("#555");
+          doc.font(FONT.italic).fontSize(8).fillColor("#555");
           doc.text(`+ photos for ${n - shown} more device(s) not shown (not enough space)`, left, page1Bottom - 10, {
             width: pageWidth,
             lineBreak: false,
@@ -565,16 +590,18 @@ doc.y = y;
       const termsBottom = doc.page.height - doc.page.margins.bottom;
       const termsTop = doc.page.margins.top;
       doc.moveTo(left, termsTop).lineTo(left + pageWidth, termsTop).lineWidth(0.75).strokeColor("#ddd").stroke();
-      doc.font("Helvetica-Bold").fontSize(10).fillColor("#333").text("Terms & Conditions:", left, termsTop + 6);
-      doc.font("Helvetica").fontSize(9).fillColor("#555");
+      doc.font(FONT.bold).fontSize(9.75).fillColor("#333").text("Terms & Conditions:", left, termsTop + 6);
+      doc.font(FONT.regular).fontSize(9).fillColor("#555");
       const customTerms = stripTermsHeading(termsAndConditions);
       const termsText =
         customTerms.trim() !== ""
           ? customTerms
           : DEFAULT_TERMS_AND_CONDITIONS.map((line, idx) => `${idx + 1}. ${line}`).join("   ");
       const termsY = doc.y + 2;
+      // Web invoice uses line-height 1.7; lineGap tops the font's natural line height up to that
+      const termsLineGap = Math.max(0, 9 * 1.7 - doc.currentLineHeight());
       // height + ellipsis stop very long terms from spilling onto a third page
-      doc.text(termsText, left, termsY, { width: pageWidth, height: termsBottom - termsY, ellipsis: true, lineGap: 5 });
+      doc.text(termsText, left, termsY, { width: pageWidth, height: termsBottom - termsY, ellipsis: true, lineGap: termsLineGap });
 
       if (termsImages.length > 0) {
         drawTermsImagesSection(doc, left, pageWidth, doc.y + 12, termsImages);

@@ -4,7 +4,7 @@ const { getISTStartOfDay, getISTEndOfDay, getISTRangeBetween } = require("../../
 const MOBILE_FIELDS =
   "mobile_name model imei issue processing ready delivered returned should_be_returned paid_amount added_date delivery_date has_warranty warranty_months warranty_expiry_date customer_id dealer_id payment productName supplierName quantity supplierId supplier_amount payments total_paid";
 
-const CLIENT_FIELDS = "client_name mobile_number bill_no balance_amount estimated_cost customer_type";
+const CLIENT_FIELDS = "client_name mobile_number whatsapp_number bill_no balance_amount estimated_cost customer_type";
 
 // Above this many prefetched client ids, the $in list costs more than it saves
 const MAX_PREFETCH_IDS = 5000;

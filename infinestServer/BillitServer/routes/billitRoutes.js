@@ -152,6 +152,20 @@ const { sendBalanceReminder } = require("../controllers/api/sendBalanceReminderC
 router.post("/sendBalanceReminder", authenticateToken, sendBalanceReminder);
 
 
+const rateLimit = require("express-rate-limit");
+const { sendCustomerMessage } = require("../controllers/api/sendCustomerMessageController");
+// Per logged-in user, to protect the shop's MSG91 balance from accidental floods
+const customerMessageLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 20,
+  standardHeaders: true,
+  legacyHeaders: false,
+  keyGenerator: (req) => String(req.user?.userId || req.user?.shop_id || "anonymous"),
+  message: { success: false, error: "Too many WhatsApp messages. Please wait a minute and try again." },
+});
+router.post("/whatsapp/send-message", authenticateToken, customerMessageLimiter, sendCustomerMessage);
+
+
 const { getCustomerBalances } = require("../controllers/api/getCustomerBalancesController");
 
 

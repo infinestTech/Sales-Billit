@@ -6,6 +6,7 @@ import { useEffect, useState } from "react"
 import Pagination from "./Pagination"
 import api from "../api"
 import { Calendar, Smartphone, AlertCircle, CheckCircle, RotateCcw, DollarSign, Truck, Package, Eye, Banknote, CreditCard, Wrench } from "lucide-react"
+import { FaWhatsapp } from "react-icons/fa"
 import { useRouter } from "next/navigation"
 import { jwtDecode } from "jwt-decode"
 import { useShopWhatsappConfig } from "@/hooks/useShopWhatsappConfig"
@@ -14,7 +15,9 @@ import { PAYMENT_METHOD_OPTIONS, DEFAULT_PAYMENT_METHOD, formatPaymentMethodLabe
 
 
 
-const MobileNameTable = ({ mobileData, setMobileData, onRevenueUpdate, hideActions }) => {
+const WA_MESSAGE_MAX = 1000
+
+const MobileNameTable = ({ mobileData, setMobileData, onRevenueUpdate, hideActions, showWhatsApp = false, clientName = "", clientPhone = "" }) => {
   const router = useRouter()
   const validMobileData = Array.isArray(mobileData) ? mobileData : []
   const [currentPage, setCurrentPage] = useState(1)
@@ -59,6 +62,56 @@ const MobileNameTable = ({ mobileData, setMobileData, onRevenueUpdate, hideActio
   const [warrantyMonthsInput, setWarrantyMonthsInput] = useState(6) // 3 | 6 | "custom"
   const [warrantyCustomMonths, setWarrantyCustomMonths] = useState("")
 
+  // Manual "Send WhatsApp Message" modal (server sends via MSG91; no credentials in the browser)
+  const [waMessageModal, setWaMessageModal] = useState({ open: false, mobile: null })
+  const [waMessageText, setWaMessageText] = useState("")
+  const [waMessageSending, setWaMessageSending] = useState(false)
+  const [waMessageError, setWaMessageError] = useState("")
+
+  const openWaMessageModal = (mobile) => {
+    setWaMessageText("")
+    setWaMessageError("")
+    setWaMessageModal({ open: true, mobile })
+  }
+
+  const closeWaMessageModal = () => {
+    if (waMessageSending) return
+    setWaMessageModal({ open: false, mobile: null })
+    setWaMessageText("")
+    setWaMessageError("")
+  }
+
+  const sendWaMessage = async () => {
+    const message = waMessageText.trim()
+    const mobile = waMessageModal.mobile
+    if (!message || !mobile?._id || waMessageSending) return
+    setWaMessageSending(true)
+    setWaMessageError("")
+    try {
+      const token = localStorage.getItem("token")
+      await api.post(
+        "/api/whatsapp/send-message",
+        { recordId: mobile._id, message, phone: clientPhone, customerName: clientName },
+        { headers: { Authorization: `Bearer ${token}` }, timeout: 20000 },
+      )
+      setWaMessageModal({ open: false, mobile: null })
+      setWaMessageText("")
+      window.dispatchEvent(new CustomEvent("show-notification-toast", {
+        detail: { message: "WhatsApp message sent successfully", type: "success" }
+      }))
+    } catch (error) {
+      if (error.message === "Session expired") return
+      const serverMsg = error.response?.data?.error || error.response?.data?.message
+      setWaMessageError(
+        serverMsg ||
+          (error.code === "ECONNABORTED" || !error.response
+            ? "Network error: could not reach the server. Please check your internet connection and try again."
+            : "Failed to send WhatsApp message. Please try again."),
+      )
+    } finally {
+      setWaMessageSending(false)
+    }
+  }
   // Console log all mobile data with model values
   useEffect(() => {
     console.log("Mobile Data with Models:", validMobileData.map(m => ({
@@ -806,6 +859,7 @@ const MobileNameTable = ({ mobileData, setMobileData, onRevenueUpdate, hideActio
                   </div>
                 </td>
                 <td className="px-6 py-4 border-b border-gray-200">
+                  <div className="flex items-center gap-2">
                   {mobile.imei ? (
                     <button
                       onClick={() => router.push(`/mobilename?imei=${encodeURIComponent(mobile.imei)}`)}
@@ -818,6 +872,19 @@ const MobileNameTable = ({ mobileData, setMobileData, onRevenueUpdate, hideActio
                   ) : (
                     <span className="text-xs text-gray-400">-</span>
                   )}
+                  {showWhatsApp && (
+                    <button
+                      type="button"
+                      onClick={() => openWaMessageModal(mobile)}
+                      disabled={hideActions || !mobile._id}
+                      className="inline-flex items-center justify-center w-8 h-8 rounded-lg bg-green-50 border border-green-200 text-green-600 hover:bg-green-100 hover:text-green-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                      title="Send WhatsApp message"
+                      aria-label="Send WhatsApp message"
+                    >
+                      <FaWhatsapp className="h-4 w-4" />
+                    </button>
+                  )}
+                  </div>
                 </td>
               </tr>
             ))}
@@ -1370,6 +1437,88 @@ const MobileNameTable = ({ mobileData, setMobileData, onRevenueUpdate, hideActio
                 className="px-4 py-2 text-sm text-white bg-emerald-600 rounded-lg hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 Continue
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Send WhatsApp Message Modal */}
+      {waMessageModal.open && (
+        <div
+          className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4"
+          onClick={closeWaMessageModal}
+        >
+          <div
+            className="bg-white rounded-xl shadow-2xl w-full max-w-md"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="wa-message-title"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="px-5 py-4 border-b border-gray-200 flex items-center gap-3">
+              <div className="p-2 rounded-lg bg-green-50 text-green-600 flex-shrink-0">
+                <FaWhatsapp className="h-5 w-5" />
+              </div>
+              <div className="min-w-0">
+                <h3 id="wa-message-title" className="text-base font-semibold text-gray-900">Send WhatsApp Message</h3>
+                {(clientName || clientPhone) && (
+                  <p className="text-xs text-gray-500 mt-0.5 truncate">
+                    To: {clientName}{clientName && clientPhone ? " • " : ""}{clientPhone}
+                  </p>
+                )}
+              </div>
+            </div>
+            <div className="p-5">
+              <label htmlFor="wa-message-text" className="block text-sm font-medium text-gray-700 mb-1.5">
+                Enter your message
+              </label>
+              <textarea
+                id="wa-message-text"
+                value={waMessageText}
+                onChange={(e) => setWaMessageText(e.target.value)}
+                rows={4}
+                maxLength={WA_MESSAGE_MAX}
+                autoFocus
+                disabled={waMessageSending}
+                placeholder="Type your message to the customer..."
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm text-gray-800 focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent resize-y disabled:bg-gray-50"
+              />
+              <div className="flex justify-between mt-1 text-xs text-gray-400">
+                <span>Sent as: Dear {clientName || "<customer>"}, &lt;your message&gt; — with your shop name &amp; contact</span>
+                <span>{waMessageText.length}/{WA_MESSAGE_MAX}</span>
+              </div>
+              {waMessageError && (
+                <div className="mt-3 flex items-start gap-2 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700" role="alert">
+                  <AlertCircle className="h-4 w-4 mt-0.5 flex-shrink-0" />
+                  <span>{waMessageError}</span>
+                </div>
+              )}
+            </div>
+            <div className="flex justify-end gap-2 px-5 py-4 border-t border-gray-200">
+              <button
+                onClick={closeWaMessageModal}
+                disabled={waMessageSending}
+                className="px-4 py-2 text-sm text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={sendWaMessage}
+                disabled={!waMessageText.trim() || waMessageSending}
+                className="inline-flex items-center gap-2 px-4 py-2 text-sm text-white bg-green-600 rounded-lg hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {waMessageSending ? (
+                  <>
+                    <span className="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent" />
+                    Sending...
+                  </>
+                ) : (
+                  <>
+                    <FaWhatsapp className="h-4 w-4" />
+                    Send
+                  </>
+                )}
               </button>
             </div>
           </div>
