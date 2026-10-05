@@ -212,7 +212,8 @@ export default function SupplierCredits({ salesUrl, token }) {
                         </div>
                         <div style={{ fontSize: '12px', color: '#94a3b8' }}>
                           {new Date(credit.createdAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}
-                          {credit.inStock_id?.items?.length ? ` • ${credit.inStock_id.items.length} product(s)` : ''}
+                          {(credit.inStock_id?.items || credit.branchSupply_id?.items)?.length ? ` • ${(credit.inStock_id?.items || credit.branchSupply_id.items).length} product(s)` : ''}
+                          {credit.branchSupply_id ? ` • ${credit.note || 'Branch purchase'}` : ''}
                         </div>
                       </div>
                       <span style={{
@@ -227,22 +228,26 @@ export default function SupplierCredits({ salesUrl, token }) {
                       </span>
                     </div>
 
-                    {/* Products Purchased */}
-                    {credit.inStock_id?.items && credit.inStock_id.items.length > 0 && (
+                    {/* Products Purchased (master inventory entry or a branch's own purchase) */}
+                    {(() => {
+                      const purchased = credit.inStock_id?.items?.length ? credit.inStock_id.items : (credit.branchSupply_id?.items || []);
+                      if (!purchased.length) return null;
+                      return (
                       <div style={{ marginTop: '12px', padding: '12px', background: '#f0f9ff', borderRadius: '8px', border: '1px solid #bae6fd' }}>
-                        <div style={{ fontSize: '12px', fontWeight: '600', color: '#0369a1', marginBottom: '8px' }}>📦 Products Purchased</div>
-                        {credit.inStock_id.items.map((item, ii) => (
-                          <div key={ii} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '13px', padding: '4px 0', borderBottom: ii < credit.inStock_id.items.length - 1 ? '1px solid #e0f2fe' : 'none' }}>
+                        <div style={{ fontSize: '12px', fontWeight: '600', color: '#0369a1', marginBottom: '8px' }}>📦 Products Purchased{credit.branchSupply_id?.branch_name ? ` — ${credit.branchSupply_id.branch_name}` : ''}</div>
+                        {purchased.map((item, ii) => (
+                          <div key={ii} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '13px', padding: '4px 0', borderBottom: ii < purchased.length - 1 ? '1px solid #e0f2fe' : 'none' }}>
                             <span style={{ color: '#1e293b' }}>
                               {item.productName}{item.brand ? ` (${item.brand})` : ''}{item.model ? ` - ${item.model}` : ''}
                             </span>
                             <span style={{ color: '#64748b', fontSize: '12px' }}>
-                              Qty: {item.quantity || 1}{item.costPrice ? ` × ${formatCurrency(item.costPrice)}` : ''}
+                              Qty: {item.quantity || item.qty || 1}{item.costPrice ? ` × ${formatCurrency(item.costPrice)}` : ''}
                             </span>
                           </div>
                         ))}
                       </div>
-                    )}
+                      );
+                    })()}
 
                     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '12px', marginTop: '16px' }}>
                       <div>

@@ -38,7 +38,7 @@ window.ENV_CONFIG = {
   SALES_API_URL: '${process.env.VITE_SALES_API_URL || 'http://127.0.0.1:9000'}',
   AUTH_API_URL: '${process.env.VITE_AUTH_API_URL || 'http://127.0.0.1:7000'}',
   WHATSAPP_WEB_URL: '${process.env.VITE_WHATSAPP_WEB_URL || 'https://web.whatsapp.com'}',
-  SHOP_ADMIN_URL: '${process.env.VITE_SHOP_ADMIN_URL || 'http://localhost:3000/shop-admin-login'}'
+  SHOP_ADMIN_URL: '${process.env.VITE_SHOP_ADMIN_URL || 'https://mobilebillingsoftware.com/shop-admin-login'}'
 };
 
 // For backward compatibility, also set SALES_URL

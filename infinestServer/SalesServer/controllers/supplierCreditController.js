@@ -17,6 +17,7 @@ exports.listCredits = async (req, res) => {
       .sort({ createdAt: -1 })
       .populate('supplier_id', 'supplierName agencyName phoneNumber')
       .populate('inStock_id', 'items supplierAmount createdAt')
+      .populate('branchSupply_id', 'items supplierAmount billNo branch_name createdAt')
       .lean();
 
     // Compute outstanding for each

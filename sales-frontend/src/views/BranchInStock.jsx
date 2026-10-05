@@ -10,6 +10,8 @@ function BranchInStock({ salesUrl, token }) {
   const [imesFilter, setImesFilter] = React.useState('');
   const [showBreakdown, setShowBreakdown] = React.useState(false);
   const [showBarcodeSheet, setShowBarcodeSheet] = React.useState(false);
+  const [showImport, setShowImport] = React.useState(false);
+  const getAuthToken = () => token || (typeof window !== 'undefined' ? (localStorage.getItem('branch_token') || '') : '');
 
   const loadEntries = async () => {
     try {
@@ -600,6 +602,27 @@ function BranchInStock({ salesUrl, token }) {
             }}
           >
             📦 Add New Stock
+          </button>
+
+          <button
+            style={{
+              background: 'linear-gradient(135deg, #11998e 0%, #38ef7d 100%)',
+              color: 'white',
+              border: 'none',
+              borderRadius: '12px',
+              padding: '12px 24px',
+              fontSize: '14px',
+              fontWeight: '600',
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '8px',
+              boxShadow: '0 4px 12px rgba(17, 153, 142, 0.3)'
+            }}
+            type="button"
+            onClick={() => setShowImport(true)}
+          >
+            📥 Import from Excel / JSON
           </button>
 
           <button 
@@ -1773,6 +1796,22 @@ function BranchInStock({ salesUrl, token }) {
             </div>
           </div>
         </div>
+      )}
+
+      {/* Supplier bill import (Excel / JSON) */}
+      {showImport && window.BranchStockImport && (
+        <window.BranchStockImport
+          salesUrl={salesUrl}
+          getToken={getAuthToken}
+          suppliers={suppliers}
+          branchEntries={entries}
+          onClose={() => setShowImport(false)}
+          onImported={async () => {
+            await loadEntries();
+            try { window.dispatchEvent(new CustomEvent('branch-stock-updated', { detail: {} })); } catch (__) {}
+          }}
+          onSuppliersChanged={loadSuppliers}
+        />
       )}
 
       {/* Barcode Sheet Modal */}

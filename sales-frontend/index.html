@@ -29,6 +29,11 @@
   <script type="text/babel" data-presets="react" src="/src/utils/salesFeatureAccess.js"></script>
   <script type="text/babel" data-presets="react" src="/src/components/FeatureGuard.jsx"></script>
   <script type="text/babel" data-presets="react" src="/src/components/EmployeeCodeInput.jsx"></script>
+
+  <!-- Supplier bill import (Excel/CSV/JSON) for branches: SheetJS + shared parser (plain JS, no Babel) -->
+  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+  <script src="/src/utils/inventoryImport.js"></script>
+  <script type="text/babel" data-presets="react" src="/src/components/BranchStockImport.jsx"></script>
   
   <!-- Load components and views -->
   <script type="text/babel" data-presets="react" src="/src/components/Sidebar.jsx"></script>

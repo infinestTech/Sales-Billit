@@ -19,6 +19,13 @@ const BranchSupply = mongoose.model('BranchSupply', new mongoose.Schema({
   totalSupplyCost: { type: Number, default: 0 },
   createdBy: { type: String },
   createdByType: { type: String, default: 'admin' }, // 'admin' or 'branch'
+  // How the stock arrived: admin sending from master inventory, a branch adding by hand, or a branch importing a supplier bill
+  source: { type: String, enum: ['supply', 'manual', 'import'], default: 'supply' },
+  billNo: { type: String, default: '' },
+  billDate: { type: Date },
+  purchaseType: { type: String, enum: ['normal', 'credit'], default: 'normal' },
+  creditAmount: { type: Number, default: 0 },
+  supplierCredit_id: { type: String, default: '' },
 }, { timestamps: true }));
 
   // helper: test if a string looks like a valid MongoDB ObjectId (24 hex chars)
@@ -48,6 +55,40 @@ exports.createBranchSupply = async (req, res) => {
     try { console.debug('FLOW createBranchSupply: incoming', { shop_id, branch_id, itemsCount: items.length }); } catch (__) {}
   if (!branch_id) return res.status(400).json({ success: false, message: 'branch_id required' });
     if (items.length === 0) return res.status(400).json({ success: false, message: 'items required' });
+
+    const isBranchUser = !!(req.user && req.user.isBranch);
+    const source = isBranchUser ? (req.body.source === 'import' ? 'import' : 'manual') : 'supply';
+    const billNo = String(req.body.billNo || '').trim().slice(0, 60);
+    const billDate = req.body.billDate && !isNaN(new Date(req.body.billDate).getTime()) ? new Date(req.body.billDate) : undefined;
+    const purchaseType = req.body.purchaseType === 'credit' ? 'credit' : 'normal';
+    const creditAmount = purchaseType === 'credit' ? (Number(req.body.creditAmount) || 0) : 0;
+    if (source === 'import') {
+      if (items.length > 500) return res.status(400).json({ success: false, message: 'A single bill can have at most 500 items' });
+      if (!supplier_id) return res.status(400).json({ success: false, message: 'supplier_id is required for imported bills' });
+      if (purchaseType === 'credit' && !(creditAmount > 0)) {
+        return res.status(400).json({ success: false, message: 'Credit amount is required for credit purchases' });
+      }
+    }
+
+    // Imported codes the branch already holds (from earlier branch purchases) top up the same stock row
+    // instead of creating duplicates. Rows supplied from master inventory are never reused, because
+    // their productId links back to central stock and would be decremented again.
+    if (source === 'import') {
+      const reuse = new Map();
+      for (const i of items) {
+        const code = String(i.productNo || '').trim();
+        if (i.productId || !code) continue;
+        const key = code.toLowerCase();
+        if (!reuse.has(key)) {
+          const existing = await BranchStock.findOne({
+            shop_id: String(shop_id), branch_id: String(branch_id), productNo: code, productId: { $regex: '^branch_' }
+          }).select('productId').lean();
+          const rand = Math.random().toString(36).slice(2, 8);
+          reuse.set(key, existing ? existing.productId : `branch_${branch_id}_${Date.now()}_${rand}`);
+        }
+        i.productId = reuse.get(key);
+      }
+    }
 
     // Prepare items with computed selling value and cost totals
     let total = 0;
@@ -89,6 +130,9 @@ exports.createBranchSupply = async (req, res) => {
         warrantyMonths: Math.max(0, Number(i.warrantyMonths) || 0),
         warrantyDetails: (i.warrantyDetails || '').toString().trim().slice(0, 300)
       };
+      if (i.hsn) out.hsn = String(i.hsn).trim().slice(0, 20);
+      if (Number(i.mrp) > 0) out.mrp = Number(i.mrp);
+      if (Number(i.gstPercent) > 0) out.gstPercent = Number(i.gstPercent);
       // include imes only when client provided them (non-empty)
       if (Array.isArray(i.imes) && i.imes.length) out.imes = i.imes.slice(0, qty);
       return out;
@@ -144,6 +188,7 @@ exports.createBranchSupply = async (req, res) => {
         warrantyDetails: it.warrantyDetails,
         costPrice: it.costPrice
       };
+      if (source === 'import' && !(setObj.sellingPrice > 0)) delete setObj.sellingPrice;
       const update = { $set: setObj, $inc: { qty: it.qty } };
 
       // If this item references a central InStock item, try to fetch productNo from central
@@ -237,8 +282,32 @@ exports.createBranchSupply = async (req, res) => {
       totalSupplyValue: successTotal,
       totalSupplyCost: successTotalCost,
       createdBy: req.user.userId || req.user.branch_id || '',
-      createdByType: req.user && req.user.isBranch ? 'branch' : 'admin'
+      createdByType: req.user && req.user.isBranch ? 'branch' : 'admin',
+      source,
+      billNo,
+      billDate,
+      purchaseType: source === 'supply' ? 'normal' : purchaseType,
+      creditAmount: source === 'supply' ? 0 : creditAmount
     });
+
+    // A branch buying on credit owes the supplier just like a master-inventory purchase
+    if (source !== 'supply' && purchaseType === 'credit' && creditAmount > 0 && supplier_id && isValidObjectId(String(supplier_id))) {
+      try {
+        const SupplierCredit = require('../models/supplierCredit');
+        const credit = await SupplierCredit.create({
+          shop_id,
+          supplier_id,
+          branch_id: String(branch_id),
+          branchSupply_id: supply._id,
+          totalAmount: creditAmount,
+          note: `Branch purchase${billNo ? ` - Bill ${billNo}` : ''}${branch_name ? ` (${branch_name})` : ''}`,
+          createdBy: String(req.user.branch_id || req.user.userId || ''),
+        });
+        await BranchSupply.updateOne({ _id: supply._id }, { $set: { supplierCredit_id: String(credit._id) } });
+      } catch (e) {
+        console.error('createBranchSupply: supplier credit not recorded', e && e.message ? e.message : e);
+      }
+    }
 
   // Backfill productNo into saved supply items if missing
   try {

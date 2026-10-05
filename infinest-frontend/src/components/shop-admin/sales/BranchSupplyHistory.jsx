@@ -1,255 +1,207 @@
 import React from 'react';
 
+// Origin of a supply record. Older records have no `source`, so fall back to who created them.
+const sourceOf = (s) => s.source || (String(s.createdByType || '').toLowerCase() === 'branch' ? 'manual' : 'supply');
+
+const SOURCE_LABEL = {
+  supply: { text: 'Sent from inventory', bg: '#e0e7ff', color: '#3730a3' },
+  import: { text: 'Branch import', bg: '#dcfce7', color: '#166534' },
+  manual: { text: 'Branch added', bg: '#fef3c7', color: '#92400e' },
+};
+
+const currency = (n) => new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 2 }).format(n || 0);
+const dayKey = (d) => {
+  const x = new Date(d);
+  return Number.isNaN(x.getTime()) ? '' : `${x.getFullYear()}-${String(x.getMonth() + 1).padStart(2, '0')}-${String(x.getDate()).padStart(2, '0')}`;
+};
+
 export default function BranchSupplyHistory({ salesUrl, token }) {
-  
-  // Safe state management
-  const [data, setData] = React.useState({
-    supplies: [],
-    branches: [],
-    loading: true,
-    error: null
-  });
-  
+  const [supplies, setSupplies] = React.useState([]);
+  const [branches, setBranches] = React.useState([]);
+  const [loading, setLoading] = React.useState(true);
+  const [error, setError] = React.useState('');
   const [branchId, setBranchId] = React.useState('');
+  const [source, setSource] = React.useState('');
   const [filterDate, setFilterDate] = React.useState('');
+  const [search, setSearch] = React.useState('');
   const [imesFilter, setImesFilter] = React.useState('');
 
-  // Simple data loading function
-  const loadData = React.useCallback(async (bid = '') => {
+  const load = React.useCallback(async (bid) => {
+    setLoading(true); setError('');
     try {
-      setData(prev => ({ ...prev, loading: true, error: null }));
-      
-      // Load branches
-      const branchesRes = await fetch(salesUrl + '/api/branches', { 
-        headers: { Authorization: 'Bearer ' + token } 
-      });
-      const branchesData = await branchesRes.json();
-      
-      // Load supplies
+      const headers = { Authorization: 'Bearer ' + token };
       const url = new URL(salesUrl + '/api/branch-supplies');
+      url.searchParams.set('limit', '200');
       if (bid) url.searchParams.set('branch_id', bid);
-      const suppliesRes = await fetch(url, { 
-        headers: { Authorization: 'Bearer ' + token } 
-      });
-      const suppliesData = await suppliesRes.json();
-      
-      setData({
-        branches: Array.isArray(branchesData.branches) ? branchesData.branches : [],
-        supplies: Array.isArray(suppliesData.supplies) ? suppliesData.supplies : [],
-        loading: false,
-        error: null
-      });
-      
-    } catch (error) {
-      setData(prev => ({ ...prev, loading: false, error: error.message }));
+      const [bRes, sRes] = await Promise.all([fetch(salesUrl + '/api/branches', { headers }), fetch(url, { headers })]);
+      const [bData, sData] = await Promise.all([bRes.json(), sRes.json()]);
+      if (!sRes.ok) throw new Error(sData.message || 'Failed to load supply history');
+      setBranches(Array.isArray(bData.branches) ? bData.branches : []);
+      setSupplies(Array.isArray(sData.supplies) ? sData.supplies : []);
+    } catch (e) {
+      setError(e.message || 'Failed to load supply history');
+    } finally {
+      setLoading(false);
     }
   }, [salesUrl, token]);
 
-  // Load data on mount
-  React.useEffect(() => {
-    loadData();
-  }, [loadData]);
+  React.useEffect(() => { load(branchId); }, [load, branchId]);
 
-  // Handle branch change
-  const onBranchChange = (e) => {
-    const id = e.target.value;
-    setBranchId(id);
-    loadData(id);
+  const branchName = React.useMemo(() => {
+    const m = new Map(branches.map(b => [String(b._id), b.name || '']));
+    return (s) => s.branch_name || m.get(String(s.branch_id)) || '-';
+  }, [branches]);
+
+  const filtered = React.useMemo(() => {
+    const q = search.trim().toLowerCase();
+    const ime = imesFilter.trim().toLowerCase();
+    return supplies
+      .filter(s => !source || sourceOf(s) === source)
+      .filter(s => !filterDate || dayKey(s.createdAt || s.updatedAt) === filterDate)
+      .map(s => {
+        const items = (Array.isArray(s.items) ? s.items : []).filter(it => {
+          if (ime && !(Array.isArray(it.imes) ? it.imes.join(',') : '').toLowerCase().includes(ime)) return false;
+          if (q && !`${it.productNo || ''} ${it.productName || ''} ${it.brand || ''} ${s.billNo || ''} ${s.supplierName || ''}`.toLowerCase().includes(q)) return false;
+          return true;
+        });
+        return { ...s, items };
+      })
+      .filter(s => s.items.length > 0);
+  }, [supplies, source, filterDate, search, imesFilter]);
+
+  const totals = React.useMemo(() => {
+    const t = { supply: 0, import: 0, manual: 0, units: 0, cost: 0 };
+    filtered.forEach(s => {
+      t[sourceOf(s)] += 1;
+      s.items.forEach(it => { t.units += Number(it.qty) || 0; t.cost += Number(it.totalCostPrice ?? (Number(it.costPrice) || 0) * (Number(it.qty) || 0)) || 0; });
+    });
+    return t;
+  }, [filtered]);
+
+  const field = { padding: '8px', width: '100%', boxSizing: 'border-box' };
+  const badge = (src) => {
+    const l = SOURCE_LABEL[src] || SOURCE_LABEL.supply;
+    return <span style={{ background: l.bg, color: l.color, padding: '2px 8px', borderRadius: '999px', fontSize: '11px', fontWeight: 600, whiteSpace: 'nowrap' }}>{l.text}</span>;
   };
 
-  // Pre-process filtered data to avoid function calls in render
-  const processedData = React.useMemo(() => {
-    // Only include supplies created by admin (exclude branch-created supplies)
-    const onlyAdmin = (arr) => (Array.isArray(arr) ? arr.filter(s => String(s.createdByType || '').toLowerCase() === 'admin') : []);
-
-    const baseArr = !filterDate ? data.supplies : data.supplies.filter(supply => {
-      const selectedDate = new Date(filterDate).toDateString();
-      const supplyDate = new Date(supply.createdAt || supply.updatedAt || new Date()).toDateString();
-      return supplyDate === selectedDate;
-    });
-    const filtered = onlyAdmin(baseArr);
-
-    const flat = [];
-    filtered.forEach(s => {
-      const when = s.createdAt || s.updatedAt || new Date();
-      const supplier = s.supplier_id?.supplierName || s.supplierName || '-';
-      (Array.isArray(s.items) ? s.items : []).forEach(it => {
-        // prepare IME string and apply IME filter
-        const imesStr = Array.isArray(it.imes) ? it.imes.join(',') : '';
-        if (imesFilter && imesStr.toLowerCase().indexOf(imesFilter.toLowerCase()) === -1) return;
-        flat.push({
-          supplier,
-          productNo: it.productNo || it.productId || '-',
-          productName: it.productName || it.name || '-',
-          brand: it.brand || '-',
-          model: it.model || '-',
-          costPrice: it.costPrice ?? it.cost ?? 0,
-          validity: it.validity || null,
-          pct: it.pct ?? null,
-          unitPrice: it.unitSellingPrice ?? it.sellingPrice ?? 0,
-          qty: it.qty ?? 0,
-          value: it.value ?? ((it.unitSellingPrice ?? it.sellingPrice ?? 0) * (it.qty ?? 0)),
-          when
-        });
-      });
-    });
-
-    return flat;
-  }, [data.supplies, filterDate, imesFilter]);
-
-  const currency = (n) => new Intl.NumberFormat('en-IN', { 
-    style: 'currency', 
-    currency: 'INR', 
-    maximumFractionDigits: 2 
-  }).format(n || 0);
-
-  if (data.loading) {
-    return React.createElement('div', {
-      style: { 
-        padding: '40px', 
-        textAlign: 'center',
-        fontSize: '18px',
-        color: '#6b7280'
-      }
-    }, '⏳ Loading Supply History...');
+  if (loading && !supplies.length) {
+    return <div style={{ padding: '40px', textAlign: 'center', fontSize: '18px', color: '#6b7280' }}>⏳ Loading Supply History...</div>;
   }
 
-  if (data.error) {
-    return React.createElement('div', {
-      style: { 
-        padding: '20px',
-        backgroundColor: '#fee2e2',
-        border: '1px solid #fca5a5',
-        borderRadius: '8px',
-        margin: '20px',
-        color: '#dc2626'
-      }
-    }, '❌ Error: ' + data.error);
-  }
+  return (
+    <div className="card table-card">
+      <div className="row" style={{ padding: '12px 12px 0 12px', display: 'flex', flexWrap: 'wrap', gap: '12px' }}>
+        <div className="col" style={{ minWidth: '180px', flex: 1 }}>
+          <label>Branch</label>
+          <select value={branchId} onChange={(e) => setBranchId(e.target.value)} style={field}>
+            <option value="">All branches</option>
+            {branches.map(b => <option key={b._id} value={b._id}>{b.name || b._id}</option>)}
+          </select>
+        </div>
+        <div className="col" style={{ minWidth: '180px', flex: 1 }}>
+          <label>Source</label>
+          <select value={source} onChange={(e) => setSource(e.target.value)} style={field}>
+            <option value="">All stock movements</option>
+            <option value="supply">Sent from inventory (admin)</option>
+            <option value="import">Branch import (Excel / JSON)</option>
+            <option value="manual">Branch added manually</option>
+          </select>
+        </div>
+        <div className="col" style={{ minWidth: '160px', flex: 1 }}>
+          <label>Date</label>
+          <input type="date" value={filterDate} onChange={(e) => setFilterDate(e.target.value)} style={field} />
+        </div>
+        <div className="col" style={{ minWidth: '200px', flex: 1 }}>
+          <label>Search (product, code, bill, supplier)</label>
+          <input type="text" value={search} onChange={(e) => setSearch(e.target.value)} style={field} />
+        </div>
+        <div className="col" style={{ minWidth: '160px', flex: 1 }}>
+          <label>IMEI</label>
+          <input type="text" value={imesFilter} onChange={(e) => setImesFilter(e.target.value)} style={field} />
+        </div>
+      </div>
 
-  return React.createElement('div', {
-    className: 'card table-card'
-  }, [
-    React.createElement('div', {
-      key: 'filters',
-      className: 'row',
-      style: { padding: '12px 12px 0 12px' }
-    }, [
-      React.createElement('div', {
-        key: 'branch-filter',
-        className: 'col'
-      }, [
-        React.createElement('label', { key: 'label' }, 'Filter by Branch'),
-        React.createElement('select', {
-          key: 'select',
-          value: branchId,
-          onChange: onBranchChange
-        }, [
-          React.createElement('option', { key: 'all', value: '' }, 'All branches'),
-          ...data.branches.map(b => 
-            React.createElement('option', { 
-              key: b._id, 
-              value: b._id 
-            }, b.name || b._id)
-          )
-        ])
-      ]),
-      React.createElement('div', {
-        key: 'date-filter',
-        className: 'col'
-      }, [
-        React.createElement('label', { key: 'label' }, 'Filter by Date'),
-        React.createElement('input', {
-          key: 'input',
-          type: 'date',
-          value: filterDate,
-          onChange: (e) => setFilterDate(e.target.value),
-          style: { marginBottom: '12px', padding: '8px', width: '100%' }
-        })
-      ])
-    ]),
+      <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', padding: '12px', fontSize: '12px' }}>
+        <span style={{ background: '#f1f5f9', padding: '4px 10px', borderRadius: '999px' }}>{filtered.length} record(s) · {totals.units} units · cost {currency(totals.cost)}</span>
+        {totals.supply > 0 && <span>{badge('supply')} {totals.supply}</span>}
+        {totals.import > 0 && <span>{badge('import')} {totals.import}</span>}
+        {totals.manual > 0 && <span>{badge('manual')} {totals.manual}</span>}
+      </div>
 
-    // IME filter row
-    React.createElement('div', { key: 'ime-filter', className: 'row', style: { padding: '6px 12px 0 12px' } }, [
-      React.createElement('div', { key: 'ime-col', className: 'col' }, [
-        React.createElement('label', { key: 'imelabel' }, 'Filter by IME'),
-        React.createElement('input', { key: 'imeinput', type: 'text', value: imesFilter, onChange: (e) => setImesFilter(e.target.value), style: { marginBottom: '12px', padding: '8px', width: '100%' } })
-      ])
-    ]),
+      {error && <div style={{ margin: '0 12px 12px', padding: '12px', background: '#fee2e2', border: '1px solid #fca5a5', borderRadius: '8px', color: '#dc2626' }}>❌ {error}</div>}
 
-    React.createElement('div', {
-      key: 'content',
-      className: 'table-scroll'
-    }, (
-      processedData.length === 0 ? 
-        React.createElement('div', {
-          style: { 
-            textAlign: 'center', 
-            padding: '40px',
-            color: '#6b7280'
-          }
-        }, [
-          React.createElement('div', { 
-            key: 'icon',
-            style: { fontSize: '48px', marginBottom: '16px' }
-          }, '📦'),
-          React.createElement('p', { 
-            key: 'msg',
-            style: { margin: '0' }
-          }, 'No supply history found')
-        ]) :
-        React.createElement('table', {
-          className: 'modern-table'
-        }, [
-          React.createElement('thead', { key: 'thead' }, 
-            React.createElement('tr', {}, [
-             
-              React.createElement('th', { key: 'productNo' }, 'Product No'),
-              React.createElement('th', { key: 'product' }, 'Product Name'),
-              React.createElement('th', { key: 'brand' }, 'Brand'),
-              React.createElement('th', { key: 'model' }, 'Model'),
-              React.createElement('th', { key: 'cost' }, 'Cost Price'),
-              React.createElement('th', { key: 'validity' }, 'Product Validity'),
-              React.createElement('th', { key: 'selling' }, 'Selling Price (pct / price)'),
-              React.createElement('th', { key: 'unit' }, 'Unit Price'),
-              React.createElement('th', { key: 'qty' }, 'Supply Qty'),
-              React.createElement('th', { key: 'value' }, 'Supply Value'),
-              React.createElement('th', { key: 'date' }, 'Sending Date & Time')
-            ])
-          ),
-          React.createElement('tbody', { key: 'tbody' }, 
-                processedData.map((r, i) => 
-              React.createElement('tr', { key: i }, [
-                React.createElement('td', { key: 'productNo' }, r.productNo),
-                React.createElement('td', { key: 'product' }, r.productName),
-                React.createElement('td', { key: 'brand' }, r.brand),
-                React.createElement('td', { key: 'model' }, r.model),
-                React.createElement('td', { key: 'cost' }, 
-                  r.costPrice != null ? currency(r.costPrice) : '-'
-                ),
-                React.createElement('td', { key: 'validity' }, 
-                  r.validity ? new Date(r.validity).toLocaleDateString() : '-'
-                ),
-                React.createElement('td', { key: 'selling' }, 
-                  r.pct != null ? `${r.pct}% / ${currency(r.unitPrice)}` : '-'
-                ),
-                React.createElement('td', { key: 'unit' }, currency(r.unitPrice)),
-                React.createElement('td', { key: 'qty' }, r.qty),
-                React.createElement('td', { key: 'value' }, currency(r.value)),
-                React.createElement('td', { key: 'date' }, new Date(r.when).toLocaleString())
-              ])
-            )
-          )
-        ])
-    )),
-
-    data.error ? React.createElement('div', {
-      key: 'error',
-      className: 'mt-2 text-danger',
-      style: { padding: '0 12px 12px' }
-    }, data.error) : null
-  ]);
+      <div className="table-scroll">
+        {filtered.length === 0 ? (
+          <div style={{ textAlign: 'center', padding: '40px', color: '#6b7280' }}>
+            <div style={{ fontSize: '48px', marginBottom: '16px' }}>📦</div>
+            <p style={{ margin: 0 }}>No supply history found</p>
+          </div>
+        ) : (
+          <table className="modern-table">
+            <thead>
+              <tr>
+                <th>Date &amp; Time</th>
+                <th>Branch</th>
+                <th>Source</th>
+                <th>Supplier / Bill</th>
+                <th>Product No</th>
+                <th>Product Name</th>
+                <th>Brand</th>
+                <th>Model</th>
+                <th>Cost Price</th>
+                <th>Selling Price</th>
+                <th>Qty</th>
+                <th>Value</th>
+                <th>Validity</th>
+              </tr>
+            </thead>
+            <tbody>
+              {filtered.map(s => {
+                const src = sourceOf(s);
+                const when = new Date(s.createdAt || s.updatedAt || Date.now()).toLocaleString();
+                const supplier = s.supplierName || s.supplier_id?.supplierName || '';
+                const units = s.items.reduce((a, it) => a + (Number(it.qty) || 0), 0);
+                return (
+                  <React.Fragment key={s._id}>
+                    <tr style={{ background: '#f8fafc' }}>
+                      <td colSpan={13} style={{ fontSize: '12px', color: '#334155' }}>
+                        <strong>{when}</strong> · {branchName(s)} · {badge(src)}
+                        {supplier ? <> · {supplier}</> : null}
+                        {s.billNo ? <> · Bill <strong>{s.billNo}</strong>{s.billDate ? ` (${new Date(s.billDate).toLocaleDateString()})` : ''}</> : null}
+                        {s.purchaseType === 'credit' ? <> · <span style={{ color: '#b45309', fontWeight: 600 }}>Credit {currency(s.creditAmount)}</span></> : null}
+                        {' '}· {s.items.length} product(s), {units} unit(s) · value {currency(s.totalSupplyValue)}
+                      </td>
+                    </tr>
+                    {s.items.map((it, idx) => {
+                      const unit = it.unitSellingPrice ?? it.sellingPrice ?? 0;
+                      return (
+                        <tr key={`${s._id}-${idx}`}>
+                          <td style={{ fontSize: '12px', color: '#64748b' }}>{when}</td>
+                          <td>{branchName(s)}</td>
+                          <td>{badge(src)}</td>
+                          <td style={{ fontSize: '12px' }}>
+                            {supplier || it.supplierName || '-'}
+                            {s.billNo ? <div style={{ color: '#64748b' }}>Bill {s.billNo}</div> : null}
+                          </td>
+                          <td style={{ fontFamily: 'monospace' }}>{it.productNo || '-'}</td>
+                          <td>{it.productName || it.name || '-'}</td>
+                          <td>{it.brand || '-'}</td>
+                          <td>{it.model || '-'}</td>
+                          <td>{currency(it.costPrice ?? it.cost ?? 0)}</td>
+                          <td>{it.pct != null ? `${it.pct}% / ${currency(unit)}` : currency(unit)}</td>
+                          <td>{it.qty ?? 0}</td>
+                          <td>{currency(it.value ?? unit * (it.qty ?? 0))}</td>
+                          <td>{it.validity ? new Date(it.validity).toLocaleDateString() : '-'}</td>
+                        </tr>
+                      );
+                    })}
+                  </React.Fragment>
+                );
+              })}
+            </tbody>
+          </table>
+        )}
+      </div>
+    </div>
+  );
 }
-
-
-

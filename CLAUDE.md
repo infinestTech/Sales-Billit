@@ -29,6 +29,12 @@ Note the data split: **CommonDB is MySQL/Prisma; BillitServer and SalesServer ar
 
 HR employees carry `business_unit` (`service` | `sales`; missing = service). HR endpoints accept `?unit=` (and `unit` in bulk-salary body) to scope combo shops.
 
+### Supplier bill import (Excel / CSV / JSON)
+
+- One parser for both portals: `infinest-frontend/src/components/shop-admin/sales/inventoryImport.js`. A file can hold several bills (one Excel sheet per bill, README/Summary sheets skipped; or a JSON array of invoices). `normalizeProductCodes` splits supplier codes reused for different products ("TWS" → "TWS-XXXX").
+- The branch portal uses a generated browser copy, `sales-frontend/src/utils/inventoryImport.js` (SheetJS from CDN in `index.html`). After editing the shop-admin parser run `node scripts/sync-inventory-import.js` in `sales-frontend`.
+- Shop-admin import → master inventory (`POST /api/in-stock`). Branch import (`BranchStockImport.jsx`) → branch stock via `POST /api/branch-supply` with `source: 'import'`: one `BranchSupply` per bill (`billNo`, `billDate`, `purchaseType`), codes the branch already bought are topped up (`branch_*` productIds only, never head-office rows), and credit bills create a `SupplierCredit` with `branchSupply_id`. Admin Supply History shows `source` = `supply` (sent from inventory), `import`, or `manual`.
+
 ### Employee performance & business analytics (one system across services)
 
 - **Employee code** — `Employee.employee_code` (unique per shop, auto `EMP###`, legacy rows backfilled on list; `utils/employeeCodes.js`). It is the join key everywhere.
