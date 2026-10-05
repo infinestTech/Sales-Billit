@@ -17,6 +17,11 @@ const InStockItemSchema = new mongoose.Schema({
   sellingPrice: { type: Number, default: 0 },
   // Store as Date for calendar input; old string values remain readable in Mongo
   validity: { type: Date },
+  warrantyMonths: { type: Number, default: 0 },
+  warrantyDetails: { type: String, default: '' },
+  hsn: { type: String, default: '' },
+  mrp: { type: Number, default: 0 },
+  gstPercent: { type: Number, default: 0 },
 }, { _id: false });
 
 
@@ -29,6 +34,9 @@ const InStockSchema = new mongoose.Schema({
   supplierAmount: { type: Number, default: 0 },
   gstAmount: { type: Number, default: 0 },
   items: { type: [InStockItemSchema], default: [] },
+  billNo: { type: String, default: '' },
+  billDate: { type: Date },
+  source: { type: String, enum: ['manual', 'import'], default: 'manual' },
   createdBy: { type: String, default: '' },
   updatedBy: { type: String, default: '' },
 }, { timestamps: true });

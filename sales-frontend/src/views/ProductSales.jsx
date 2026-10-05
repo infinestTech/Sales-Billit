@@ -26,6 +26,7 @@ function ProductSales({ salesUrl, token }) {
 	const [lastSale, setLastSale] = React.useState(null);
 	const [previewHtml, setPreviewHtml] = React.useState('');
 	const [showPreview, setShowPreview] = React.useState(false);
+	const empCode = window.useEmployeeCode(salesUrl, token);
 
 
 	// Fetch branch stock products
@@ -114,6 +115,8 @@ function ProductSales({ salesUrl, token }) {
 			if (imeMismatch) { setError('Selected IMEs must match selling quantity for IME-tracked products'); return; }
 			if (!(customerNo || '').toString().replace(/[^0-9]/g, '')) { setError('Customer mobile number is required'); return; }
 			if (!selectedBank || selectedBank === 'select') { setError('Select a payment method'); return; }
+			const empError = empCode.validateForSale();
+			if (empError) { setError(empError); return; }
 			setSellingBusy(true);
 			setError('');
 			const url = new URL(salesUrl + '/api/sales');
@@ -133,7 +136,8 @@ function ProductSales({ salesUrl, token }) {
 				igstAmount: Number(igstAmount.toFixed(2)),
 				totalAmount: Number(totalAmount.toFixed(2)),
 				paymentMethod,
-				amountPaid: Number(totalAmount || 0)
+				amountPaid: Number(totalAmount || 0),
+				employeeCode: empCode.code || undefined
 			};
 			const res = await fetch(url, { method: 'POST', headers: { Authorization: 'Bearer ' + token, 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
 			const data = await res.json();
@@ -175,6 +179,7 @@ function ProductSales({ salesUrl, token }) {
 			setCustomerNo('');
 			setCustomerName('');
 			setSelectedBank('');
+			empCode.reset();
 			setCgst(0);
 			setSgst(0);
 			setIgst(0);
@@ -512,7 +517,7 @@ function ProductSales({ salesUrl, token }) {
 					<div class="invoice-details">
 						<h3>Invoice Details</h3>
 						<strong>Invoice No:</strong> ${invoiceNo}<br>
-						<strong>Invoice Date:</strong> ${invoiceDate}
+						<strong>Invoice Date:</strong> ${invoiceDate}${sale.employee_name ? `<br><strong>Sales Executive:</strong> ${sale.employee_name} (${sale.employee_code})` : ''}
 					</div>
 				</div>
 				
@@ -809,6 +814,7 @@ function ProductSales({ salesUrl, token }) {
 					<strong>📱 Phone:</strong> ${sale.customerNo || customerNo || 'N/A'} &nbsp;&nbsp;&nbsp;
 					<strong>📅 Date:</strong> ${date}
 				</div>` +
+				(sale.employee_name ? `<div class="cust-line"><strong>🧑‍💼 Sales Exec:</strong> ${sale.employee_name} (${sale.employee_code})</div>` : '') +
 				`<table class="items">
 					<thead>
 						<tr>
@@ -1325,6 +1331,8 @@ function ProductSales({ salesUrl, token }) {
 						<h3 style={{fontSize: '18px', fontWeight: '600', color: '#1e293b', marginBottom: '16px', display: 'flex', alignItems: 'center', gap: '8px'}}>
 							👤 Customer Details
 						</h3>
+
+						<window.EmployeeCodeInput state={empCode} />
 						
 						<div style={{marginBottom: '16px'}}>
 							<label style={{display: 'block', fontSize: '13px', fontWeight: '600', color: '#475569', marginBottom: '6px'}}>

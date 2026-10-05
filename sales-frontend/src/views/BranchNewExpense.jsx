@@ -1,5 +1,5 @@
 function BranchNewExpense({ salesUrl, token, adminUrl, branchUser }) {
-  const [form, setForm] = React.useState({ title: '', amount: '', date: '' });
+  const [form, setForm] = React.useState({ title: '', amount: '', date: '', paymentMethod: '' });
   const [branches, setBranches] = React.useState([]);
   const [loading, setLoading] = React.useState(false);
   const [error, setError] = React.useState('');
@@ -147,6 +147,7 @@ function BranchNewExpense({ salesUrl, token, adminUrl, branchUser }) {
     const amt = Number(form.amount);
     if (!form.title || String(form.title).trim() === '') return setError('Enter an expense title');
     if (!amt || amt <= 0) return setError('Enter a valid amount');
+    if (!form.paymentMethod) return setError('Select a payment method');
     setLoading(true);
     try {
       // capture values locally before we clear the form
@@ -157,12 +158,12 @@ function BranchNewExpense({ salesUrl, token, adminUrl, branchUser }) {
       const res = await fetch(salesUrl + '/api/branch-expenses', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token },
-        body: JSON.stringify({ title: postTitle, amount: amt, date: postDate, branch_id: postBranchId })
+        body: JSON.stringify({ title: postTitle, amount: amt, paymentMethod: form.paymentMethod, date: postDate, branch_id: postBranchId })
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.message || 'Create failed');
       // clear only the fields we want; preserve selected branch and bank if desired
-      setForm(f => ({ ...f, title: '', amount: '', date: '' }));
+      setForm(f => ({ ...f, title: '', amount: '', date: '', paymentMethod: '' }));
       await load();
       // notify admin server (BillitServer) so admin portal sees the expense too
       if (adminUrl) {
@@ -197,6 +198,15 @@ function BranchNewExpense({ salesUrl, token, adminUrl, branchUser }) {
               <div className="col">
                 <label>Amount</label>
                 <input name="amount" value={form.amount} onChange={onChange} placeholder="0.00" />
+              </div>
+              <div className="col">
+                <label>Payment Method</label>
+                <select name="paymentMethod" value={form.paymentMethod} onChange={onChange}>
+                  <option value="">Select Payment Method</option>
+                  {(window.__PAYMENT_METHODS__ || []).map(m => (
+                    <option key={m.value} value={m.value}>{m.label}</option>
+                  ))}
+                </select>
               </div>
               <div className="col">
                 <label>Date</label>
@@ -273,6 +283,7 @@ function BranchNewExpense({ salesUrl, token, adminUrl, branchUser }) {
                 <th style={{width:80}}>S.No</th>
                 <th>Title</th>
                 <th className="text-right">Amount</th>
+                <th>Payment</th>
                 <th>Date &amp; Time</th>
               </tr>
             </thead>
@@ -291,12 +302,13 @@ function BranchNewExpense({ salesUrl, token, adminUrl, branchUser }) {
                     const t = r.date ? new Date(r.date) : (r.createdAt ? new Date(r.createdAt) : null);
                     return t && t >= startEnd.s && t <= startEnd.e;
                   });
-                  if (filtered.length === 0) return (<tr><td colSpan={4}><div className="empty-state"><div className="empty-icon">💸</div><div className="empty-title">No expenses found for selected date</div></div></td></tr>);
+                  if (filtered.length === 0) return (<tr><td colSpan={5}><div className="empty-state"><div className="empty-icon">💸</div><div className="empty-title">No expenses found for selected date</div></div></td></tr>);
                   return filtered.map((r, i) => (
                     <tr key={r._id || i}>
                       <td><span className="serial-badge">{i + 1}</span></td>
                       <td>{r.title || '-'}</td>
                       <td className="text-right">{currency(Number(r.amount) || 0)}</td>
+                      <td>{r.paymentMethod || '-'}</td>
                       <td>{r.date ? new Date(r.date).toLocaleString() : (r.createdAt ? new Date(r.createdAt).toLocaleString() : '-')}</td>
                     </tr>
                   ));

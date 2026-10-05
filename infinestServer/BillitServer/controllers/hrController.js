@@ -18,6 +18,14 @@ const mongoose = require('mongoose');
 const moment = require('moment-timezone');
 const { Shop, Employee, HrPunch, HrDailyAttendance, HrSalaryRecord } = require('../models/mongoModels');
 const { formatIST } = require('../utils/dateHelper');
+const {
+  normalizeEmployeeCode, isValidEmployeeCode, nextEmployeeCode,
+  isEmployeeCodeTaken, isDuplicateKeyError, ensureEmployeeCodes,
+} = require('../utils/employeeCodes');
+const { resolveShopProductAccess } = require('../utils/shopProductAccess');
+const { fetchSalesSummary, describeSalesError } = require('../utils/salesBridge');
+const { getServiceByTechnician, attributeServiceToEmployees } = require('../utils/servicePerformance');
+const { monthPeriod } = require('../utils/periodRange');
 
 const IST_TZ = 'Asia/Kolkata';
 const DAY_NAMES = ['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT'];
@@ -48,6 +56,21 @@ function requireShop(req, res) {
     return null;
   }
   return shopId;
+}
+
+const BUSINESS_UNITS = ['service', 'sales'];
+
+// Employee filter for ?unit=service|sales (anything else = all units)
+function unitQuery(unit) {
+  if (unit === 'sales') return { business_unit: 'sales' };
+  if (unit === 'service') return { business_unit: { $ne: 'sales' } };
+  return {};
+}
+
+function matchesUnit(employee, unit) {
+  if (!BUSINESS_UNITS.includes(unit)) return true;
+  const empUnit = employee?.business_unit === 'sales' ? 'sales' : 'service';
+  return empUnit === unit;
 }
 
 function parseTime(timeStr) {
@@ -128,7 +151,37 @@ function mapFormToDb(form, shopId) {
     } : undefined,
     device_pin: form.esslDeviceUserId || form.device_pin,
   };
+  const unit = form.businessUnit || form.business_unit;
+  if (BUSINESS_UNITS.includes(unit)) out.business_unit = unit;
+  const code = normalizeEmployeeCode(form.employeeCode ?? form.employee_code);
+  if (code) out.employee_code = code;
+  const inc = form.incentive;
+  if (inc && typeof inc === 'object') {
+    out.incentive = {
+      sales_commission_percent: Number(inc.salesCommissionPercent ?? inc.sales_commission_percent) || 0,
+      service_commission_percent: Number(inc.serviceCommissionPercent ?? inc.service_commission_percent) || 0,
+      monthly_sales_target: Number(inc.monthlySalesTarget ?? inc.monthly_sales_target) || 0,
+      target_bonus: Number(inc.targetBonus ?? inc.target_bonus) || 0,
+    };
+  }
   return out;
+}
+
+function validateIncentive(incentive) {
+  if (!incentive) return null;
+  const pct = [incentive.sales_commission_percent, incentive.service_commission_percent];
+  if (pct.some(v => v < 0 || v > 100)) return 'Commission percentages must be between 0 and 100';
+  if (incentive.monthly_sales_target < 0 || incentive.target_bonus < 0) return 'Sales target and bonus cannot be negative';
+  return null;
+}
+
+function mapIncentiveToFrontend(inc = {}) {
+  return {
+    salesCommissionPercent: inc.sales_commission_percent || 0,
+    serviceCommissionPercent: inc.service_commission_percent || 0,
+    monthlySalesTarget: inc.monthly_sales_target || 0,
+    targetBonus: inc.target_bonus || 0,
+  };
 }
 
 function mapDbToFrontend(emp) {
@@ -139,6 +192,7 @@ function mapDbToFrontend(emp) {
   return {
     _id: e._id,
     employeeId: e._id,
+    employeeCode: e.employee_code || '',
     shopId: e.shop_id,
     isActive: e.is_active !== false,
     name: e.name || e.employee_name || '',
@@ -148,6 +202,7 @@ function mapDbToFrontend(emp) {
     joiningDate: e.joining_date,
     department: e.department || '',
     designation: e.designation || '',
+    businessUnit: e.business_unit === 'sales' ? 'sales' : 'service',
     dailySalary: e.daily_salary || 0,
     shift: {
       name: shift.name || 'General',
@@ -163,6 +218,7 @@ function mapDbToFrontend(emp) {
       deductionPerHour: e.late_policy?.deduction_per_hour ?? 0,
     },
     esslDeviceUserId: e.device_pin || '',
+    incentive: mapIncentiveToFrontend(e.incentive),
     createdAt: e.created_at,
   };
 }
@@ -172,8 +228,9 @@ function mapDbToFrontend(emp) {
 async function listEmployees(req, res) {
   try {
     const shopId = requireShop(req, res); if (!shopId) return;
+    await ensureEmployeeCodes(shopId);
     const isActive = req.query.isActive;
-    const query = { shop_id: shopId };
+    const query = { shop_id: shopId, ...unitQuery(req.query.unit) };
     if (isActive === 'true') query.is_active = true;
     if (isActive === 'false') query.is_active = false;
     const employees = await Employee.find(query).sort({ created_at: -1 }).lean();
@@ -194,10 +251,33 @@ async function createEmployee(req, res) {
     if (!(data.daily_salary > 0)) {
       return res.status(400).json({ success: false, message: 'Daily salary must be greater than zero' });
     }
-    const emp = await Employee.create(data);
+    const incentiveError = validateIncentive(data.incentive);
+    if (incentiveError) return res.status(400).json({ success: false, message: incentiveError });
+    if (data.employee_code) {
+      if (!isValidEmployeeCode(data.employee_code)) {
+        return res.status(400).json({ success: false, message: 'Employee code may only contain letters, digits, "-" or "_" (max 20)' });
+      }
+      if (await isEmployeeCodeTaken(shopId, data.employee_code)) {
+        return res.status(409).json({ success: false, message: `Employee code ${data.employee_code} is already used in this shop` });
+      }
+    }
+    const autoCode = !data.employee_code;
+    let emp;
+    for (let attempt = 0; attempt < 5 && !emp; attempt++) {
+      if (autoCode) data.employee_code = await nextEmployeeCode(shopId);
+      try {
+        emp = await Employee.create(data);
+      } catch (err) {
+        if (!(autoCode && isDuplicateKeyError(err))) throw err;
+      }
+    }
+    if (!emp) throw new Error('Could not allocate an employee code, please retry');
     return res.status(201).json({ success: true, data: mapDbToFrontend(emp) });
   } catch (err) {
     console.error('[HR createEmployee]', err);
+    if (isDuplicateKeyError(err)) {
+      return res.status(409).json({ success: false, message: 'Employee code is already used in this shop' });
+    }
     return res.status(500).json({ success: false, message: err.message || 'Failed to create employee' });
   }
 }
@@ -211,11 +291,24 @@ async function updateEmployee(req, res) {
     if (!emp) return res.status(404).json({ success: false, message: 'Employee not found' });
     const updates = mapFormToDb(req.body, shopId);
     delete updates._id;
+    const incentiveError = validateIncentive(updates.incentive);
+    if (incentiveError) return res.status(400).json({ success: false, message: incentiveError });
+    if (updates.employee_code && updates.employee_code !== emp.employee_code) {
+      if (!isValidEmployeeCode(updates.employee_code)) {
+        return res.status(400).json({ success: false, message: 'Employee code may only contain letters, digits, "-" or "_" (max 20)' });
+      }
+      if (await isEmployeeCodeTaken(shopId, updates.employee_code, emp._id)) {
+        return res.status(409).json({ success: false, message: `Employee code ${updates.employee_code} is already used in this shop` });
+      }
+    }
     Object.assign(emp, updates);
     await emp.save();
     return res.json({ success: true, data: mapDbToFrontend(emp) });
   } catch (err) {
     console.error('[HR updateEmployee]', err);
+    if (isDuplicateKeyError(err)) {
+      return res.status(409).json({ success: false, message: 'Employee code is already used in this shop' });
+    }
     return res.status(500).json({ success: false, message: err.message || 'Failed to update employee' });
   }
 }
@@ -558,9 +651,11 @@ async function getDailyAttendance(req, res) {
   try {
     const shopId = requireShop(req, res); if (!shopId) return;
     const date = req.query.date || todayIST();
-    const records = await HrDailyAttendance.find({ shop_id: shopId, date })
-      .populate('employee_id', 'name employee_name phone mobile_number department designation shift')
+    const unit = req.query.unit;
+    const allRecords = await HrDailyAttendance.find({ shop_id: shopId, date })
+      .populate('employee_id', 'name employee_name phone mobile_number department designation shift business_unit')
       .lean();
+    const records = allRecords.filter(r => matchesUnit(r.employee_id, unit));
     const empIds = records.map(r => r.employee_id?._id).filter(Boolean);
     const punches = await HrPunch.find({ shop_id: shopId, date, employee_id: { $in: empIds } }).lean();
     const punchMap = {};
@@ -628,7 +723,7 @@ async function getAttendanceReport(req, res) {
     const { month, year } = req.query;
     if (!month || !year) return res.status(400).json({ success: false, message: 'month and year required' });
     const monthStr = `${year}-${String(month).padStart(2, '0')}`;
-    const employees = await Employee.find({ shop_id: shopId, is_active: true }).lean();
+    const employees = await Employee.find({ shop_id: shopId, is_active: true, ...unitQuery(req.query.unit) }).lean();
     const records = await HrDailyAttendance.find({ shop_id: shopId, date: { $regex: `^${monthStr}` } }).lean();
 
     const recMap = {};
@@ -676,7 +771,7 @@ async function buildMonthlyAttendanceSummary(empOid, monthStr) {
   };
 }
 
-function calculateSalary(employee, summary, year, monthNum, hrSettings = {}) {
+function calculateSalary(employee, summary, year, monthNum, hrSettings = {}, performance = {}) {
   const daily = employee.daily_salary || 0;
   const workingDays = workingDaysInMonth(year, monthNum, employee.weekly_off || ['SUN']);
   const earnedBase = Math.round(daily * summary.present_days * 100) / 100;
@@ -716,7 +811,17 @@ function calculateSalary(employee, summary, year, monthNum, hrSettings = {}) {
     }
   }
 
-  const netSalary = Math.max(0, Math.round((earnedBase - lateDeduction + overtimeBonus) * 100) / 100);
+  // Performance incentives (only when configured on the employee)
+  const inc = employee.incentive || {};
+  const salesNet = Number(performance.netSales) || 0;
+  const serviceRevenue = Number(performance.serviceRevenue) || 0;
+  const salesCommission = round2(salesNet * (Number(inc.sales_commission_percent) || 0) / 100);
+  const serviceCommission = round2(serviceRevenue * (Number(inc.service_commission_percent) || 0) / 100);
+  const salesTarget = Number(inc.monthly_sales_target) || 0;
+  const targetBonusEarned = salesTarget > 0 && salesNet >= salesTarget ? (Number(inc.target_bonus) || 0) : 0;
+  const incentiveTotal = round2(salesCommission + serviceCommission + targetBonusEarned);
+
+  const netSalary = Math.max(0, round2(earnedBase - lateDeduction + overtimeBonus + incentiveTotal));
 
   return {
     daily_salary: daily,
@@ -730,16 +835,69 @@ function calculateSalary(employee, summary, year, monthNum, hrSettings = {}) {
     late_deduction: lateDeduction,
     overtime_bonus: overtimeBonus,
     total_overtime_minutes: totalOvertimeMinutes,
+    sales_net: round2(salesNet),
+    service_revenue: round2(serviceRevenue),
+    sales_commission: salesCommission,
+    service_commission: serviceCommission,
+    sales_target: salesTarget,
+    target_bonus_earned: targetBonusEarned,
+    incentive_total: incentiveTotal,
     net_salary: netSalary,
   };
+}
+
+const round2 = (n) => Math.round((Number(n) || 0) * 100) / 100;
+
+const hasSalesIncentive = (e) => {
+  const inc = e.incentive || {};
+  return inc.sales_commission_percent > 0 || (inc.monthly_sales_target > 0 && inc.target_bonus > 0);
+};
+const hasServiceIncentive = (e) => (e.incentive?.service_commission_percent || 0) > 0;
+
+/**
+ * Month performance used for incentives: net sales per employee (SalesServer) and
+ * service payments collected on jobs whose technician matches the employee (BillitServer).
+ * Returns { byEmployee: Map(id → { netSales, serviceRevenue }), warnings: [] }.
+ */
+async function loadMonthlyPerformance(shopId, employees, year, monthNum) {
+  const byEmployee = new Map();
+  const warnings = [];
+  const entry = (id) => {
+    if (!byEmployee.has(id)) byEmployee.set(id, { netSales: 0, serviceRevenue: 0 });
+    return byEmployee.get(id);
+  };
+  const needSales = employees.some(hasSalesIncentive);
+  const needService = employees.some(hasServiceIncentive);
+  if (!needSales && !needService) return { byEmployee, warnings };
+
+  const period = monthPeriod(year, monthNum);
+  if (needSales) {
+    const access = await resolveShopProductAccess(shopId);
+    if (access?.sales) {
+      try {
+        const summary = await fetchSalesSummary(shopId, period.from, period.to);
+        (summary?.byEmployee || []).forEach((r) => { if (r.employeeId) entry(String(r.employeeId)).netSales = r.netSales || 0; });
+      } catch (err) {
+        warnings.push(`Sales commission not applied: ${describeSalesError(err)}`);
+      }
+    }
+  }
+  if (needService) {
+    const allEmployees = await Employee.find({ shop_id: shopId }).select('name employee_name employee_code').lean();
+    const techMap = await getServiceByTechnician(shopId, period.start, period.end);
+    attributeServiceToEmployees(techMap, allEmployees).byEmployee
+      .forEach((m, id) => { entry(id).serviceRevenue = m.revenue || 0; });
+  }
+  return { byEmployee, warnings };
 }
 
 function mapSalaryToFrontend(rec) {
   const r = rec.toObject ? rec.toObject() : rec;
   const empRaw = r.employee_id;
-  const employee = (empRaw && typeof empRaw === 'object' && !empRaw.toString)
+  const employee = (empRaw && typeof empRaw === 'object' && !(empRaw instanceof mongoose.Types.ObjectId))
     ? {
         name: empRaw.name || empRaw.employee_name || '',
+        code: empRaw.employee_code || '',
         department: empRaw.department || '',
         designation: empRaw.designation || '',
       }
@@ -754,6 +912,16 @@ function mapSalaryToFrontend(rec) {
       reason: `${r.total_overtime_minutes || 0} overtime minutes`,
     });
   }
+  if ((r.sales_commission || 0) > 0) {
+    earnings.push({ name: 'Sales Commission', amount: r.sales_commission, reason: `on net sales ₹${r.sales_net || 0}` });
+  }
+  if ((r.service_commission || 0) > 0) {
+    earnings.push({ name: 'Service Commission', amount: r.service_commission, reason: `on service collections ₹${r.service_revenue || 0}` });
+  }
+  if ((r.target_bonus_earned || 0) > 0) {
+    earnings.push({ name: 'Sales Target Bonus', amount: r.target_bonus_earned, reason: `target ₹${r.sales_target || 0} achieved` });
+  }
+  const totalEarnings = round2(earnings.reduce((s, e) => s + (e.amount || 0), 0));
   const deductions = [];
   if ((r.late_deduction || 0) > 0) {
     deductions.push({
@@ -778,7 +946,14 @@ function mapSalaryToFrontend(rec) {
     dailySalary: r.daily_salary || 0,
     earnedBase: r.earned_base || 0,
     earnings,
-    totalEarnings: r.earned_base || 0,
+    totalEarnings,
+    overtimeBonus: r.overtime_bonus || 0,
+    salesNet: r.sales_net || 0,
+    serviceRevenue: r.service_revenue || 0,
+    salesCommission: r.sales_commission || 0,
+    serviceCommission: r.service_commission || 0,
+    targetBonus: r.target_bonus_earned || 0,
+    incentiveTotal: r.incentive_total || 0,
     deductions,
     totalDeductions: r.late_deduction || 0,
     lateDeduction: r.late_deduction || 0,
@@ -806,7 +981,8 @@ async function generateSalary(req, res) {
 
     const hrSettings = await getShopHrSettings(shopId);
     const summary    = await buildMonthlyAttendanceSummary(empOid, monthStr);
-    const calc       = calculateSalary(employee, summary, yearNum, monthNum, hrSettings);
+    const perf       = await loadMonthlyPerformance(shopId, [employee], yearNum, monthNum);
+    const calc       = calculateSalary(employee, summary, yearNum, monthNum, hrSettings, perf.byEmployee.get(String(empOid)));
 
     const record = await HrSalaryRecord.findOneAndUpdate(
       { employee_id: empOid, month: monthStr },
@@ -824,9 +1000,9 @@ async function generateSalary(req, res) {
     );
 
     const populated = await HrSalaryRecord.findById(record._id)
-      .populate('employee_id', 'name employee_name department designation')
+      .populate('employee_id', 'name employee_name employee_code department designation')
       .lean();
-    return res.json({ success: true, data: mapSalaryToFrontend(populated) });
+    return res.json({ success: true, data: mapSalaryToFrontend(populated), warnings: perf.warnings });
   } catch (err) {
     console.error('[HR generateSalary]', err);
     return res.status(500).json({ success: false, message: 'Failed to generate salary' });
@@ -842,13 +1018,14 @@ async function generateBulkSalary(req, res) {
     const yearNum  = parseInt(year);
     const monthStr = `${yearNum}-${String(monthNum).padStart(2, '0')}`;
 
-    const employees   = await Employee.find({ shop_id: shopId, is_active: true }).lean();
+    const employees   = await Employee.find({ shop_id: shopId, is_active: true, ...unitQuery(req.body.unit) }).lean();
     const hrSettings  = await getShopHrSettings(shopId);
+    const perf        = await loadMonthlyPerformance(shopId, employees, yearNum, monthNum);
     const results = [];
     for (const emp of employees) {
       try {
         const summary = await buildMonthlyAttendanceSummary(emp._id, monthStr);
-        const calc    = calculateSalary(emp, summary, yearNum, monthNum, hrSettings);
+        const calc    = calculateSalary(emp, summary, yearNum, monthNum, hrSettings, perf.byEmployee.get(String(emp._id)));
         const record  = await HrSalaryRecord.findOneAndUpdate(
           { employee_id: emp._id, month: monthStr },
           {
@@ -874,6 +1051,7 @@ async function generateBulkSalary(req, res) {
       success: true,
       result: { success: successList, failed: failedList },
       generated: successList.length,
+      warnings: perf.warnings,
     });
   } catch (err) {
     console.error('[HR generateBulkSalary]', err);
@@ -887,17 +1065,20 @@ async function getSalaryReport(req, res) {
     const { month, year } = req.query;
     if (!month || !year) return res.status(400).json({ success: false, message: 'month and year required' });
     const monthStr = `${year}-${String(month).padStart(2, '0')}`;
-    const records = await HrSalaryRecord.find({ shop_id: shopId, month: monthStr })
-      .populate('employee_id', 'name employee_name department designation daily_salary')
+    const allRecords = await HrSalaryRecord.find({ shop_id: shopId, month: monthStr })
+      .populate('employee_id', 'name employee_name employee_code department designation daily_salary business_unit')
       .lean();
+    const records = allRecords.filter(r => matchesUnit(r.employee_id, req.query.unit));
 
     const totalEarned = records.reduce((s, r) => s + (r.earned_base || 0), 0);
     const totalLateDeduction = records.reduce((s, r) => s + (r.late_deduction || 0), 0);
     const totalNetSalary = records.reduce((s, r) => s + (r.net_salary || 0), 0);
+    const totalIncentives = records.reduce((s, r) => s + (r.incentive_total || 0), 0);
 
     const summary = {
       totalEmployees: records.length,
       totalEarned: Math.round(totalEarned * 100) / 100,
+      totalIncentives: Math.round(totalIncentives * 100) / 100,
       totalLateDeduction: Math.round(totalLateDeduction * 100) / 100,
       totalDeductions: Math.round(totalLateDeduction * 100) / 100,
       totalNetSalary: Math.round(totalNetSalary * 100) / 100,
@@ -921,7 +1102,7 @@ async function getSalaryRecord(req, res) {
     const record = await HrSalaryRecord.findOne({
       employee_id: toObjectId(employeeId), month: monthStr, shop_id: shopId
     })
-      .populate('employee_id', 'name employee_name department designation')
+      .populate('employee_id', 'name employee_name employee_code department designation')
       .lean();
     if (!record) return res.status(404).json({ success: false, message: 'Salary record not found. Generate it first.' });
     return res.json({ success: true, data: mapSalaryToFrontend(record) });

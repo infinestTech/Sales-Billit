@@ -159,6 +159,8 @@ function BranchSupply({ salesUrl, token }) {
           brand: row.brand || '',
           model: row.model || '',
           validity: row.validity || null,
+          warrantyMonths: row.warrantyMonths || 0,
+          warrantyDetails: row.warrantyDetails || '',
           qty: qtyToSend,
           sellingPrice: sellingPrice,
           costPrice: row.costPrice,

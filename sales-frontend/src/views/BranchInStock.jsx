@@ -92,7 +92,7 @@ function BranchInStock({ salesUrl, token }) {
 
   // Add New Stock modal state
   const [openAdd, setOpenAdd] = React.useState(false);
-  const [itemsToAdd, setItemsToAdd] = React.useState([{ productNo: '', productName: '', brand: '', model: '', qty: 1, costPrice: '', sellingPrice: '', validity: '', imes: [] }]);
+  const [itemsToAdd, setItemsToAdd] = React.useState([{ productNo: '', productName: '', brand: '', model: '', qty: 1, costPrice: '', sellingPrice: '', validity: '', warrantyMonths: '', warrantyDetails: '', imes: [] }]);
   const [adding, setAdding] = React.useState(false);
   const [addError, setAddError] = React.useState('');
 
@@ -107,7 +107,7 @@ function BranchInStock({ salesUrl, token }) {
     }
     return { ...it, [field]: value };
   }));
-  const addAddRow = () => setItemsToAdd(list => [...list, { productNo: '', productName: '', brand: '', model: '', qty: 1, costPrice: '', sellingPrice: '', validity: '', imes: [] }]);
+  const addAddRow = () => setItemsToAdd(list => [...list, { productNo: '', productName: '', brand: '', model: '', qty: 1, costPrice: '', sellingPrice: '', validity: '', warrantyMonths: '', warrantyDetails: '', imes: [] }]);
   const removeAddRow = (idx) => setItemsToAdd(list => list.filter((_, i) => i !== idx));
 
   const submitAdd = async () => {
@@ -172,6 +172,8 @@ function BranchInStock({ salesUrl, token }) {
               costPrice: Number(it.costPrice) || 0,
               sellingPrice: Number(it.sellingPrice) || 0,
               validity: it.validity || null,
+              warrantyMonths: Number(it.warrantyMonths) || 0,
+              warrantyDetails: (it.warrantyDetails || '').trim(),
               imes: Array.isArray(it.imes) ? it.imes.filter(x => x && x.trim()) : []
             });
           }
@@ -185,7 +187,7 @@ function BranchInStock({ salesUrl, token }) {
       const data = await res.json();
       if (!res.ok || !data.success) throw new Error(data.message || 'Failed to add');
       setOpenAdd(false);
-  setItemsToAdd([{ productNo: '', productName: '', brand: '', model: '', qty: 1, costPrice: '', sellingPrice: '', validity: '', imes: [] }]);
+  setItemsToAdd([{ productNo: '', productName: '', brand: '', model: '', qty: 1, costPrice: '', sellingPrice: '', validity: '', warrantyMonths: '', warrantyDetails: '', imes: [] }]);
   setSupplierId(''); setSupplierAmount(''); setGstAmount(''); setCategory('');
       // reload entries and notify other components
       await loadEntries();
@@ -967,6 +969,14 @@ function BranchInStock({ salesUrl, token }) {
                       borderBottom: '2px solid #e5e7eb',
                       minWidth: '120px'
                     }}>Validity</th>
+                  <th style={{
+                      padding: '16px 12px',
+                      textAlign: 'center',
+                      fontWeight: '600',
+                      color: '#374151',
+                      borderBottom: '2px solid #e5e7eb',
+                      minWidth: '150px'
+                    }}>Warranty</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -1078,6 +1088,18 @@ function BranchInStock({ salesUrl, token }) {
                       <td style={{ padding: '16px 12px', textAlign: 'center', fontSize: '12px', color: '#64748b' }}>
                         {it.validity ? new Date(it.validity).toLocaleDateString() : '-'}
                       </td>
+                      <td style={{ padding: '16px 12px', textAlign: 'center', fontSize: '12px', color: '#64748b' }}>
+                        {(() => {
+                          const months = Number(it.warrantyMonths) || 0;
+                          if (!months && !it.warrantyDetails) return '-';
+                          return (
+                            <div>
+                              {months ? <div style={{ color: '#374151', fontWeight: '600' }}>{months} month{months > 1 ? 's' : ''}</div> : null}
+                              {it.warrantyDetails ? <div>{it.warrantyDetails}</div> : null}
+                            </div>
+                          );
+                        })()}
+                      </td>
                     </tr>
                   ))}
                 </tbody>
@@ -1169,7 +1191,7 @@ function BranchInStock({ salesUrl, token }) {
                 onClick={() => { 
                   setOpenAdd(false); 
                   setAddError(''); 
-                  setItemsToAdd([{ productNo: '', productName: '', brand: '', model: '', qty: 1, costPrice: '', sellingPrice: '', validity: '', imes: [] }]); 
+                  setItemsToAdd([{ productNo: '', productName: '', brand: '', model: '', qty: 1, costPrice: '', sellingPrice: '', validity: '', warrantyMonths: '', warrantyDetails: '', imes: [] }]); 
                 }}
               >
                 ✕ Close
@@ -1452,6 +1474,22 @@ function BranchInStock({ salesUrl, token }) {
                             fontWeight: '600',
                             color: '#374151',
                             borderBottom: '1px solid #e5e7eb',
+                            minWidth: '120px'
+                          }}>Warranty (months)</th>
+                          <th style={{
+                            padding: '12px',
+                            textAlign: 'center',
+                            fontWeight: '600',
+                            color: '#374151',
+                            borderBottom: '1px solid #e5e7eb',
+                            minWidth: '180px'
+                          }}>Warranty Details</th>
+                          <th style={{
+                            padding: '12px',
+                            textAlign: 'center',
+                            fontWeight: '600',
+                            color: '#374151',
+                            borderBottom: '1px solid #e5e7eb',
                             width: '60px'
                           }}></th>
                         </tr>
@@ -1624,6 +1662,39 @@ function BranchInStock({ salesUrl, token }) {
                                 }}
                               />
                             </td>
+                            <td style={{ padding: '12px' }}>
+                              <input
+                                type="number"
+                                min="0"
+                                value={it.warrantyMonths ?? ''}
+                                onChange={e=>updateAddItem(idx,'warrantyMonths',e.target.value)}
+                                placeholder="0"
+                                style={{
+                                  width: '100%',
+                                  padding: '8px 12px',
+                                  border: '1px solid #d1d5db',
+                                  borderRadius: '6px',
+                                  fontSize: '13px',
+                                  outline: 'none'
+                                }}
+                              />
+                            </td>
+                            <td style={{ padding: '12px' }}>
+                              <input
+                                value={it.warrantyDetails || ''}
+                                onChange={e=>updateAddItem(idx,'warrantyDetails',e.target.value)}
+                                placeholder="e.g. Brand warranty"
+                                maxLength={300}
+                                style={{
+                                  width: '100%',
+                                  padding: '8px 12px',
+                                  border: '1px solid #d1d5db',
+                                  borderRadius: '6px',
+                                  fontSize: '13px',
+                                  outline: 'none'
+                                }}
+                              />
+                            </td>
                             <td style={{ padding: '12px', textAlign: 'center' }}>
                               <button 
                                 style={{
@@ -1673,7 +1744,7 @@ function BranchInStock({ salesUrl, token }) {
                 onClick={() => { 
                   setOpenAdd(false); 
                   setAddError(''); 
-                  setItemsToAdd([{ productNo: '', productName: '', brand: '', model: '', qty: 1, costPrice: '', sellingPrice: '', validity: '', imes: [] }]); 
+                  setItemsToAdd([{ productNo: '', productName: '', brand: '', model: '', qty: 1, costPrice: '', sellingPrice: '', validity: '', warrantyMonths: '', warrantyDetails: '', imes: [] }]); 
                 }}
               >
                 Cancel
@@ -1707,7 +1778,9 @@ function BranchInStock({ salesUrl, token }) {
       {/* Barcode Sheet Modal */}
       {showBarcodeSheet && window.BarcodeSheet && (
         <window.BarcodeSheet 
-          entries={barcodeEntries}
+          entries={barcodeEntries} 
+          salesUrl={salesUrl} 
+          token={token}
           onClose={() => setShowBarcodeSheet(false)}
         />
       )}

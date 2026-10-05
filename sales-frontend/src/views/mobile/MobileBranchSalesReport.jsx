@@ -123,6 +123,9 @@ function MobileBranchSalesReport({ salesUrl, token }) {
                       <div style={{ fontSize: 12, color: '#64748b', marginTop: 2 }}>
                         {sale.customerName || 'Walk-in'} {sale.customerNo ? '• ' + sale.customerNo : ''}
                       </div>
+                      {sale.employee_name && (
+                        <div style={{ fontSize: 12, color: '#4f46e5', marginTop: 2 }}>🧑‍💼 {sale.employee_name} ({sale.employee_code})</div>
+                      )}
                     </div>
                     <div style={{ textAlign: 'right' }}>
                       <div style={{ fontWeight: 700, color: '#16a34a' }}>{currency(sale.totalAmount)}</div>

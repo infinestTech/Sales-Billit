@@ -5,7 +5,7 @@
  * - Downloads as PDF instead of printing
  */
 
-function BarcodeSheet({ entries, onClose }) {
+function BarcodeSheet({ entries, onClose, salesUrl, token }) {
   const [barcodeData, setBarcodeData] = React.useState([]);
   const [filteredData, setFilteredData] = React.useState([]);
   const [filters, setFilters] = React.useState({
@@ -14,6 +14,18 @@ function BarcodeSheet({ entries, onClose }) {
     customQuantity: {}
   });
   const [downloading, setDownloading] = React.useState(false);
+  const [shopName, setShopName] = React.useState('');
+
+  React.useEffect(() => {
+    const effectiveToken = token || localStorage.getItem('branch_token') || '';
+    if (!salesUrl || !effectiveToken) return undefined;
+    let cancelled = false;
+    fetch(salesUrl + '/api/shop-info', { headers: { Authorization: 'Bearer ' + effectiveToken } })
+      .then(r => (r.ok ? r.json() : null))
+      .then(d => { if (!cancelled && d && d.shopName) setShopName(d.shopName); })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, [salesUrl, token]);
 
   // Generate barcode data from entries
   React.useEffect(() => {
@@ -157,7 +169,7 @@ function BarcodeSheet({ entries, onClose }) {
       const pageHeight = 297;
       const margin = 10;
       const labelWidth = (pageWidth - margin * 3) / 2;
-      const labelHeight = 50;
+      const labelHeight = 55;
       const gap = 10;
 
       let x = margin;
@@ -180,13 +192,23 @@ function BarcodeSheet({ entries, onClose }) {
           doc.setDrawColor(200);
           doc.rect(x, y, labelWidth, labelHeight);
 
+          // Shop name
+          let topY = y;
+          if (shopName) {
+            doc.setFontSize(9);
+            doc.setFont(undefined, 'bold');
+            doc.setTextColor(0);
+            doc.text(doc.splitTextToSize(shopName, labelWidth - 4)[0], x + labelWidth / 2, y + 5, { align: 'center' });
+            topY = y + 5;
+          }
+
           // Product name
           doc.setFontSize(12);
           doc.setFont(undefined, 'bold');
           const productNameLines = doc.splitTextToSize(item.productName, labelWidth - 4);
-          doc.text(productNameLines, x + labelWidth / 2, y + 6, { align: 'center' });
+          doc.text(productNameLines, x + labelWidth / 2, topY + 6, { align: 'center' });
 
-          let currentY = y + 6 + (productNameLines.length * 5);
+          let currentY = topY + 6 + (productNameLines.length * 5);
 
           // Brand/Model
           if (item.brand || item.model) {
@@ -503,6 +525,19 @@ function BarcodeSheet({ entries, onClose }) {
                       textAlign: 'center',
                       marginBottom: '8px'
                     }}>
+                      {shopName && (
+                        <div style={{
+                          fontSize: '12px',
+                          fontWeight: '700',
+                          color: '#4f46e5',
+                          textTransform: 'uppercase',
+                          letterSpacing: '0.5px',
+                          marginBottom: '6px',
+                          wordWrap: 'break-word'
+                        }}>
+                          {shopName}
+                        </div>
+                      )}
                       <div style={{
                         fontSize: '16px',
                         fontWeight: '700',

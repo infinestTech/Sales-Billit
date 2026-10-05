@@ -173,7 +173,7 @@ router.post('/login', async (req, res) => {
                 email: shopAdmin.email,
                 shops: shopAdmin.shop_ids.map(shop => ({
                     id: shop._id,
-                    name: shop.shop_name,
+                    name: shop.shop_name || (shop.owner_name ? `${shop.owner_name}'s Shop` : 'Shop'),
                     location: shop.location,
                     owner_name: shop.owner_name
                 })),
@@ -186,6 +186,52 @@ router.post('/login', async (req, res) => {
     } catch (error) {
         console.error('❌ Shop admin login error:', error);
         res.status(500).json({ success: false, message: 'Server error' });
+    }
+});
+
+// ==============================
+// 🧩 Plan-based product access (service / sales / combo)
+// ==============================
+const axiosIPv4 = require('../utils/axiosConfig');
+const { resolveShopProductAccess } = require('../utils/shopProductAccess');
+
+router.get('/product-access', shopAdminAuth, async (req, res) => {
+    try {
+        const access = await resolveShopProductAccess(req.shopId);
+        if (!access) return res.status(404).json({ success: false, message: 'Shop not found' });
+        res.json({
+            success: true,
+            access: { service: access.service, sales: access.sales },
+            plans: access.plans,
+            source: access.source
+        });
+    } catch (error) {
+        console.error('Product access error:', error);
+        res.status(500).json({ success: false, message: 'Failed to resolve plan access' });
+    }
+});
+
+// Exchange the shop-admin session for a short-lived SalesServer token scoped to the current shop
+router.post('/sales/token', shopAdminAuth, async (req, res) => {
+    try {
+        const access = await resolveShopProductAccess(req.shopId);
+        if (!access || !access.sales) {
+            return res.status(403).json({ success: false, message: 'This shop does not have a Sales plan' });
+        }
+        const mongoPlanId = access.salesMongoPlanId || 'sales-premium';
+        const salesServerUrl = process.env.SALES_SERVER_URL || 'http://127.0.0.1:9000';
+        const { data } = await axiosIPv4.post(
+            `${salesServerUrl}/internal/shop-admin-token`,
+            { shop_id: String(req.shopId), mysql_user_id: access.mysqlUserId, mongoPlanId },
+            { headers: { 'x-internal-key': process.env.INTERNAL_API_KEY } }
+        );
+        if (!data?.token) {
+            return res.status(502).json({ success: false, message: 'Sales server did not issue a token' });
+        }
+        res.json({ success: true, token: data.token, mongoPlanId, branchLimit: data.payload?.branchLimit ?? 0 });
+    } catch (error) {
+        console.error('Sales token exchange error:', error.response?.data || error.message);
+        res.status(502).json({ success: false, message: 'Could not connect to the Sales server' });
     }
 });
 
@@ -2618,6 +2664,16 @@ router.get('/hr/salary/:id',                      hrController.getSalaryRecord);
 // HR shop-level settings (duplicate punch window, lunch threshold/duration)
 router.get('/hr/settings',                        hrController.getHrSettings);
 router.patch('/hr/settings',                      hrController.updateHrSettings);
+
+// Employee performance (sales by POS employee code + service jobs by technician + attendance + incentives)
+const performanceController = require('../controllers/performanceController');
+router.get('/hr/performance',                     performanceController.getPerformance);
+router.get('/hr/performance/:id',                 performanceController.getEmployeePerformance);
+// Consolidated sales + service P&L
+router.get('/analytics/business', shopAdminAuth,  performanceController.getBusinessAnalytics);
+// POS rules enforced by SalesServer (e.g. employee code mandatory on every sale)
+router.get('/shop-settings/pos', shopAdminAuth,   performanceController.getPosSettings);
+router.patch('/shop-settings/pos', shopAdminAuth, performanceController.updatePosSettings);
 
 // ============================================================================
 // CRUD ENDPOINTS — Records / Suppliers / Inventory / Expenses (shop-scoped)

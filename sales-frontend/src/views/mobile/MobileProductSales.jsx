@@ -26,6 +26,7 @@ function MobileProductSales({ salesUrl, token }) {
   const [lastSale, setLastSale] = React.useState(null);
   const [previewHtml, setPreviewHtml] = React.useState('');
   const [showPreview, setShowPreview] = React.useState(false);
+  const empCode = window.useEmployeeCode(salesUrl, token);
 
   // state to toggle IME list per product index
   const [showImes, setShowImes] = React.useState({});
@@ -194,6 +195,11 @@ function MobileProductSales({ salesUrl, token }) {
         setError('Select a payment method');
         return;
       }
+      const empError = empCode.validateForSale();
+      if (empError) {
+        setError(empError);
+        return;
+      }
       setSellingBusy(true);
       setError('');
       const url = new URL(salesUrl + '/api/sales');
@@ -221,7 +227,8 @@ function MobileProductSales({ salesUrl, token }) {
         igstAmount: Number(igstAmount.toFixed(2)),
         totalAmount: Number(totalAmount.toFixed(2)),
         paymentMethod,
-        amountPaid: Number(totalAmount || 0)
+        amountPaid: Number(totalAmount || 0),
+        employeeCode: empCode.code || undefined
       };
       const res = await fetch(url, {
         method: 'POST',
@@ -267,6 +274,7 @@ function MobileProductSales({ salesUrl, token }) {
       setCustomerNo('');
       setCustomerName('');
       setSelectedBank('select');
+      empCode.reset();
       setCgst(0);
       setSgst(0);
       setIgst(0);
@@ -431,7 +439,7 @@ function MobileProductSales({ salesUrl, token }) {
 			<div class="invoice-header">
 				<div>
 					<div class="invoice-title">TAX INVOICE</div>
-					<div style="margin-top:6px;font-size:12px;">Invoice Date: ${new Date(sale.createdAt || Date.now()).toLocaleString()}</div>
+					<div style="margin-top:6px;font-size:12px;">Invoice Date: ${new Date(sale.createdAt || Date.now()).toLocaleString()}</div>${sale.employee_name ? `<div style="margin-top:4px;font-size:12px;">Sales Executive: ${sale.employee_name} (${sale.employee_code})</div>` : ''}
 				</div>
 				<div class="shop-block">
 					<div class="shop-name">${shopName || 'Shop Name'}</div>
@@ -756,6 +764,7 @@ function MobileProductSales({ salesUrl, token }) {
 					<strong>📱 Phone:</strong> ${sale.customerNo || customerNo || 'N/A'} &nbsp;&nbsp;&nbsp;
 					<strong>📅 Date:</strong> ${date}
 				</div>` +
+        (sale.employee_name ? `<div class="cust-line"><strong>🧑‍💼 Sales Exec:</strong> ${sale.employee_name} (${sale.employee_code})</div>` : '') +
         `<table class="items">
 					<thead>
 						<tr>
@@ -905,6 +914,8 @@ function MobileProductSales({ salesUrl, token }) {
 
       <div className="card" style={{ marginBottom: 12 }}>
         <div style={{ fontWeight: 700, marginBottom: 10 }}>Customer & Payment</div>
+
+        <window.EmployeeCodeInput state={empCode} compact />
 
         <label>Customer Name</label>
         <input

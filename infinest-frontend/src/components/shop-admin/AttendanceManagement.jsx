@@ -33,7 +33,9 @@ const PUNCH_LABEL = {
   DUPLICATE: "DUPLICATE",
 };
 
-export default function AttendanceManagement({ shopId }) {
+// unit: 'service' | 'sales' | 'all' — limits employees/attendance to one business unit
+export default function AttendanceManagement({ shopId, unit = "all" }) {
+  const unitParam = unit === "all" ? undefined : unit;
   const [activeTab, setActiveTab] = useState("daily");
   const [employees, setEmployees] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -96,8 +98,13 @@ export default function AttendanceManagement({ shopId }) {
   }, [shopId]);
 
   useEffect(() => {
+    if (shopId) fetchEmployees();
+    setReportData(null);
+  }, [unit]);
+
+  useEffect(() => {
     if (shopId && activeTab === "daily") fetchDailyAttendance();
-  }, [dailyDate, shopId, activeTab]);
+  }, [dailyDate, shopId, activeTab, unit]);
 
   useEffect(() => {
     if (shopId && activeTab === "settings") fetchHrSettings(); // Re-fetch when settings tab is opened (ensures latest values)
@@ -107,7 +114,7 @@ export default function AttendanceManagement({ shopId }) {
     try {
       const res = await axios.get(`${API_URL}/api/shop-admin/hr/employees`, {
         headers: headers(),
-        params: { shopId, isActive: true },
+        params: { shopId, isActive: true, unit: unitParam },
       });
       if (res.data.success) setEmployees(res.data.data || []);
     } catch (_) {}
@@ -119,7 +126,7 @@ export default function AttendanceManagement({ shopId }) {
     try {
       const res = await axios.get(`${API_URL}/api/shop-admin/hr/attendance/daily`, {
         headers: headers(),
-        params: { date: dailyDate, shopId },
+        params: { date: dailyDate, shopId, unit: unitParam },
       });
       if (res.data.success) setDailyRecords(res.data.data || []);
     } catch (_) {
@@ -207,7 +214,7 @@ export default function AttendanceManagement({ shopId }) {
       const [year, month] = reportMonth.split("-");
       const res = await axios.get(`${API_URL}/api/shop-admin/hr/attendance/report`, {
         headers: headers(),
-        params: { shopId, month, year },
+        params: { shopId, month, year, unit: unitParam },
       });
       if (res.data.success) setReportData(res.data.data || []);
     } catch (_) {
@@ -464,7 +471,7 @@ export default function AttendanceManagement({ shopId }) {
                 >
                   <option value="">— Select Employee —</option>
                   {employees.map((e) => (
-                    <option key={e.employeeId} value={e.employeeId}>{e.name} ({e.employeeId})</option>
+                    <option key={e.employeeId} value={e.employeeId}>{e.name} ({e.employeeCode || e.employeeId})</option>
                   ))}
                 </select>
               </div>
@@ -544,7 +551,7 @@ export default function AttendanceManagement({ shopId }) {
               >
                 <option value="">— Select Employee —</option>
                 {employees.map((e) => (
-                  <option key={e.employeeId} value={e.employeeId}>{e.name} ({e.employeeId})</option>
+                  <option key={e.employeeId} value={e.employeeId}>{e.name} ({e.employeeCode || e.employeeId})</option>
                 ))}
               </select>
             </div>
@@ -663,7 +670,7 @@ export default function AttendanceManagement({ shopId }) {
               >
                 <option value="">— Select Employee —</option>
                 {employees.map((e) => (
-                  <option key={e.employeeId} value={e.employeeId}>{e.name} ({e.employeeId})</option>
+                  <option key={e.employeeId} value={e.employeeId}>{e.name} ({e.employeeCode || e.employeeId})</option>
                 ))}
               </select>
             </div>

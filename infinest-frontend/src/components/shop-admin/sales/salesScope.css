@@ -1,0 +1,4027 @@
+/* Auto-scoped port of sales-frontend/styles.css for the shop-admin Sales workspace. Every rule is nested under .sales-scope. */
+.sales-scope :where(h1) { font-size: 2em; font-weight: 700; }
+.sales-scope :where(h2) { font-size: 1.5em; font-weight: 700; }
+.sales-scope :where(h3) { font-size: 1.17em; font-weight: 700; }
+.sales-scope :where(h4) { font-size: 1em; font-weight: 700; }
+.sales-scope :where(button) { cursor: pointer; }
+.sales-scope :where(strong, b) { font-weight: 700; }
+/* Modern Professional UI Theme */
+.sales-scope {
+  --primary: #6366f1; /* Indigo */
+  --primary-dark: #4f46e5;
+  --primary-light: #818cf8;
+  --secondary: #06b6d4; /* Cyan */
+  --secondary-dark: #0891b2;
+  --accent: #f59e0b; /* Amber */
+  --success: #10b981; /* Emerald */
+  --warning: #f59e0b; /* Amber */
+  --danger: #ef4444; /* Red */
+  --info: #3b82f6; /* Blue */
+  
+  --bg: #fafbfc; /* Light background */
+  --bg-2: #f8fafc; /* Slightly darker background */
+  --bg-3: #f1f5f9; /* Card background */
+  --card: #ffffff;
+  --border: #e2e8f0;
+  --border-light: #f1f5f9;
+  --text: #1e293b; /* Dark text */
+  --text-muted: #64748b; /* Muted text */
+  --text-light: #94a3b8; /* Light text */
+  
+  /* Shadows */
+  --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.05);
+  --shadow: 0 1px 3px 0 rgb(0 0 0 / 0.1), 0 1px 2px -1px rgb(0 0 0 / 0.1);
+  --shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
+  --shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1);
+  --shadow-xl: 0 20px 25px -5px rgb(0 0 0 / 0.1), 0 8px 10px -6px rgb(0 0 0 / 0.1);
+  
+  /* Gradients */
+  --gradient-primary: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
+  --gradient-secondary: linear-gradient(135deg, var(--secondary) 0%, var(--secondary-dark) 100%);
+  --gradient-accent: linear-gradient(135deg, var(--accent) 0%, #f97316 100%);
+}
+
+/* Base Styles */
+.sales-scope * { 
+  box-sizing: border-box; 
+  margin: 0;
+  padding: 0;
+}
+
+.sales-scope { 
+  font-size: 14px;
+}
+
+.sales-scope {
+  background: var(--bg);
+  color: var(--text);
+  font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Layout */
+.sales-scope .app {
+  display: flex;
+  height: 100vh;
+  background: var(--bg);
+}
+
+.sales-scope .sidebar {
+  width: 280px;
+  background: linear-gradient(180deg, #1a1d2e 0%, #16192b 100%);
+  border-right: 1px solid rgba(99, 102, 241, 0.1);
+  display: flex;
+  flex-direction: column;
+  box-shadow: 4px 0 24px rgba(0, 0, 0, 0.15);
+  z-index: 10;
+}
+
+.sales-scope .brand {
+  padding: 24px 20px;
+  border-bottom: 1px solid rgba(99, 102, 241, 0.15);
+  background: linear-gradient(135deg, #6366f1 0%, #4f46e5 100%);
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.sales-scope .brand-icon {
+  width: 48px;
+  height: 48px;
+  background: rgba(255, 255, 255, 0.15);
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 24px;
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+.sales-scope .brand-info {
+  flex: 1;
+}
+
+.sales-scope .brand h1 {
+  font-weight: 800;
+  font-size: 24px;
+  letter-spacing: -0.5px;
+  margin: 0;
+  color: white;
+}
+
+.sales-scope .brand p {
+  font-size: 11px;
+  opacity: 0.85;
+  margin: 4px 0 0 0;
+  font-weight: 500;
+  color: rgba(255, 255, 255, 0.9);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.sales-scope .nav {
+  flex: 1;
+  padding: 16px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(99, 102, 241, 0.3) transparent;
+}
+
+.sales-scope .nav::-webkit-scrollbar {
+  width: 6px;
+}
+
+.sales-scope .nav::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.sales-scope .nav::-webkit-scrollbar-thumb {
+  background: rgba(99, 102, 241, 0.3);
+  border-radius: 3px;
+}
+
+.sales-scope .nav::-webkit-scrollbar-thumb:hover {
+  background: rgba(99, 102, 241, 0.5);
+}
+
+.sales-scope .nav-section-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 16px 12px 8px 12px;
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  color: rgba(255, 255, 255, 0.4);
+  margin-top: 8px;
+}
+
+.sales-scope .nav-section-title:first-child {
+  margin-top: 0;
+}
+
+.sales-scope .nav-section-title .section-icon {
+  font-size: 14px;
+  opacity: 0.6;
+}
+
+.sales-scope .nav-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 11px 14px;
+  border-radius: 10px;
+  background: transparent;
+  color: rgba(255, 255, 255, 0.75);
+  text-decoration: none;
+  border: 1px solid transparent;
+  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+  font-weight: 500;
+  font-size: 14px;
+  position: relative;
+  overflow: hidden;
+}
+
+.sales-scope .nav-item::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 3px;
+  height: 100%;
+  background: linear-gradient(180deg, #6366f1, #8b5cf6);
+  opacity: 0;
+  transition: opacity 0.25s ease;
+}
+
+.sales-scope .nav-item:hover {
+  background: rgba(99, 102, 241, 0.12);
+  color: rgba(255, 255, 255, 0.95);
+  transform: translateX(3px);
+  border-color: rgba(99, 102, 241, 0.2);
+}
+
+.sales-scope .nav-item:hover::before {
+  opacity: 1;
+}
+
+.sales-scope .nav-item.active {
+  background: linear-gradient(135deg, rgba(99, 102, 241, 0.25), rgba(139, 92, 246, 0.15));
+  border-color: rgba(99, 102, 241, 0.4);
+  color: white;
+  box-shadow: 0 4px 12px rgba(99, 102, 241, 0.25), inset 0 1px 0 rgba(255, 255, 255, 0.1);
+  font-weight: 600;
+}
+
+.sales-scope .nav-item.active::before {
+  opacity: 1;
+}
+
+.sales-scope .nav-item .icon {
+  width: 20px;
+  height: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 16px;
+  transition: transform 0.25s ease;
+}
+
+.sales-scope .nav-item:hover .icon,
+.sales-scope .nav-item.active .icon {
+  transform: scale(1.1);
+}
+
+.sales-scope .nav-item .lock {
+  color: #fbbf24;
+  font-size: 13px;
+  margin-left: auto;
+  opacity: 0.8;
+}
+
+.sales-scope .main {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  background: linear-gradient(180deg, #f8fafc 0%, #f1f5f9 100%);
+}
+
+.sales-scope .header {
+  height: 100px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 20px 40px;
+  background: var(--gradient-primary);
+  border-bottom: 1px solid rgba(99, 102, 241, 0.08);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.02), 0 4px 12px rgba(99, 102, 241, 0.04);
+  backdrop-filter: blur(10px);
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  color: #fff;
+}
+.sales-scope .header h1,
+.sales-scope .header .subtitle,
+.sales-scope .header .time-text,
+.sales-scope .header .user-name {
+  color: #fff !important;
+  text-shadow: 0 1px 4px rgba(44, 51, 73, 0.18);
+}
+
+.sales-scope .header-left h1 {
+  font-size: 28px;
+  font-weight: 700;
+  margin: 0;
+  /* remove gradient text and force white for better contrast */
+  background: none !important;
+  -webkit-background-clip: initial !important;
+  background-clip: initial !important;
+  -webkit-text-fill-color: #fff !important;
+  color: #fff !important;
+  letter-spacing: -0.5px;
+  line-height: 1.2;
+}
+
+.sales-scope .header-left .subtitle {
+  color: #fff !important;
+  font-size: 14px;
+  margin-top: 6px;
+  font-weight: 500;
+  opacity: 0.7;
+  line-height: 1.4;
+}
+
+/* Admin / Logout controls styling */
+.sales-scope .user-menu-wrapper {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 6px;
+  border-radius: 14px;
+  background: rgba(255,255,255,0.06);
+}
+
+.sales-scope .user-menu {
+  background: #fff;
+  border-radius: 12px;
+  box-shadow: 0 4px 12px rgba(16,24,40,0.06);
+  padding: 6px 10px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.sales-scope .user-avatar {
+  background: linear-gradient(135deg, #6366f1 0%, #4f46e5 100%);
+  color: #fff;
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+}
+
+.sales-scope .logout-btn {
+  background: #fff;
+  color: var(--primary-dark);
+  border: none;
+  padding: 8px 12px;
+  border-radius: 12px;
+  box-shadow: 0 4px 10px rgba(16,24,40,0.06);
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+}
+
+.sales-scope .logout-text { color: var(--primary-dark); font-weight: 600; }
+
+/* Strong overrides: make profile + logout share one white rounded background
+   and ensure internal text is dark for good contrast. Placed at end
+   to override earlier button gradient rules. */
+.sales-scope .header .header-right .user-menu-wrapper {
+  background: #ffffff !important;
+  border-radius: 14px !important;
+  padding: 6px 10px !important;
+  box-shadow: 0 6px 18px rgba(16,24,40,0.06) !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  gap: 12px !important;
+}
+
+.sales-scope .header .header-right .user-menu {
+  background: transparent !important;
+  box-shadow: none !important;
+  padding: 0 !important;
+  border-radius: 8px !important;
+}
+
+.sales-scope .header .header-right .user-avatar { box-shadow: none !important; }
+
+.sales-scope .header .header-right .user-name,
+.sales-scope .header .header-right .user-role,
+.sales-scope .header .header-right .avatar-text {
+  color: #0f172a !important; /* dark navy */
+}
+
+.sales-scope .header .header-right .logout-btn {
+  background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%) !important;
+  color: #fff !important;
+  box-shadow: 0 6px 16px rgba(220,38,38,0.18) !important;
+  padding: 8px 12px !important;
+  border-radius: 10px !important;
+  border: none !important;
+  font-weight: 600 !important;
+}
+
+.sales-scope .header .header-right .logout-btn .logout-icon { display: none !important; }
+
+/* Ensure logout text is white in all circumstances */
+.sales-scope .header .header-right .logout-btn,
+.sales-scope .header .header-right .logout-btn .logout-text {
+  color: #fff !important;
+}
+
+
+.sales-scope .header-title-wrapper {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  justify-content: center;
+}
+
+.sales-scope .header-right {
+  height: 100%;
+  display: flex;
+  align-items: center;
+  gap: 20px;
+}
+
+.sales-scope .header-time {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: linear-gradient(135deg, rgba(99, 102, 241, 0.08), rgba(139, 92, 246, 0.05));
+  border-radius: 12px;
+  border: 1px solid rgba(99, 102, 241, 0.15);
+  height: fit-content;
+  border: 1px solid rgba(99, 102, 241, 0.15);
+}
+
+.sales-scope .time-icon {
+  font-size: 18px;
+  opacity: 0.8;
+}
+
+.sales-scope .time-text {
+  font-size: 14px;
+  font-weight: 600;
+  color: #475569;
+  letter-spacing: 0.3px;
+}
+
+.sales-scope .user-menu-wrapper {
+  display: flex;
+  align-items: center;
+  gap: 14px10px 12px;
+  border-radius: 14px;
+  background: linear-gradient(135deg, rgba(99, 102, 241, 0.05), rgba(139, 92, 246, 0.05));
+  border: 1px solid rgba(99, 102, 241, 0.12);
+  transition: all 0.25s ease;
+  height: fit-content 102, 241, 0.12);
+  transition: all 0.25s ease;
+}
+
+.sales-scope .user-menu-wrapper:hover {
+  background: linear-gradient(135deg, rgba(99, 102, 241, 0.08), rgba(139, 92, 246, 0.08));
+  border-color: rgba(99, 102, 241, 0.2);
+  box-shadow: 0 4px 12px rgba(99, 102, 241, 0.15);
+}
+
+.sales-scope .user-menu {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 8px 14px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.sales-scope .user-avatar {
+  width: 46px;
+  height: 46px;
+  border-radius: 12px;
+  background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 4px 12px rgba(99, 102, 241, 0.3);
+  position: relative;
+  overflow: hidden;
+}
+
+.sales-scope .user-avatar::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.2), transparent);
+  opacity: 0;
+  transition: opacity 0.3s ease;
+}
+
+.sales-scope .user-menu:hover .user-avatar::before {
+  opacity: 1;
+}
+
+.sales-scope .avatar-text {
+  color: white;
+  font-weight: 700;
+  font-size: 18px;
+  z-index: 1;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+}
+
+.sales-scope .user-info {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.sales-scope .user-name {
+  font-size: 15px;
+  font-weight: 600;
+  color: #1e293b;
+  line-height: 1.2;
+}
+
+.sales-scope .user-role {
+  font-size: 13px;
+  color: #64748b;
+  font-weight: 500;
+  line-height: 1.2;
+}
+
+.sales-scope .logout-btn {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: linear-gradient(135deg, #ef4444, #dc2626);
+  border: none;
+  color: white;
+  cursor: pointer;
+  padding: 10px 18px;
+  border-radius: 10px;
+  font-size: 14px;
+  font-weight: 600;
+  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+  box-shadow: 0 2px 8px rgba(239, 68, 68, 0.25);
+  position: relative;
+  overflow: hidden;
+}
+
+.sales-scope .logout-btn::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.2), transparent);
+  opacity: 0;
+  transition: opacity 0.25s ease;
+}
+
+.sales-scope .logout-btn:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 16px rgba(239, 68, 68, 0.4);
+}
+
+.sales-scope .logout-btn:hover::before {
+  opacity: 1;
+}
+
+.sales-scope .logout-btn:active {
+  transform: translateY(0);
+  box-shadow: 0 2px 8px rgba(239, 68, 68, 0.25);
+}
+
+.sales-scope .logout-icon {
+  font-size: 18px;
+  line-height: 1;
+}
+
+.sales-scope .logout-text {
+  letter-spacing: 0.3px;
+  font-size: 14px;
+}
+
+.sales-scope .content {
+  flex: 1;
+  padding: 24px;
+  background: var(--bg);
+  overflow-y: auto;
+}
+
+.sales-scope .page-header {
+  margin-bottom: 24px;
+}
+
+.sales-scope .page-title {
+  font-size: 28px;
+  font-weight: 700;
+  color: var(--text);
+  margin: 0 0 8px 0;
+}
+
+.sales-scope .page-description {
+  color: var(--text-muted);
+  font-size: 16px;
+  margin: 0;
+}
+/* Cards and Components */
+.sales-scope .card {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  padding: 24px;
+  box-shadow: var(--shadow);
+  transition: all 0.2s ease;
+}
+
+.sales-scope .card:hover {
+  box-shadow: var(--shadow-md);
+}
+
+.sales-scope .card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 20px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid var(--border-light);
+}
+
+.sales-scope .card-title {
+  font-size: 20px;
+  font-weight: 600;
+  color: var(--text);
+  margin: 0;
+}
+
+.sales-scope .card-description {
+  color: var(--text-muted);
+  font-size: 14px;
+  margin: 4px 0 0 0;
+}
+
+/* Stats Cards */
+.sales-scope .stats-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 20px;
+  margin-bottom: 32px;
+}
+
+.sales-scope .stat-card {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  padding: 24px;
+  position: relative;
+  overflow: hidden;
+  box-shadow: var(--shadow);
+  transition: all 0.2s ease;
+}
+
+.sales-scope .stat-card:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-lg);
+}
+
+.sales-scope .stat-card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 4px;
+  background: var(--gradient-primary);
+}
+
+.sales-scope .stat-card.secondary::before {
+  background: var(--gradient-secondary);
+}
+
+.sales-scope .stat-card.accent::before {
+  background: var(--gradient-accent);
+}
+
+.sales-scope .stat-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 16px;
+}
+
+.sales-scope .stat-icon {
+  width: 48px;
+  height: 48px;
+  border-radius: 12px;
+  background: linear-gradient(135deg, var(--primary), var(--primary-dark));
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 24px;
+}
+
+.sales-scope .stat-label {
+  font-size: 14px;
+  color: var(--text-muted);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin: 0;
+}
+
+.sales-scope .stat-value {
+  font-size: 32px;
+  font-weight: 800;
+  color: var(--text);
+  margin: 8px 0 0 0;
+  line-height: 1;
+}
+
+.sales-scope .stat-change {
+  font-size: 14px;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+    background: #fff;
+    border-radius: 16px;
+    box-shadow: 0 2px 8px rgba(44,51,73,0.08);
+    padding: 8px 16px;
+    display: flex;
+    align-items: center;
+}
+
+.sales-scope .stat-change.positive {
+  color: var(--success);
+}
+
+.sales-scope .stat-change.negative {
+  color: var(--danger);
+}
+
+/* Modern Table Styles */
+.sales-scope .table-card {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  overflow: hidden;
+  box-shadow: var(--shadow);
+  margin-bottom: 24px;
+}
+
+.sales-scope .table-header {
+  padding: 20px 24px;
+  border-bottom: 1px solid var(--border-light);
+  background: var(--bg-2);
+}
+
+.sales-scope .table-title {
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--text);
+  margin: 0;
+}
+
+.sales-scope .table-subtitle {
+  color: var(--text-muted);
+  font-size: 14px;
+  margin: 4px 0 0 0;
+}
+
+.sales-scope .table-scroll {
+  overflow-x: auto;
+}
+
+.sales-scope .modern-table {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+}
+
+.sales-scope .modern-table thead th {
+  background: var(--bg-2);
+  color: var(--text);
+  text-align: left;
+  font-size: 14px;
+  font-weight: 600;
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--border);
+  position: sticky;
+  top: 0;
+  z-index: 5;
+}
+
+.sales-scope .modern-table tbody td {
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--border-light);
+  color: var(--text);
+  font-size: 14px;
+  vertical-align: middle;
+}
+
+.sales-scope .modern-table tbody tr {
+  transition: all 0.2s ease;
+}
+
+.sales-scope .modern-table tbody tr:hover {
+  background: var(--bg-2);
+}
+
+.sales-scope .modern-table tbody tr:last-child td {
+  border-bottom: none;
+}
+
+.sales-scope .serial-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: var(--gradient-primary);
+  color: white;
+  font-weight: 600;
+  font-size: 12px;
+}
+
+.sales-scope .status-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 12px;
+  border-radius: 20px;
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.sales-scope .status-badge.success {
+  background: rgba(16, 185, 129, 0.1);
+  color: var(--success);
+}
+
+.sales-scope .status-badge.warning {
+  background: rgba(245, 158, 11, 0.1);
+  color: var(--warning);
+}
+
+.sales-scope .status-badge.danger {
+  background: rgba(239, 68, 68, 0.1);
+  color: var(--danger);
+}
+
+.sales-scope .status-badge.info {
+  background: rgba(59, 130, 246, 0.1);
+  color: var(--info);
+}
+
+.sales-scope .amount-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 8px;
+  background: rgba(16, 185, 129, 0.1);
+  color: var(--success);
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.sales-scope .count-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 8px;
+  background: rgba(99, 102, 241, 0.1);
+  color: var(--primary);
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.sales-scope .cell-strong {
+  font-weight: 600;
+  color: var(--text);
+}
+
+/* Enhanced Table Cell Styles */
+.sales-scope .datetime-cell {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.sales-scope .date-part {
+  font-weight: 600;
+  color: var(--text);
+}
+
+.sales-scope .time-part {
+  font-size: 11px;
+  color: #fff;
+}
+
+.sales-scope .bank-cell, .sales-scope .supplier-cell, .sales-scope .product-cell {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.sales-scope .cell-sub {
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+.sales-scope .reference-cell {
+  font-family: monospace;
+  font-size: 12px;
+  color: var(--text-muted);
+  max-width: 120px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.sales-scope .balance-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 8px;
+  background: rgba(16, 185, 129, 0.1);
+  color: var(--success);
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.sales-scope .amount-badge.positive {
+  background: rgba(16, 185, 129, 0.1);
+  color: var(--success);
+}
+
+.sales-scope .amount-badge.negative {
+  background: rgba(239, 68, 68, 0.1);
+  color: var(--danger);
+}
+
+.sales-scope .product-code {
+  font-family: monospace;
+  font-size: 12px;
+  background: var(--bg-2);
+  padding: 2px 6px;
+  border-radius: 4px;
+  color: var(--text-muted);
+}
+
+.sales-scope .brand-text, .sales-scope .model-text {
+  color: var(--text-muted);
+  font-size: 13px;
+}
+
+.sales-scope .date-cell {
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+/* WhatsApp Inventory Enhancements */
+.sales-scope .toggle-section {
+  display: flex;
+  justify-content: center;
+  margin: 20px 0;
+}
+
+.sales-scope .toggle-pill {
+  display: flex;
+  background: var(--bg-2);
+  border-radius: 8px;
+  padding: 4px;
+  gap: 4px;
+}
+
+.sales-scope .toggle-btn {
+  padding: 8px 16px;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text-muted);
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.sales-scope .toggle-btn.active {
+  background: var(--primary);
+  color: white;
+  box-shadow: var(--shadow-sm);
+}
+
+.sales-scope .toggle-btn:hover:not(.active) {
+  background: var(--border-light);
+  color: var(--text);
+}
+
+.sales-scope .mode-description {
+  margin-top: 16px;
+}
+
+.sales-scope .info-card {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 16px;
+  background: var(--bg-2);
+  border-radius: 8px;
+  border-left: 4px solid var(--primary);
+}
+
+.sales-scope .info-icon {
+  font-size: 24px;
+}
+
+.sales-scope .info-title {
+  font-weight: 600;
+  color: var(--text);
+  margin-bottom: 4px;
+}
+
+.sales-scope .info-text {
+  font-size: 13px;
+  color: var(--text-muted);
+}
+
+.sales-scope .content-wrapper {
+  margin-top: 20px;
+}
+
+.sales-scope .loading-card {
+  background: var(--card);
+  border-radius: 12px;
+  padding: 40px;
+  text-align: center;
+  box-shadow: var(--shadow);
+}
+
+.sales-scope .loading-content {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+  color: var(--text-muted);
+}
+
+/* Enhanced Form Elements for Product Price */
+.sales-scope .pricing-cell {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 120px;
+}
+
+.sales-scope .supply-cell {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 100px;
+}
+
+.sales-scope .calculated-price {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--success);
+  padding: 4px 8px;
+  background: rgba(16, 185, 129, 0.1);
+  border-radius: 4px;
+  text-align: center;
+}
+
+.sales-scope .input-group {
+  display: flex;
+  align-items: center;
+}
+
+.sales-scope .input-suffix {
+  margin-left: 4px;
+  font-size: 12px;
+  color: var(--text-muted);
+  font-weight: 500;
+}
+
+.sales-scope .form-input-sm {
+  padding: 6px 8px;
+  font-size: 12px;
+  height: auto;
+}
+
+.sales-scope .form-input.error {
+  border-color: var(--danger);
+  background: rgba(239, 68, 68, 0.05);
+}
+
+.sales-scope .error-text {
+  font-size: 10px;
+  color: var(--danger);
+  margin-top: 2px;
+}
+
+.sales-scope .text-right {
+  text-align: right;
+}
+
+.sales-scope .table-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 24px;
+  background: var(--bg-2);
+  border-top: 1px solid var(--border);
+}
+
+.sales-scope .table-info {
+  font-size: 14px;
+  color: var(--text-muted);
+}
+
+.sales-scope .pagination {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.sales-scope .pagination-btn {
+  background: var(--gradient-primary);
+  color: white;
+  border: none;
+  padding: 8px 16px;
+  border-radius: 8px;
+  cursor: pointer;
+  font-weight: 600;
+  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.sales-scope .pagination-btn:hover:not(:disabled) {
+  transform: translateY(-1px);
+  box-shadow: var(--shadow-md);
+}
+
+.sales-scope .pagination-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  transform: none;
+}
+
+.sales-scope .pagination-info {
+  font-size: 14px;
+  color: var(--text-muted);
+  margin: 0 16px;
+}
+
+/* Empty States */
+.sales-scope .empty-state {
+  text-align: center;
+  padding: 60px 20px;
+  background: var(--card);
+  border-radius: 16px;
+  border: 1px solid var(--border);
+}
+
+.sales-scope .empty-icon {
+  width: 80px;
+  height: 80px;
+  border-radius: 20px;
+  margin: 0 auto 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 36px;
+  background: linear-gradient(135deg, var(--primary), var(--primary-dark));
+  color: white;
+}
+
+.sales-scope .empty-title {
+  font-size: 20px;
+  font-weight: 600;
+  color: var(--text);
+  margin-bottom: 8px;
+}
+
+.sales-scope .empty-description {
+  color: var(--text-muted);
+  font-size: 16px;
+  margin-bottom: 24px;
+}
+
+.sales-scope .empty-action {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  background: var(--gradient-primary);
+  color: white;
+  border: none;
+  padding: 12px 24px;
+  border-radius: 8px;
+  font-weight: 600;
+  text-decoration: none;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.sales-scope .empty-action:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-lg);
+}
+
+/* Forms */
+.sales-scope .form-grid {
+  display: grid;
+  gap: 20px;
+  margin-bottom: 24px;
+}
+
+.sales-scope .form-grid-2 {
+  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+}
+
+.sales-scope .form-grid-3 {
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+}
+
+.sales-scope .form-group {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.sales-scope .form-label {
+  display: block;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text);
+  margin-bottom: 6px;
+}
+
+.sales-scope .form-label.required::after {
+  content: ' *';
+  color: var(--danger);
+}
+
+.sales-scope .form-input, .sales-scope .form-select, .sales-scope .form-textarea {
+  width: 100%;
+  padding: 12px 16px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  font-size: 14px;
+  color: var(--text);
+  background: var(--card);
+  transition: all 0.2s ease;
+}
+
+.sales-scope .form-input:focus, .sales-scope .form-select:focus, .sales-scope .form-textarea:focus {
+  outline: none;
+  border-color: var(--primary);
+  box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1);
+}
+
+.sales-scope .form-input::placeholder {
+  color: var(--text-light);
+}
+
+.sales-scope .form-textarea {
+  min-height: 100px;
+  resize: vertical;
+}
+
+.sales-scope .form-error {
+  color: var(--danger);
+  font-size: 14px;
+  margin-top: 4px;
+}
+
+.sales-scope .form-help {
+  color: var(--text-muted);
+  font-size: 13px;
+  margin-top: 4px;
+}
+
+/* Buttons */
+.sales-scope .btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 12px 20px;
+  border: none;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 600;
+  text-decoration: none;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  position: relative;
+  overflow: hidden;
+}
+
+.sales-scope .btn:hover:not(:disabled) {
+  transform: translateY(-1px);
+  box-shadow: var(--shadow-md);
+}
+
+.sales-scope .btn:active:not(:disabled) {
+  transform: translateY(0);
+}
+
+.sales-scope .btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+  transform: none;
+}
+
+.sales-scope .btn-primary {
+  background: var(--gradient-primary);
+  color: white;
+}
+
+.sales-scope .btn-secondary {
+  background: var(--gradient-secondary);
+  color: white;
+}
+
+.sales-scope .btn-accent {
+  background: var(--gradient-accent);
+  color: white;
+}
+
+.sales-scope .btn-success {
+  background: var(--success);
+  color: white;
+}
+
+.sales-scope .btn-danger {
+  background: var(--danger);
+  color: white;
+}
+
+.sales-scope .btn-outline {
+  background: transparent;
+  color: var(--primary);
+  border: 1px solid var(--primary);
+}
+
+.sales-scope .btn-outline:hover:not(:disabled) {
+  background: var(--primary);
+  color: white;
+}
+
+.sales-scope .btn-ghost {
+  background: transparent;
+  color: var(--text-muted);
+  border: 1px solid var(--border);
+}
+
+.sales-scope .btn-ghost:hover:not(:disabled) {
+  background: var(--bg-2);
+  color: var(--text);
+}
+
+.sales-scope .btn-sm {
+  padding: 8px 16px;
+  font-size: 13px;
+}
+
+.sales-scope .btn-lg {
+  padding: 16px 32px;
+  font-size: 16px;
+}
+
+.sales-scope .btn-group {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+}
+
+/* Authentication */
+.sales-scope .auth-container {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
+  padding: 20px;
+}
+
+.sales-scope .auth-card {
+  width: 100%;
+  max-width: 440px;
+  background: var(--card);
+  border-radius: 20px;
+  padding: 40px;
+  box-shadow: var(--shadow-xl);
+  border: 1px solid var(--border);
+}
+
+.sales-scope .auth-header {
+  text-align: center;
+  margin-bottom: 32px;
+}
+
+.sales-scope .auth-logo {
+  width: 60px;
+  height: 60px;
+  margin: 0 auto 16px;
+  background: var(--gradient-primary);
+  border-radius: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 24px;
+  color: white;
+}
+
+.sales-scope .auth-title {
+  font-size: 28px;
+  font-weight: 700;
+  color: var(--text);
+  margin: 0 0 8px 0;
+}
+
+.sales-scope .auth-subtitle {
+  color: var(--text-muted);
+  font-size: 16px;
+  margin: 0;
+}
+
+.sales-scope .auth-form {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.sales-scope .auth-footer {
+  text-align: center;
+  margin-top: 24px;
+  padding-top: 24px;
+  border-top: 1px solid var(--border-light);
+}
+
+.sales-scope .auth-link {
+  color: var(--primary);
+  text-decoration: none;
+  font-weight: 600;
+}
+
+.sales-scope .auth-link:hover {
+  text-decoration: underline;
+}
+
+/* Alerts */
+.sales-scope .alert {
+  padding: 16px 20px;
+  border-radius: 12px;
+  margin-bottom: 20px;
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.sales-scope .alert-icon {
+  flex-shrink: 0;
+  width: 20px;
+  height: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.sales-scope .alert-success {
+  background: rgba(16, 185, 129, 0.1);
+  color: var(--success);
+  border: 1px solid rgba(16, 185, 129, 0.2);
+}
+
+.sales-scope .alert-warning {
+  background: rgba(245, 158, 11, 0.1);
+  color: var(--warning);
+  border: 1px solid rgba(245, 158, 11, 0.2);
+}
+
+.sales-scope .alert-danger {
+  background: rgba(239, 68, 68, 0.1);
+  color: var(--danger);
+  border: 1px solid rgba(239, 68, 68, 0.2);
+}
+
+.sales-scope .alert-info {
+  background: rgba(59, 130, 246, 0.1);
+  color: var(--info);
+  border: 1px solid rgba(59, 130, 246, 0.2);
+}
+
+/* Loading */
+.sales-scope .loading {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.sales-scope .spinner {
+  width: 16px;
+  height: 16px;
+  border: 2px solid transparent;
+  border-top: 2px solid currentColor;
+  border-radius: 50%;
+  animation: sales-spin 1s linear infinite;
+}
+
+@keyframes sales-spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+/* Modals */
+.sales-scope .modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  z-index: 50;
+  backdrop-filter: blur(4px);
+}
+
+.sales-scope .modal {
+  width: 100%;
+  max-width: 1200px;
+  max-height: 90vh;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  overflow: hidden;
+  box-shadow: var(--shadow-xl);
+  animation: sales-modalSlide 0.3s ease-out;
+}
+
+@keyframes sales-modalSlide {
+  from {
+    opacity: 0;
+    transform: translateY(-20px) scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.sales-scope .modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 20px 24px;
+  border-bottom: 1px solid var(--border);
+}
+
+.sales-scope .modal-title {
+  font-size: 20px;
+  font-weight: 600;
+  color: var(--text);
+  margin: 0;
+}
+
+.sales-scope .modal-close {
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  padding: 4px;
+  border-radius: 4px;
+  transition: all 0.2s ease;
+}
+
+.sales-scope .modal-close:hover {
+  background: var(--bg-2);
+  color: var(--text);
+}
+
+.sales-scope .modal-body {
+  padding: 24px;
+  overflow-y: auto;
+  max-height: 60vh;
+}
+
+.sales-scope .modal-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+  padding: 20px 24px;
+  border-top: 1px solid var(--border);
+  background: var(--bg-2);
+}
+
+/* Utility Classes */
+.sales-scope .flex { display: flex; }
+.sales-scope .flex-col { flex-direction: column; }
+.sales-scope .items-center { align-items: center; }
+.sales-scope .justify-center { justify-content: center; }
+.sales-scope .justify-between { justify-content: space-between; }
+.sales-scope .gap-2 { gap: 8px; }
+.sales-scope .gap-3 { gap: 12px; }
+.sales-scope .gap-4 { gap: 16px; }
+.sales-scope .gap-6 { gap: 24px; }
+
+.sales-scope .mt-2 { margin-top: 8px; }
+.sales-scope .mt-3 { margin-top: 12px; }
+.sales-scope .mt-4 { margin-top: 16px; }
+.sales-scope .mt-6 { margin-top: 24px; }
+.sales-scope .mb-2 { margin-bottom: 8px; }
+.sales-scope .mb-3 { margin-bottom: 12px; }
+.sales-scope .mb-4 { margin-bottom: 16px; }
+.sales-scope .mb-6 { margin-bottom: 24px; }
+
+.sales-scope .text-sm { font-size: 14px; }
+.sales-scope .text-lg { font-size: 18px; }
+.sales-scope .text-xl { font-size: 20px; }
+.sales-scope .text-2xl { font-size: 24px; }
+
+.sales-scope .font-medium { font-weight: 500; }
+.sales-scope .font-semibold { font-weight: 600; }
+.sales-scope .font-bold { font-weight: 700; }
+
+.sales-scope .text-center { text-align: center; }
+.sales-scope .text-right { text-align: right; }
+
+.sales-scope .text-muted { color: var(--text-muted); }
+.sales-scope .text-success { color: var(--success); }
+.sales-scope .text-warning { color: var(--warning); }
+.sales-scope .text-danger { color: var(--danger); }
+.sales-scope .text-info { color: var(--info); }
+
+.sales-scope .w-full { width: 100%; }
+.sales-scope .h-full { height: 100%; }
+
+.sales-scope .rounded { border-radius: 8px; }
+.sales-scope .rounded-lg { border-radius: 12px; }
+.sales-scope .rounded-xl { border-radius: 16px; }
+
+.sales-scope .shadow { box-shadow: var(--shadow); }
+.sales-scope .shadow-md { box-shadow: var(--shadow-md); }
+.sales-scope .shadow-lg { box-shadow: var(--shadow-lg); }
+
+/* Responsive */
+@media (max-width: 768px) {
+  .sales-scope .sidebar {
+    width: 260px;
+    position: fixed;
+    left: -260px;
+    z-index: 40;
+    transition: left 0.3s ease;
+  }
+  
+  .sales-scope .sidebar.open {
+    left: 0;
+  }
+  
+  .sales-scope .main {
+    margin-left: 0;
+  }
+  
+  .sales-scope .content {
+    padding: 16px;
+  }
+  
+  .sales-scope .stats-grid {
+    grid-template-columns: 1fr;
+  }
+  
+  .sales-scope .form-grid-2,
+  .sales-scope .form-grid-3 {
+    grid-template-columns: 1fr;
+  }
+  
+  .sales-scope .auth-card {
+    padding: 24px;
+  }
+  
+  .sales-scope .table-scroll {
+    font-size: 13px;
+  }
+
+  .sales-scope .header {
+    padding: 0 16px;
+    height: 64px;
+  }
+
+  .sales-scope .header-left h1 {
+    font-size: 20px;
+  }
+
+  .sales-scope .header-time {
+    display: none;
+  }
+
+  .sales-scope .user-menu-wrapper {
+    padding: 4px;
+  }
+
+  .sales-scope .user-menu {
+    padding: 4px 8px;
+  }
+
+  .sales-scope .user-info {
+    display: none;
+  }
+
+  .sales-scope .user-avatar {
+    width: 36px;
+    height: 36px;
+  }
+
+  .sales-scope .logout-text {
+    display: none;
+  }
+
+  .sales-scope .logout-btn {
+    padding: 8px;
+    border-radius: 50%;
+    width: 36px;
+    height: 36px;
+    justify-content: center;
+  }
+
+  .sales-scope .logout-icon {
+    font-size: 18px;
+  }
+}
+
+/* Legacy compatibility */
+.sales-scope .row { display: flex; align-items: center; gap: 12px; }
+
+.sales-scope input, .sales-scope select, .sales-scope textarea {
+  width: 100%;
+  padding: 12px 16px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  font-size: 14px;
+  color: var(--text);
+  background: var(--card);
+  transition: all 0.2s ease;
+}
+
+.sales-scope input:focus, .sales-scope select:focus, .sales-scope textarea:focus {
+  outline: none;
+  border-color: var(--primary);
+  box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1);
+}
+
+.sales-scope button.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 12px 20px;
+  border: none;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 600;
+  background: var(--gradient-primary);
+  color: white;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.sales-scope button.btn.secondary {
+  background: transparent;
+  color: var(--primary);
+  border: 1px solid var(--primary);
+}
+
+.sales-scope .text-danger { color: var(--danger); }
+
+.sales-scope .pretty-table {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+}
+
+.sales-scope .serial-pill {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: var(--gradient-primary);
+  color: white;
+  font-weight: 600;
+  font-size: 12px;
+}
+
+.sales-scope .pager {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.sales-scope .pager-btn {
+  background: var(--gradient-primary);
+  color: white;
+  border: none;
+  padding: 8px 16px;
+  border-radius: 8px;
+  cursor: pointer;
+  font-weight: 600;
+  transition: all 0.2s ease;
+}
+
+.sales-scope .empty-sub {
+  color: var(--text-muted);
+  font-size: 16px;
+  margin-bottom: 24px;
+}
+
+/* ========================================
+   MOBILE RESPONSIVE STYLES
+======================================== */
+
+/* Mobile Layout Variables */
+.sales-scope {
+  --mobile-header-height: 68px;
+  --mobile-sidebar-width: 320px;
+  --mobile-transition: 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* Mobile App Container */
+.sales-scope .mobile-app {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  width: 100%;
+  background: var(--bg);
+  overflow-x: hidden;
+  margin: 0;
+  padding: 0;
+}
+
+/* ========================================
+   MOBILE HEADER STYLES
+======================================== */
+
+.sales-scope .mobile-header {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  width: 100%;
+  min-height: calc(var(--mobile-header-height) + env(safe-area-inset-top));
+  height: calc(var(--mobile-header-height) + env(safe-area-inset-top));
+  background: var(--gradient-primary);
+  border-bottom: none;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding-top: calc(env(safe-area-inset-top) + 8px);
+  padding-left: 16px;
+  padding-right: 16px;
+  padding-bottom: 8px;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.18);
+  z-index: 100;
+  color: white;
+  margin: 0;
+  border-radius: 0;
+}
+
+.sales-scope .mobile-app.sidebar-open .mobile-header {
+  z-index: 0;
+}
+
+.sales-scope .mobile-header-left {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex: 1;
+  min-width: 0;
+}
+
+.sales-scope .mobile-menu-toggle {
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 8px;
+  border-radius: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  transition: all var(--mobile-transition);
+  position: relative;
+  width: 32px;
+  height: 32px;
+  align-items: center;
+  justify-content: center;
+}
+
+.sales-scope .mobile-menu-toggle:hover {
+  background: rgba(255, 255, 255, 0.15);
+}
+
+.sales-scope .hamburger-line {
+  width: 18px;
+  height: 2px;
+  background: white;
+  border-radius: 1px;
+  transition: all var(--mobile-transition);
+  transform-origin: center;
+}
+
+.sales-scope .mobile-menu-toggle.active .hamburger-line:nth-child(1) {
+  transform: rotate(45deg) translate(4px, 4px);
+}
+
+.sales-scope .mobile-menu-toggle.active .hamburger-line:nth-child(2) {
+  opacity: 0;
+  transform: scale(0);
+}
+
+.sales-scope .mobile-menu-toggle.active .hamburger-line:nth-child(3) {
+  transform: rotate(-45deg) translate(4px, -4px);
+}
+
+.sales-scope .mobile-header-content {
+  flex: 1;
+  min-width: 0;
+}
+
+.sales-scope .mobile-title {
+  font-size: 18px;
+  font-weight: 700;
+  color: white;
+  margin: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  line-height: 1.2;
+}
+
+.sales-scope .mobile-subtitle {
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.85);
+  margin-top: 2px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  line-height: 1.2;
+}
+
+.sales-scope .mobile-header-right {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.sales-scope .mobile-user-menu {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.sales-scope .mobile-user-avatar {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.25);
+  backdrop-filter: blur(10px);
+  border: 2px solid rgba(255, 255, 255, 0.4);
+  color: white;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  font-size: 16px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+  flex-shrink: 0;
+}
+
+.sales-scope .mobile-logout-btn {
+  background: rgba(255, 255, 255, 0.2);
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  cursor: pointer;
+  padding: 8px;
+  border-radius: 8px;
+  transition: all 0.2s ease;
+  color: white;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  flex-shrink: 0;
+}
+
+.sales-scope .mobile-logout-btn:active {
+  transform: scale(0.95);
+}
+
+.sales-scope .mobile-logout-btn:hover {
+  background: rgba(255, 255, 255, 0.3);
+  border-color: rgba(255, 255, 255, 0.5);
+}
+
+.sales-scope .mobile-logout-btn svg {
+  width: 20px;
+  height: 20px;
+}
+
+/* ========================================
+   MOBILE NAV HEADER STYLES
+======================================== */
+
+.sales-scope .mobile-nav-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px;
+  background: var(--gradient-primary);
+  color: white;
+  border-radius: 0 0 16px 16px;
+  margin-bottom: 16px;
+}
+
+.sales-scope .mobile-nav-brand {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.sales-scope .mobile-brand-icon {
+  font-size: 24px;
+}
+
+.sales-scope .mobile-brand-text {
+  display: flex;
+  flex-direction: column;
+}
+
+.sales-scope .mobile-brand-title {
+  font-weight: 800;
+  font-size: 18px;
+  line-height: 1;
+}
+
+.sales-scope .mobile-brand-subtitle {
+  font-size: 12px;
+  opacity: 0.9;
+  font-weight: 500;
+}
+
+.sales-scope .mobile-nav-stats {
+  display: flex;
+  align-items: center;
+}
+
+.sales-scope .mobile-loading {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  opacity: 0.9;
+}
+
+.sales-scope .mobile-spinner {
+  width: 12px;
+  height: 12px;
+  border: 2px solid rgba(255, 255, 255, 0.3);
+  border-radius: 50%;
+  border-top-color: white;
+  animation: sales-spin 1s ease-in-out infinite;
+}
+
+.sales-scope .mobile-branch-count {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: rgba(255, 255, 255, 0.2);
+  padding: 6px 12px;
+  border-radius: 12px;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.sales-scope .mobile-branch-icon {
+  font-size: 14px;
+}
+
+/* ========================================
+   MOBILE SIDEBAR STYLES
+======================================== */
+
+.sales-scope .mobile-sidebar-backdrop {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(0, 0, 0, 0.5);
+  backdrop-filter: blur(2px);
+  z-index: 1200;
+  opacity: 0;
+  visibility: hidden;
+  transition: all var(--mobile-transition);
+}
+
+.sales-scope .mobile-sidebar-backdrop.open {
+  opacity: 1;
+  visibility: visible;
+}
+
+.sales-scope .mobile-sidebar {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: var(--mobile-sidebar-width);
+  height: 100%;
+  background: linear-gradient(180deg, #1a1d2e 0%, #16192b 100%);
+  box-shadow: 4px 0 24px rgba(0, 0, 0, 0.3);
+  z-index: 1300;
+  transform: translateX(-100%);
+  transition: transform var(--mobile-transition);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.sales-scope .mobile-sidebar.open {
+  transform: translateX(0);
+}
+
+.sales-scope .mobile-sidebar-header {
+  position: relative;
+  background: linear-gradient(135deg, #6366f1 0%, #4f46e5 100%);
+  box-shadow: 0 2px 12px rgba(99, 102, 241, 0.25);
+}
+
+/* Reserve space so header content doesn't sit under the close (X) button */
+.sales-scope .mobile-sidebar-header .mobile-nav-header {
+  padding-right: 64px;
+}
+
+.sales-scope .mobile-sidebar-close {
+  position: absolute;
+  top: 16px;
+  right: 16px;
+  /* Opaque background so nothing shows through */
+  background: rgba(26, 29, 46, 0.95);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  cursor: pointer;
+  padding: 8px;
+  border-radius: 50%;
+  color: white;
+  font-size: 16px;
+  width: 36px;
+  height: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.25s ease;
+  z-index: 20;
+  backdrop-filter: none;
+}
+
+.sales-scope .mobile-sidebar-close:hover {
+  background: rgba(255, 255, 255, 0.25);
+  transform: scale(1.1) rotate(90deg);
+}
+
+.sales-scope .mobile-nav {
+  flex: 1;
+  overflow-y: auto;
+  padding: 16px;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(99, 102, 241, 0.3) transparent;
+}
+
+.sales-scope .mobile-nav::-webkit-scrollbar {
+  width: 6px;
+}
+
+.sales-scope .mobile-nav::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.sales-scope .mobile-nav::-webkit-scrollbar-thumb {
+  background: rgba(99, 102, 241, 0.3);
+  border-radius: 3px;
+}
+
+.sales-scope .mobile-nav::-webkit-scrollbar-thumb:hover {
+  background: rgba(99, 102, 241, 0.5);
+}
+
+.sales-scope .mobile-nav-section {
+  margin-bottom: 28px;
+}
+
+.sales-scope .mobile-nav-section-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 11px;
+  font-weight: 700;
+  color: rgba(255, 255, 255, 0.4);
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  margin-bottom: 12px;
+  padding: 8px 12px;
+  background: rgba(99, 102, 241, 0.05);
+  border-radius: 8px;
+  border-left: 3px solid rgba(99, 102, 241, 0.3);
+}
+
+.sales-scope .mobile-nav-section-title .section-icon {
+  font-size: 14px;
+  opacity: 0.7;
+}
+
+.sales-scope .mobile-nav-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 12px;
+  border-radius: 12px;
+  background: transparent;
+  color: rgba(255, 255, 255, 0.75);
+  text-decoration: none;
+  border: 1px solid transparent;
+  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+  margin-bottom: 6px;
+  position: relative;
+  overflow: hidden;
+}
+
+.sales-scope .mobile-nav-item::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 3px;
+  height: 100%;
+  background: linear-gradient(180deg, #6366f1, #8b5cf6);
+  opacity: 0;
+  transition: opacity 0.25s ease;
+}
+
+.sales-scope .mobile-nav-item:hover {
+  background: rgba(99, 102, 241, 0.12);
+  color: rgba(255, 255, 255, 0.95);
+  transform: translateX(4px);
+  border-color: rgba(99, 102, 241, 0.2);
+}
+
+.sales-scope .mobile-nav-item:hover::before {
+  opacity: 1;
+}
+
+.sales-scope .mobile-nav-item.active {
+  background: linear-gradient(135deg, rgba(99, 102, 241, 0.25), rgba(139, 92, 246, 0.15));
+  border-color: rgba(99, 102, 241, 0.4);
+  color: white;
+  box-shadow: 0 4px 12px rgba(99, 102, 241, 0.25), inset 0 1px 0 rgba(255, 255, 255, 0.1);
+}
+
+.sales-scope .mobile-nav-item.active::before {
+  opacity: 1;
+}
+
+.sales-scope .mobile-nav-item.locked {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.sales-scope .mobile-nav-item.locked:hover {
+  transform: none;
+  color: rgba(255, 255, 255, 0.5);
+  background: transparent;
+  border-color: transparent;
+}
+
+.sales-scope .mobile-nav-item.locked:hover::before {
+  opacity: 0;
+}
+
+.sales-scope .mobile-nav-item-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  border-radius: 12px;
+  background: rgba(99, 102, 241, 0.1);
+  position: relative;
+  flex-shrink: 0;
+  transition: all 0.25s ease;
+}
+
+.sales-scope .mobile-nav-item:hover .mobile-nav-item-icon {
+  background: rgba(99, 102, 241, 0.15);
+  transform: scale(1.05);
+}
+
+.sales-scope .mobile-nav-item.active .mobile-nav-item-icon {
+  background: linear-gradient(135deg, #6366f1, #8b5cf6);
+  box-shadow: 0 4px 12px rgba(99, 102, 241, 0.3);
+}
+
+.sales-scope .mobile-icon {
+  font-size: 20px;
+  transition: transform 0.25s ease;
+}
+
+.sales-scope .mobile-nav-item:hover .mobile-icon,
+.sales-scope .mobile-nav-item.active .mobile-icon {
+  transform: scale(1.1);
+}
+
+
+.sales-scope .mobile-nav-item.active .mobile-icon {
+  filter: grayscale(1) brightness(0) invert(1);
+}
+
+.sales-scope .mobile-lock {
+  position: absolute;
+  top: -4px;
+  right: -4px;
+  font-size: 11px;
+  background: #fbbf24;
+  border-radius: 50%;
+  width: 18px;
+  height: 18px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 2px 8px rgba(251, 191, 36, 0.4);
+}
+
+.sales-scope .mobile-nav-item-content {
+  flex: 1;
+  min-width: 0;
+}
+
+.sales-scope .mobile-nav-item-label {
+  display: block;
+  font-weight: 600;
+  font-size: 15px;
+  line-height: 1.3;
+  margin-bottom: 3px;
+  color: inherit;
+}
+
+.sales-scope .mobile-nav-item-desc {
+  display: block;
+  font-size: 12px;
+  opacity: 0.6;
+  color: inherit;
+  line-height: 1.2;
+}
+
+
+.sales-scope .mobile-nav-item-desc {
+  display: block;
+  font-size: 12px;
+  color: var(--text-muted);
+  line-height: 1.2;
+}
+
+.sales-scope .mobile-nav-item.active .mobile-nav-item-desc {
+  color: var(--primary-light);
+}
+
+.sales-scope .mobile-nav-item-arrow {
+  color: rgba(255, 255, 255, 0.3);
+  font-size: 20px;
+  font-weight: 300;
+  transition: all 0.25s ease;
+}
+
+.sales-scope .mobile-nav-item:hover .mobile-nav-item-arrow {
+  color: rgba(255, 255, 255, 0.7);
+  transform: translateX(3px);
+}
+
+.sales-scope .mobile-nav-item.active .mobile-nav-item-arrow {
+  color: white;
+}
+
+.sales-scope .mobile-nav-footer {
+  padding: 16px;
+  border-top: 1px solid rgba(99, 102, 241, 0.15);
+  margin-top: auto;
+  background: rgba(0, 0, 0, 0.1);
+}
+
+.sales-scope .mobile-plan-info {
+  text-align: center;
+}
+
+.sales-scope .mobile-plan-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  background: linear-gradient(135deg, rgba(99, 102, 241, 0.2), rgba(139, 92, 246, 0.15));
+  padding: 10px 16px;
+  border-radius: 12px;
+  border: 1px solid rgba(99, 102, 241, 0.3);
+}
+
+.sales-scope .mobile-plan-icon {
+  font-size: 16px;
+}
+
+.sales-scope .mobile-plan-text {
+  font-size: 13px;
+  font-weight: 600;
+  color: white;
+  letter-spacing: 0.3px;
+}
+
+.sales-scope .mobile-branch-limit {
+  margin-top: 10px;
+}
+
+.sales-scope .mobile-limit-text {
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.5);
+  font-weight: 500;
+}
+  background: var(--gradient-accent);
+  color: white;
+  padding: 8px 12px;
+  border-radius: 20px;
+  font-size: 12px;
+  font-weight: 600;
+  margin-bottom: 8px;
+
+
+.sales-scope .mobile-plan-icon {
+  font-size: 14px;
+}
+
+.sales-scope .mobile-branch-limit {
+  color: var(--text-muted);
+  font-size: 11px;
+}
+
+/* ========================================
+   MOBILE MAIN CONTENT STYLES
+======================================== */
+
+.sales-scope .mobile-main {
+  flex: 1;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  padding-top: calc(var(--mobile-header-height) + env(safe-area-inset-top));
+}
+
+.sales-scope .mobile-content {
+  flex: 1;
+  overflow-y: auto;
+  padding: 16px;
+  background: var(--bg);
+}
+
+/* ========================================
+   RESPONSIVE UTILITIES
+======================================== */
+
+/* Ensure mobile components are completely hidden on desktop */
+@media (min-width: 769px) {
+  .sales-scope .mobile-app,
+  .sales-scope .mobile-header,
+  .sales-scope .mobile-sidebar,
+  .sales-scope .mobile-nav,
+  .sales-scope .mobile-layout,
+  .sales-scope .mobile-auth-container,
+  .sales-scope .mobile-dashboard,
+  .sales-scope .mobile-quick-actions,
+  .sales-scope .mobile-stats-grid {
+    display: none !important;
+  }
+}
+
+/* Hide desktop components on mobile */
+@media (max-width: 768px) {
+  .sales-scope {
+    width: 100%;
+    margin: 0;
+    padding: 0;
+    overscroll-behavior: none;
+  }
+  
+  .sales-scope {
+    width: 100%;
+    margin: 0;
+    padding: 0 !important;
+  }
+  
+  .sales-scope .app {
+    display: none !important;
+  }
+  
+  .sales-scope .sidebar,
+  .sales-scope .header,
+  .sales-scope .auth-container {
+    display: none !important;
+  }
+}
+
+/* ========================================
+   MOBILE FORM ADAPTATIONS
+======================================== */
+
+@media (max-width: 768px) {
+  /* Make cards stack better on mobile */
+  .sales-scope .stats-grid {
+    grid-template-columns: 1fr;
+    gap: 12px;
+  }
+  
+  .sales-scope .stat-card {
+    padding: 16px;
+  }
+  
+  .sales-scope .stat-value {
+    font-size: 24px;
+  }
+  
+  /* Better form layouts on mobile */
+  .sales-scope .form-grid {
+    grid-template-columns: 1fr !important;
+    gap: 16px;
+  }
+  
+  .sales-scope .form-grid-2,
+  .sales-scope .form-grid-3,
+  .sales-scope .form-grid-4 {
+    grid-template-columns: 1fr !important;
+  }
+  
+  .sales-scope .form-group {
+    margin-bottom: 16px;
+  }
+  
+  .sales-scope .form-input,
+  .sales-scope .form-textarea,
+  .sales-scope .form-select {
+    font-size: 16px !important; /* Prevent zoom on iOS */
+    padding: 12px 16px !important;
+  }
+  
+  .sales-scope .btn,
+  .sales-scope .btn-primary,
+  .sales-scope .btn-secondary,
+  .sales-scope .btn-danger {
+    padding: 14px 20px !important;
+    font-size: 16px !important;
+    width: 100%;
+    justify-content: center;
+  }
+  
+  /* Card adaptations */
+  .sales-scope .card {
+    padding: 16px !important;
+    margin: 0 0 16px 0 !important;
+    border-radius: 12px;
+  }
+  
+  .sales-scope .card-header {
+    padding: 16px !important;
+    flex-direction: column;
+    align-items: flex-start !important;
+    gap: 12px;
+  }
+  
+  .sales-scope .card-title {
+    font-size: 18px !important;
+  }
+  
+  .sales-scope .card-description {
+    font-size: 14px !important;
+  }
+  
+  /* Table adaptations */
+  .sales-scope .table-container {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    margin: -16px;
+    padding: 16px;
+  }
+  
+  .sales-scope .table,
+  .sales-scope .modern-table {
+    min-width: 800px;
+    font-size: 14px !important;
+  }
+  
+  .sales-scope .table th,
+  .sales-scope .table td,
+  .sales-scope .modern-table th,
+  .sales-scope .modern-table td {
+    padding: 10px 8px !important;
+    font-size: 13px !important;
+  }
+  
+  /* Modal adaptations */
+  .sales-scope .modal {
+    margin: 0 !important;
+    border-radius: 20px 20px 0 0 !important;
+    max-height: 90vh !important;
+    bottom: 0 !important;
+    top: auto !important;
+  }
+  
+  .sales-scope .modal-overlay {
+    align-items: flex-end !important;
+  }
+  
+  .sales-scope .modal-content {
+    max-height: 80vh !important;
+    overflow-y: auto !important;
+    padding: 16px !important;
+  }
+  
+  .sales-scope .modal-header {
+    padding: 16px !important;
+    flex-direction: row;
+    justify-content: space-between;
+    align-items: center;
+  }
+  
+  .sales-scope .modal-title {
+    font-size: 18px !important;
+  }
+  
+  .sales-scope .modal-body {
+    padding: 16px !important;
+  }
+  
+  .sales-scope .modal-footer {
+    padding: 16px !important;
+    flex-direction: column;
+    gap: 12px;
+  }
+  
+  .sales-scope .modal-footer .btn {
+    width: 100%;
+  }
+  
+  /* Pagination on mobile */
+  .sales-scope .pager {
+    flex-wrap: wrap;
+    gap: 8px;
+    justify-content: center;
+  }
+  
+  .sales-scope .pager-info {
+    order: 3;
+    width: 100%;
+    text-align: center;
+    margin-top: 8px;
+    font-size: 14px;
+  }
+  
+  .sales-scope .pager-btn {
+    padding: 8px 12px;
+    font-size: 14px;
+  }
+  
+  /* Statistics grid */
+  .sales-scope .stats-grid {
+    grid-template-columns: 1fr !important;
+    gap: 12px;
+  }
+  
+  /* Action buttons */
+  .sales-scope .action-btns {
+    flex-direction: column !important;
+    width: 100%;
+    gap: 12px !important;
+  }
+  
+  .sales-scope .action-btns .btn {
+    width: 100% !important;
+  }
+  
+  /* Search and filter sections */
+  .sales-scope .filter-section,
+  .sales-scope .search-section {
+    flex-direction: column !important;
+    gap: 12px;
+  }
+  
+  .sales-scope .search-input,
+  .sales-scope .filter-input {
+    width: 100% !important;
+  }
+  
+  /* Empty states */
+  .sales-scope .empty-state {
+    padding: 32px 16px !important;
+  }
+  
+  .sales-scope .empty-icon {
+    font-size: 48px !important;
+  }
+  
+  .sales-scope .empty-title {
+    font-size: 18px !important;
+  }
+  
+  .sales-scope .empty-sub {
+    font-size: 14px !important;
+  }
+}
+
+/* ========================================
+   MOBILE CARD LAYOUTS
+======================================== */
+
+@media (max-width: 768px) {
+  .sales-scope .mobile-card {
+    background: var(--card);
+    border-radius: 12px;
+    padding: 16px;
+    box-shadow: var(--shadow);
+    margin-bottom: 16px;
+    border: 1px solid var(--border);
+  }
+  
+  .sales-scope .mobile-card-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 12px;
+    padding-bottom: 12px;
+    border-bottom: 1px solid var(--border-light);
+  }
+  
+  .sales-scope .mobile-card-title {
+    font-weight: 600;
+    font-size: 16px;
+    color: var(--text);
+  }
+  
+  .sales-scope .mobile-card-action {
+    padding: 6px 12px;
+    border-radius: 6px;
+    background: var(--bg-2);
+    border: none;
+    color: var(--text);
+    font-size: 12px;
+    cursor: pointer;
+  }
+  
+  .sales-scope .mobile-list-item {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 12px 0;
+    border-bottom: 1px solid var(--border-light);
+  }
+  
+  .sales-scope .mobile-list-item:last-child {
+    border-bottom: none;
+  }
+  
+  .sales-scope .mobile-list-icon {
+    width: 32px;
+    height: 32px;
+    border-radius: 8px;
+    background: var(--bg-3);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 16px;
+    flex-shrink: 0;
+  }
+  
+  .sales-scope .mobile-list-content {
+    flex: 1;
+    min-width: 0;
+  }
+  
+  .sales-scope .mobile-list-title {
+    font-weight: 600;
+    font-size: 14px;
+    color: var(--text);
+    margin-bottom: 2px;
+  }
+  
+  .sales-scope .mobile-list-subtitle {
+    font-size: 12px;
+    color: var(--text-muted);
+  }
+  
+  .sales-scope .mobile-list-action {
+    flex-shrink: 0;
+  }
+}
+
+/* ========================================
+   MOBILE DASHBOARD STYLES
+======================================== */
+
+.sales-scope .mobile-dashboard {
+  padding: 0;
+}
+
+.sales-scope .mobile-welcome-section {
+  background: var(--gradient-primary);
+  color: white;
+  padding: 24px 20px;
+  border-radius: 0 0 24px 24px;
+  margin: -16px -16px 24px -16px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.sales-scope .mobile-welcome-text {
+  flex: 1;
+}
+
+.sales-scope .mobile-welcome-title {
+  font-size: 20px;
+  font-weight: 700;
+  margin: 0 0 8px 0;
+  line-height: 1.2;
+}
+
+.sales-scope .mobile-welcome-subtitle {
+  font-size: 14px;
+  opacity: 0.9;
+  margin: 0;
+  line-height: 1.3;
+}
+
+.sales-scope .mobile-welcome-icon {
+  font-size: 32px;
+  margin-left: 16px;
+}
+
+.sales-scope .mobile-stats-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(100px, 1fr));
+  gap: 12px;
+  margin-bottom: 24px;
+}
+
+.sales-scope .mobile-stat-card {
+  background: var(--card);
+  border-radius: 16px;
+  padding: 20px 16px;
+  text-align: center;
+  box-shadow: var(--shadow-sm);
+  border: 1px solid var(--border);
+}
+
+.sales-scope .mobile-stat-value {
+  font-size: 24px;
+  font-weight: 800;
+  color: var(--text);
+  margin-bottom: 4px;
+}
+
+.sales-scope .mobile-stat-label {
+  font-size: 12px;
+  color: var(--text-muted);
+  margin-bottom: 8px;
+  font-weight: 500;
+}
+
+.sales-scope .mobile-stat-change {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.sales-scope .mobile-stat-change.positive {
+  color: var(--success);
+}
+
+.sales-scope .mobile-stat-change.negative {
+  color: var(--danger);
+}
+
+.sales-scope .mobile-stat-change-icon {
+  font-size: 12px;
+}
+
+/* ========================================
+   MOBILE QUICK ACTIONS STYLES
+======================================== */
+
+.sales-scope .mobile-quick-actions {
+  margin-bottom: 24px;
+}
+
+.sales-scope .mobile-quick-actions-header {
+  margin-bottom: 16px;
+}
+
+.sales-scope .mobile-quick-actions-title {
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--text);
+  margin: 0 0 4px 0;
+}
+
+.sales-scope .mobile-quick-actions-subtitle {
+  font-size: 14px;
+  color: var(--text-muted);
+  margin: 0;
+}
+
+.sales-scope .mobile-quick-actions-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 12px;
+}
+
+.sales-scope .mobile-quick-action {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  padding: 20px 16px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  position: relative;
+  overflow: hidden;
+}
+
+.sales-scope .mobile-quick-action:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-md);
+  border-color: var(--action-color, var(--primary));
+}
+
+.sales-scope .mobile-quick-action:active {
+  transform: translateY(0);
+}
+
+.sales-scope .mobile-quick-action-icon {
+  font-size: 32px;
+  width: 56px;
+  height: 56px;
+  border-radius: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(135deg, var(--action-color, var(--primary)), var(--action-color, var(--primary-dark)));
+  filter: grayscale(1) brightness(0) invert(1);
+}
+
+.sales-scope .mobile-quick-action:hover .mobile-quick-action-icon {
+  filter: none;
+}
+
+.sales-scope .mobile-quick-action-label {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text);
+  text-align: center;
+}
+
+/* ========================================
+   MOBILE RECENT ACTIVITY STYLES
+======================================== */
+
+.sales-scope .mobile-recent-activity {
+  margin-bottom: 24px;
+}
+
+.sales-scope .mobile-section-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 16px;
+}
+
+.sales-scope .mobile-section-title {
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--text);
+  margin: 0;
+}
+
+.sales-scope .mobile-section-action {
+  background: none;
+  border: none;
+  color: var(--primary);
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  padding: 4px 8px;
+  border-radius: 6px;
+  transition: all 0.2s ease;
+}
+
+.sales-scope .mobile-section-action:hover {
+  background: var(--bg-2);
+}
+
+.sales-scope .mobile-activity-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.sales-scope .mobile-activity-item {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 16px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.sales-scope .mobile-activity-icon {
+  width: 40px;
+  height: 40px;
+  border-radius: 10px;
+  background: var(--bg-3);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 18px;
+  flex-shrink: 0;
+}
+
+.sales-scope .mobile-activity-content {
+  flex: 1;
+  min-width: 0;
+}
+
+.sales-scope .mobile-activity-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text);
+  margin-bottom: 2px;
+}
+
+.sales-scope .mobile-activity-time {
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.sales-scope .mobile-activity-amount {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--primary);
+  flex-shrink: 0;
+}
+
+/* ========================================
+   MOBILE AUTH STYLES
+======================================== */
+
+.sales-scope .mobile-auth-container {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
+}
+
+.sales-scope .mobile-auth-card {
+  width: 100%;
+  max-width: 400px;
+  background: var(--card);
+  border-radius: 20px;
+  padding: 32px 24px;
+  box-shadow: var(--shadow-xl);
+  border: 1px solid var(--border);
+}
+
+.sales-scope .mobile-auth-header {
+  text-align: center;
+  margin-bottom: 32px;
+}
+
+.sales-scope .mobile-auth-logo {
+  font-size: 48px;
+  margin-bottom: 16px;
+}
+
+.sales-scope .mobile-auth-title {
+  font-size: 24px;
+  font-weight: 700;
+  color: var(--text);
+  margin: 0 0 8px 0;
+}
+
+.sales-scope .mobile-auth-subtitle {
+  font-size: 14px;
+  color: var(--text-muted);
+  margin: 0;
+}
+
+.sales-scope .mobile-auth-form {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.sales-scope .mobile-form-group {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.sales-scope .mobile-form-label {
+  font-weight: 600;
+  font-size: 14px;
+  color: var(--text);
+}
+
+.sales-scope .mobile-form-input {
+  padding: 14px 16px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  font-size: 16px;
+  background: var(--card);
+  color: var(--text);
+  transition: all 0.2s ease;
+  -webkit-appearance: none;
+  appearance: none;
+}
+
+.sales-scope .mobile-form-input:focus {
+  outline: none;
+  border-color: var(--primary);
+  box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1);
+}
+
+.sales-scope .mobile-btn {
+  padding: 14px 20px;
+  border-radius: 12px;
+  font-size: 16px;
+  font-weight: 600;
+  border: none;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  text-decoration: none;
+  min-height: 50px;
+}
+
+.sales-scope .mobile-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.sales-scope .mobile-btn-primary {
+  background: var(--gradient-primary);
+  color: white;
+  box-shadow: var(--shadow);
+}
+
+.sales-scope .mobile-btn-primary:hover:not(:disabled) {
+  transform: translateY(-1px);
+  box-shadow: var(--shadow-lg);
+}
+
+.sales-scope .mobile-btn-outline {
+  background: transparent;
+  color: var(--primary);
+  border: 1px solid var(--primary);
+}
+
+.sales-scope .mobile-btn-outline:hover:not(:disabled) {
+  background: var(--primary);
+  color: white;
+}
+
+.sales-scope .mobile-loading {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.sales-scope .mobile-alert {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 16px;
+  border-radius: 8px;
+  margin-top: 16px;
+}
+
+.sales-scope .mobile-alert-danger {
+  background: rgba(239, 68, 68, 0.1);
+  border: 1px solid rgba(239, 68, 68, 0.2);
+  color: var(--danger);
+}
+
+.sales-scope .mobile-alert-icon {
+  font-size: 16px;
+  flex-shrink: 0;
+}
+
+.sales-scope .mobile-auth-footer {
+  text-align: center;
+  margin-top: 24px;
+}
+
+.sales-scope .mobile-auth-footer-text {
+  font-size: 14px;
+  color: var(--text-muted);
+  margin: 0;
+}
+
+.sales-scope .mobile-auth-link {
+  color: var(--primary);
+  text-decoration: none;
+  font-weight: 600;
+}
+
+.sales-scope .mobile-auth-link:hover {
+  text-decoration: underline;
+}
+
+/* ========================================
+   MOBILE TOUCH OPTIMIZATIONS
+======================================== */
+
+/* Ensure minimum touch target size (44px) */
+@media (max-width: 768px) {
+  .sales-scope button, .sales-scope .btn, .sales-scope .mobile-btn, .sales-scope .nav-item, .sales-scope .mobile-nav-item {
+    min-height: 44px;
+    min-width: 44px;
+  }
+  
+  /* Improve tap targets */
+  .sales-scope input, .sales-scope select, .sales-scope textarea {
+    min-height: 44px;
+    font-size: 16px; /* Prevent zoom on iOS */
+  }
+  
+  /* Smooth scrolling */
+  .sales-scope * {
+    -webkit-overflow-scrolling: touch;
+  }
+  
+  /* Remove tap highlights */
+  .sales-scope * {
+    -webkit-tap-highlight-color: transparent;
+    -webkit-touch-callout: none;
+  }
+  
+  /* Custom tap feedback */
+  .sales-scope .mobile-nav-item:active,
+  .sales-scope .mobile-quick-action:active,
+  .sales-scope .mobile-btn:active,
+  .sales-scope .mobile-card:active {
+    transform: scale(0.98);
+    transition: transform 0.1s ease;
+  }
+  
+  /* Improved scrollbars for mobile */
+  .sales-scope ::-webkit-scrollbar {
+    width: 2px;
+  }
+  
+  .sales-scope ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  
+  .sales-scope ::-webkit-scrollbar-thumb {
+    background: var(--border);
+    border-radius: 1px;
+  }
+  
+  /* Swipe indicators */
+  .sales-scope .mobile-swipe-indicator {
+    position: relative;
+  }
+  
+  .sales-scope .mobile-swipe-indicator::after {
+    content: '';
+    position: absolute;
+    bottom: 8px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 40px;
+    height: 3px;
+    background: var(--border);
+    border-radius: 2px;
+  }
+  
+  /* Floating action button */
+  .sales-scope .mobile-fab {
+    position: fixed;
+    bottom: 20px;
+    right: 20px;
+    width: 56px;
+    height: 56px;
+    border-radius: 50%;
+    background: var(--gradient-primary);
+    color: white;
+    border: none;
+    box-shadow: var(--shadow-lg);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 24px;
+    z-index: 1000;
+    transition: all 0.3s ease;
+  }
+  
+  .sales-scope .mobile-fab:hover {
+    transform: scale(1.1);
+    box-shadow: var(--shadow-xl);
+  }
+  
+  .sales-scope .mobile-fab:active {
+    transform: scale(0.95);
+  }
+  
+  /* Pull to refresh indicator */
+  .sales-scope .mobile-pull-refresh {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+    color: var(--text-muted);
+    font-size: 14px;
+  }
+  
+  /* Loading states optimized for mobile */
+  .sales-scope .mobile-skeleton {
+    background: linear-gradient(90deg, var(--bg-3) 25%, var(--bg-2) 50%, var(--bg-3) 75%);
+    background-size: 200% 100%;
+    animation: sales-shimmer 1.5s infinite;
+  }
+  
+  @keyframes sales-shimmer {
+    0% { background-position: -200% 0; }
+    100% { background-position: 200% 0; }
+  }
+  
+  /* Safe area for notched devices */
+  .sales-scope .mobile-app {
+    padding-top: env(safe-area-inset-top);
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+  
+  .sales-scope .mobile-header {
+    padding-left: max(16px, env(safe-area-inset-left));
+    padding-right: max(16px, env(safe-area-inset-right));
+  }
+  
+  /* Dark mode support */
+  @media (prefers-color-scheme: dark) {
+    .sales-scope .mobile-auth-container {
+      background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%);
+    }
+    
+    .sales-scope .mobile-welcome-section {
+      background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%);
+    }
+  }
+  
+  /* High contrast mode support */
+  @media (prefers-contrast: high) {
+    .sales-scope .mobile-nav-item,
+    .sales-scope .mobile-quick-action,
+    .sales-scope .mobile-stat-card {
+      border-width: 2px;
+    }
+  }
+  
+  /* Reduced motion support */
+  @media (prefers-reduced-motion: reduce) {
+    .sales-scope * {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+    }
+  }
+}
+
+/* ========================================
+   ANIMATIONS
+======================================== */
+
+@keyframes sales-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes sales-slideInRight {
+  from {
+    transform: translateX(100%);
+  }
+  to {
+    transform: translateX(0);
+  }
+}
+
+@keyframes sales-slideOutRight {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(100%);
+  }
+}
+
+@keyframes sales-fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes sales-fadeOut {
+  from {
+    opacity: 1;
+  }
+  to {
+    opacity: 0;
+  }
+}
+/* ========================================
+   MOBILE VIEW-SPECIFIC RESPONSIVE STYLES
+======================================== */
+
+@media (max-width: 768px) {
+  /* General container and padding adjustments */
+  .sales-scope > div,
+  .sales-scope .main-content,
+  .sales-scope .content-wrapper {
+    padding: 12px !important;
+  }
+  
+  /* Page headers in views */
+  .sales-scope h1, .sales-scope .page-title {
+    font-size: 24px !important;
+    line-height: 1.3 !important;
+    margin-bottom: 12px !important;
+  }
+  
+  .sales-scope h2, .sales-scope .section-title {
+    font-size: 20px !important;
+    line-height: 1.3 !important;
+  }
+  
+  .sales-scope h3, .sales-scope .card-title {
+    font-size: 18px !important;
+    line-height: 1.3 !important;
+  }
+  
+  .sales-scope h4, .sales-scope .subsection-title {
+    font-size: 16px !important;
+  }
+  
+  /* Inline styled tables (used in StockHistory, InStockView, etc.) */
+  .sales-scope div[style*="overflowX: 'auto'"],
+  .sales-scope div[style*="overflow-x: auto"] {
+    margin: -12px !important;
+    padding: 12px !important;
+  }
+  
+  .sales-scope table[style*="width: '100%'"],
+  .sales-scope table[style*="width: 100%"] {
+    font-size: 13px !important;
+  }
+  
+  .sales-scope table th[style*="padding"],
+  .sales-scope table td[style*="padding"] {
+    padding: 8px 6px !important;
+    font-size: 12px !important;
+    min-width: 80px !important;
+  }
+  
+  /* Grid layouts in views */
+  .sales-scope div[style*="gridTemplateColumns"],
+  .sales-scope div[style*="grid-template-columns"] {
+    display: flex !important;
+    flex-direction: column !important;
+    gap: 12px !important;
+  }
+  
+  .sales-scope div[style*="display: grid"] {
+    display: flex !important;
+    flex-direction: column !important;
+  }
+  
+  /* Statistics cards in views */
+  .sales-scope div[style*="minmax(250px"] {
+    min-width: 100% !important;
+  }
+  
+  /* Form sections with flex layouts */
+  .sales-scope div[style*="display: flex"][style*="gap"] {
+    flex-wrap: wrap !important;
+    gap: 12px !important;
+  }
+  
+  /* Buttons in flex containers */
+  .sales-scope div[style*="display: flex"] button,
+  .sales-scope div[style*="display: flex"] .btn {
+    min-width: 100% !important;
+    margin-bottom: 8px;
+  }
+  
+  /* Input groups and form fields */
+  .sales-scope input[style],
+  .sales-scope select[style],
+  .sales-scope textarea[style] {
+    font-size: 16px !important;
+    padding: 12px !important;
+    width: 100% !important;
+  }
+  
+  /* Product entry rows in InStockView */
+  .sales-scope tr[style] td input,
+  .sales-scope tr[style] td select {
+    min-width: 120px !important;
+    font-size: 14px !important;
+    padding: 10px 8px !important;
+  }
+  
+  /* Modal dialogs */
+  .sales-scope div[style*="position: fixed"][style*="inset"] {
+    padding: 12px !important;
+  }
+  
+  .sales-scope div[style*="max-width: 600px"],
+  .sales-scope div[style*="max-width: 800px"] {
+    max-width: 100% !important;
+    width: 100% !important;
+  }
+  
+  /* Summary sections */
+  .sales-scope div[style*="background: '#f8fafc'"],
+  .sales-scope div[style*="backgroundColor: '#f8fafc'"] {
+    padding: 16px !important;
+    margin: 12px 0 !important;
+  }
+  
+  /* Action button rows */
+  .sales-scope div[style*="justifyContent: 'space-between'"] button {
+    flex: 1;
+    min-width: auto !important;
+  }
+  
+  /* Card-like containers */
+  .sales-scope div[style*="border: '1px solid"],
+  .sales-scope div[style*="border: '2px solid"] {
+    padding: 12px !important;
+    margin-bottom: 12px !important;
+  }
+  
+  /* Improve touch targets for all buttons */
+  .sales-scope button,
+  .sales-scope .btn,
+  .sales-scope a.btn {
+    min-height: 44px !important;
+    padding: 12px 16px !important;
+    font-size: 16px !important;
+  }
+  
+  /* Small icon buttons */
+  .sales-scope button[style*="padding: '6px'"],
+  .sales-scope button[style*="padding: '8px'"] {
+    min-height: 44px !important;
+    min-width: 44px !important;
+    padding: 12px !important;
+  }
+  
+  /* Date/time inputs */
+  .sales-scope input[type="date"],
+  .sales-scope input[type="time"],
+  .sales-scope input[type="datetime-local"] {
+    font-size: 16px !important;
+    padding: 12px !important;
+  }
+  
+  /* Select dropdowns */
+  .sales-scope select {
+    font-size: 16px !important;
+    padding: 12px !important;
+    background-size: 16px !important;
+  }
+  
+  /* Pagination controls */
+  .sales-scope div[style*="pagination"] button,
+  .sales-scope .pager button {
+    min-width: 44px !important;
+    min-height: 44px !important;
+  }
+  
+  /* Table action buttons */
+  .sales-scope table button {
+    min-width: auto !important;
+    padding: 10px 14px !important;
+    font-size: 14px !important;
+  }
+  
+  /* Price and currency displays */
+  .sales-scope div[style*="fontSize: '18px'"],
+  .sales-scope div[style*="font-size: 18px"] {
+    font-size: 16px !important;
+  }
+  
+  .sales-scope div[style*="fontSize: '24px'"],
+  .sales-scope div[style*="font-size: 24px"] {
+    font-size: 20px !important;
+  }
+  
+  /* Reduce horizontal padding in tight spaces */
+  .sales-scope div[style*="padding: '24px'"],
+  .sales-scope div[style*="padding: 24px"] {
+    padding: 16px !important;
+  }
+  
+  .sales-scope div[style*="padding: '32px'"],
+  .sales-scope div[style*="padding: 32px"] {
+    padding: 20px !important;
+  }
+  
+  /* Fix spacing in header sections */
+  .sales-scope div[style*="marginBottom: '32px'"],
+  .sales-scope div[style*="margin-bottom: 32px"] {
+    margin-bottom: 20px !important;
+  }
+  
+  /* Compact table headers */
+  .sales-scope thead tr {
+    display: table-row !important;
+  }
+  
+  .sales-scope thead th {
+    position: sticky;
+    top: 0;
+    background: #f8fafc !important;
+    z-index: 10;
+  }
+  
+  /* Scrollable content areas */
+  .sales-scope .table-scroll,
+  .sales-scope .table-container,
+  .sales-scope div[style*="overflowY: 'auto'"],
+  .sales-scope div[style*="overflow-y: auto"] {
+    max-height: 60vh !important;
+    -webkit-overflow-scrolling: touch;
+  }
+  
+  /* Product list items */
+  .sales-scope .product-item,
+  .sales-scope .seller-product-row {
+    flex-direction: column !important;
+    align-items: flex-start !important;
+    padding: 12px !important;
+  }
+  
+  /* Filter sections */
+  .sales-scope .filter-row,
+  .sales-scope .search-row {
+    flex-direction: column !important;
+    gap: 12px !important;
+  }
+  
+  .sales-scope .filter-row > *,
+  .sales-scope .search-row > * {
+    width: 100% !important;
+  }
+  
+  /* Summary boxes */
+  .sales-scope .summary-box,
+  .sales-scope .total-box {
+    padding: 16px !important;
+    margin: 12px 0 !important;
+  }
+  
+  /* Alert and notification boxes */
+  .sales-scope div[style*="backgroundColor: '#fee2e2'"],
+  .sales-scope div[style*="background: '#fee2e2'"],
+  .sales-scope .alert,
+  .sales-scope .notification {
+    padding: 12px !important;
+    font-size: 14px !important;
+    margin: 12px 0 !important;
+  }
+  
+  /* Branch/supplier selection sections */
+  .sales-scope .selection-section,
+  .sales-scope div[style*="display: 'flex'"][style*="marginBottom: '20px'"] {
+    flex-direction: column !important;
+  }
+  
+  .sales-scope .selection-section > div {
+    width: 100% !important;
+  }
+  
+  /* IMES input sections */
+  .sales-scope .imes-section {
+    flex-direction: column !important;
+  }
+  
+  .sales-scope .imes-input {
+    width: 100% !important;
+    margin-bottom: 8px !important;
+  }
+  
+  /* Purchase history sections */
+  .sales-scope .purchase-card,
+  .sales-scope div[style*="border: '2px solid #fecaca'"] {
+    margin-bottom: 16px !important;
+  }
+  
+  /* Validity popup */
+  .sales-scope .validity-popup {
+    max-width: 100% !important;
+    width: 95% !important;
+  }
+  
+  /* Preview sections */
+  .sales-scope .preview-container {
+    padding: 12px !important;
+    max-height: 70vh !important;
+  }
+  
+  /* WhatsApp and sharing sections */
+  .sales-scope .whatsapp-section,
+  .sales-scope .share-section {
+    flex-direction: column !important;
+    gap: 12px !important;
+  }
+  
+  /* Amount and balance displays */
+  .sales-scope .balance-display,
+  .sales-scope .amount-display {
+    font-size: 18px !important;
+    padding: 12px !important;
+  }
+  
+  /* GST calculator specific */
+  .sales-scope .gst-calculator-container {
+    padding: 16px !important;
+  }
+  
+  .sales-scope .gst-result-box {
+    padding: 12px !important;
+    margin: 12px 0 !important;
+  }
+  
+  /* Product sales specific */
+  .sales-scope .product-list-container {
+    max-height: 50vh !important;
+  }
+  
+  /* Branch supply specific */
+  .sales-scope .branch-selector {
+    flex-direction: column !important;
+    gap: 12px !important;
+  }
+  
+  /* Seconds sales specific */
+  .sales-scope .seconds-sales-grid {
+    grid-template-columns: 1fr !important;
+  }
+  
+  /* Sales track/analytics */
+  .sales-scope .analytics-grid {
+    grid-template-columns: 1fr !important;
+  }
+  
+  .sales-scope .chart-container {
+    height: 250px !important;
+  }
+  
+  /* Scrollable modals */
+  .sales-scope .modal-scroll-content {
+    max-height: 70vh !important;
+  }
+}
+
+/* ========================================
+   MOBILE LANDSCAPE OPTIMIZATIONS
+======================================== */
+
+@media (max-width: 768px) and (orientation: landscape) {
+  .sales-scope .modal {
+    max-height: 85vh !important;
+  }
+  
+  .sales-scope .modal-content,
+  .sales-scope .modal-scroll-content {
+    max-height: 65vh !important;
+  }
+  
+  .sales-scope .table-scroll,
+  .sales-scope .table-container {
+    max-height: 50vh !important;
+  }
+}
+
+/* ========================================
+   SMALL MOBILE DEVICES (< 400px)
+======================================== */
+
+@media (max-width: 400px) {
+  .sales-scope > div,
+  .sales-scope .main-content,
+  .sales-scope .content-wrapper {
+    padding: 8px !important;
+  }
+  
+  .sales-scope .card {
+    padding: 12px !important;
+  }
+  
+  .sales-scope h1, .sales-scope .page-title {
+    font-size: 20px !important;
+  }
+  
+  .sales-scope h2, .sales-scope .section-title {
+    font-size: 18px !important;
+  }
+  
+  .sales-scope h3, .sales-scope .card-title {
+    font-size: 16px !important;
+  }
+  
+  .sales-scope table th,
+  .sales-scope table td {
+    padding: 6px 4px !important;
+    font-size: 11px !important;
+    min-width: 70px !important;
+  }
+  
+  .sales-scope button,
+  .sales-scope .btn {
+    padding: 10px 12px !important;
+    font-size: 14px !important;
+  }
+}
+/* ========================================
+   MOBILE UTILITY CLASSES
+======================================== */
+
+/* Responsive display utilities */
+.sales-scope .mobile-only {
+  display: none !important;
+}
+
+.sales-scope .desktop-only {
+  display: block !important;
+}
+
+@media (max-width: 768px) {
+  .sales-scope .mobile-only {
+    display: block !important;
+  }
+  
+  .sales-scope .desktop-only {
+    display: none !important;
+  }
+  
+  .sales-scope .mobile-flex {
+    display: flex !important;
+  }
+  
+  .sales-scope .mobile-grid {
+    display: grid !important;
+  }
+  
+  .sales-scope .mobile-hidden {
+    display: none !important;
+  }
+}
+
+/* Mobile spacing utilities */
+@media (max-width: 768px) {
+  .sales-scope .mobile-p-0 { padding: 0 !important; }
+  .sales-scope .mobile-p-1 { padding: 8px !important; }
+  .sales-scope .mobile-p-2 { padding: 12px !important; }
+  .sales-scope .mobile-p-3 { padding: 16px !important; }
+  .sales-scope .mobile-p-4 { padding: 20px !important; }
+  
+  .sales-scope .mobile-m-0 { margin: 0 !important; }
+  .sales-scope .mobile-m-1 { margin: 8px !important; }
+  .sales-scope .mobile-m-2 { margin: 12px !important; }
+  .sales-scope .mobile-m-3 { margin: 16px !important; }
+  .sales-scope .mobile-m-4 { margin: 20px !important; }
+  
+  .sales-scope .mobile-mb-1 { margin-bottom: 8px !important; }
+  .sales-scope .mobile-mb-2 { margin-bottom: 12px !important; }
+  .sales-scope .mobile-mb-3 { margin-bottom: 16px !important; }
+  .sales-scope .mobile-mb-4 { margin-bottom: 20px !important; }
+  
+  .sales-scope .mobile-mt-1 { margin-top: 8px !important; }
+  .sales-scope .mobile-mt-2 { margin-top: 12px !important; }
+  .sales-scope .mobile-mt-3 { margin-top: 16px !important; }
+  .sales-scope .mobile-mt-4 { margin-top: 20px !important; }
+  
+  .sales-scope .mobile-text-sm { font-size: 14px !important; }
+  .sales-scope .mobile-text-base { font-size: 16px !important; }
+  .sales-scope .mobile-text-lg { font-size: 18px !important; }
+  .sales-scope .mobile-text-xl { font-size: 20px !important; }
+  
+  .sales-scope .mobile-text-center { text-align: center !important; }
+  .sales-scope .mobile-text-left { text-align: left !important; }
+  .sales-scope .mobile-text-right { text-align: right !important; }
+  
+  .sales-scope .mobile-flex-col { flex-direction: column !important; }
+  .sales-scope .mobile-flex-row { flex-direction: row !important; }
+  .sales-scope .mobile-flex-wrap { flex-wrap: wrap !important; }
+  .sales-scope .mobile-justify-center { justify-content: center !important; }
+  .sales-scope .mobile-justify-between { justify-content: space-between !important; }
+  .sales-scope .mobile-items-center { align-items: center !important; }
+  .sales-scope .mobile-items-start { align-items: flex-start !important; }
+  .sales-scope .mobile-gap-1 { gap: 8px !important; }
+  .sales-scope .mobile-gap-2 { gap: 12px !important; }
+  .sales-scope .mobile-gap-3 { gap: 16px !important; }
+  
+  .sales-scope .mobile-w-full { width: 100% !important; }
+  .sales-scope .mobile-w-auto { width: auto !important; }
+  .sales-scope .mobile-min-w-full { min-width: 100% !important; }
+  .sales-scope .mobile-max-w-full { max-width: 100% !important; }
+  
+  .sales-scope .mobile-overflow-auto { overflow: auto !important; }
+  .sales-scope .mobile-overflow-hidden { overflow: hidden !important; }
+  .sales-scope .mobile-overflow-x-auto { 
+    overflow-x: auto !important; 
+    -webkit-overflow-scrolling: touch;
+  }
+  .sales-scope .mobile-overflow-y-auto { 
+    overflow-y: auto !important;
+    -webkit-overflow-scrolling: touch;
+  }
+}
+
+/* ========================================
+   EXTRA SMALL MOBILE SCREENS (< 400px)
+   iPhone SE, smaller Android devices
+======================================== */
+
+@media (max-width: 400px) {
+  /* Header adjustments for very small screens */
+  .sales-scope .mobile-header {
+    padding-left: 12px;
+    padding-right: 12px;
+    padding-top: calc(env(safe-area-inset-top) + 6px);
+    padding-bottom: 6px;
+    height: calc(62px + env(safe-area-inset-top));
+  }
+  
+  .sales-scope .mobile-title {
+    font-size: 16px !important;
+  }
+  
+  .sales-scope .mobile-subtitle {
+    font-size: 10px !important;
+    display: none; /* Hide subtitle on very small screens to save space */
+  }
+  
+  .sales-scope .mobile-user-avatar {
+    width: 32px;
+    height: 32px;
+    font-size: 14px;
+  }
+  
+  .sales-scope .mobile-logout-btn {
+    width: 32px;
+    height: 32px;
+    padding: 6px;
+  }
+  
+  .sales-scope .mobile-logout-btn svg {
+    width: 18px;
+    height: 18px;
+  }
+  
+  .sales-scope .mobile-header-right {
+    gap: 8px;
+  }
+  
+  .sales-scope .mobile-menu-toggle {
+    width: 28px;
+    height: 28px;
+  }
+  
+  .sales-scope .hamburger-line {
+    width: 16px;
+  }
+}
+
+/* ========================================
+   LANDSCAPE MODE ON MOBILE
+======================================== */
+
+@media (max-width: 768px) and (orientation: landscape) {
+  .sales-scope .mobile-header {
+    padding-top: calc(env(safe-area-inset-top) + 4px);
+    padding-bottom: 4px;
+    height: calc(56px + env(safe-area-inset-top));
+  }
+  
+  .sales-scope .mobile-title {
+    font-size: 16px;
+  }
+  
+  .sales-scope .mobile-subtitle {
+    display: none; /* Hide subtitle in landscape for space */
+  }
+  
+  .sales-scope .mobile-user-avatar,
+  .sales-scope .mobile-logout-btn {
+    width: 32px;
+    height: 32px;
+  }
+}

@@ -14,12 +14,15 @@ function MobileViewRenderer({ view, salesUrl, token, branchUser, ...props }) {
   // so feature/plan restrictions are consistent on mobile too.
   const planId = props?.planId || '';
 
-  // Admin-only views (desktop blocks these when `branchUser` is truthy)
-  const adminOnlyViews = new Set(['gst-calculator', 'whatsapp-stock', 'whatsapp-contact']);
+  // Owner-only views now live in the Shop Admin dashboard of the main app
+  const adminOnlyViews = new Set([
+    'gst-calculator', 'whatsapp-stock', 'whatsapp-contact', 'supplier-credits',
+    'branch-supply', 'branch-supply-history', 'branch-sales-report'
+  ]);
   if (branchUser && adminOnlyViews.has(view)) {
     return (
       <div className="mobile-content mobile-overflow-y-auto">
-        {renderCardMessage('🔒', 'Admin Only', 'This section is available only for the admin account.')}
+        {renderCardMessage('🔒', 'Moved to Shop Admin', 'This section is now managed by the owner from the Shop Admin dashboard.')}
       </div>
     );
   }

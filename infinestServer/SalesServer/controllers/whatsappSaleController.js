@@ -1,5 +1,6 @@
 const mongoose = require('mongoose');
 const WhatsappSale = require('../models/whatsappSale');
+const { normalizeCode, resolveEmployeeByCode, isEmployeeCodeRequired } = require('./employeeController');
 
 exports.createWhatsappSale = async (req, res) => {
   try {
@@ -15,8 +16,23 @@ exports.createWhatsappSale = async (req, res) => {
 
     const totalAmount = items.reduce((s, it) => s + (Number(it.qty || it.sellingQty || 0) * Number(it.sellingPrice || 0)), 0);
 
+    const employeeCode = normalizeCode(req.body.employeeCode || req.body.employee_code);
+    let employee = null;
+    if (employeeCode) {
+      employee = await resolveEmployeeByCode(shop_id, employeeCode);
+      if (!employee) return res.status(400).json({ success: false, message: `Employee code ${employeeCode} is not valid or the employee is inactive` });
+    } else if (await isEmployeeCodeRequired(shop_id)) {
+      return res.status(400).json({ success: false, message: 'Employee code is required for every sale' });
+    }
+
     // Create record
-    const doc = await WhatsappSale.create({ shop_id, branch_id, seller_id, customerNo, items, totalAmount, paymentMethod, amountPaid, createdBy: req.user.userId || req.user.branch_id || '' });
+    const doc = await WhatsappSale.create({
+      shop_id, branch_id, seller_id, customerNo, items, totalAmount, paymentMethod, amountPaid,
+      employee_id: employee ? employee.id : '',
+      employee_code: employee ? employee.code : '',
+      employee_name: employee ? employee.name : '',
+      createdBy: req.user.userId || req.user.branch_id || ''
+    });
 
     // Decrement stock: prefer WhatsappStock supplyQty decrement, fallback to BranchStock by productId/productNo
     try {

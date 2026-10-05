@@ -4,7 +4,8 @@
 window.ENV_CONFIG = {
   SALES_API_URL: '${SALES_API_URL}',
   AUTH_API_URL: '${AUTH_API_URL}',
-  WHATSAPP_WEB_URL: '${WHATSAPP_WEB_URL}'
+  WHATSAPP_WEB_URL: '${WHATSAPP_WEB_URL}',
+  SHOP_ADMIN_URL: '${SHOP_ADMIN_URL}'
 };
 
 // For backward compatibility, also set SALES_URL

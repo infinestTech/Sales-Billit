@@ -21,6 +21,8 @@ const mysqlUserRoutes = require('./routes/mysqlUserRoutes');
 const secondsSalesRoutes = require('./routes/secondsSalesRoutes');
 const featureRoutes = require('./routes/featureRoutes');
 const supplierCreditRoutes = require('./routes/supplierCreditRoutes');
+const shopInfoRoutes = require('./routes/shopInfoRoutes');
+const salesPerformanceRoutes = require('./routes/salesPerformanceRoutes');
 
 const { syncSalesUser } = require('./controllers/salesSyncController');
 const app = express();
@@ -37,6 +39,11 @@ app.use(cors({
   origin: [
     process.env.FRONTEND_URL || 'http://localhost:3000',
     process.env.AUTH_SERVER_URL || 'http://localhost:7000',
+    // Main (infinest) frontend hosting the shop-admin portal, which now manages sales too
+    ...(process.env.MAIN_FRONTEND_URL ? [process.env.MAIN_FRONTEND_URL] : []),
+    'http://localhost:3000',
+    'http://127.0.0.1:3000',
+    'http://89.116.121.212:3000',
     'http://localhost:3020',
     'http://127.0.0.1:3020',
     // Production domains
@@ -371,6 +378,46 @@ app.get('/auth/verify', async (req, res) => {
   }
 });
 
+// Internal: issue a Sales token for a shop on behalf of the shop-admin portal (BillitServer).
+// BillitServer has already authenticated the shop admin and verified the shop's sales plan.
+app.post('/internal/shop-admin-token', async (req, res) => {
+  try {
+    const apiKey = req.headers['x-internal-key'];
+    if (!apiKey || apiKey !== process.env.INTERNAL_API_KEY) {
+      return res.status(403).json({ message: 'Forbidden' });
+    }
+    const { shop_id, mysql_user_id, mongoPlanId } = req.body || {};
+    if (!shop_id || !mysql_user_id || !mongoPlanId) {
+      return res.status(400).json({ message: 'shop_id, mysql_user_id and mongoPlanId are required' });
+    }
+    if (!mongoPlanId.startsWith('sales-') && !mongoPlanId.startsWith('combo-')) {
+      return res.status(403).json({ message: 'Shop does not have a sales plan' });
+    }
+    if (!mongoose.Types.ObjectId.isValid(String(shop_id))) {
+      return res.status(400).json({ message: 'Invalid shop_id' });
+    }
+    const shop = await Shop.findOne({ _id: shop_id, mysql_user_id: String(mysql_user_id) }).lean();
+    if (!shop) return res.status(404).json({ message: 'Shop not found' });
+
+    const branchLimit = await fetchBranchLimitByMongoPlanId(mongoPlanId);
+    const payload = {
+      userId: String(mysql_user_id),
+      mongoPlanId,
+      shop_id: String(shop._id),
+      branchLimit: Number.isFinite(branchLimit) ? branchLimit : 0,
+      via: 'shop-admin'
+    };
+    const token = jwt.sign(payload, process.env.JWT_SECRET || 'dev-sales-secret', {
+      expiresIn: '12h',
+      issuer: process.env.JWT_ISSUER || 'sales.local'
+    });
+    return res.json({ token, payload });
+  } catch (err) {
+    console.error('Sales /internal/shop-admin-token error:', err.message || err);
+    return res.status(500).json({ message: 'Failed to issue token' });
+  }
+});
+
 // Subscribe endpoint: records MySQL subscription via CommonDB and mirrors to Mongo
 app.post('/api/subscribe', async (req, res) => {
   try {
@@ -443,6 +490,8 @@ app.use(mysqlUserRoutes);
 app.use(secondsSalesRoutes);
 app.use(featureRoutes);
 app.use(supplierCreditRoutes);
+app.use(shopInfoRoutes);
+app.use(salesPerformanceRoutes);
 
 const PORT = process.env.SALES_PORT || 9000;
 app.listen(PORT, '0.0.0.0', function () {

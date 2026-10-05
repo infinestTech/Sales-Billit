@@ -8,7 +8,7 @@ function MobileInStock({ salesUrl, token }) {
   const [gstAmount, setGstAmount] = React.useState('');
   const [category, setCategory] = React.useState('');
   const [items, setItems] = React.useState([
-    { productNo: '', productName: '', brand: '', model: '', quantity: 1, costPrice: '', validity: '', imes: [] }
+    { productNo: '', productName: '', brand: '', model: '', quantity: 1, costPrice: '', validity: '', warrantyMonths: '', warrantyDetails: '', imes: [] }
   ]);
   const [saving, setSaving] = React.useState(false);
   const [error, setError] = React.useState('');
@@ -43,7 +43,7 @@ function MobileInStock({ salesUrl, token }) {
   const totalProductAmount = items.reduce((sum, it) => sum + ((Number(it.quantity) || 0) * (Number(it.costPrice) || 0)), 0);
   const totalBillAmount = (Number(supplierAmount) || 0) + (Number(gstAmount) || 0);
 
-  const addRow = () => setItems(it => [...it, { productNo: '', productName: '', brand: '', model: '', quantity: 1, costPrice: '', validity: '', imes: [] }]);
+  const addRow = () => setItems(it => [...it, { productNo: '', productName: '', brand: '', model: '', quantity: 1, costPrice: '', validity: '', warrantyMonths: '', warrantyDetails: '', imes: [] }]);
   
   const updateItem = (idx, field, value) => setItems(list => list.map((it, i) => {
     if (i !== idx) return it;
@@ -93,6 +93,8 @@ function MobileInStock({ salesUrl, token }) {
             quantity: Number(it.quantity) || 1,
             costPrice: Number(it.costPrice) || 0,
             validity: it.validity,
+            warrantyMonths: Number(it.warrantyMonths) || 0,
+            warrantyDetails: (it.warrantyDetails || '').trim(),
             imes: Array.isArray(it.imes) ? it.imes.filter(x => x && String(x).trim()) : []
           }))
         })
@@ -107,7 +109,7 @@ function MobileInStock({ salesUrl, token }) {
       setCategory('');
       setPurchaseType('normal');
       setCreditAmount('');
-      setItems([{ productNo: '', productName: '', brand: '', model: '', quantity: 1, costPrice: '', validity: '', imes: [] }]);
+      setItems([{ productNo: '', productName: '', brand: '', model: '', quantity: 1, costPrice: '', validity: '', warrantyMonths: '', warrantyDetails: '', imes: [] }]);
       setShowAddForm(false);
       await loadEntries();
     } catch (err) {
@@ -330,6 +332,31 @@ function MobileInStock({ salesUrl, token }) {
                         step="0.01"
                       />
                     </div>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 2fr', gap: '8px' }}>
+                    <div className="form-group">
+                      <label className="form-label" style={{ fontSize: '13px' }}>Warranty (months)</label>
+                      <input
+                        className="form-input"
+                        type="number"
+                        min="0"
+                        value={item.warrantyMonths ?? ''}
+                        onChange={(e) => updateItem(idx, 'warrantyMonths', e.target.value)}
+                        placeholder="0"
+                      />
+                    </div>
+
+                    <div className="form-group">
+                      <label className="form-label" style={{ fontSize: '13px' }}>Warranty Details</label>
+                      <input
+                        className="form-input"
+                        value={item.warrantyDetails || ''}
+                        onChange={(e) => updateItem(idx, 'warrantyDetails', e.target.value)}
+                        placeholder="e.g. Brand warranty"
+                        maxLength={300}
+                      />
+                    </div>
+                  </div>
+
                   </div>
 
                   {items.length > 1 && (

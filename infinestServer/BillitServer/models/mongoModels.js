@@ -109,6 +109,10 @@ const shopSchema = new mongoose.Schema({
       balance_reminder: { type: Boolean, default: true }
     }
   },
+  // Point-of-sale rules read by SalesServer (shared `shops` collection).
+  sales_settings: {
+    require_employee_code: { type: Boolean, default: false }
+  },
   created_at: { type: Date, default: Date.now }
 });
 
@@ -508,6 +512,19 @@ const employeeSchema = new mongoose.Schema({
   joining_date: { type: Date },
   department: { type: String, trim: true },
   designation: { type: String, trim: true },
+  // Which business the employee works for; legacy records without it are service staff.
+  business_unit: { type: String, enum: ['service', 'sales'], default: 'service' },
+  // Shop-unique code (e.g. EMP001) entered at the POS and matched against technician names
+  // to attribute sales and service jobs. Auto-generated when left blank.
+  employee_code: { type: String, trim: true, uppercase: true },
+
+  // Performance pay — added on top of attendance wages during salary generation.
+  incentive: {
+    sales_commission_percent: { type: Number, default: 0 },   // % of net sales (after discount, before GST)
+    service_commission_percent: { type: Number, default: 0 }, // % of service payments collected
+    monthly_sales_target: { type: Number, default: 0 },       // net sales target per month
+    target_bonus: { type: Number, default: 0 }                // flat bonus when the monthly target is met
+  },
 
   // Shift — working_hours is auto-derived from start/end at read time, not stored as truth.
   shift: {
@@ -531,6 +548,10 @@ const employeeSchema = new mongoose.Schema({
 // Index for shop queries
 employeeSchema.index({ shop_id: 1 });
 employeeSchema.index({ shop_id: 1, is_active: 1 });
+employeeSchema.index(
+  { shop_id: 1, employee_code: 1 },
+  { unique: true, partialFilterExpression: { employee_code: { $type: 'string' } } }
+);
 
 // ==============================
 // 🕐 HR Attendance Punch Log

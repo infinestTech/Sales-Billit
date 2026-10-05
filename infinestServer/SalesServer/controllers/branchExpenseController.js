@@ -1,10 +1,17 @@
 const mongoose = require('mongoose');
 
+// Same payment methods used across the app (BillitServer constants/paymentMethods.js)
+const EXPENSE_PAYMENT_METHODS = [
+  'Cash', 'Gpay', 'Card', 'Gpay-H', 'Gpay-S', 'Cash + Card',
+  'Gpay H + CASH', 'Gpay S + CASH', 'Gpay H + CARD', 'Gpay S + CARD'
+];
+
 const BranchExpense = mongoose.model('BranchExpense', new mongoose.Schema({
   shop_id: { type: String, index: true },
   branch_id: { type: String, index: true },
   title: { type: String },
   amount: { type: Number, default: 0 },
+  paymentMethod: { type: String, default: '' },
   date: { type: Date, default: Date.now },
   createdBy: { type: String }
 }, { timestamps: true }));
@@ -22,14 +29,18 @@ exports.createBranchExpense = async (req, res) => {
     const title = (req.body.title || '').toString();
     const amount = Number(req.body.amount) || 0;
     const date = req.body.date ? new Date(req.body.date) : new Date();
+    const paymentMethod = (req.body.paymentMethod || '').toString();
 
     if (!branch_id) return res.status(400).json({ success: false, message: 'branch_id required' });
     if (!title) return res.status(400).json({ success: false, message: 'title required' });
     if (!amount || amount <= 0) return res.status(400).json({ success: false, message: 'amount must be > 0' });
+    if (paymentMethod && !EXPENSE_PAYMENT_METHODS.includes(paymentMethod)) {
+      return res.status(400).json({ success: false, message: 'Invalid payment method' });
+    }
 
     // Create expense
     const createdBy = req.user.userId || req.user.branch_id || '';
-    const exp = await BranchExpense.create({ shop_id, branch_id, title, amount, date, createdBy });
+    const exp = await BranchExpense.create({ shop_id, branch_id, title, amount, paymentMethod, date, createdBy });
     return res.json({ success: true, expense: exp });
   } catch (err) {
     console.error('createBranchExpense error:', err.message || err);

@@ -339,6 +339,7 @@ function SalesTrack({ salesUrl, token }) {
                 <tr>
                   <th>Date</th>
                   <th>Customer</th>
+                  <th>Sales Exec</th>
                   <th>Product</th>
                   <th>Discount</th>
                   <th>Total</th>
@@ -351,6 +352,7 @@ function SalesTrack({ salesUrl, token }) {
                   <tr key={s._id}>
                     <td>{new Date(s.createdAt).toLocaleString()}</td>
                     <td>{s.customerNo || '-'}</td>
+                    <td>{s.employee_name ? `${s.employee_name} (${s.employee_code})` : '-'}</td>
                     <td>{(s.items || []).map(i => {
                       const ims = Array.isArray(i.imes) ? i.imes : (Array.isArray(i.selectedImes) ? i.selectedImes : []);
                       const imeCountStr = ims && ims.length ? ` [IMEs:${ims.length}]` : '';
@@ -455,7 +457,7 @@ function SalesTrack({ salesUrl, token }) {
                   </tr>
                 ))}
                 {filteredRows.length === 0 ? (
-                  <tr><td colSpan={6}>No sales found</td></tr>
+                  <tr><td colSpan={8}>No sales found</td></tr>
                 ) : null}
               </tbody>
             </table>

@@ -85,7 +85,9 @@ exports.createBranchSupply = async (req, res) => {
         costPrice: costUnit,
         totalCostPrice,
         pct: pct,
-        validity: i.validity ? new Date(i.validity) : null
+        validity: i.validity ? new Date(i.validity) : null,
+        warrantyMonths: Math.max(0, Number(i.warrantyMonths) || 0),
+        warrantyDetails: (i.warrantyDetails || '').toString().trim().slice(0, 300)
       };
       // include imes only when client provided them (non-empty)
       if (Array.isArray(i.imes) && i.imes.length) out.imes = i.imes.slice(0, qty);
@@ -138,6 +140,8 @@ exports.createBranchSupply = async (req, res) => {
         brand: it.brand,
         model: it.model,
         validity: it.validity,
+        warrantyMonths: it.warrantyMonths,
+        warrantyDetails: it.warrantyDetails,
         costPrice: it.costPrice
       };
       const update = { $set: setObj, $inc: { qty: it.qty } };
@@ -386,6 +390,8 @@ exports.listBranchStock = async (req, res) => {
           costPrice: costPrice,
           sellingPrice: (it.sellingPrice ?? it.price ?? it.costPrice ?? 0),
           validity: it.validity || null,
+          warrantyMonths: Number(it.warrantyMonths) || 0,
+          warrantyDetails: it.warrantyDetails || '',
           totalCostPrice: (Number(qty) * Number(costPrice || 0)),
           imes: Array.isArray(it.imes) ? it.imes : [],
           // expose centralImes for frontend dropdowns that need to show central IMEs
@@ -441,6 +447,8 @@ exports.listBranchStock = async (req, res) => {
           // Selling price: branch override if present, else central sellingPrice
           sellingPrice: br ? (br.sellingPrice ?? c.sellingPrice) : c.sellingPrice,
           validity: br ? (br.validity || c.validity) : c.validity,
+          warrantyMonths: Number(br && br.warrantyMonths) || Number(c.warrantyMonths) || 0,
+          warrantyDetails: (br && br.warrantyDetails) || c.warrantyDetails || '',
           totalCostPrice: Number(totalQty) * Number(costPrice || 0),
           // include imes only from branch rows. Do NOT fall back to central imes for branch views.
           imes: Array.isArray(br && br.imes) && br.imes.length ? br.imes : [],
@@ -470,6 +478,8 @@ exports.listBranchStock = async (req, res) => {
             costPrice: costPrice,
             sellingPrice: br.sellingPrice ?? 0,
             validity: br.validity || null,
+            warrantyMonths: Number(br.warrantyMonths) || 0,
+            warrantyDetails: br.warrantyDetails || '',
             totalCostPrice: Number(qty) * Number(costPrice || 0),
             imes: Array.isArray(br.imes) ? br.imes : []
           });

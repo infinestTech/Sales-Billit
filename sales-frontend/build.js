@@ -106,7 +106,8 @@ const server = http.createServer((req, res) => {
 window.ENV_CONFIG = {
   SALES_API_URL: '\${process.env.VITE_SALES_API_URL || 'https://sales.mobilebillingsoftware.com'}',
   AUTH_API_URL: '\${process.env.VITE_AUTH_API_URL || 'https://auth.mobilebillingsoftware.com'}',
-  WHATSAPP_WEB_URL: '\${process.env.VITE_WHATSAPP_WEB_URL || 'https://web.whatsapp.com'}'
+  WHATSAPP_WEB_URL: '\${process.env.VITE_WHATSAPP_WEB_URL || 'https://web.whatsapp.com'}',
+  SHOP_ADMIN_URL: '\${process.env.VITE_SHOP_ADMIN_URL || ''}'
 };
 
 // For backward compatibility, also set SALES_URL

@@ -1,13 +1,15 @@
 "use client";
 
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import dynamic from 'next/dynamic';
 import axios from 'axios';
 import {
   Users, Phone, Calendar, Filter, Search, ChevronDown,
   TrendingUp, Package, Wrench, DollarSign, CheckCircle,
   XCircle, Truck, AlertCircle, UserPlus, Briefcase,
-  ClipboardList, FileText
+  ClipboardList, FileText, Wallet, Calculator, Building2,
+  Boxes, History, CreditCard, Store, Send, BarChart3, Award
 } from 'lucide-react';
 import {
   LineChart, Line, AreaChart, Area, BarChart, Bar,
@@ -25,37 +27,89 @@ import CreateDealerPanel from '@/components/shop-admin/panels/CreateDealerPanel'
 import AllRecordsPanel from '@/components/shop-admin/panels/AllRecordsPanel';
 import SuppliersPanel from '@/components/shop-admin/panels/SuppliersPanel';
 import { formatPaymentMethodLabel } from '@/constants/paymentMethods';
+import useSalesSession from '@/components/shop-admin/sales/useSalesSession';
 import * as XLSX from 'xlsx';
 
-// Sidebar navigation config: standalone items + collapsible groups
+const SalesWorkspace = dynamic(() => import('@/components/shop-admin/sales/SalesWorkspace'), { ssr: false });
+const SalesOverview = dynamic(() => import('@/components/shop-admin/sales/SalesOverview'), { ssr: false });
+const EmployeePerformance = dynamic(() => import('@/components/shop-admin/EmployeePerformance'), { ssr: false });
+const BusinessAnalytics = dynamic(() => import('@/components/shop-admin/BusinessAnalytics'), { ssr: false });
+
+// Sidebar navigation config: standalone items, section headings and collapsible groups.
+// `product` decides visibility from the shop's plan: 'service', 'sales' or undefined (always shown).
 const NAV = [
   { type: 'item', id: 'overview', label: 'Overview', icon: TrendingUp },
+  { type: 'item', id: 'business-analytics', label: 'Business Analytics', icon: BarChart3 },
   {
     type: 'group', key: 'hr', label: 'HR', icon: Users, children: [
       { id: 'hr-employees', label: 'Employees', icon: Users },
       { id: 'hr-attendance', label: 'Attendance', icon: CheckCircle },
       { id: 'salary', label: 'Salary', icon: DollarSign },
+      { id: 'hr-performance', label: 'Performance', icon: Award },
     ]
   },
+  { type: 'heading', key: 'heading-service', label: 'Service', product: 'service' },
   {
-    type: 'group', key: 'records', label: 'Records', icon: ClipboardList, children: [
+    type: 'group', key: 'records', label: 'Records', icon: ClipboardList, product: 'service', children: [
       { id: 'all-records', label: 'All Records', icon: Phone },
       { id: 'customer-create', label: 'Create Customer', icon: UserPlus },
       { id: 'dealer-create', label: 'Create Dealer', icon: Briefcase },
     ]
   },
   {
-    type: 'group', key: 'suppliers', label: 'Suppliers', icon: Truck, children: [
+    type: 'group', key: 'suppliers', label: 'Suppliers', icon: Truck, product: 'service', children: [
       { id: 'suppliers', label: 'Manage Suppliers', icon: Truck },
     ]
   },
   {
-    type: 'group', key: 'reports', label: 'Reports', icon: FileText, children: [
+    type: 'group', key: 'reports', label: 'Reports', icon: FileText, product: 'service', children: [
       { id: 'revenue', label: 'Revenue', icon: DollarSign },
       { id: 'report', label: 'Financial Report', icon: AlertCircle },
     ]
   },
+  { type: 'heading', key: 'heading-sales', label: 'Sales', product: 'sales' },
+  {
+    type: 'group', key: 'sales-finance', label: 'Financial', icon: Wallet, product: 'sales', children: [
+      { id: 'sales-expenses', label: 'Expenses', icon: Wallet },
+      { id: 'sales-gst', label: 'GST Calculator', icon: Calculator },
+    ]
+  },
+  {
+    type: 'group', key: 'sales-inventory', label: 'Inventory', icon: Boxes, product: 'sales', children: [
+      { id: 'sales-dealers', label: 'Dealers', icon: Building2 },
+      { id: 'sales-inventory', label: 'Product Inventory', icon: Package },
+      { id: 'sales-stock-history', label: 'Stock History', icon: History },
+      { id: 'sales-supplier-credits', label: 'Supplier Credits', icon: CreditCard },
+    ]
+  },
+  {
+    type: 'group', key: 'sales-branches', label: 'Branch Operations', icon: Store, product: 'sales', children: [
+      { id: 'sales-branches', label: 'Branch Management', icon: Store },
+      { id: 'sales-branch-supply', label: 'Branch Supply', icon: Send },
+      { id: 'sales-supply-history', label: 'Supply History', icon: ClipboardList },
+      { id: 'sales-branch-sales', label: 'Branch Sales', icon: BarChart3 },
+    ]
+  },
 ];
+
+// Which nav nodes the shop's plan unlocks; headings only make sense when both products are present
+function buildVisibleNav(access) {
+  if (!access) return [];
+  const both = access.service && access.sales;
+  return NAV.filter((node) => {
+    if (node.type === 'heading') return both && access[node.product];
+    return !node.product || access[node.product];
+  });
+}
+
+const ALWAYS_TABS = ['overview', 'business-analytics', 'employees', 'hr-employees', 'hr-attendance', 'salary', 'hr-performance'];
+
+function isTabAllowed(tab, visibleNav) {
+  if (ALWAYS_TABS.includes(tab)) return true;
+  return visibleNav.some((node) =>
+    node.type === 'item' ? node.id === tab : node.type === 'group' && node.children.some((c) => c.id === tab)
+  );
+}
 
 export default function ShopAdminDashboard() {
   const router = useRouter();
@@ -124,6 +178,48 @@ export default function ShopAdminDashboard() {
   const [termsSaved, setTermsSaved] = useState(false);
 
   const API_URL = process.env.NEXT_PUBLIC_API_URL_BILLIT || 'http://localhost:8000';
+
+  // Products unlocked by the selected shop's plan: { service, sales } (combo = both)
+  const [productAccess, setProductAccess] = useState(null);
+  // HR scope for combo shops: 'all' | 'service' | 'sales'
+  const [hrUnit, setHrUnit] = useState('all');
+  const salesSession = useSalesSession(currentShopId, !!productAccess?.sales);
+  const visibleNav = useMemo(() => buildVisibleNav(productAccess), [productAccess]);
+  const hasService = !!productAccess?.service;
+  const hasSales = !!productAccess?.sales;
+  const isCombo = hasService && hasSales;
+  const effectiveHrUnit = isCombo ? hrUnit : (hasSales ? 'sales' : 'service');
+
+  useEffect(() => {
+    if (!currentShopId) return;
+    let cancelled = false;
+    setProductAccess(null);
+    setHrUnit('all');
+    (async () => {
+      try {
+        const res = await axios.get(`${API_URL}/api/shop-admin/product-access`, {
+          headers: { 'Authorization': `Bearer ${localStorage.getItem('shopAdminToken')}` },
+          params: { shop_id: currentShopId }
+        });
+        if (!cancelled) setProductAccess(res.data?.access || { service: true, sales: false });
+      } catch (error) {
+        if (cancelled) return;
+        if (error.response?.status === 401) {
+          localStorage.clear();
+          router.push('/shop-admin-login');
+          return;
+        }
+        console.error('Error fetching plan access:', error);
+        setProductAccess({ service: true, sales: false });
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [currentShopId]);
+
+  // Never leave the admin on a section their plan doesn't include (e.g. after switching shops)
+  useEffect(() => {
+    if (productAccess && !isTabAllowed(activeTab, visibleNav)) setActiveTab('overview');
+  }, [productAccess, visibleNav, activeTab]);
 
   // Check if mobile on mount and window resize
   useEffect(() => {
@@ -1424,7 +1520,7 @@ export default function ShopAdminDashboard() {
     }
   };
 
-  if (loading) {
+  if (loading || (currentShopId && !productAccess)) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 flex items-center justify-center">
         <div className="text-gray-600 text-xl">Loading dashboard...</div>
@@ -1460,6 +1556,8 @@ export default function ShopAdminDashboard() {
         fetchFinancialReport={fetchFinancialReport}
         handleLogout={handleLogout}
         handleSwitchShop={handleSwitchShop}
+        productAccess={productAccess}
+        salesSession={salesSession}
       />
     );
   }
@@ -1515,6 +1613,15 @@ export default function ShopAdminDashboard() {
                   </div>
                 </div>
 
+                {productAccess && (
+                  <div className="mt-2 bg-white bg-opacity-10 rounded-lg p-2 flex items-center justify-between">
+                    <span className="text-green-100 text-xs">Plan</span>
+                    <span className="text-white text-xs font-semibold">
+                      {isCombo ? 'Service + Sales' : hasSales ? 'Sales' : 'Service'}
+                    </span>
+                  </div>
+                )}
+
                 {/* Admin Info */}
                 <div className="mt-3 pt-3 border-t border-green-400 border-opacity-30">
                   <div className="flex items-center">
@@ -1558,7 +1665,15 @@ export default function ShopAdminDashboard() {
 
             {/* Navigation */}
             <nav className="flex-1 px-4 py-6 space-y-2">
-              {NAV.map((node) => {
+              {visibleNav.map((node) => {
+                if (node.type === 'heading') {
+                  return (
+                    <div key={node.key} className="pt-4 pb-1 px-4 text-[11px] font-bold uppercase tracking-widest text-gray-500">
+                      {node.label}
+                    </div>
+                  );
+                }
+
                 if (node.type === 'item') {
                   const Icon = node.icon;
                   const active = activeTab === node.id;
@@ -1640,7 +1755,11 @@ export default function ShopAdminDashboard() {
         {/* Collapsed State */}
         {!sidebarOpen && (
           <nav className="flex-1 px-2 py-6 space-y-3">
-            {NAV.map((node) => {
+            {visibleNav.map((node) => {
+              if (node.type === 'heading') {
+                return <div key={node.key} className="border-t border-gray-700 mx-2" />;
+              }
+
               if (node.type === 'item') {
                 const Icon = node.icon;
                 return (
@@ -1689,6 +1808,13 @@ export default function ShopAdminDashboard() {
         {/* Content based on active tab */}
         {activeTab === 'overview' && (
           <div className="space-y-6">
+            {hasService && (<>
+            {isCombo && (
+              <div className="flex items-center gap-2">
+                <Wrench className="h-5 w-5 text-green-600" />
+                <h3 className="text-gray-900 font-semibold text-lg">Service</h3>
+              </div>
+            )}
             {/* Stats Grid */}
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
               <div className="bg-white border border-gray-200 rounded-xl p-6 shadow-sm hover:shadow-md transition">
@@ -1804,6 +1930,11 @@ export default function ShopAdminDashboard() {
 
             {/* Receipt Terms & Conditions Images */}
             <ReceiptTermsImages shopId={currentShopId} />
+            </>)}
+
+            {hasSales && (
+              <SalesOverview session={salesSession} onNavigate={setActiveTab} />
+            )}
 
             {/* eSSL M20 Biometric Attendance Settings */}
             <div className="bg-white border border-gray-200 rounded-xl p-6 shadow-sm">
@@ -1820,6 +1951,7 @@ export default function ShopAdminDashboard() {
             </div>
 
             {/* Secondary Stats */}
+            {hasService && (<>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <div className="bg-white border border-gray-200 rounded-xl p-6 shadow-sm">
                 <div className="flex items-center gap-4">
@@ -2124,8 +2256,9 @@ export default function ShopAdminDashboard() {
                 </div>
               )}
             </div>
+            </>)}
 
-            {!overview && !loading && (
+            {hasService && !overview && !loading && (
               <div className="text-center py-12 bg-white rounded-xl border border-gray-200">
                 <p className="text-gray-600">No overview data available</p>
                 <button 
@@ -2146,16 +2279,56 @@ export default function ShopAdminDashboard() {
           </div>
         )}
 
+        {(activeTab === 'hr-employees' || activeTab === 'hr-attendance' || activeTab === 'salary' || activeTab === 'hr-performance') && isCombo && (
+          <div className="mb-4 flex items-center justify-between bg-white border border-gray-200 rounded-xl px-4 py-3 shadow-sm">
+            <span className="text-sm font-medium text-gray-700">Showing staff from</span>
+            <div className="inline-flex rounded-lg border border-gray-200 bg-gray-50 p-1">
+              {[
+                { id: 'all', label: 'All' },
+                { id: 'service', label: 'Service' },
+                { id: 'sales', label: 'Sales' },
+              ].map((opt) => (
+                <button
+                  key={opt.id}
+                  onClick={() => setHrUnit(opt.id)}
+                  className={`px-4 py-1.5 rounded-md text-sm font-medium transition ${
+                    hrUnit === opt.id ? 'bg-green-600 text-white shadow' : 'text-gray-600 hover:bg-white'
+                  }`}
+                >
+                  {opt.label}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+
         {activeTab === 'hr-employees' && (
-          <EmployeeManagement shopId={currentShopId} />
+          <EmployeeManagement shopId={currentShopId} unit={effectiveHrUnit} allowUnitChoice={isCombo} />
         )}
 
         {activeTab === 'hr-attendance' && (
-          <AttendanceManagement shopId={currentShopId} />
+          <AttendanceManagement shopId={currentShopId} unit={effectiveHrUnit} />
         )}
 
         {activeTab === 'salary' && (
-          <SalaryManagement shopId={currentShopId} />
+          <SalaryManagement shopId={currentShopId} unit={effectiveHrUnit} />
+        )}
+
+        {activeTab === 'hr-performance' && productAccess && (
+          <EmployeePerformance shopId={currentShopId} unit={effectiveHrUnit} access={productAccess} />
+        )}
+
+        {activeTab === 'business-analytics' && productAccess && (
+          <BusinessAnalytics shopId={currentShopId} access={productAccess} onNavigate={setActiveTab} />
+        )}
+
+        {activeTab.startsWith('sales-') && hasSales && (
+          <SalesWorkspace
+            view={activeTab.slice('sales-'.length)}
+            session={salesSession}
+            shopId={currentShopId}
+            onNavigate={setActiveTab}
+          />
         )}
 
         {activeTab === 'customer-create' && (

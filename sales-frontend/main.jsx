@@ -1,16 +1,53 @@
 // Sidebar and HeaderBar are now loaded from src/components via index.html
 
+// Owner-only screens that moved to the Shop Admin dashboard
+const ADMIN_ONLY_VIEWS = new Set([
+  'gst-calculator', 'branch-supply', 'branch-supply-history', 'supplier-credits',
+  'branch-sales-report', 'whatsapp-stock', 'whatsapp-contact'
+]);
+
+// The owner/admin sales portal now lives in the Shop Admin dashboard of the main app;
+// this app only serves branch staff.
+function AdminMovedScreen() {
+  const shopAdminUrl = window.ENV_CONFIG?.SHOP_ADMIN_URL || '';
+  return (
+    <div className="auth-container">
+      <div className="auth-card">
+        <div className="auth-header">
+          <div className="auth-logo">🏪</div>
+          <h2 className="auth-title">Sales Admin has moved</h2>
+          <p className="auth-subtitle">
+            Inventory, dealers, branches, supplies and expenses are now managed from the Shop Admin dashboard.
+          </p>
+        </div>
+
+        <div className="auth-form">
+          {shopAdminUrl ? (
+            <a className="btn btn-primary w-full" href={shopAdminUrl}>Go to Shop Admin</a>
+          ) : (
+            <p style={{ color: 'var(--text-muted)', fontSize: '14px', textAlign: 'center' }}>
+              Please sign in to the Shop Admin portal to manage your sales business.
+            </p>
+          )}
+        </div>
+
+        <div className="auth-footer">
+          <p style={{ color: 'var(--text-muted)', fontSize: '14px' }}>
+            Branch staff? <a href="#branch-login" className="auth-link">Sign in as Branch</a>
+          </p>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function App() {
-  const [email, setEmail] = React.useState('');
-  const [password, setPassword] = React.useState('');
-  const [token, setToken] = React.useState(localStorage.getItem('sales_token') || '');
-  const [hasAccess, setHasAccess] = React.useState(null); // null=unknown, true/false
-  const [loading, setLoading] = React.useState(false);
-  const [error, setError] = React.useState('');
   const [view, setView] = React.useState((location.hash || '#instock').slice(1));
-  const [planId, setPlanId] = React.useState('');
-  const [branchLimit, setBranchLimit] = React.useState(0);
   const [branchUser, setBranchUser] = React.useState(null);
+  // Kept for components that still accept plan props; branch sessions carry no plan info
+  const planId = '';
+  const branchLimit = 0;
+  const email = '';
 
   // Device detection for responsive layout
   const { isMobile } = useDeviceDetection();
@@ -25,80 +62,12 @@ function App() {
     } catch { return null; }
   };
 
-  const login = async (e) => {
-    e.preventDefault();
-    setError('');
-    setLoading(true);
-    try {
-      const res = await fetch(SALES_URL + '/auth/login', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, password })
-      });
-      const data = await res.json();
-      
-      // Check for trial expiry
-      if (!res.ok) {
-        if (data.trialExpired && data.redirectToPricing) {
-          setError(data.message || "Your trial has expired. Please upgrade to continue.");
-          setLoading(false);
-          // Redirect to pricing after showing error
-          setTimeout(() => {
-            window.open('/pricing/sales', '_blank');
-          }, 2000);
-          return;
-        }
-        throw new Error(data.error || data.message || 'Login failed');
-      }
-      
-      if (!data.token) throw new Error('No token returned');
-      
-      // Ensure branch token is removed so only one token type exists in this browser
-      try { localStorage.removeItem('branch_token'); } catch (e) {}
-      localStorage.setItem('sales_token', data.token);
-      setToken(data.token);
-      setHasAccess(true);
-      setBranchUser(null);
-      try { window.dispatchEvent(new Event('sales-login')); } catch (__) {}
-      
-      const payload = data.payload || decodeJwt(data.token);
-      if (payload?.mongoPlanId) setPlanId(payload.mongoPlanId);
-      if (Number.isFinite(payload?.branchLimit)) setBranchLimit(payload.branchLimit);
-    } catch (err) {
-      setError(err.message);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const checkAccess = async (tk = token) => {
-    setError('');
-    setLoading(true);
-    try {
-      const res = await fetch(SALES_URL + '/auth/verify', { headers: { Authorization: 'Bearer ' + tk } });
-      const data = await res.json();
-      if (!res.ok || !data.valid) throw new Error(data.message || 'Token invalid');
-      setHasAccess(true);
-      if (data.token) {
-        localStorage.setItem('sales_token', data.token);
-        setToken(data.token);
-      }
-      const decoded = data.decoded || data.payload || decodeJwt(data.token || tk);
-      if (decoded?.mongoPlanId) setPlanId(decoded.mongoPlanId);
-      if (Number.isFinite(decoded?.branchLimit)) setBranchLimit(decoded.branchLimit);
-    } catch (err) {
-      setError(err.message);
-      setHasAccess(false);
-    } finally {
-      setLoading(false);
-    }
-  };
-
   React.useEffect(() => {
-    if (localStorage.getItem('token') && !localStorage.getItem('sales_token')) {
+    // Owner sessions from the old admin portal are no longer used here
+    try {
+      localStorage.removeItem('sales_token');
       localStorage.removeItem('token');
-    }
-    if (token && hasAccess === null) checkAccess(token);
+    } catch (_) {}
 
     const onHash = () => setView((location.hash || '#instock').slice(1));
     window.addEventListener('hashchange', onHash);
@@ -109,19 +78,10 @@ function App() {
       if (bt) {
         const d = decodeJwt(bt);
         setBranchUser(d || null);
-        // Ensure sales token isn't used
-        setToken('');
-        setHasAccess(false);
         try { location.hash = '#branch'; } catch (_) {}
       }
     };
     window.addEventListener('branch-login', onBranchLoginEvent);
-
-    const onSalesLoginEvent = () => {
-      // sales login happened elsewhere in-app/tab: clear branchUser
-      setBranchUser(null);
-    };
-    window.addEventListener('sales-login', onSalesLoginEvent);
 
     // update branchUser state when branch_token changes elsewhere
     const syncBranchUser = () => {
@@ -138,139 +98,28 @@ function App() {
       window.removeEventListener('hashchange', onHash);
       window.removeEventListener('storage', syncBranchUser);
       window.removeEventListener('branch-login', onBranchLoginEvent);
-      window.removeEventListener('sales-login', onSalesLoginEvent);
     };
   }, []);
 
-  if (loading && hasAccess === null) return <div>Loading…</div>;
-  // If we're a branch user, render the app immediately (use branch_token as effective token)
-  const effectiveToken = branchUser ? (localStorage.getItem('branch_token') || '') : token;
+  const effectiveToken = branchUser ? (localStorage.getItem('branch_token') || '') : '';
 
-  // If we're not a branch user and we don't have a valid sales token, show auth screens
-  if (!branchUser && ((!token) || hasAccess === false)) {
-    // Allow visiting public branch-login route even without sales token
+  // Not signed in as a branch: only the branch login is available
+  if (!branchUser) {
     if ((location.hash || '#instock').slice(1) === 'branch-login') {
       if (isMobile) {
         return window.MobileBranchLogin ? React.createElement(window.MobileBranchLogin, { salesUrl: SALES_URL }) : null;
       }
       return <BranchLogin salesUrl={SALES_URL} />;
     }
-
-    // No sales token and not a branch user -> show sales login
-    if (isMobile) {
-      return (
-        <MobileAuth 
-          email={email}
-          setEmail={setEmail}
-          password={password}
-          setPassword={setPassword}
-          onLogin={login}
-          onVerifyToken={() => checkAccess()}
-          loading={loading}
-          error={error}
-          token={token}
-        />
-      );
-    }
-
-    return (
-      <div className="auth-container">
-        <div className="auth-card">
-          <div className="auth-header">
-            <div className="auth-logo">🚀</div>
-            <h2 className="auth-title">Welcome Back</h2>
-            <p className="auth-subtitle">Sign in to your SalesPro account</p>
-          </div>
-          
-          <form onSubmit={login} className="auth-form">
-            <div className="form-group">
-              <label className="form-label">Email Address</label>
-              <input 
-                value={email} 
-                onChange={e => setEmail(e.target.value)} 
-                type="email" 
-                className="form-input"
-                placeholder="Enter your email"
-                required 
-              />
-            </div>
-            
-            <div className="form-group">
-              <label className="form-label">Password</label>
-              <input 
-                value={password} 
-                onChange={e => setPassword(e.target.value)} 
-                type="password" 
-                className="form-input"
-                placeholder="Enter your password"
-                required 
-              />
-            </div>
-            
-            <button className="btn btn-primary w-full" disabled={loading} type="submit">
-              {loading ? (
-                <span className="loading">
-                  <span className="spinner"></span>
-                  Signing in...
-                </span>
-              ) : 'Sign In'}
-            </button>
-            
-            {token && (
-              <button 
-                className="btn btn-outline w-full" 
-                onClick={(e) => { e.preventDefault(); checkAccess(); }}
-                type="button"
-              >
-                Verify Existing Token
-              </button>
-            )}
-          </form>
-          
-          {error && (
-            <div className="alert alert-danger">
-              <div className="alert-icon">❌</div>
-              <div>{error}</div>
-            </div>
-          )}
-          
-          <div className="auth-footer">
-            <p style={{ color: 'var(--text-muted)', fontSize: '14px' }}>
-              Need a branch account? <a href="#branch-login" className="auth-link">Sign in as Branch</a>
-            </p>
-          </div>
-        </div>
-      </div>
-    );
+    return <AdminMovedScreen />;
   }
 
   const logout = () => {
-    localStorage.removeItem('sales_token');
-    localStorage.removeItem('branch_token');
-    setToken('');
-    setBranchUser(null);
-    setHasAccess(false);
-    location.hash = '#instock';
-  };
-
-  const branchLogout = () => {
-    // Only remove branch token, keep sales token for admin
     localStorage.removeItem('branch_token');
     setBranchUser(null);
-    // Restore admin access by checking existing sales token
-    const salesToken = localStorage.getItem('sales_token');
-    if (salesToken) {
-      setToken(salesToken);
-      checkAccess(salesToken);
-      // Trigger feature reload for admin account
-      try { 
-        window.dispatchEvent(new Event('sales-login')); 
-      } catch (e) {
-        console.log('Event dispatch failed:', e);
-      }
-    }
-    location.hash = '#instock';
+    location.hash = '#branch-login';
   };
+  const branchLogout = logout;
 
   // Helper function to get page title
   const getTitle = () => {
@@ -334,31 +183,13 @@ function App() {
           ) : null
         ) : null}
 
-        {(!branchUser && view === 'gst-calculator') ? (
-          (window.GstCalculatorView ? React.createElement(window.GstCalculatorView) : (
-            <div className="card"><div className="empty-state"><div className="empty-icon">🧮</div><div className="empty-title">Loading…</div></div></div>
-          ))
+        {ADMIN_ONLY_VIEWS.has(view) ? (
+          <div className="card"><div className="empty-state"><div className="empty-icon">🔒</div><div className="empty-title">Moved to Shop Admin</div><div className="empty-sub">This section is now managed by the owner from the Shop Admin dashboard.</div></div></div>
         ) : (view === 'supplier') ? (
           <CreateSupplier salesUrl={SALES_URL} token={effectiveToken} />
-        ) : (!branchUser && view === 'branch') ? (
-          <CreateBranch salesUrl={SALES_URL} token={effectiveToken} planId={planId} branchLimit={branchLimit} />
         ) : view === 'branch-login' ? (
           <BranchLogin salesUrl={SALES_URL} />
-        ) : view === 'branch-supply' ? (
-          <BranchSupply salesUrl={SALES_URL} token={effectiveToken} />
-        ) : (!branchUser && view === 'whatsapp-stock') ? (
-          (window.WhatsappStock ? React.createElement(window.WhatsappStock, { salesUrl: SALES_URL, token: effectiveToken }) : (
-            <div className="card"><div className="empty-state"><div className="empty-icon">📦💬</div><div className="empty-title">Loading…</div></div></div>
-          ))
-        ) : (!branchUser && view === 'whatsapp-contact') ? (
-          (window.WhatsappContact ? React.createElement(window.WhatsappContact, { salesUrl: SALES_URL, token: effectiveToken }) : (
-            <div className="card"><div className="empty-state"><div className="empty-icon">💬</div><div className="empty-title">Loading…</div></div></div>
-          ))
-        ) : (!branchUser && view === 'seconds-sales') ? (
-          (window.SecondsSales ? React.createElement(window.SecondsSales, { salesUrl: SALES_URL, token: effectiveToken }) : (
-            <div className="card"><div className="empty-state"><div className="empty-icon">📊</div><div className="empty-title">Loading…</div></div></div>
-          ))
-        ) : (branchUser && view === 'seconds-sales') ? (
+        ) : (view === 'seconds-sales') ? (
           (window.SecondsSales ? React.createElement(window.SecondsSales, { salesUrl: SALES_URL, token: effectiveToken }) : (
             <div className="card"><div className="empty-state"><div className="empty-icon">📊</div><div className="empty-title">Loading…</div></div></div>
           ))
@@ -370,24 +201,6 @@ function App() {
               <div className="card"><div className="empty-state"><div className="empty-icon">📊</div><div className="empty-title">Loading…</div></div></div>
             ));
           })()
-        ) : view === 'branch-supply-history' ? (
-          (window.BranchSupplyHistory ? React.createElement(window.BranchSupplyHistory, { salesUrl: SALES_URL, token: effectiveToken }) : (
-            <div className="card">
-              <div className="empty-state">
-                <div className="empty-icon">📦</div>
-                <div className="empty-title">Loading…</div>
-                <div className="empty-sub">Branch Supply History component not loaded yet.</div>
-              </div>
-            </div>
-          ))
-        ) : view === 'supplier-credits' ? (
-          (window.SupplierCredits ? React.createElement(window.SupplierCredits, { salesUrl: SALES_URL, token: effectiveToken }) : (
-            <div className="card"><div className="empty-state"><div className="empty-icon">💳</div><div className="empty-title">Loading…</div></div></div>
-          ))
-        ) : view === 'branch-sales-report' ? (
-          (window.BranchSalesReport ? React.createElement(window.BranchSalesReport, { salesUrl: SALES_URL, token: effectiveToken }) : (
-            <div className="card"><div className="empty-state"><div className="empty-icon">📊</div><div className="empty-title">Loading…</div></div></div>
-          ))
         ) : view === 'stock-history' ? (
           (window.StockHistory ? React.createElement(window.StockHistory, { salesUrl: SALES_URL, token: effectiveToken, branchUser }) : (
             <div className="card">
@@ -407,16 +220,9 @@ function App() {
             <div className="card"><div className="empty-state"><div className="empty-icon">📊</div><div className="empty-title">Loading…</div></div></div>
           ))
         ) : view === 'product-sales' ? (
-          // Product Sales is only for branch users
-          branchUser ? (
-            (window.ProductSales ? React.createElement(window.ProductSales, { salesUrl: SALES_URL, token: effectiveToken }) : (
-              <div className="card"><div className="empty-state"><div className="empty-icon">🛍️</div><div className="empty-title">Loading…</div></div></div>
-            ))
-          ) : (
-            // Redirect admin to instock view if they somehow access product-sales
-            React.useEffect(() => { location.hash = '#instock'; }, []),
-            <div className="card"><div className="empty-state"><div className="empty-icon">🔒</div><div className="empty-title">Redirecting…</div></div></div>
-          )
+          (window.ProductSales ? React.createElement(window.ProductSales, { salesUrl: SALES_URL, token: effectiveToken }) : (
+            <div className="card"><div className="empty-state"><div className="empty-icon">🛍️</div><div className="empty-title">Loading…</div></div></div>
+          ))
         ) : (
           view === 'instock' && branchUser ? (
             <BranchInStock salesUrl={SALES_URL} token={effectiveToken} />

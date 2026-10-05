@@ -1,5 +1,5 @@
 function MobileBranchExpense({ salesUrl, token, adminUrl, branchUser }) {
-  const [form, setForm] = React.useState({ title: '', amount: '', date: '', branch_id: '' });
+  const [form, setForm] = React.useState({ title: '', amount: '', date: '', branch_id: '', paymentMethod: '' });
   const [branches, setBranches] = React.useState([]);
   const [loading, setLoading] = React.useState(false);
   const [error, setError] = React.useState('');
@@ -132,6 +132,7 @@ function MobileBranchExpense({ salesUrl, token, adminUrl, branchUser }) {
     const amt = Number(form.amount);
     if (!form.title || String(form.title).trim() === '') return setError('Enter an expense title');
     if (!amt || amt <= 0) return setError('Enter a valid amount');
+    if (!form.paymentMethod) return setError('Select a payment method');
 
     setLoading(true);
     try {
@@ -142,13 +143,13 @@ function MobileBranchExpense({ salesUrl, token, adminUrl, branchUser }) {
       const res = await fetch(salesUrl + '/api/branch-expenses', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token },
-        body: JSON.stringify({ title: postTitle, amount: amt, date: postDate, branch_id: postBranchId })
+        body: JSON.stringify({ title: postTitle, amount: amt, paymentMethod: form.paymentMethod, date: postDate, branch_id: postBranchId })
       });
 
       const data = await res.json();
       if (!res.ok) throw new Error(data.message || 'Create failed');
 
-      setForm((prev) => ({ ...prev, title: '', amount: '', date: '' }));
+      setForm((prev) => ({ ...prev, title: '', amount: '', date: '', paymentMethod: '' }));
       await load();
 
       if (adminUrl) {
@@ -288,6 +289,22 @@ function MobileBranchExpense({ salesUrl, token, adminUrl, branchUser }) {
           </div>
 
           <div className="form-group">
+            <label className="form-label">Payment Method</label>
+            <select
+              name="paymentMethod"
+              value={form.paymentMethod}
+              onChange={onChange}
+              className="form-input"
+              style={{ fontSize: 16 }}
+            >
+              <option value="">Select Payment Method</option>
+              {(window.__PAYMENT_METHODS__ || []).map((m) => (
+                <option key={m.value} value={m.value}>{m.label}</option>
+              ))}
+            </select>
+          </div>
+
+          <div className="form-group">
             <label className="form-label">Date & Time</label>
             <input
               name="date"
@@ -346,7 +363,7 @@ function MobileBranchExpense({ salesUrl, token, adminUrl, branchUser }) {
                   </div>
                   <div style={{ marginTop: 10, display: 'flex', gap: 8, alignItems: 'center', justifyContent: 'space-between' }}>
                     <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>
-                      #{i + 1}
+                      #{i + 1}{r.paymentMethod ? ` · ${r.paymentMethod}` : ''}
                     </div>
                     <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>
                       {selectedDate ? 'Filtered' : 'Today view'}

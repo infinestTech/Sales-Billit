@@ -4,7 +4,7 @@ import axios from "axios";
 import {
   Users, Plus, Edit2, Save, X, ChevronDown, ChevronUp,
   ToggleLeft, ToggleRight, Clock, DollarSign,
-  AlertCircle, CheckCircle,
+  AlertCircle, CheckCircle, TrendingUp,
 } from "lucide-react";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL_BILLIT || "http://localhost:8000";
@@ -23,8 +23,15 @@ const defaultLatePolicy = {
   deductionPerHour: 0,
 };
 
+const defaultIncentive = {
+  salesCommissionPercent: 0,
+  serviceCommissionPercent: 0,
+  monthlySalesTarget: 0,
+  targetBonus: 0,
+};
+
 const emptyForm = {
-  employeeId: "",
+  employeeCode: "",
   esslDeviceUserId: "",
   name: "",
   phone: "",
@@ -33,11 +40,13 @@ const emptyForm = {
   joiningDate: "",
   department: "",
   designation: "",
+  businessUnit: "service",
   dailySalary: "",
   shift: { ...defaultShift },
   workingDaysPerWeek: 6,
   weeklyOff: ["SUN"],
   latePolicy: { ...defaultLatePolicy },
+  incentive: { ...defaultIncentive },
 };
 
 // Auto-derive working hours/day from shift start/end (HH:MM)
@@ -79,7 +88,10 @@ function Field({ label, children, half }) {
   );
 }
 
-export default function EmployeeManagement({ shopId }) {
+const UNIT_LABELS = { service: "Service", sales: "Sales" };
+
+// unit: 'service' | 'sales' | 'all' (combo plans). allowUnitChoice lets combo admins pick the unit per employee.
+export default function EmployeeManagement({ shopId, unit = "service", allowUnitChoice = false }) {
   const [employees, setEmployees] = useState([]);
   const [loading, setLoading] = useState(false);
   const [showForm, setShowForm] = useState(false);
@@ -89,7 +101,7 @@ export default function EmployeeManagement({ shopId }) {
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
   const [expandedSections, setExpandedSections] = useState({
-    personal: true, pay: true, shift: false, policies: false,
+    personal: true, pay: true, incentive: false, shift: false, policies: false,
   });
   const [showInactive, setShowInactive] = useState(false);
   const [hrSettings, setHrSettings] = useState(null);
@@ -109,7 +121,7 @@ export default function EmployeeManagement({ shopId }) {
     try {
       const res = await axios.get(`${API_URL}/api/shop-admin/hr/employees`, {
         headers: headers(),
-        params: { shopId, isActive: showInactive ? undefined : true },
+        params: { shopId, isActive: showInactive ? undefined : true, unit: unit === "all" ? undefined : unit },
       });
       if (res.data.success) setEmployees(res.data.data || []);
     } catch (err) {
@@ -129,7 +141,7 @@ export default function EmployeeManagement({ shopId }) {
     } catch (_) {}
   };
 
-  useEffect(() => { fetchEmployees(); }, [showInactive]);
+  useEffect(() => { fetchEmployees(); }, [showInactive, unit]);
 
   const toggleSection = (key) =>
     setExpandedSections((prev) => ({ ...prev, [key]: !prev[key] }));
@@ -158,20 +170,22 @@ export default function EmployeeManagement({ shopId }) {
   const openCreateForm = () => {
     setForm({
       ...emptyForm,
+      businessUnit: unit === "sales" ? "sales" : "service",
       shift: { ...defaultShift },
       latePolicy: { ...defaultLatePolicy },
+      incentive: { ...defaultIncentive },
       weeklyOff: ["SUN"],
     });
     setEditingId(null);
     setError("");
     setSuccess("");
     setShowForm(true);
-    setExpandedSections({ personal: true, pay: true, shift: true, policies: true });
+    setExpandedSections({ personal: true, pay: true, incentive: true, shift: true, policies: true });
   };
 
   const openEditForm = (emp) => {
     setForm({
-      employeeId: emp.employeeId || "",
+      employeeCode: emp.employeeCode || "",
       esslDeviceUserId: emp.esslDeviceUserId || "",
       name: emp.name || "",
       phone: emp.phone || "",
@@ -180,6 +194,7 @@ export default function EmployeeManagement({ shopId }) {
       joiningDate: emp.joiningDate ? emp.joiningDate.split("T")[0] : "",
       department: emp.department || "",
       designation: emp.designation || "",
+      businessUnit: emp.businessUnit === "sales" ? "sales" : "service",
       dailySalary: emp.dailySalary ?? "",
       shift: {
         name: emp.shift?.name || "General",
@@ -193,12 +208,13 @@ export default function EmployeeManagement({ shopId }) {
         gracePeriodMinutes: emp.latePolicy?.gracePeriodMinutes ?? 15,
         deductionPerHour: emp.latePolicy?.deductionPerHour ?? 0,
       },
+      incentive: { ...defaultIncentive, ...(emp.incentive || {}) },
     });
     setEditingId(emp.employeeId);
     setError("");
     setSuccess("");
     setShowForm(true);
-    setExpandedSections({ personal: true, pay: true, shift: true, policies: true });
+    setExpandedSections({ personal: true, pay: true, incentive: true, shift: true, policies: true });
   };
 
   const handleSubmit = async (e) => {
@@ -224,6 +240,13 @@ export default function EmployeeManagement({ shopId }) {
           gracePeriodMinutes: gracePeriod,
           deductionPerHour: Number(form.latePolicy.deductionPerHour),
         },
+        incentive: {
+          salesCommissionPercent: Number(form.incentive.salesCommissionPercent) || 0,
+          serviceCommissionPercent: Number(form.incentive.serviceCommissionPercent) || 0,
+          monthlySalesTarget: Number(form.incentive.monthlySalesTarget) || 0,
+          targetBonus: Number(form.incentive.targetBonus) || 0,
+        },
+        employeeCode: (form.employeeCode || "").trim().toUpperCase(),
         shopId,
       };
 
@@ -312,7 +335,7 @@ export default function EmployeeManagement({ shopId }) {
             <table className="w-full text-sm">
               <thead className="bg-gray-50 border-b border-gray-200">
                 <tr>
-                  {["ID", "Name", "Department", "Designation", "Shift", "Daily Salary", "Joining Date", "Status", "Actions"].map((h) => (
+                  {["ID", "Name", ...(allowUnitChoice ? ["Unit"] : []), "Department", "Designation", "Shift", "Daily Salary", "Joining Date", "Status", "Actions"].map((h) => (
                     <th key={h} className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wide">
                       {h}
                     </th>
@@ -322,11 +345,18 @@ export default function EmployeeManagement({ shopId }) {
               <tbody className="divide-y divide-gray-100">
                 {employees.map((emp) => (
                   <tr key={emp._id} className={`hover:bg-gray-50 transition ${!emp.isActive ? "opacity-50" : ""}`}>
-                    <td className="px-4 py-3 font-mono text-xs text-gray-700">{emp.employeeId}</td>
+                    <td className="px-4 py-3 font-mono text-xs text-gray-700">{emp.employeeCode || "—"}</td>
                     <td className="px-4 py-3">
                       <div className="font-medium text-gray-900">{emp.name}</div>
                       <div className="text-xs text-gray-500">{emp.phone}</div>
                     </td>
+                    {allowUnitChoice && (
+                      <td className="px-4 py-3">
+                        <span className={`px-2 py-1 rounded-full text-xs font-semibold ${emp.businessUnit === "sales" ? "bg-indigo-100 text-indigo-700" : "bg-emerald-100 text-emerald-700"}`}>
+                          {UNIT_LABELS[emp.businessUnit] || "Service"}
+                        </span>
+                      </td>
+                    )}
                     <td className="px-4 py-3 text-gray-700">{emp.department || "—"}</td>
                     <td className="px-4 py-3 text-gray-700">{emp.designation || "—"}</td>
                     <td className="px-4 py-3">
@@ -398,8 +428,9 @@ export default function EmployeeManagement({ shopId }) {
               {/* Personal Info */}
               <Section id="personal" label="Personal Information" icon={Users} expanded={expandedSections.personal} onToggle={toggleSection}>
                 <div className="grid grid-cols-2 gap-3">
-                  <Field label="Employee ID *">
-                    <input required className={inp} value={form.employeeId} onChange={(e) => setField("employeeId", e.target.value)} disabled={!!editingId} placeholder="EMP001" />
+                  <Field label="Employee Code">
+                    <input className={`${inp} uppercase font-mono`} value={form.employeeCode} onChange={(e) => setField("employeeCode", e.target.value.toUpperCase().replace(/\s+/g, ""))} maxLength={20} placeholder={editingId ? "EMP001" : "Auto (EMP001…)"} />
+                    <p className="text-[11px] text-gray-500 mt-1">Entered at the POS to credit sales. Use the same code or name as the technician on service jobs.</p>
                   </Field>
                   <Field label="ESSL Device User ID">
                     <input className={inp} value={form.esslDeviceUserId} onChange={(e) => setField("esslDeviceUserId", e.target.value)} placeholder="Device PIN/ID" />
@@ -416,6 +447,14 @@ export default function EmployeeManagement({ shopId }) {
                   <Field label="Joining Date *">
                     <input required type="date" className={inp} value={form.joiningDate} onChange={(e) => setField("joiningDate", e.target.value)} />
                   </Field>
+                  {allowUnitChoice && (
+                    <Field label="Business Unit *">
+                      <select required className={inp} value={form.businessUnit} onChange={(e) => setField("businessUnit", e.target.value)}>
+                        <option value="service">Service</option>
+                        <option value="sales">Sales</option>
+                      </select>
+                    </Field>
+                  )}
                   <Field label="Department">
                     <input className={inp} value={form.department} onChange={(e) => setField("department", e.target.value)} placeholder="Sales, Service, etc." />
                   </Field>
@@ -439,6 +478,27 @@ export default function EmployeeManagement({ shopId }) {
                 </div>
                 <p className="text-xs text-gray-500">
                   Employees earn this amount for each PRESENT day. There is no monthly base salary and no paid leaves.
+                </p>
+              </Section>
+
+              {/* Performance incentives */}
+              <Section id="incentive" label="Performance Incentives" icon={TrendingUp} expanded={expandedSections.incentive} onToggle={toggleSection}>
+                <div className="grid grid-cols-2 gap-3">
+                  <Field label="Sales Commission (%)">
+                    <input type="number" min="0" max="100" step="0.1" className={inp} value={form.incentive.salesCommissionPercent} onChange={(e) => setField("incentive.salesCommissionPercent", e.target.value)} />
+                  </Field>
+                  <Field label="Service Commission (%)">
+                    <input type="number" min="0" max="100" step="0.1" className={inp} value={form.incentive.serviceCommissionPercent} onChange={(e) => setField("incentive.serviceCommissionPercent", e.target.value)} />
+                  </Field>
+                  <Field label="Monthly Sales Target (₹)">
+                    <input type="number" min="0" className={inp} value={form.incentive.monthlySalesTarget} onChange={(e) => setField("incentive.monthlySalesTarget", e.target.value)} />
+                  </Field>
+                  <Field label="Target Bonus (₹)">
+                    <input type="number" min="0" className={inp} value={form.incentive.targetBonus} onChange={(e) => setField("incentive.targetBonus", e.target.value)} />
+                  </Field>
+                </div>
+                <p className="text-xs text-gray-500">
+                  Sales commission is on net sales (after discount, before GST) billed with this employee&apos;s code. Service commission is on payments collected for jobs where the technician matches this employee. The target bonus is paid when monthly net sales reach the target. All are added during salary generation.
                 </p>
               </Section>
 

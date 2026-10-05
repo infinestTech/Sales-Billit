@@ -30,7 +30,9 @@ exports.createInStock = async (req, res) => {
   if (req.user.isBranch) return res.status(403).json({ success: false, message: 'Branches cannot create in-stock entries' });
 
 
-  const { supplier_id, supplierAmount = 0, gstAmount = 0, items = [], purchaseType = 'normal', creditAmount = 0 } = req.body || {};
+  const { supplier_id, supplierAmount = 0, gstAmount = 0, items = [], purchaseType = 'normal', creditAmount = 0, billNo = '', billDate = null, source = 'manual' } = req.body || {};
+    if (!Array.isArray(items) || items.length === 0) return res.status(400).json({ success: false, message: 'At least one item is required' });
+    if (items.length > 500) return res.status(400).json({ success: false, message: 'A single stock entry can have at most 500 items' });
     if (!supplier_id) return res.status(400).json({ success: false, message: 'supplier_id is required' });
     if (purchaseType === 'credit' && (!creditAmount || Number(creditAmount) <= 0)) {
       return res.status(400).json({ success: false, message: 'Credit amount is required for credit purchases' });
@@ -77,6 +79,9 @@ exports.createInStock = async (req, res) => {
       creditAmount: purchaseType === 'credit' ? (Number(creditAmount) || 0) : 0,
       supplierAmount: Number(supplierAmount) || 0,
       gstAmount: Number(gstAmount) || 0,
+      billNo: String(billNo || '').trim().slice(0, 60),
+      billDate: billDate && !isNaN(new Date(billDate).getTime()) ? new Date(billDate) : undefined,
+      source: source === 'import' ? 'import' : 'manual',
       items: (items || []).map(i => {
         // Helper to generate random alphanumeric string (3-6 chars)
         function randomProductNo() {
@@ -103,6 +108,11 @@ exports.createInStock = async (req, res) => {
           costPrice: Number(i.costPrice) || 0,
           sellingPrice: Number(i.sellingPrice) || 0,
           validity: i.validity ? new Date(i.validity) : undefined,
+          warrantyMonths: Math.max(0, Number(i.warrantyMonths) || 0),
+          warrantyDetails: (i.warrantyDetails || '').toString().trim().slice(0, 300),
+          hsn: (i.hsn || '').toString().trim().slice(0, 20),
+          mrp: Math.max(0, Number(i.mrp) || 0),
+          gstPercent: Math.max(0, Number(i.gstPercent) || 0),
         };
       }),
       createdBy: String(userId || ''),

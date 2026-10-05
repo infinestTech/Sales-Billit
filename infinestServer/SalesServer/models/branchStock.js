@@ -12,7 +12,9 @@ const BranchStockSchema = new mongoose.Schema({
   costPrice: { type: Number, default: 0 },
   qty: { type: Number, default: 0 },
   sellingPrice: { type: Number, default: 0 },
-  validity: { type: Date }
+  validity: { type: Date },
+  warrantyMonths: { type: Number, default: 0 },
+  warrantyDetails: { type: String, default: '' }
 }, { timestamps: true });
 
 module.exports = mongoose.models && mongoose.models.BranchStock

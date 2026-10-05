@@ -107,6 +107,7 @@ function BranchSalesReport({ salesUrl, token }) {
                 <th style={{ width: 36 }}></th>
                 <th>Branch</th>
                 <th>Customer</th>
+                <th>Sales Exec</th>
                 <th>Items</th>
                 <th>Subtotal</th>
                 <th>Discount</th>
@@ -130,6 +131,9 @@ function BranchSalesReport({ salesUrl, token }) {
                         <div style={{ fontWeight: 500 }}>{sale.customerName || 'Walk-in'}</div>
                         {sale.customerNo && <div style={{ fontSize: 11, color: '#94a3b8' }}>{sale.customerNo}</div>}
                       </td>
+                      <td>
+                        {sale.employee_name ? (<><div style={{ fontWeight: 500 }}>{sale.employee_name}</div><div style={{ fontSize: 11, color: '#94a3b8' }}>{sale.employee_code}</div></>) : <span style={{ color: '#cbd5e1' }}>?</span>}
+                      </td>
                       <td style={{ textAlign: 'center' }}>{itemCount}</td>
                       <td>{currency(sale.subTotal)}</td>
                       <td>{sale.discount ? sale.discount + '%' : '-'}</td>
@@ -148,7 +152,7 @@ function BranchSalesReport({ salesUrl, token }) {
                     </tr>
                     {isExpanded && (
                       <tr>
-                        <td colSpan={10} style={{ padding: 0, background: '#f8fafc' }}>
+                        <td colSpan={11} style={{ padding: 0, background: '#f8fafc' }}>
                           <div style={{ padding: '12px 24px' }}>
                             <div style={{ display: 'flex', flexWrap: 'wrap', gap: 24, marginBottom: 12 }}>
                               <div><strong>Subtotal:</strong> {currency(sale.subTotal)}</div>

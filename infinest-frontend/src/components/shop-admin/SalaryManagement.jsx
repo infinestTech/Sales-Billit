@@ -15,7 +15,9 @@ const STATUS = {
   PAID:      { label: "Paid",      color: "bg-green-100 text-green-700" },
 };
 
-export default function SalaryManagement({ shopId }) {
+// unit: 'service' | 'sales' | 'all' — limits salary records to one business unit
+export default function SalaryManagement({ shopId, unit = "all" }) {
+  const unitParam = unit === "all" ? undefined : unit;
   const [activeTab, setActiveTab] = useState("records");
   const [employees, setEmployees] = useState([]);
   const [records, setRecords] = useState([]);
@@ -40,12 +42,12 @@ export default function SalaryManagement({ shopId }) {
   const headers = () => ({ Authorization: `Bearer ${token()}` });
   const [month, year] = selectedMonth.split("-").map(Number);
 
-  useEffect(() => { if (shopId) fetchEmployees(); }, [shopId]);
-  useEffect(() => { if (shopId && activeTab === "records") fetchSalaryReport(); }, [selectedMonth, shopId, activeTab]);
+  useEffect(() => { if (shopId) fetchEmployees(); }, [shopId, unit]);
+  useEffect(() => { if (shopId && activeTab === "records") fetchSalaryReport(); }, [selectedMonth, shopId, activeTab, unit]);
 
   const fetchEmployees = async () => {
     try {
-      const res = await axios.get(`${API_URL}/api/shop-admin/hr/employees`, { headers: headers(), params: { shopId, isActive: true } });
+      const res = await axios.get(`${API_URL}/api/shop-admin/hr/employees`, { headers: headers(), params: { shopId, isActive: true, unit: unitParam } });
       if (res.data.success) setEmployees(res.data.data || []);
     } catch (_) {}
   };
@@ -53,7 +55,7 @@ export default function SalaryManagement({ shopId }) {
   const fetchSalaryReport = async () => {
     setLoading(true); setActionMsg(null);
     try {
-      const res = await axios.get(`${API_URL}/api/shop-admin/hr/salary/report`, { headers: headers(), params: { shopId, month, year } });
+      const res = await axios.get(`${API_URL}/api/shop-admin/hr/salary/report`, { headers: headers(), params: { shopId, month, year, unit: unitParam } });
       if (res.data.success) { setRecords(res.data.data || []); setSummary(res.data.summary || null); }
     } catch (_) { setRecords([]); }
     finally { setLoading(false); }
@@ -64,7 +66,8 @@ export default function SalaryManagement({ shopId }) {
     setGenerating(true); setActionMsg(null);
     try {
       const res = await axios.post(`${API_URL}/api/shop-admin/hr/salary/generate`, { employeeId: genEmployeeId, month, year }, { headers: headers() });
-      setActionMsg({ success: `Salary generated. Net: ₹${res.data.data?.netSalary?.toLocaleString() || 0}` });
+      const warn = (res.data.warnings || []).join(" ");
+      setActionMsg({ success: `Salary generated. Net: ₹${res.data.data?.netSalary?.toLocaleString() || 0}${warn ? ` — ${warn}` : ""}` });
       fetchSalaryReport();
     } catch (err) { setActionMsg({ error: err.response?.data?.message || "Generation failed" }); }
     finally { setGenerating(false); }
@@ -73,9 +76,10 @@ export default function SalaryManagement({ shopId }) {
   const handleGenerateBulk = async () => {
     setGenerating(true); setActionMsg(null);
     try {
-      const res = await axios.post(`${API_URL}/api/shop-admin/hr/salary/generate-bulk`, { shopId, month, year }, { headers: headers() });
+      const res = await axios.post(`${API_URL}/api/shop-admin/hr/salary/generate-bulk`, { shopId, month, year, unit: unitParam }, { headers: headers() });
       const r = res.data.result;
-      setActionMsg({ success: `Bulk generated: ${r.success.length} success, ${r.failed.length} failed` });
+      const warn = (res.data.warnings || []).join(" ");
+      setActionMsg({ success: `Bulk generated: ${r.success.length} success, ${r.failed.length} failed${warn ? ` — ${warn}` : ""}` });
       fetchSalaryReport();
     } catch (err) { setActionMsg({ error: err.response?.data?.message || "Bulk generation failed" }); }
     finally { setGenerating(false); }
@@ -161,10 +165,11 @@ export default function SalaryManagement({ shopId }) {
       {activeTab==="records" && (
         <div className="space-y-4">
           {summary && (
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+            <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
               {[
                 {label:"Total Employees", val:summary.totalEmployees, color:"text-gray-700 border-gray-200"},
                 {label:"Total Earned", val:`₹${(summary.totalEarned||0).toLocaleString()}`, color:"text-green-700 border-green-200 bg-green-50"},
+                {label:"Incentives", val:`₹${(summary.totalIncentives||0).toLocaleString()}`, color:"text-indigo-700 border-indigo-200 bg-indigo-50"},
                 {label:"Late Deductions", val:`₹${(summary.totalLateDeduction||0).toLocaleString()}`, color:"text-orange-700 border-orange-200 bg-orange-50"},
                 {label:"Total Net Payable", val:`₹${(summary.totalNetSalary||0).toLocaleString()}`, color:"text-blue-700 border-blue-200 bg-blue-50"},
               ].map(({label,val,color})=>(
@@ -194,7 +199,7 @@ export default function SalaryManagement({ shopId }) {
               <div className="overflow-x-auto">
                 <table className="w-full text-sm">
                   <thead className="bg-gray-50 border-b border-gray-200">
-                    <tr>{["Employee","Present","Absent","Late","Earned","Late Deduction","Net Pay","Status","Actions"].map(h=>(
+                    <tr>{["Employee","Present","Absent","Late","Earned","Incentives","Late Deduction","Net Pay","Status","Actions"].map(h=>(
                       <th key={h} className="px-3 py-3 text-left text-xs font-semibold text-gray-600">{h}</th>
                     ))}</tr>
                   </thead>
@@ -203,11 +208,12 @@ export default function SalaryManagement({ shopId }) {
                       const st=STATUS[rec.status]||STATUS.DRAFT;
                       return (
                         <tr key={rec._id} className="hover:bg-gray-50 transition">
-                          <td className="px-3 py-3"><div className="font-medium text-gray-900">{rec.employee?.name||rec.employeeId}</div><div className="text-xs text-gray-500">{rec.employeeId}</div></td>
+                          <td className="px-3 py-3"><div className="font-medium text-gray-900">{rec.employee?.name||rec.employeeId}</div><div className="text-xs text-gray-500 font-mono">{rec.employee?.code||rec.employeeId}</div></td>
                           <td className="px-3 py-3 text-green-700 font-semibold">{rec.presentDays}</td>
                           <td className="px-3 py-3 text-red-700 font-semibold">{rec.absentDays}</td>
                           <td className="px-3 py-3 text-orange-600">{rec.lateDays}</td>
                           <td className="px-3 py-3 text-gray-700">₹{(rec.earnedBase||0).toLocaleString()}</td>
+                          <td className="px-3 py-3 text-indigo-700" title={`Sales ₹${rec.salesCommission||0} · Service ₹${rec.serviceCommission||0} · Target bonus ₹${rec.targetBonus||0}`}>{rec.incentiveTotal ? `+₹${rec.incentiveTotal.toLocaleString()}` : "—"}</td>
                           <td className="px-3 py-3 text-red-600">−₹{(rec.lateDeduction||0).toLocaleString()}</td>
                           <td className="px-3 py-3 font-bold text-green-700">₹{(rec.netSalary||0).toLocaleString()}</td>
                           <td className="px-3 py-3"><span className={`px-2 py-0.5 rounded-full text-xs font-semibold ${st.color}`}>{st.label}</span></td>
@@ -239,7 +245,7 @@ export default function SalaryManagement({ shopId }) {
               <select value={genEmployeeId} onChange={(e)=>setGenEmployeeId(e.target.value)}
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white text-gray-900 focus:outline-none focus:ring-2 focus:ring-green-500">
                 <option value="">— Select Employee —</option>
-                {employees.map(e=><option key={e.employeeId} value={e.employeeId}>{e.name} ({e.employeeId})</option>)}
+                {employees.map(e=><option key={e.employeeId} value={e.employeeId}>{e.name} ({e.employeeCode || e.employeeId})</option>)}
               </select>
             </div>
             <div className="bg-gray-50 rounded-lg p-3 text-xs text-gray-500">

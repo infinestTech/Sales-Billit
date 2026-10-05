@@ -18,13 +18,24 @@ Note the data split: **CommonDB is MySQL/Prisma; BillitServer and SalesServer ar
 
 ### Frontends
 
-- **`infinest-frontend/`** — the **main marketing + admin app**. Next.js 15 (App Router, `src/app/`), React 18, Redux Toolkit, Tailwind v3. Talks to backends via `NEXT_PUBLIC_API_URL_BILLIT` and `NEXT_PUBLIC_API_URL_AUTH`. The shop-admin dashboard lives in `src/components/shop-admin/`.
-- **`sales-frontend/`** — a **standalone sales POS UI** (React + TypeScript, `src/App.tsx`). It is **not Next.js and not bundled** at dev time: `server.js` is a hand-rolled static file server (default port **3020**) that serves raw files and injects runtime config at `/src/config/env.js` from env vars (`VITE_SALES_API_URL`, `VITE_AUTH_API_URL`, `VITE_WHATSAPP_WEB_URL`). `npm run build` (`build.js`) just copies files into `dist/`. Client reads config from `window.ENV_CONFIG` / `window.SALES_URL`.
+- **`infinest-frontend/`** — the **main marketing + admin app**. Next.js 15 (App Router, `src/app/`), React 18, Redux Toolkit, Tailwind v3. Talks to backends via `NEXT_PUBLIC_API_URL_BILLIT` and `NEXT_PUBLIC_API_URL_AUTH`. The shop-admin dashboard lives in `src/components/shop-admin/` and is **plan-aware**: `GET /api/shop-admin/product-access` returns `{ service, sales }` (combo = both) and the sidebar/overview/HR render accordingly. Sales admin screens (ported from sales-frontend) live in `src/components/shop-admin/sales/`, styled by `salesScope.css` (sales-frontend `styles.css` with every rule prefixed by `.sales-scope`), and call SalesServer (`NEXT_PUBLIC_API_URL_SALES`) with a token from `POST /api/shop-admin/sales/token`.
+- **`sales-frontend/`** — a **standalone sales POS UI for branch staff only** (the owner/admin portal moved into shop-admin; admin login now shows a "moved" screen linking to `VITE_SHOP_ADMIN_URL`). React + TypeScript (`src/App.tsx`). It is **not Next.js and not bundled** at dev time: `server.js` is a hand-rolled static file server (default port **3020**) that serves raw files and injects runtime config at `/src/config/env.js` from env vars (`VITE_SALES_API_URL`, `VITE_AUTH_API_URL`, `VITE_WHATSAPP_WEB_URL`). `npm run build` (`build.js`) just copies files into `dist/`. Client reads config from `window.ENV_CONFIG` / `window.SALES_URL`.
 
 ### Inter-service auth (two distinct mechanisms)
 
 1. **User-facing JWT** — issued by CommonDB on login; verified by each service (`JWT_SECRET`, `JWT_ISSUER`). Shop-admin uses a separate `SHOP_ADMIN_JWT_SECRET`.
 2. **Internal service-to-service key** — header `x-internal-key` checked against `INTERNAL_API_KEY` (see `CommonDB/middleware/internalAuth.js`). Used for server→server calls (e.g. plan-limit sync, feature lookups). When adding cross-service endpoints, follow the existing pattern of guarding with `internalAuth`/`authMySQLToken`.
+3. **Shop-admin → Sales** — BillitServer resolves the shop's plan via CommonDB `GET /internal-user-product-access/:userId`, then asks SalesServer `POST /internal/shop-admin-token` (internal key) to sign a 12h Sales JWT for that shop. BillitServer needs `SALES_SERVER_URL`; SalesServer CORS needs the main frontend origin (`MAIN_FRONTEND_URL`).
+
+HR employees carry `business_unit` (`service` | `sales`; missing = service). HR endpoints accept `?unit=` (and `unit` in bulk-salary body) to scope combo shops.
+
+### Employee performance & business analytics (one system across services)
+
+- **Employee code** — `Employee.employee_code` (unique per shop, auto `EMP###`, legacy rows backfilled on list; `utils/employeeCodes.js`). It is the join key everywhere.
+- **Sales attribution** — the POS (`sales-frontend` `EmployeeCodeInput` used by ProductSales / MobileProductSales / ProductSell) sends `employeeCode`; SalesServer resolves it read-only from the shared `employees` collection (`models/employeeRef.js`) and stores `employee_id/code/name` on `Sale`/`WhatsappSale`, plus a `costPrice` snapshot per item for profit. `Shop.sales_settings.require_employee_code` (toggled in shop-admin Performance) makes it mandatory.
+- **Service attribution** — repair jobs are credited when `Mobile.technician_name` equals an employee's code or name (case-insensitive; `utils/servicePerformance.js`).
+- **Analytics** — SalesServer aggregates sales (`/api/sales-analytics/*` for tokens, `/internal/sales-analytics/*` with `x-internal-key`). BillitServer combines them with attendance and service in `controllers/performanceController.js`: `GET /api/shop-admin/hr/performance[/:id]`, `GET /api/shop-admin/analytics/business` (sales + service P&L), `GET|PATCH /api/shop-admin/shop-settings/pos`. If SalesServer is unreachable these return `warnings` instead of failing.
+- **Payroll** — `Employee.incentive` (sales/service commission %, monthly sales target + bonus) is added to `net_salary` during salary generation (`sales_commission`, `service_commission`, `target_bonus_earned`, `incentive_total` on `HrSalaryRecord`).
 
 ### Request-ordering gotchas in BillitServer (`server_Billit.js`)
 

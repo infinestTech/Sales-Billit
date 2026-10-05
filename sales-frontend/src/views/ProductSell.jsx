@@ -26,6 +26,7 @@ function ProductSell({ salesUrl, token }) {
   const [lastSale, setLastSale] = React.useState(null);
   const [previewHtml, setPreviewHtml] = React.useState('');
   const [showPreview, setShowPreview] = React.useState(false);
+  const empCode = window.useEmployeeCode(salesUrl, token);
 
   React.useEffect(() => {
     async function loadProducts() {
@@ -76,13 +77,16 @@ function ProductSell({ salesUrl, token }) {
       if (sellerProducts.length === 0) { setError('No products to sell'); return; }
       if (!(customerNo || '').toString().replace(/[^0-9]/g, '')) { setError('Customer mobile number is required'); return; }
       if (!selectedBank || selectedBank === 'select') { setError('Select a payment method'); return; }
+      const empError = empCode.validateForSale();
+      if (empError) { setError(empError); return; }
       setSellingBusy(true); setError('');
 
       const payload = {
         items: sellerProducts.map(it => ({ productId: it._id || it.productId, productNo: it.productNo || '', productName: it.productName || it.name || '', qty: Number(it.sellingQty ?? it.qty ?? 0), sellingPrice: Number(it.sellingPrice || 0), lineTotal: Number(lineTotal(it)) })),
         customerNo,
         paymentMethod: selectedBank,
-        amountPaid: Number(totalAmount || 0)
+        amountPaid: Number(totalAmount || 0),
+        employeeCode: empCode.code || undefined
       };
 
       // Decide endpoint: if any item is from whatsapp stock, use whatsapp-sales endpoint
@@ -93,7 +97,7 @@ function ProductSell({ salesUrl, token }) {
       const data = await res.json();
       if (!res.ok) throw new Error(data.message || data.error || 'Sell failed');
       setLastSale(data.sale || data || null);
-      setSellerProducts([]); setCustomerNo(''); setSelectedBank('select'); setError('Sale saved');
+      setSellerProducts([]); setCustomerNo(''); setSelectedBank('select'); empCode.reset(); setError('Sale saved');
       // refresh product lists to reflect updated stock
       try { 
         const bsUrl = new URL((salesUrl || '') + '/api/branch-stock'); bsUrl.searchParams.set('only_branch','1');
@@ -313,6 +317,10 @@ function ProductSell({ salesUrl, token }) {
               setProductNo('');
             }}>Add</button>
           </div>
+        </div>
+
+        <div>
+          <window.EmployeeCodeInput state={empCode} compact />
         </div>
 
         <div>

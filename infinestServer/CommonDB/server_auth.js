@@ -1080,6 +1080,75 @@ app.post('/internal-plan-by-mongo-id', internalAuth, async (req, res) => {
   }
 });
 
+// Internal: which products (service / sales) a user's active subscriptions unlock.
+// Used by BillitServer's shop-admin portal to render plan-specific sections.
+app.get('/internal-user-product-access/:userId', internalAuth, async (req, res) => {
+  const { userId } = req.params;
+  if (!userId) return res.status(400).json({ message: 'Missing userId' });
+
+  try {
+    const now = new Date();
+    const subscriptions = await prisma.subscription.findMany({
+      where: {
+        userId,
+        status: 'ACTIVE',
+        OR: [{ endDate: null }, { endDate: { gt: now } }]
+      },
+      select: {
+        product: true,
+        endDate: true,
+        plan: { select: { name: true, mongoPlanId: true, mongoCategoryId: true, branchLimit: true } }
+      },
+      orderBy: { startDate: 'desc' }
+    });
+
+    let service = false;
+    let sales = false;
+    let salesMongoPlanId = null;
+    const plans = [];
+
+    for (const sub of subscriptions) {
+      const mongoPlanId = sub.plan?.mongoPlanId || '';
+      const category = sub.plan?.mongoCategoryId || '';
+      let grantsService = false;
+      let grantsSales = false;
+
+      if (category === 'Sales_Service' || mongoPlanId.startsWith('combo-')) {
+        grantsService = true;
+        grantsSales = true;
+      } else if (mongoPlanId.startsWith('sales-') || category === 'Sales') {
+        grantsSales = true;
+      } else if (mongoPlanId.startsWith('service-') || category === 'Service') {
+        grantsService = true;
+      } else if (sub.product === 'SALES') {
+        grantsSales = true;
+      } else if (sub.product === 'SERVICE' || sub.product === 'BILLIT') {
+        grantsService = true;
+      }
+
+      if (grantsService) service = true;
+      if (grantsSales) {
+        sales = true;
+        if (!salesMongoPlanId && mongoPlanId) salesMongoPlanId = mongoPlanId;
+      }
+
+      plans.push({
+        name: sub.plan?.name || null,
+        mongoPlanId: mongoPlanId || null,
+        mongoCategoryId: category || null,
+        product: sub.product,
+        endDate: sub.endDate,
+        grants: { service: grantsService, sales: grantsSales }
+      });
+    }
+
+    return res.json({ service, sales, salesMongoPlanId, plans });
+  } catch (err) {
+    console.error('Internal product access lookup failed:', err.message || err);
+    return res.status(500).json({ message: 'Server error' });
+  }
+});
+
 // Internal: Get trial status for a user
 app.get('/internal-get-trial-status/:userId', internalAuth, async (req, res) => {
   const { userId } = req.params;

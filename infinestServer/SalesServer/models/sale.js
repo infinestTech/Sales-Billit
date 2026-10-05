@@ -7,13 +7,18 @@ const SaleItem = new mongoose.Schema({
   qty: { type: Number, default: 0 },
   sellingPrice: { type: Number, default: 0 },
   imes: { type: [String], default: [] },
-  lineTotal: { type: Number, default: 0 }
+  lineTotal: { type: Number, default: 0 },
+  costPrice: { type: Number, default: 0 } // unit cost snapshot from branch stock, for profit reporting
 }, { _id: false });
 
 const SaleSchema = new mongoose.Schema({
   shop_id: { type: String, index: true },
   branch_id: { type: String, index: true },
   seller_id: { type: String, default: '' },
+  // Salesperson (HR employee from the shared `employees` collection), captured at the POS
+  employee_id: { type: String, default: '' },
+  employee_code: { type: String, default: '' },
+  employee_name: { type: String, default: '' },
   customerNo: { type: String, default: '' },
   customerName: { type: String, default: '' },
   items: { type: [SaleItem], default: [] },
@@ -33,5 +38,8 @@ const SaleSchema = new mongoose.Schema({
   bank_id: { type: String, default: '' },
   createdBy: { type: String, default: '' }
 }, { timestamps: true });
+
+SaleSchema.index({ shop_id: 1, createdAt: -1 });
+SaleSchema.index({ shop_id: 1, employee_id: 1, createdAt: -1 });
 
 module.exports = mongoose.model('Sale', SaleSchema);

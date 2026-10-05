@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from 'react';
+import dynamic from 'next/dynamic';
 import axios from 'axios';
 import {
   Users, Phone, Calendar, Filter, Search, ChevronDown,
@@ -14,6 +15,8 @@ import {
 } from 'recharts';
 import MobileSalaryManagement from './mobile/MobileSalaryManagement';
 import * as XLSX from 'xlsx';
+
+const SalesOverview = dynamic(() => import('./sales/SalesOverview'), { ssr: false });
 
 export default function MobileDashboard({
   shopAdmin,
@@ -37,9 +40,17 @@ export default function MobileDashboard({
   fetchEmployeeAttendance,
   fetchFinancialReport,
   handleLogout,
-  handleSwitchShop
+  handleSwitchShop,
+  productAccess,
+  salesSession
 }) {
+  const hasService = productAccess ? !!productAccess.service : true;
+  const hasSales = !!productAccess?.sales;
   const [activeTab, setActiveTab] = useState('overview');
+
+  useEffect(() => {
+    if (!hasService && (activeTab === 'revenue' || activeTab === 'report')) setActiveTab('overview');
+  }, [hasService, activeTab]);
   const [showMobileMenu, setShowMobileMenu] = useState(false);
   const [showShopSelector, setShowShopSelector] = useState(false);
   const [showFilters, setShowFilters] = useState(false);
@@ -774,6 +785,15 @@ export default function MobileDashboard({
         {/* Overview Tab */}
         {activeTab === 'overview' && (
           <div className="space-y-4">
+            {hasSales && (
+              <>
+                <SalesOverview session={salesSession} compact />
+                <p className="text-xs text-gray-500">
+                  Full sales management (inventory, branches, supplies) is available on a tablet or desktop screen.
+                </p>
+              </>
+            )}
+            {hasService && (<>
             {/* Stats Grid */}
             <div className="grid grid-cols-2 gap-3">
               <div className="bg-white rounded-lg p-4 shadow-sm border border-gray-200">
@@ -949,6 +969,7 @@ export default function MobileDashboard({
                 </div>
               )}
             </div>
+            </>)}
           </div>
         )}
 
@@ -1561,7 +1582,7 @@ export default function MobileDashboard({
 
       {/* Bottom Navigation */}
       <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 shadow-lg z-50">
-        <div className="grid grid-cols-5 gap-1">
+        <div className={`grid ${hasService ? 'grid-cols-5' : 'grid-cols-3'} gap-1`}>
           <button
             onClick={() => setActiveTab('overview')}
             className={`flex flex-col items-center justify-center py-3 ${
@@ -1580,6 +1601,7 @@ export default function MobileDashboard({
             <Users className="h-5 w-5 mb-1" />
             <span className="text-xs font-medium">Employees</span>
           </button>
+          {hasService && (
           <button
             onClick={() => setActiveTab('revenue')}
             className={`flex flex-col items-center justify-center py-3 ${
@@ -1589,6 +1611,7 @@ export default function MobileDashboard({
             <DollarSign className="h-5 w-5 mb-1" />
             <span className="text-xs font-medium">Revenue</span>
           </button>
+          )}
           <button
             onClick={() => setActiveTab('salary')}
             className={`flex flex-col items-center justify-center py-3 ${
@@ -1598,6 +1621,7 @@ export default function MobileDashboard({
             <Wallet className="h-5 w-5 mb-1" />
             <span className="text-xs font-medium">Salary</span>
           </button>
+          {hasService && (
           <button
             onClick={() => setActiveTab('report')}
             className={`flex flex-col items-center justify-center py-3 ${
@@ -1607,6 +1631,7 @@ export default function MobileDashboard({
             <FileText className="h-5 w-5 mb-1" />
             <span className="text-xs font-medium">Report</span>
           </button>
+          )}
         </div>
       </div>
 

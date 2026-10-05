@@ -7,7 +7,7 @@ function InStockView({ salesUrl, token }) {
   const [gstAmount, setGstAmount] = React.useState('');
   const [category, setCategory] = React.useState('');
   const [items, setItems] = React.useState([
-    { productNo: '', productName: '', brand: '', model: '', quantity: 1, costPrice: '', validity: '', imes: [] }
+    { productNo: '', productName: '', brand: '', model: '', quantity: 1, costPrice: '', validity: '', warrantyMonths: '', warrantyDetails: '', imes: [] }
   ]);
   const [saving, setSaving] = React.useState(false);
   const [error, setError] = React.useState('');
@@ -234,8 +234,8 @@ function InStockView({ salesUrl, token }) {
   const totalBillAmount = (Number(supplierAmount) || 0) + (Number(gstAmount) || 0);
 
 
-  const addRow = () => setItems(it => [...it, { productNo: '', productName: '', brand: '', model: '', quantity: 1, costPrice: '', validity: '' }]);
-  const addRowWithImes = () => setItems(it => [...it, { productNo: '', productName: '', brand: '', model: '', quantity: 1, costPrice: '', validity: '', imes: [] }]);
+  const addRow = () => setItems(it => [...it, { productNo: '', productName: '', brand: '', model: '', quantity: 1, costPrice: '', validity: '', warrantyMonths: '', warrantyDetails: '' }]);
+  const addRowWithImes = () => setItems(it => [...it, { productNo: '', productName: '', brand: '', model: '', quantity: 1, costPrice: '', validity: '', warrantyMonths: '', warrantyDetails: '', imes: [] }]);
 
 
   const updateItem = (idx, field, value) => setItems(list => list.map((it, i) => {
@@ -254,7 +254,7 @@ function InStockView({ salesUrl, token }) {
 
   const resetModal = () => {
     setSupplierId(''); setSupplierAmount('');
-  setItems([{ productNo: '', productName: '', brand: '', model: '', quantity: 1, costPrice: '', validity: '', imes: [] }]);
+  setItems([{ productNo: '', productName: '', brand: '', model: '', quantity: 1, costPrice: '', validity: '', warrantyMonths: '', warrantyDetails: '', imes: [] }]);
     setError('');
     setGstAmount('');
     setCategory('');
@@ -330,6 +330,8 @@ function InStockView({ salesUrl, token }) {
                   quantity: Number(it.quantity) || 1,
                   costPrice: Number(it.costPrice) || 0,
                   validity: it.validity,
+                  warrantyMonths: Number(it.warrantyMonths) || 0,
+                  warrantyDetails: (it.warrantyDetails || '').trim(),
                   imes: Array.isArray(it.imes) ? it.imes.filter(x => x && x.trim()) : []
                 };
               })
@@ -1027,6 +1029,14 @@ function InStockView({ salesUrl, token }) {
                     fontWeight: '600',
                     color: '#374151',
                     borderBottom: '2px solid #e5e7eb',
+                    minWidth: '150px'
+                  }}>Warranty</th>
+                  <th style={{
+                    padding: '16px 12px',
+                    textAlign: 'center',
+                    fontWeight: '600',
+                    color: '#374151',
+                    borderBottom: '2px solid #e5e7eb',
                     minWidth: '120px'
                   }}>Days in Stock</th>
                   <th style={{
@@ -1154,6 +1164,18 @@ function InStockView({ salesUrl, token }) {
                         }}>
                           {it.validity ? new Date(it.validity).toLocaleDateString() : '-'}
                         </div>
+                      </td>
+                      <td style={{ padding: '16px 12px', textAlign: 'center', fontSize: '12px', color: '#64748b' }}>
+                        {(() => {
+                          const months = Number(it.warrantyMonths) || 0;
+                          if (!months && !it.warrantyDetails) return '-';
+                          return (
+                            <div>
+                              {months ? <div style={{ color: '#374151', fontWeight: '600' }}>{months} month{months > 1 ? 's' : ''}</div> : null}
+                              {it.warrantyDetails ? <div>{it.warrantyDetails}</div> : null}
+                            </div>
+                          );
+                        })()}
                       </td>
                       <td style={{ padding: '16px 12px', textAlign: 'center' }}>
                         <span style={{
@@ -1651,6 +1673,22 @@ function InStockView({ salesUrl, token }) {
                             borderBottom: '1px solid #e5e7eb',
                             minWidth: '130px'
                           }}>Validity</th>
+                          <th style={{
+                            padding: '12px',
+                            textAlign: 'center',
+                            fontWeight: '600',
+                            color: '#374151',
+                            borderBottom: '1px solid #e5e7eb',
+                            minWidth: '120px'
+                          }}>Warranty (months)</th>
+                          <th style={{
+                            padding: '12px',
+                            textAlign: 'center',
+                            fontWeight: '600',
+                            color: '#374151',
+                            borderBottom: '1px solid #e5e7eb',
+                            minWidth: '180px'
+                          }}>Warranty Details</th>
                           {category === 'Mobile' && (
                             <th style={{
                               padding: '12px',
@@ -1775,6 +1813,39 @@ function InStockView({ salesUrl, token }) {
                                 type="date" 
                                 value={it.validity} 
                                 onChange={e=>updateItem(idx,'validity',e.target.value)}
+                                style={{
+                                  width: '100%',
+                                  padding: '8px 12px',
+                                  border: '1px solid #d1d5db',
+                                  borderRadius: '6px',
+                                  fontSize: '13px',
+                                  outline: 'none'
+                                }}
+                              />
+                            </td>
+                            <td style={{ padding: '12px' }}>
+                              <input
+                                type="number"
+                                min="0"
+                                value={it.warrantyMonths ?? ''}
+                                onChange={e=>updateItem(idx,'warrantyMonths',e.target.value)}
+                                placeholder="0"
+                                style={{
+                                  width: '100%',
+                                  padding: '8px 12px',
+                                  border: '1px solid #d1d5db',
+                                  borderRadius: '6px',
+                                  fontSize: '13px',
+                                  outline: 'none'
+                                }}
+                              />
+                            </td>
+                            <td style={{ padding: '12px' }}>
+                              <input
+                                value={it.warrantyDetails || ''}
+                                onChange={e=>updateItem(idx,'warrantyDetails',e.target.value)}
+                                placeholder="e.g. Brand warranty"
+                                maxLength={300}
                                 style={{
                                   width: '100%',
                                   padding: '8px 12px',
@@ -2090,7 +2161,9 @@ function InStockView({ salesUrl, token }) {
       {/* Barcode Sheet Modal */}
       {showBarcodeSheet && window.BarcodeSheet && (
         <window.BarcodeSheet 
-          entries={entries}
+          entries={entries} 
+          salesUrl={salesUrl} 
+          token={token}
           onClose={() => setShowBarcodeSheet(false)}
         />
       )}

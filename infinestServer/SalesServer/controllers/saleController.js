@@ -1,4 +1,5 @@
 const Sale = require('../models/sale');
+const { normalizeCode, resolveEmployeeByCode, isEmployeeCodeRequired } = require('./employeeController');
 
 exports.listSales = async (req, res) => {
   try {
@@ -14,6 +15,7 @@ exports.listSales = async (req, res) => {
     const pageSize = Math.min(100, Math.max(10, Number(req.query.pageSize || 25)));
     const q = { shop_id };
     if (branch_id) q.branch_id = branch_id;
+    if (req.query.employee_id) q.employee_id = String(req.query.employee_id) === 'none' ? '' : String(req.query.employee_id);
 
     // Optional date range filtering
     const from = req.query.from ? new Date(req.query.from) : null;
@@ -54,6 +56,18 @@ exports.createSale = async (req, res) => {
 
     const seller_id = req.user.branch_id ? req.user.branch_id : (req.user.userId || '');
     const items = Array.isArray(req.body.items) ? req.body.items : [];
+
+    // Salesperson attribution: validate the employee code typed at the POS
+    const employeeCode = normalizeCode(req.body.employeeCode || req.body.employee_code);
+    let employee = null;
+    if (employeeCode) {
+      employee = await resolveEmployeeByCode(shop_id, employeeCode);
+      if (!employee) {
+        return res.status(400).json({ success: false, message: `Employee code ${employeeCode} is not valid or the employee is inactive` });
+      }
+    } else if (await isEmployeeCodeRequired(shop_id)) {
+      return res.status(400).json({ success: false, message: 'Employee code is required for every sale' });
+    }
     const customerNo = req.body.customerNo || '';
     const customerName = req.body.customerName || '';
     const paymentMethod = req.body.paymentMethod || 'cash';
@@ -98,6 +112,7 @@ exports.createSale = async (req, res) => {
         const query = { shop_id, branch_id, $or: or };
         const bs = await BranchStock.findOne(query).lean();
         const available = bs ? Number(bs.qty || 0) : 0;
+        it.costPrice = Number(bs?.costPrice || 0);
         if (available < required) {
           const idDesc = it.productId || it.productNo || it.productName || 'unknown';
           return res.status(400).json({ success: false, message: `Insufficient stock for ${idDesc}: available ${available}, requested ${required}` });
@@ -128,6 +143,9 @@ exports.createSale = async (req, res) => {
       shop_id,
       branch_id,
       seller_id,
+      employee_id: employee ? employee.id : '',
+      employee_code: employee ? employee.code : '',
+      employee_name: employee ? employee.name : '',
       customerNo,
       customerName,
       items,
