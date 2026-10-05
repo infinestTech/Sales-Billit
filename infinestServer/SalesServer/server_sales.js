@@ -47,6 +47,8 @@ app.use(cors({
     'http://localhost:3020',
     'http://127.0.0.1:3020',
     // Production domains
+    'https://mobilebillingsoftware.com',          // ✅ Main frontend (shop-admin portal manages sales)
+    'https://www.mobilebillingsoftware.com',
     'https://sales.mobilebillingsoftware.com',    // ✅ Production sales frontend
     'http://sales.mobilebillingsoftware.com',     // ✅ Fallback for sales frontend
     'https://auth.mobilebillingsoftware.com',     // ✅ Production auth server
