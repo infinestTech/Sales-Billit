@@ -40,8 +40,9 @@ const META_LABELS = [
   { key: "supplierGstin", re: /^(gstin|gst\s*no\.?)\s*(?::\s*(.*))?$/i },
 ];
 
+// camelCase / snake_case / spaced headers all normalize the same way ("costPrice" → "cost price")
 const normalizeHeader = (h) =>
-  String(h ?? "").toLowerCase().replace(/\*/g, "").replace(/[_\s]+/g, " ").trim();
+  String(h ?? "").replace(/([a-z0-9])([A-Z])/g, "$1 $2").toLowerCase().replace(/\*/g, "").replace(/[_\s]+/g, " ").trim();
 
 const ALIAS_LOOKUP = Object.entries(ALIASES).reduce((acc, [field, list]) => {
   list.forEach((alias) => { acc[alias] = field; });
@@ -215,31 +216,86 @@ function objectsToItems(list) {
   });
 }
 
+const isInvoiceObject = (o) => !!o && typeof o === "object" && !Array.isArray(o) && Array.isArray(o.items);
+
+function invoiceMeta(data) {
+  return {
+    supplierName: text(data.supplierName || data.supplier || data.dealer || data.vendor),
+    billNo: text(data.billNo || data.invoiceNo || data.billNumber || data.invoiceNumber),
+    billDate: text(data.billDate || data.invoiceDate || data.date),
+    billType: text(data.billType || data.purchaseType || data.paymentType),
+    supplierGstin: text(data.supplierGstin || data.gstin || data.gstNumber),
+  };
+}
+
+/**
+ * Accepts:
+ *   - one invoice:            { supplierName, billNo, ..., items: [...] }
+ *   - several invoices:       [ { billNo, items: [...] }, ... ]  or  { invoices: [ ... ] }
+ *   - a plain list of items:  [ { product, qty, ... }, ... ]
+ * Returns { invoices: [{ name, meta, items }] }.
+ */
 export function parseJsonText(content) {
   let data;
   try {
-    data = JSON.parse(content);
+    data = JSON.parse(String(content).replace(/^\uFEFF/, ""));
   } catch (e) {
     throw new Error("Invalid JSON: " + e.message);
   }
-  const list = Array.isArray(data) ? data : data?.items;
-  if (!Array.isArray(list) || list.length === 0) throw new Error("JSON must be an array of items or an object with an 'items' array.");
-  const meta = Array.isArray(data) ? {} : {
-    supplierName: text(data.supplierName || data.supplier),
-    billNo: text(data.billNo || data.invoiceNo),
-    billDate: text(data.billDate || data.date),
-    billType: text(data.billType),
-    supplierGstin: text(data.supplierGstin || data.gstin),
-  };
-  return { meta, items: objectsToItems(list) };
+
+  let invoiceList = null;
+  if (Array.isArray(data) && data.length && data.every(isInvoiceObject)) invoiceList = data;
+  else if (data && Array.isArray(data.invoices)) invoiceList = data.invoices.filter(isInvoiceObject);
+  else if (isInvoiceObject(data)) invoiceList = [data];
+
+  if (invoiceList) {
+    const invoices = invoiceList
+      .map((inv, idx) => {
+        const meta = invoiceMeta(inv);
+        return { name: meta.billNo || `Invoice ${idx + 1}`, meta, items: objectsToItems(inv.items) };
+      })
+      .filter((inv) => inv.items.length > 0);
+    if (!invoices.length) throw new Error("The JSON invoices have no items.");
+    return { invoices };
+  }
+
+  if (Array.isArray(data) && data.length) {
+    return { invoices: [{ name: "Items", meta: {}, items: objectsToItems(data) }] };
+  }
+  throw new Error("JSON must be an invoice object with an 'items' array, an array of invoices, or an array of items.");
 }
 
+// Helper sheets that are not invoices (consolidated summaries, instructions)
+const NON_INVOICE_SHEET = /summary|readme|read me|instruction|notes|consolidated/i;
+
+/** Every sheet that has a product table becomes one invoice. Returns { invoices: [{ name, meta, items }] }. */
 export function parseSheetBuffer(arrayBuffer) {
   const wb = XLSX.read(arrayBuffer, { type: "array", cellDates: true });
-  const sheet = wb.Sheets[wb.SheetNames[0]];
-  if (!sheet) throw new Error("The file has no sheets.");
-  const rows = XLSX.utils.sheet_to_json(sheet, { header: 1, raw: true, defval: "", blankrows: false });
-  return rowsToItems(rows);
+  if (!wb.SheetNames.length) throw new Error("The file has no sheets.");
+
+  const found = [];
+  wb.SheetNames.forEach((name) => {
+    const sheet = wb.Sheets[name];
+    if (!sheet) return;
+    const rows = XLSX.utils.sheet_to_json(sheet, { header: 1, raw: true, defval: "", blankrows: false });
+    try {
+      const { meta, items } = rowsToItems(rows);
+      if (items.length) found.push({ name, meta, items });
+    } catch (_) { /* sheet without a product table */ }
+  });
+
+  // Skip summary/README sheets whenever real invoice sheets exist alongside them
+  const invoices = found.length > 1 ? found.filter((s) => !NON_INVOICE_SHEET.test(s.name)) : found;
+  if (!invoices.length) {
+    throw new Error(
+      `Could not find a product table in ${wb.SheetNames.length > 1 ? `any of the ${wb.SheetNames.length} sheets` : "the sheet"}. ` +
+      "Each invoice sheet needs a header row with at least 'Product' and 'Qty' columns (see the template)."
+    );
+  }
+  invoices.forEach((inv) => {
+    if (!inv.meta.billNo && wb.SheetNames.length > 1 && !/^sheet\s*\d*$/i.test(inv.name)) inv.meta.billNo = inv.name;
+  });
+  return { invoices };
 }
 
 export async function parseInventoryFile(file) {
