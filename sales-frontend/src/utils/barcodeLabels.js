@@ -123,7 +123,7 @@ const barcodeValueOf = (item) => String(item && item.barcodeValue != null ? item
 
 const lineMm = (pt) => pt * PT_MM * LINE_SPACING;
 
-function useFont(doc, pt, bold) {
+function applyFont(doc, pt, bold) {
   doc.setFont('helvetica', bold ? 'bold' : 'normal');
   doc.setFontSize(pt);
 }
@@ -165,21 +165,21 @@ function countModules(JsBarcode, value) {
 function layoutText(doc, label, settings, lvl, textW) {
   const t = { fonts: {}, lines: { shop: null, product: [], code: label.code, tag: null }, topH: 0, bottomH: 0, codeFits: true };
   if (label.shopName && lvl.shop) {
-    useFont(doc, lvl.shop, false);
+    applyFont(doc, lvl.shop, false);
     t.fonts.shop = lvl.shop;
     t.lines.shop = ellipsize(doc, label.shopName, textW);
     t.topH += lineMm(lvl.shop);
   }
-  useFont(doc, lvl.product, true);
+  applyFont(doc, lvl.product, true);
   t.fonts.product = lvl.product;
   t.lines.product = wrapLines(doc, label.productName, textW, lvl.productLines);
   t.topH += t.lines.product.length * lineMm(lvl.product);
 
   let codePt = lvl.code;
-  useFont(doc, codePt, false);
+  applyFont(doc, codePt, false);
   while (codePt > MIN_CODE_FONT_PT && doc.getTextWidth(label.code) > textW) {
     codePt -= 0.5;
-    useFont(doc, codePt, false);
+    applyFont(doc, codePt, false);
   }
   t.fonts.code = codePt;
   t.codeFits = doc.getTextWidth(label.code) <= textW;
@@ -316,10 +316,10 @@ function drawThermalLabel(doc, plan, image) {
   const opts = { align: 'center', baseline: 'top' };
   doc.setTextColor(0, 0, 0);
   if (plan.lines.shop) {
-    useFont(doc, plan.fonts.shop, false);
+    applyFont(doc, plan.fonts.shop, false);
     doc.text(plan.lines.shop, cx, plan.y.shop, opts);
   }
-  useFont(doc, plan.fonts.product, true);
+  applyFont(doc, plan.fonts.product, true);
   plan.lines.product.forEach((line, i) => doc.text(line, cx, plan.y.product[i], opts));
   if (image) {
     // Height comes from the canvas aspect ratio, never a fixed box. 'FAST' = Flate: jsPDF stores PNGs uncompressed otherwise
@@ -327,10 +327,10 @@ function drawThermalLabel(doc, plan, image) {
     const h = (w * image.height) / image.width;
     doc.addImage(image.dataUrl, 'PNG', plan.barcode.x, plan.barcode.y, w, h, image.alias, 'FAST');
   }
-  useFont(doc, plan.fonts.code, false);
+  applyFont(doc, plan.fonts.code, false);
   doc.text(plan.lines.code, cx, plan.y.code, opts);
   if (plan.lines.tag) {
-    useFont(doc, plan.fonts.tag, true);
+    applyFont(doc, plan.fonts.tag, true);
     doc.text(plan.lines.tag, cx, plan.y.tag, opts);
   }
 }
