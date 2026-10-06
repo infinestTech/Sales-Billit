@@ -269,10 +269,14 @@ function ProductSell({ salesUrl, token }) {
           <div style={{display:'flex', gap:8}}>
             <input value={productNo} onChange={e => setProductNo(e.target.value)} placeholder="Enter product no to filter" />
             <button className="btn" type="button" onClick={() => {
-              const needle = (productNo || '').toString().trim().toLowerCase();
-              if (!needle) return;
-              // Prefer whatsapp-stock records
-              const foundW = whatsappStock.find(w => String(w.productNo || '').toLowerCase() === needle);
+              if (!(productNo || '').toString().trim()) return;
+              // Prefer whatsapp-stock records; also matches labels printed without spaces/hyphens
+              const scan = window.BarcodeLabels.findScanMatch(productNo, [
+                whatsappStock.filter(w => w.productNo).map(w => ({ code: w.productNo, value: w })),
+                products.map(p => ({ code: p.productNo || p._id, value: p })),
+              ]);
+              if (scan && scan.ambiguous) { setError('This code matches more than one product. Type the full product number.'); return; }
+              const foundW = scan && scan.group === 0 ? scan.value : null;
               if (foundW) {
                 setError('');
                 // Compute per-unit cost and selling price using totalCost and sellPercent when available
@@ -307,7 +311,7 @@ function ProductSell({ salesUrl, token }) {
               }
 
               // fallback to branch-stock products
-              const found = products.find(p => String(p.productNo || p._id || '').toLowerCase() === needle);
+              const found = scan && scan.group === 1 ? scan.value : null;
               if (!found) { setError('Product not found'); return; }
               setError('');
               setSellerProducts(sp => {

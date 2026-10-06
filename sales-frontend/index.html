@@ -33,6 +33,8 @@
   <!-- Supplier bill import (Excel/CSV/JSON) for branches: SheetJS + shared parser (plain JS, no Babel) -->
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
   <script src="/src/utils/inventoryImport.js"></script>
+  <!-- Barcode label layouts + POS scan matching (plain JS, shared with shop-admin via scripts/sync-shared.js) -->
+  <script src="/src/utils/barcodeLabels.js"></script>
   <script type="text/babel" data-presets="react" src="/src/components/BranchStockImport.jsx"></script>
   
   <!-- Load components and views -->

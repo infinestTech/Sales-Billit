@@ -97,24 +97,14 @@ function MobileProductSales({ salesUrl, token }) {
   totalAmount = Number(totalAmount.toFixed(1));
 
   function addByProductNo() {
-    const needle = (productNo || '').toString().trim().toLowerCase();
-    if (!needle) return;
-    // Step 1: Try to find by IMEI first (phones have individual IMEI barcodes)
-    let found = null;
-    let matchedImei = null;
-    for (let pi = 0; pi < products.length; pi++) {
-      const p = products[pi];
-      const pImes = Array.isArray(p.centralOnlyImes) && p.centralOnlyImes.length ? p.centralOnlyImes : Array.isArray(p.centralImes) && p.centralImes.length ? p.centralImes : Array.isArray(p.imes) ? p.imes : [];
-      const match = pImes.find(imei => String(imei || '').toLowerCase() === needle);
-      if (match) { found = p; matchedImei = match; break; }
-    }
-    // Step 2: If not found by IMEI, try product number
-    let foundByProductNo = false;
-    if (!found) {
-      found = products.find((p) => String(p.productNo || '').toLowerCase() === needle);
-      foundByProductNo = !!found;
-    }
-    if (!found) { setError('Product not found'); return; }
+    if (!(productNo || '').toString().trim()) return;
+    // IMEI first (phones have one barcode per IMEI), then product number; also matches labels printed without spaces/hyphens
+    const scan = window.BarcodeLabels.resolvePosScan(products, productNo);
+    if (scan && scan.ambiguous) { setError('This code matches more than one product. Type the full product number.'); return; }
+    if (!scan) { setError('Product not found'); return; }
+    const found = scan.product;
+    const matchedImei = scan.imei;
+    const foundByProductNo = scan.byProductNo;
     if (Number(found.qty) === 0) { setError('This product has zero quantity and cannot be added to sales.'); return; }
     const availImes = (Array.isArray(found.centralOnlyImes) && found.centralOnlyImes.length) ? found.centralOnlyImes : (Array.isArray(found.centralImes) && found.centralImes.length) ? found.centralImes : (Array.isArray(found.imes) ? found.imes : []);
     const isImeiTracked = availImes.length > 0;

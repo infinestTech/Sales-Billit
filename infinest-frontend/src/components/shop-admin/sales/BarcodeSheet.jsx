@@ -1,6 +1,7 @@
 "use client";
 import React from 'react';
 import { jsPDF } from 'jspdf';
+import * as BL from './barcodeLabels';
 
 const JSBARCODE_SRC = 'https://cdn.jsdelivr.net/npm/jsbarcode@3.11.5/dist/JsBarcode.all.min.js';
 
@@ -36,6 +37,19 @@ function BarcodeSheet({ entries, onClose, salesUrl, token }) {
   });
   const [downloading, setDownloading] = React.useState(false);
   const [shopName, setShopName] = React.useState('');
+
+  // 'a4' keeps the original sheet; 'thermal' prints one label per PDF page for the label printer
+  const [layout, setLayout] = React.useState('a4');
+  const [thermal, setThermal] = React.useState(() => {
+    const s = BL.loadThermalSettings();
+    return { widthMm: String(s.widthMm), heightMm: String(s.heightMm), showTypeTag: s.showTypeTag };
+  });
+  const thermalSettings = React.useMemo(
+    () => ({ widthMm: Number(thermal.widthMm), heightMm: Number(thermal.heightMm), showTypeTag: thermal.showTypeTag }),
+    [thermal]
+  );
+  const thermalError = BL.thermalSizeError(thermalSettings.widthMm, thermalSettings.heightMm);
+  React.useEffect(() => { if (!thermalError) BL.saveThermalSettings(thermalSettings); }, [thermalSettings, thermalError]);
 
   React.useEffect(() => {
     const effectiveToken = token || localStorage.getItem('branch_token') || '';
@@ -145,9 +159,10 @@ function BarcodeSheet({ entries, onClose, salesUrl, token }) {
           try {
             const canvas = document.getElementById(`barcode-${index}`);
             if (canvas) {
-              const cleanValue = item.barcodeValue.replace(/[^a-zA-Z0-9]/g, '').toUpperCase();
-              if (cleanValue.length > 0) {
-                window.JsBarcode(canvas, cleanValue, {
+              // Encode the exact code: Code 128 carries spaces and hyphens, and the POS looks codes up as written
+              const value = BL.barcodeValueOf(item);
+              if (value.length > 0) {
+                window.JsBarcode(canvas, value, {
                   format: 'CODE128',
                   width: 2,
                   height: 60,
@@ -182,108 +197,27 @@ function BarcodeSheet({ entries, onClose, salesUrl, token }) {
     return Array.from(products.values());
   }, [barcodeData]);
 
+  // Thermal: flag labels whose code is too long or whose bars would be too short to scan
+  const thermalCheck = React.useMemo(() => {
+    if (layout !== 'thermal' || thermalError || !barcodeLibReady || !window.JsBarcode) return null;
+    return BL.checkThermalLabels({ jsPDF, JsBarcode: window.JsBarcode, labels: filteredData, settings: thermalSettings, shopName });
+  }, [layout, thermalError, thermalSettings, filteredData, shopName, barcodeLibReady]);
+
   const handleDownloadPDF = async () => {
     if (filteredData.length === 0) {
       alert('No labels to download!');
       return;
     }
+    if (layout === 'thermal' && thermalError) {
+      alert(thermalError);
+      return;
+    }
 
     setDownloading(true);
     try {
-      const doc = new jsPDF('p', 'mm', 'a4');
-      const pageWidth = 210;
-      const pageHeight = 297;
-      const margin = 10;
-      const labelWidth = (pageWidth - margin * 3) / 2;
-      const labelHeight = 55;
-      const gap = 10;
-
-      let x = margin;
-      let y = margin;
-      let labelCount = 0;
-
-      for (let i = 0; i < filteredData.length; i++) {
-        const item = filteredData[i];
-        const canvas = document.getElementById(`barcode-${i}`);
-
-        if (canvas) {
-          // Add new page if needed
-          if (y + labelHeight > pageHeight - margin) {
-            doc.addPage();
-            x = margin;
-            y = margin;
-          }
-
-          // Draw border
-          doc.setDrawColor(200);
-          doc.rect(x, y, labelWidth, labelHeight);
-
-          // Shop name
-          let topY = y;
-          if (shopName) {
-            doc.setFontSize(9);
-            doc.setFont(undefined, 'bold');
-            doc.setTextColor(0);
-            doc.text(doc.splitTextToSize(shopName, labelWidth - 4)[0], x + labelWidth / 2, y + 5, { align: 'center' });
-            topY = y + 5;
-          }
-
-          // Product name
-          doc.setFontSize(12);
-          doc.setFont(undefined, 'bold');
-          const productNameLines = doc.splitTextToSize(item.productName, labelWidth - 4);
-          doc.text(productNameLines, x + labelWidth / 2, topY + 6, { align: 'center' });
-
-          let currentY = topY + 6 + (productNameLines.length * 5);
-
-          // Brand/Model
-          if (item.brand || item.model) {
-            doc.setFontSize(10);
-            doc.setFont(undefined, 'normal');
-            doc.text(`${item.brand} ${item.model}`, x + labelWidth / 2, currentY + 4, { align: 'center' });
-            currentY += 4;
-          }
-
-          // Product No
-          doc.setFontSize(9);
-          doc.setTextColor(100);
-          doc.text(`Product No: ${item.productNo}`, x + labelWidth / 2, currentY + 4, { align: 'center' });
-          currentY += 4;
-
-          // IMEI if present
-          if (item.imei) {
-            doc.setFontSize(8);
-            doc.setTextColor(200, 150, 0);
-            doc.text(`IMEI: ${item.imei}`, x + labelWidth / 2, currentY + 4, { align: 'center' });
-            currentY += 4;
-          }
-
-          // Add barcode image
-          const imgData = canvas.toDataURL('image/png');
-          doc.addImage(imgData, 'PNG', x + 5, currentY + 2, labelWidth - 10, 15);
-
-          // Type badge
-          doc.setFontSize(8);
-          doc.setFont(undefined, 'bold');
-          if (item.type === 'Mobile') {
-            doc.setTextColor(30, 64, 175);
-          } else {
-            doc.setTextColor(21, 128, 61);
-          }
-          doc.text(item.type, x + labelWidth / 2, currentY + 20, { align: 'center' });
-          doc.setTextColor(0);
-
-          // Move to next position
-          labelCount++;
-          if (labelCount % 2 === 0) {
-            x = margin;
-            y += labelHeight + gap;
-          } else {
-            x += labelWidth + gap;
-          }
-        }
-      }
-
+      const doc = layout === 'thermal'
+        ? BL.buildThermalPdf({ jsPDF, JsBarcode: window.JsBarcode, document, labels: filteredData, settings: thermalSettings, shopName })
+        : BL.buildA4Pdf({ jsPDF, labels: filteredData, shopName, getCanvas: (i) => document.getElementById(`barcode-${i}`) });
       doc.save(`Barcode_Labels_${new Date().getTime()}.pdf`);
     } catch (error) {
       console.error('PDF generation error:', error);
@@ -340,12 +274,13 @@ function BarcodeSheet({ entries, onClose, salesUrl, token }) {
               </h2>
               <p style={{ margin: '4px 0 0', color: '#64748b', fontSize: '14px' }}>
                 {filteredData.length} label{filteredData.length !== 1 ? 's' : ''} ready to download
+                {layout === 'thermal' && !thermalError ? ` · one ${thermalSettings.widthMm} × ${thermalSettings.heightMm} mm label per page` : ''}
               </p>
             </div>
             <div style={{ display: 'flex', gap: '12px' }}>
               <button
                 onClick={handleDownloadPDF}
-                disabled={downloading || filteredData.length === 0}
+                disabled={downloading || filteredData.length === 0 || (layout === 'thermal' && (!!thermalError || !barcodeLibReady))}
                 style={{
                   padding: '12px 24px',
                   backgroundColor: downloading ? '#94a3b8' : '#10b981',
@@ -457,7 +392,89 @@ function BarcodeSheet({ entries, onClose, salesUrl, token }) {
                     })}
                 </select>
               </div>
+
+              {/* Label layout */}
+              <div>
+                <label style={{ display: 'block', fontSize: '12px', fontWeight: '600', color: '#475569', marginBottom: '6px' }}>
+                  Label layout
+                </label>
+                <select
+                  value={layout}
+                  onChange={e => setLayout(e.target.value)}
+                  style={{
+                    width: '100%',
+                    padding: '8px 12px',
+                    border: '1px solid #cbd5e1',
+                    borderRadius: '6px',
+                    fontSize: '14px',
+                    cursor: 'pointer'
+                  }}
+                >
+                  <option value="a4">A4 sheet (existing)</option>
+                  <option value="thermal">Thermal label</option>
+                </select>
+              </div>
             </div>
+
+            {/* Thermal label size */}
+            {layout === 'thermal' && (
+              <div style={{ marginTop: '16px', paddingTop: '16px', borderTop: '1px solid #e2e8f0' }}>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '16px', alignItems: 'flex-end' }}>
+                  {[['widthMm', 'Label width (mm)'], ['heightMm', 'Label height (mm)']].map(([key, text]) => (
+                    <div key={key}>
+                      <label style={{ display: 'block', fontSize: '12px', fontWeight: '600', color: '#475569', marginBottom: '6px' }}>
+                        {text}
+                      </label>
+                      <input
+                        type="number"
+                        min={key === 'widthMm' ? BL.THERMAL_LIMITS.minWidthMm : BL.THERMAL_LIMITS.minHeightMm}
+                        max={key === 'widthMm' ? BL.THERMAL_LIMITS.maxWidthMm : BL.THERMAL_LIMITS.maxHeightMm}
+                        step="0.5"
+                        value={thermal[key]}
+                        onChange={e => { const v = e.target.value; setThermal(prev => ({ ...prev, [key]: v })); }}
+                        style={{ width: '110px', padding: '8px 10px', border: '1px solid ' + (thermalError ? '#f87171' : '#cbd5e1'), borderRadius: '6px', fontSize: '14px' }}
+                      />
+                    </div>
+                  ))}
+                  <label style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '13px', color: '#475569', paddingBottom: '9px', cursor: 'pointer' }}>
+                    <input
+                      type="checkbox"
+                      checked={thermal.showTypeTag}
+                      onChange={e => { const v = e.target.checked; setThermal(prev => ({ ...prev, showTypeTag: v })); }}
+                    />
+                    Show type tag
+                  </label>
+                  <span style={{ fontSize: '12px', color: '#64748b', paddingBottom: '9px' }}>
+                    One label per PDF page. Print at 100% / “Actual size”, not “Fit to page”.
+                  </span>
+                </div>
+                {thermalError && (
+                  <div style={{ marginTop: '10px', padding: '8px 12px', background: '#fef2f2', border: '1px solid #fecaca', borderRadius: '6px', color: '#b91c1c', fontSize: '13px' }}>
+                    {thermalError}
+                  </div>
+                )}
+                {thermalCheck && thermalCheck.problems.length > 0 && (
+                  <div style={{ marginTop: '10px', padding: '8px 12px', background: '#fffbeb', border: '1px solid #fde68a', borderRadius: '6px', color: '#92400e', fontSize: '13px' }}>
+                    <div style={{ fontWeight: '600', marginBottom: '4px' }}>
+                      ⚠ {thermalCheck.problems.reduce((s, p) => s + p.count, 0)} label(s) may not scan or print fully on a {thermalSettings.widthMm} × {thermalSettings.heightMm} mm label:
+                    </div>
+                    <ul style={{ margin: 0, paddingLeft: '18px' }}>
+                      {thermalCheck.problems.slice(0, 8).map(p => (
+                        <li key={p.code + '|' + p.productName}>
+                          <strong>{p.code || '(no code)'}</strong> — {p.productName}{p.count > 1 ? ` (×${p.count})` : ''}: {p.problems.join('; ')}
+                        </li>
+                      ))}
+                    </ul>
+                    {thermalCheck.problems.length > 8 && <div>…and {thermalCheck.problems.length - 8} more</div>}
+                  </div>
+                )}
+                {thermalCheck && thermalCheck.reducedText > 0 && (
+                  <div style={{ marginTop: '8px', fontSize: '12px', color: '#64748b' }}>
+                    {thermalCheck.reducedText} label(s) use smaller text so the barcode keeps a scannable size.
+                  </div>
+                )}
+              </div>
+            )}
 
             {/* Quantity Controls for Accessories */}
             {barcodeData.filter(item => 
