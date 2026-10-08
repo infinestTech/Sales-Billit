@@ -138,8 +138,10 @@ function labelCodeLines(item) {
   const rawNo = String(item && item.productNo != null ? item.productNo : '').trim();
   const productNo = rawNo === 'N/A' ? '' : rawNo;
   const priceCode = String(item && item.priceCode != null ? item.priceCode : '').trim();
+  // Only phones carry a real IMEI — accessories (or placeholder "0" values) never show this line
+  const hasRealImei = item && item.type === 'Mobile' && code && code !== productNo && !/^0+$/.test(code);
   const lines = [];
-  if (code && code !== productNo) lines.push({ text: code, kind: 'barcode' });
+  if (hasRealImei) lines.push({ text: code, kind: 'barcode' });
   if (productNo) lines.push({ text: productNo, kind: 'product' });
   if (priceCode) lines.push({ text: priceCode, kind: 'price' });
   return lines;

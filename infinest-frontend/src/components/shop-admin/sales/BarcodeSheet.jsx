@@ -37,6 +37,7 @@ function BarcodeSheet({ entries, onClose, salesUrl, token }) {
   });
   const [downloading, setDownloading] = React.useState(false);
   const [shopName, setShopName] = React.useState('');
+  const [qtyPage, setQtyPage] = React.useState(1);
 
   // 'a4' keeps the original sheet; 'thermal' prints one label per PDF page for the label printer
   const [layout, setLayout] = React.useState('a4');
@@ -76,14 +77,14 @@ function BarcodeSheet({ entries, onClose, salesUrl, token }) {
       const category = entry.category || '';
       
       entry.items?.forEach(item => {
-        // Check if it's a mobile by category OR by having IMEI numbers
-        const hasImei = Array.isArray(item.imes) && item.imes.length > 0 && item.imes.some(imei => imei && imei.trim());
+        // Check if it's a mobile by category OR by having real IMEI numbers (ignore "0"/placeholder values)
+        const hasImei = Array.isArray(item.imes) && item.imes.length > 0 && item.imes.some(imei => imei && imei.trim() && !/^0+$/.test(imei.trim()));
         const isMobile = category.toLowerCase().includes('mobile') || category.toLowerCase() === 'phone' || hasImei;
         
         if (isMobile && hasImei) {
-          // For mobiles: create separate barcode for each IMEI
+          // For mobiles: create separate barcode for each real IMEI
           item.imes.forEach((imei, index) => {
-            if (imei && imei.trim()) {
+            if (imei && imei.trim() && !/^0+$/.test(imei.trim())) {
               data.push({
                 id: `${item.productNo}-${imei}`,
                 productNo: item.productNo || 'N/A',
@@ -198,6 +199,21 @@ function BarcodeSheet({ entries, onClose, salesUrl, token }) {
     });
     return Array.from(products.values());
   }, [barcodeData]);
+
+  // Accessories matching the current type/product filter, shown (paginated) in the quantity customizer below
+  const accessoryQtyItems = React.useMemo(() => barcodeData.filter(item =>
+    item.type === 'Accessory' &&
+    (filters.type === 'all' || filters.type === 'accessory') &&
+    (filters.productNo === 'all' || filters.productNo === item.productNo)
+  ), [barcodeData, filters.type, filters.productNo]);
+
+  // Reset to the first page whenever the filtered accessory list changes
+  React.useEffect(() => { setQtyPage(1); }, [filters.type, filters.productNo]);
+
+  const QTY_PAGE_SIZE = 12;
+  const qtyTotalPages = Math.max(1, Math.ceil(accessoryQtyItems.length / QTY_PAGE_SIZE));
+  const clampedQtyPage = Math.min(qtyPage, qtyTotalPages);
+  const qtyPageItems = accessoryQtyItems.slice((clampedQtyPage - 1) * QTY_PAGE_SIZE, clampedQtyPage * QTY_PAGE_SIZE);
 
   // Thermal: flag labels whose code is too long or whose bars would be too short to scan
   const thermalCheck = React.useMemo(() => {
@@ -479,23 +495,36 @@ function BarcodeSheet({ entries, onClose, salesUrl, token }) {
             )}
 
             {/* Quantity Controls for Accessories */}
-            {barcodeData.filter(item => 
-              item.type === 'Accessory' && 
-              (filters.type === 'all' || filters.type === 'accessory') &&
-              (filters.productNo === 'all' || filters.productNo === item.productNo)
-            ).length > 0 && (
+            {accessoryQtyItems.length > 0 && (
               <div style={{ marginTop: '16px', paddingTop: '16px', borderTop: '1px solid #e2e8f0' }}>
-                <label style={{ display: 'block', fontSize: '12px', fontWeight: '600', color: '#475569', marginBottom: '8px' }}>
-                  Customize Quantity (Accessories)
-                </label>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '8px', marginBottom: '8px' }}>
+                  <label style={{ fontSize: '12px', fontWeight: '600', color: '#475569' }}>
+                    Customize Quantity (Accessories) · {accessoryQtyItems.length} product{accessoryQtyItems.length !== 1 ? 's' : ''}
+                  </label>
+                  {qtyTotalPages > 1 && (
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      <button
+                        type="button"
+                        onClick={() => setQtyPage(p => Math.max(1, p - 1))}
+                        disabled={clampedQtyPage <= 1}
+                        style={{ padding: '4px 10px', fontSize: '12px', borderRadius: '6px', border: '1px solid #cbd5e1', backgroundColor: clampedQtyPage <= 1 ? '#f1f5f9' : 'white', color: '#475569', cursor: clampedQtyPage <= 1 ? 'not-allowed' : 'pointer' }}
+                      >
+                        ← Prev
+                      </button>
+                      <span style={{ fontSize: '12px', color: '#64748b' }}>Page {clampedQtyPage} of {qtyTotalPages}</span>
+                      <button
+                        type="button"
+                        onClick={() => setQtyPage(p => Math.min(qtyTotalPages, p + 1))}
+                        disabled={clampedQtyPage >= qtyTotalPages}
+                        style={{ padding: '4px 10px', fontSize: '12px', borderRadius: '6px', border: '1px solid #cbd5e1', backgroundColor: clampedQtyPage >= qtyTotalPages ? '#f1f5f9' : 'white', color: '#475569', cursor: clampedQtyPage >= qtyTotalPages ? 'not-allowed' : 'pointer' }}
+                      >
+                        Next →
+                      </button>
+                    </div>
+                  )}
+                </div>
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(250px, 1fr))', gap: '12px' }}>
-                  {barcodeData
-                    .filter(item => 
-                      item.type === 'Accessory' && 
-                      (filters.type === 'all' || filters.type === 'accessory') &&
-                      (filters.productNo === 'all' || filters.productNo === item.productNo)
-                    )
-                    .map(item => (
+                  {qtyPageItems.map(item => (
                       <div key={item.productNo} style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                         <span style={{ fontSize: '13px', color: '#64748b', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                           {item.productName}

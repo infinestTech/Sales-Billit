@@ -3,7 +3,7 @@
 
 import { useEffect, useState } from "react"
 import api from "../../components/api"
-import { Plus, Calendar, Receipt, TrendingUp, TrendingDown, DollarSign, Clock, Hash, Smartphone, Package, Coins } from "lucide-react"
+import { Plus, Calendar, Receipt, DollarSign, Clock, Hash, Coins } from "lucide-react"
 import { PAYMENT_METHOD_OPTIONS, DEFAULT_PAYMENT_METHOD } from "@/constants/paymentMethods"
 import { getLocalDateString } from "@/lib/utils"
 
@@ -14,10 +14,6 @@ const TodayExpenses = ({ shopId }) => {
   const [paymentMethod, setPaymentMethod] = useState(DEFAULT_PAYMENT_METHOD)
   const [expenses, setExpenses] = useState([])
   const [selectedDate, setSelectedDate] = useState(getLocalDateString())
-  const [totalExpense, setTotalExpense] = useState(0)
-  const [dailyRevenue, setDailyRevenue] = useState(0)
-  const [serviceRevenue, setServiceRevenue] = useState(0)
-  const [stockRevenue, setStockRevenue] = useState(0)
   const [isLoading, setIsLoading] = useState(false)
 
 
@@ -30,26 +26,8 @@ const TodayExpenses = ({ shopId }) => {
         { headers: { Authorization: `Bearer ${token}` } },
       )
       setExpenses(res.data.expenses || [])
-      setTotalExpense(res.data.totalAmount || 0)
     } catch (err) {
       console.error("Failed to fetch expenses", err)
-    }
-  }
-
-
-  const fetchDailyRevenue = async (date = selectedDate) => {
-    try {
-      const token = localStorage.getItem("token")
-      const res = await api.post(
-        "/api/daily-summary",
-        { shop_id: shopId, date },
-        { headers: { Authorization: `Bearer ${token}` } },
-      )
-      setDailyRevenue(res.data.totalRevenue || 0)
-      setServiceRevenue(res.data.serviceRevenue || 0)
-      setStockRevenue(res.data.stockRevenue || 0)
-    } catch (err) {
-      console.error("Failed to fetch daily revenue", err)
     }
   }
 
@@ -95,7 +73,6 @@ const TodayExpenses = ({ shopId }) => {
       setAmount("")
       setPaymentMethod(DEFAULT_PAYMENT_METHOD)
       fetchExpenses()
-      fetchDailyRevenue()
     } catch (err) {
       console.error("Failed to add expense", err)
     } finally {
@@ -106,11 +83,7 @@ const TodayExpenses = ({ shopId }) => {
 
   useEffect(() => {
     fetchExpenses()
-    fetchDailyRevenue()
   }, [selectedDate])
-
-
-  const netRevenue = dailyRevenue - totalExpense
 
 
   return (
@@ -241,83 +214,6 @@ const TodayExpenses = ({ shopId }) => {
                   </>
                 )}
               </button>
-            </div>
-          </div>
-        </div>
-      </div>
-
-
-      {/* Summary Cards */}
-      <div className="px-8 py-6 bg-gradient-to-r from-gray-50 to-blue-50 border-b border-gray-200 flex-shrink-0">
-        <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
-          {/* Service Revenue Card */}
-          <div className="bg-white rounded-xl p-6 shadow-lg border border-gray-200 hover:shadow-xl transition-shadow duration-200">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-semibold text-gray-600 mb-1">Service Revenue</p>
-                <p className="text-2xl font-bold text-indigo-700">₹{serviceRevenue.toLocaleString("en-IN")}</p>
-              </div>
-              <div className="p-3 bg-indigo-100 rounded-xl">
-                <Smartphone className="h-8 w-8 text-indigo-600" />
-              </div>
-            </div>
-          </div>
-
-
-          {/* Stock Revenue Card */}
-          <div className="bg-white rounded-xl p-6 shadow-lg border border-gray-200 hover:shadow-xl transition-shadow duration-200">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-semibold text-gray-600 mb-1">Stock Revenue</p>
-                <p className="text-2xl font-bold text-purple-700">₹{stockRevenue.toLocaleString("en-IN")}</p>
-              </div>
-              <div className="p-3 bg-purple-100 rounded-xl">
-                <Package className="h-8 w-8 text-purple-600" />
-              </div>
-            </div>
-          </div>
-
-
-          {/* Total Revenue Card */}
-          <div className="bg-white rounded-xl p-6 shadow-lg border border-gray-200 hover:shadow-xl transition-shadow duration-200">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-semibold text-gray-600 mb-1">Total Revenue</p>
-                <p className="text-2xl font-bold text-blue-700">₹{dailyRevenue.toLocaleString("en-IN")}</p>
-              </div>
-              <div className="p-3 bg-blue-100 rounded-xl">
-                <TrendingUp className="h-8 w-8 text-blue-600" />
-              </div>
-            </div>
-          </div>
-
-
-          {/* Total Expense Card */}
-          <div className="bg-white rounded-xl p-6 shadow-lg border border-gray-200 hover:shadow-xl transition-shadow duration-200">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-semibold text-gray-600 mb-1">Total Expense</p>
-                <p className="text-2xl font-bold text-red-700">₹{totalExpense.toLocaleString("en-IN")}</p>
-              </div>
-              <div className="p-3 bg-red-100 rounded-xl">
-                <TrendingDown className="h-8 w-8 text-red-600" />
-              </div>
-            </div>
-          </div>
-
-
-          {/* Net Revenue Card */}
-          <div className="bg-white rounded-xl p-6 shadow-lg border border-gray-200 hover:shadow-xl transition-shadow duration-200">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-semibold text-gray-600 mb-1">Net Revenue</p>
-                <p className={`text-2xl font-bold ${netRevenue >= 0 ? "text-green-700" : "text-red-700"}`}>
-                  ₹{netRevenue.toLocaleString("en-IN")}
-                </p>
-              </div>
-              <div className={`p-3 rounded-xl ${netRevenue >= 0 ? "bg-green-100" : "bg-red-100"}`}>
-                <DollarSign className={`h-8 w-8 ${netRevenue >= 0 ? "text-green-600" : "text-red-600"}`} />
-              </div>
             </div>
           </div>
         </div>
