@@ -185,6 +185,7 @@ export default function InStockImport({ salesUrl, token, suppliers, existingEntr
         hsn: i.hsn,
         mrp: i.mrp,
         gstPercent: i.gstPercent,
+        priceCode: i.priceCode,
       })),
     };
     const res = await fetch(salesUrl + '/api/in-stock', {
@@ -262,7 +263,7 @@ export default function InStockImport({ salesUrl, token, suppliers, existingEntr
             <div>
               <div style={{ fontWeight: '600', color: '#3730a3' }}>{fileName ? `📄 ${fileName}` : 'Drop the invoice file here or choose a file'}</div>
               <div style={{ fontSize: '12px', color: '#6366f1', marginTop: '4px' }}>
-                Columns: S.No, Code, Product, HSN, MRP, Rate, Qty, T.Value, CGST %, CGST Amt, SGST %, SGST Amt, Total (optional: Brand, Model, IMEI, Selling Price, Warranty, Validity)
+                Columns: S.No, Code, Product, HSN, MRP, Rate, Qty, T.Value, CGST %, CGST Amt, SGST %, SGST Amt, Total (optional: Brand, Model, IMEI, Selling Price, Warranty, Validity, Price Code)
               </div>
             </div>
             <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
@@ -406,6 +407,7 @@ export default function InStockImport({ salesUrl, token, suppliers, existingEntr
                         <td style={td}>
                           <span style={{ fontFamily: 'monospace' }} title={i.originalCode ? `Supplier code "${i.originalCode}" is used for several products in this file` : undefined}>{i.productNo || <em style={{ color: '#9ca3af' }}>auto</em>}</span>
                           {i.originalCode ? <div style={{ fontSize: '11px', color: '#d97706' }}>was {i.originalCode}</div> : null}
+                          {i.priceCode ? <div style={{ fontSize: '11px', color: '#475569' }}>Price code: <span style={{ fontFamily: 'monospace' }}>{i.priceCode}</span></div> : null}
                         </td>
                         <td style={{ ...td, minWidth: '220px' }}>
                           <div style={{ fontWeight: '500', color: '#1e293b' }}>{i.productName || '-'}</div>

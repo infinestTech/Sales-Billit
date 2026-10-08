@@ -22,6 +22,8 @@ const InStockItemSchema = new mongoose.Schema({
   hsn: { type: String, default: '' },
   mrp: { type: Number, default: 0 },
   gstPercent: { type: Number, default: 0 },
+  // Shop's coded price printed on barcode labels (e.g. "AXC"); free text from the supplier bill import
+  priceCode: { type: String, default: '' },
 }, { _id: false });
 
 

@@ -337,6 +337,7 @@ export default function InStockView({ salesUrl, token }) {
                   validity: it.validity,
                   warrantyMonths: Number(it.warrantyMonths) || 0,
                   warrantyDetails: (it.warrantyDetails || '').trim(),
+                  priceCode: (it.priceCode || '').trim(),
                   imes: Array.isArray(it.imes) ? it.imes.filter(x => x && x.trim()) : []
                 };
               })
@@ -1715,6 +1716,14 @@ export default function InStockView({ salesUrl, token }) {
                             borderBottom: '1px solid #e5e7eb',
                             minWidth: '180px'
                           }}>Warranty Details</th>
+                          <th style={{
+                            padding: '12px',
+                            textAlign: 'center',
+                            fontWeight: '600',
+                            color: '#374151',
+                            borderBottom: '1px solid #e5e7eb',
+                            minWidth: '110px'
+                          }}>Price Code</th>
                           {category === 'Mobile' && (
                             <th style={{
                               padding: '12px',
@@ -1872,6 +1881,22 @@ export default function InStockView({ salesUrl, token }) {
                                 onChange={e=>updateItem(idx,'warrantyDetails',e.target.value)}
                                 placeholder="e.g. Brand warranty"
                                 maxLength={300}
+                                style={{
+                                  width: '100%',
+                                  padding: '8px 12px',
+                                  border: '1px solid #d1d5db',
+                                  borderRadius: '6px',
+                                  fontSize: '13px',
+                                  outline: 'none'
+                                }}
+                              />
+                            </td>
+                            <td style={{ padding: '12px' }}>
+                              <input
+                                value={it.priceCode || ''}
+                                onChange={e=>updateItem(idx,'priceCode',e.target.value)}
+                                placeholder="e.g. AXC"
+                                maxLength={40}
                                 style={{
                                   width: '100%',
                                   padding: '8px 12px',

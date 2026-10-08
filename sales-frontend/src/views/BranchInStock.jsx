@@ -316,6 +316,7 @@ function BranchInStock({ salesUrl, token }) {
         productName: row.productName || '',
         brand: row.brand || '',
         model: row.model || '',
+        priceCode: row.priceCode || '',
         quantity: row.branchQty ?? row.qty ?? 0,
         imes: Array.isArray(row.imes) ? row.imes : (row.imei ? [row.imei] : [])
       });

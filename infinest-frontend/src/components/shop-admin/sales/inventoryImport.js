@@ -2,7 +2,7 @@ import * as XLSX from "xlsx";
 
 // Parses supplier tax invoices (Excel/CSV/JSON) shaped like:
 // S.No | Code | Product | HSN | MRP | Rate | Qty | T.Value | CGST % | CGST Amt | SGST % | SGST Amt | Total
-// plus optional Brand, Model, IMEI, Selling Price, Warranty (months), Warranty Details, Validity.
+// plus optional Brand, Model, IMEI, Selling Price, Warranty (months), Warranty Details, Validity, Price Code.
 
 const ALIASES = {
   sno: ["s.no", "sno", "s no", "sl no", "sl.no", "#", "serial no"],
@@ -27,6 +27,7 @@ const ALIASES = {
   warrantyMonths: ["warranty (months)", "warranty months", "warrantymonths", "warranty"],
   warrantyDetails: ["warranty details", "warrantydetails", "warranty note"],
   validity: ["validity", "expiry", "expiry date", "valid till"],
+  priceCode: ["price code", "pricecode", "price cd", "p code", "pcode", "rate code", "cost code"],
 };
 
 const TAX_GROUPS = { cgst: ["cgstPercent", "cgstAmount"], sgst: ["sgstPercent", "sgstAmount"], igst: ["igstPercent", "igstAmount"] };
@@ -161,6 +162,7 @@ function buildItem(raw, rowNumber) {
     warrantyMonths: Math.max(0, Math.round(toNumber(raw.warrantyMonths))),
     warrantyDetails: text(raw.warrantyDetails).slice(0, 300),
     validity: toDateString(raw.validity),
+    priceCode: text(raw.priceCode).slice(0, 40),
     errors,
   };
 }
@@ -361,11 +363,11 @@ export function summarize(items) {
 const TEMPLATE_HEADER = [
   "S.No", "Code", "Product", "HSN", "MRP", "Rate", "Qty", "T.Value",
   "CGST %", "CGST Amt", "SGST %", "SGST Amt", "Total",
-  "Brand", "Model", "IMEI", "Selling Price", "Warranty (months)", "Warranty Details", "Validity",
+  "Brand", "Model", "IMEI", "Selling Price", "Warranty (months)", "Warranty Details", "Validity", "Price Code",
 ];
 const TEMPLATE_ROWS = [
-  [1, "POR 2203", "iKonnect C Pro - Type C to 3.5mm Female", "85444999", 0, 149, 5, 631.36, "9%", 56.82, "9%", 56.82, 745, "Portronics", "iKonnect C Pro", "", 199, 6, "Brand warranty", ""],
-  [2, "POR 1236", "Konnect B Micro - 1M Micro USB Nylon Braided Cable", "85444999", 499, 66, 10, 559.32, "9%", 50.34, "9%", 50.34, 660, "Portronics", "Konnect B", "", "", 6, "", ""],
+  [1, "POR 2203", "iKonnect C Pro - Type C to 3.5mm Female", "85444999", 0, 149, 5, 631.36, "9%", 56.82, "9%", 56.82, 745, "Portronics", "iKonnect C Pro", "", 199, 6, "Brand warranty", "", "AXC"],
+  [2, "POR 1236", "Konnect B Micro - 1M Micro USB Nylon Braided Cable", "85444999", 499, 66, 10, 559.32, "9%", 50.34, "9%", 50.34, 660, "Portronics", "Konnect B", "", "", 6, "", "", "BTZ"],
 ];
 
 export function downloadTemplate() {
@@ -385,7 +387,7 @@ export function downloadTemplate() {
 }
 
 export function downloadJsonTemplate() {
-  const keys = ["sno", "code", "product", "hsn", "mrp", "rate", "qty", "taxableValue", "cgstPercent", "cgstAmount", "sgstPercent", "sgstAmount", "total", "brand", "model", "imei", "sellingPrice", "warrantyMonths", "warrantyDetails", "validity"];
+  const keys = ["sno", "code", "product", "hsn", "mrp", "rate", "qty", "taxableValue", "cgstPercent", "cgstAmount", "sgstPercent", "sgstAmount", "total", "brand", "model", "imei", "sellingPrice", "warrantyMonths", "warrantyDetails", "validity", "priceCode"];
   const sample = {
     supplierName: "Finetune Mobiles",
     billNo: "GST-R-373",

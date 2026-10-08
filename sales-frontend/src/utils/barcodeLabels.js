@@ -21,10 +21,10 @@ const MIN_CODE_FONT_PT = 4;
 
 // Tried in order: text only shrinks when the bars would otherwise get too short to scan
 const TEXT_LEVELS = [
-  { shop: 6, product: 7, productLines: 2, code: 6 },
-  { shop: 5, product: 6, productLines: 2, code: 5 },
-  { shop: 5, product: 6, productLines: 1, code: 5 },
-  { shop: 0, product: 5, productLines: 1, code: 5 },
+  { shop: 6, product: 7, code: 6 },
+  { shop: 5, product: 6, code: 5 },
+  { shop: 5, product: 5, code: 4.5 },
+  { shop: 0, product: 5, code: 4.5 },
 ];
 
 const THERMAL_DEFAULTS = { widthMm: 50, heightMm: 25, showTypeTag: false };
@@ -117,9 +117,35 @@ function resolvePosScan(products, scanned) {
   return { product: hit.value.product, imei: hit.value.imei, byProductNo: hit.group === 1 };
 }
 
-// ── Thermal labels ────────────────────────────────────────────────────────────
+// ── Label content ─────────────────────────────────────────────────────────────
+// Every label reads, top to bottom: shop name, short product title, barcode, product code, price code.
 
 const barcodeValueOf = (item) => String(item && item.barcodeValue != null ? item.barcodeValue : '').trim();
+
+/** First two words of the product name, followed by ".." when the name is longer. */
+function shortTitle(name) {
+  const words = String(name == null ? '' : name).trim().split(/\s+/).filter(Boolean);
+  if (words.length <= 2) return words.join(' ');
+  return words.slice(0, 2).join(' ') + '..';
+}
+
+/**
+ * Text lines printed under the bars: the barcode value only when it is not the product code (a phone's IMEI),
+ * then the product code, then the price code. Each line is { text, kind: 'barcode' | 'product' | 'price' }.
+ */
+function labelCodeLines(item) {
+  const code = barcodeValueOf(item);
+  const rawNo = String(item && item.productNo != null ? item.productNo : '').trim();
+  const productNo = rawNo === 'N/A' ? '' : rawNo;
+  const priceCode = String(item && item.priceCode != null ? item.priceCode : '').trim();
+  const lines = [];
+  if (code && code !== productNo) lines.push({ text: code, kind: 'barcode' });
+  if (productNo) lines.push({ text: productNo, kind: 'product' });
+  if (priceCode) lines.push({ text: priceCode, kind: 'price' });
+  return lines;
+}
+
+// ── Thermal labels ────────────────────────────────────────────────────────────
 
 const lineMm = (pt) => pt * PT_MM * LINE_SPACING;
 
@@ -141,14 +167,6 @@ function ellipsize(doc, text, maxWidth) {
   return s.slice(0, lo).trimEnd() + '...';
 }
 
-function wrapLines(doc, text, maxWidth, maxLines) {
-  const lines = doc.splitTextToSize(String(text || ''), maxWidth).map((l) => (doc.getTextWidth(l) > maxWidth ? ellipsize(doc, l, maxWidth) : l));
-  if (lines.length <= maxLines) return lines;
-  const kept = lines.slice(0, maxLines - 1);
-  kept.push(ellipsize(doc, lines.slice(maxLines - 1).join(' '), maxWidth));
-  return kept;
-}
-
 /** Code 128 module count for a value, or null if it cannot be encoded. */
 function countModules(JsBarcode, value) {
   if (!value) return null;
@@ -163,7 +181,7 @@ function countModules(JsBarcode, value) {
 }
 
 function layoutText(doc, label, settings, lvl, textW) {
-  const t = { fonts: {}, lines: { shop: null, product: [], code: label.code, tag: null }, topH: 0, bottomH: 0, codeFits: true };
+  const t = { fonts: {}, lines: { shop: null, product: [], codes: [], tag: null }, topH: 0, bottomH: 0, codeFits: true };
   if (label.shopName && lvl.shop) {
     applyFont(doc, lvl.shop, false);
     t.fonts.shop = lvl.shop;
@@ -172,21 +190,24 @@ function layoutText(doc, label, settings, lvl, textW) {
   }
   applyFont(doc, lvl.product, true);
   t.fonts.product = lvl.product;
-  t.lines.product = wrapLines(doc, label.productName, textW, lvl.productLines);
+  t.lines.product = label.productName ? [ellipsize(doc, label.productName, textW)] : [];
   t.topH += t.lines.product.length * lineMm(lvl.product);
 
-  let codePt = lvl.code;
-  applyFont(doc, codePt, false);
-  while (codePt > MIN_CODE_FONT_PT && doc.getTextWidth(label.code) > textW) {
-    codePt -= 0.5;
-    applyFont(doc, codePt, false);
-  }
-  t.fonts.code = codePt;
-  t.codeFits = doc.getTextWidth(label.code) <= textW;
-  t.bottomH += lineMm(codePt);
+  label.codeLines.forEach((line) => {
+    const bold = line.kind === 'price';
+    let pt = lvl.code;
+    applyFont(doc, pt, bold);
+    while (pt > MIN_CODE_FONT_PT && doc.getTextWidth(line.text) > textW) {
+      pt -= 0.5;
+      applyFont(doc, pt, bold);
+    }
+    if (doc.getTextWidth(line.text) > textW) t.codeFits = false;
+    t.lines.codes.push({ text: line.text, pt, bold });
+    t.bottomH += lineMm(pt);
+  });
 
   if (settings.showTypeTag && label.type) {
-    t.fonts.tag = Math.min(codePt, 5);
+    t.fonts.tag = Math.min(lvl.code, 5);
     t.lines.tag = label.type;
     t.bottomH += lineMm(t.fonts.tag);
   }
@@ -247,8 +268,8 @@ function planThermalLabel(doc, label, settings, modules) {
     }
   }
 
-  // Vertical: text block on top, then barcode + human-readable code centred in the remaining space
-  const y = { shop: null, product: [], barcode: 0, code: 0, tag: null };
+  // Vertical: text block on top, then barcode + code lines (product code, price code) centred in the remaining space
+  const y = { shop: null, product: [], barcode: 0, codes: [], tag: null };
   let cursor = PADDING_MM;
   if (t.lines.shop) { y.shop = cursor; cursor += lineMm(t.fonts.shop); }
   t.lines.product.forEach(() => { y.product.push(cursor); cursor += lineMm(t.fonts.product); });
@@ -257,12 +278,14 @@ function planThermalLabel(doc, label, settings, modules) {
   const groupH = (modules ? barH + GAP_MM : 0) + t.bottomH;
   const groupTop = regionTop + Math.max(0, (regionH - groupH) / 2);
   y.barcode = groupTop;
-  y.code = groupTop + (modules ? barH + GAP_MM : 0);
-  if (t.lines.tag) y.tag = y.code + lineMm(t.fonts.code);
+  let codeY = groupTop + (modules ? barH + GAP_MM : 0);
+  t.lines.codes.forEach((line) => { y.codes.push(codeY); codeY += lineMm(line.pt); });
+  if (t.lines.tag) y.tag = codeY;
 
   return {
     widthMm: W,
     heightMm: H,
+    code: label.code,
     modules,
     moduleDots: moduleDots >= MIN_MODULE_DOTS ? moduleDots : null,
     moduleMm,
@@ -279,13 +302,14 @@ function planThermalLabel(doc, label, settings, modules) {
 function toThermalLabel(item, shopName) {
   return {
     code: barcodeValueOf(item),
-    productName: item.productName || '',
+    productName: shortTitle(item.productName),
+    codeLines: labelCodeLines(item),
     type: item.type || '',
     shopName: shopName || '',
   };
 }
 
-const labelKey = (item) => `${barcodeValueOf(item)}\u0000${item.productName || ''}\u0000${item.type || ''}`;
+const labelKey = (item) => [barcodeValueOf(item), item.productName || '', item.productNo || '', item.priceCode || '', item.type || ''].join('\u0000');
 
 /**
  * Checks every distinct label without building the PDF. Returns
@@ -301,7 +325,7 @@ function checkThermalLabels({ jsPDF, JsBarcode, labels, settings, shopName }) {
     if (seen.has(key)) { seen.get(key).count += 1; return; }
     const label = toThermalLabel(item, shopName);
     const plan = planThermalLabel(doc, label, settings, countModules(JsBarcode, label.code));
-    const entry = { code: label.code, productName: label.productName, count: 1, plan };
+    const entry = { code: label.code, productName: item.productName || '', count: 1, plan };
     seen.set(key, entry);
   });
   seen.forEach((entry) => {
@@ -327,8 +351,10 @@ function drawThermalLabel(doc, plan, image) {
     const h = (w * image.height) / image.width;
     doc.addImage(image.dataUrl, 'PNG', plan.barcode.x, plan.barcode.y, w, h, image.alias, 'FAST');
   }
-  applyFont(doc, plan.fonts.code, false);
-  doc.text(plan.lines.code, cx, plan.y.code, opts);
+  plan.lines.codes.forEach((line, i) => {
+    applyFont(doc, line.pt, line.bold);
+    doc.text(line.text, cx, plan.y.codes[i], opts);
+  });
   if (plan.lines.tag) {
     applyFont(doc, plan.fonts.tag, true);
     doc.text(plan.lines.tag, cx, plan.y.tag, opts);
@@ -354,10 +380,10 @@ function buildThermalPdf({ jsPDF, JsBarcode, document: dom, labels, settings, sh
     const plan = plans.get(key);
     let image = null;
     if (plan.modules) {
-      const imgKey = `${plan.modulePx}\u0000${plan.lines.code}`;
+      const imgKey = `${plan.modulePx}\u0000${plan.code}`;
       if (!images.has(imgKey)) {
         const canvas = dom.createElement('canvas');
-        JsBarcode(canvas, plan.lines.code, {
+        JsBarcode(canvas, plan.code, {
           format: 'CODE128',
           width: plan.modulePx,
           height: CANVAS_HEIGHT_PX,
@@ -375,7 +401,7 @@ function buildThermalPdf({ jsPDF, JsBarcode, document: dom, labels, settings, sh
   return doc;
 }
 
-// ── A4 sheet (original layout, unchanged) ─────────────────────────────────────
+// ── A4 sheet ──────────────────────────────────────────────────────────────────
 
 /**
  * A4 portrait, 2 × 4 grid of 90 × 55 mm labels. getCanvas(i) returns the rendered preview barcode canvas
@@ -410,60 +436,36 @@ function buildA4Pdf({ jsPDF, labels, shopName, getCanvas }) {
       doc.setDrawColor(200);
       doc.rect(x, y, labelWidth, labelHeight);
 
+      const cx = x + labelWidth / 2;
+      let cursor = y + 7;
+      doc.setTextColor(0);
+
       // Shop name
-      let topY = y;
       if (shopName) {
         doc.setFontSize(9);
         doc.setFont(undefined, 'bold');
-        doc.setTextColor(0);
-        doc.text(doc.splitTextToSize(shopName, labelWidth - 4)[0], x + labelWidth / 2, y + 5, { align: 'center' });
-        topY = y + 5;
+        doc.text(doc.splitTextToSize(shopName, labelWidth - 4)[0], cx, cursor, { align: 'center' });
+        cursor += 6;
       }
 
-      // Product name
+      // Product title: first two words only
       doc.setFontSize(12);
       doc.setFont(undefined, 'bold');
-      const productNameLines = doc.splitTextToSize(item.productName, labelWidth - 4);
-      doc.text(productNameLines, x + labelWidth / 2, topY + 6, { align: 'center' });
+      doc.text(doc.splitTextToSize(shortTitle(item.productName), labelWidth - 4)[0] || '', cx, cursor, { align: 'center' });
+      cursor += 3;
 
-      let currentY = topY + 6 + (productNameLines.length * 5);
-
-      // Brand/Model
-      if (item.brand || item.model) {
-        doc.setFontSize(10);
-        doc.setFont(undefined, 'normal');
-        doc.text(`${item.brand} ${item.model}`, x + labelWidth / 2, currentY + 4, { align: 'center' });
-        currentY += 4;
-      }
-
-      // Product No
-      doc.setFontSize(9);
-      doc.setTextColor(100);
-      doc.text(`Product No: ${item.productNo}`, x + labelWidth / 2, currentY + 4, { align: 'center' });
-      currentY += 4;
-
-      // IMEI if present
-      if (item.imei) {
-        doc.setFontSize(8);
-        doc.setTextColor(200, 150, 0);
-        doc.text(`IMEI: ${item.imei}`, x + labelWidth / 2, currentY + 4, { align: 'center' });
-        currentY += 4;
-      }
-
-      // Add barcode image
+      // Barcode
       const imgData = canvas.toDataURL('image/png');
-      doc.addImage(imgData, 'PNG', x + 5, currentY + 2, labelWidth - 10, 15);
+      doc.addImage(imgData, 'PNG', x + 5, cursor, labelWidth - 10, 15);
+      cursor += 15 + 5;
 
-      // Type badge
-      doc.setFontSize(8);
-      doc.setFont(undefined, 'bold');
-      if (item.type === 'Mobile') {
-        doc.setTextColor(30, 64, 175);
-      } else {
-        doc.setTextColor(21, 128, 61);
-      }
-      doc.text(item.type, x + labelWidth / 2, currentY + 20, { align: 'center' });
-      doc.setTextColor(0);
+      // Product code, price code (and the IMEI for phones, whose barcode is the IMEI)
+      labelCodeLines(item).forEach((line) => {
+        doc.setFontSize(line.kind === 'price' ? 11 : 10);
+        doc.setFont(undefined, line.kind === 'price' ? 'bold' : 'normal');
+        doc.text(doc.splitTextToSize(line.text, labelWidth - 4)[0], cx, cursor, { align: 'center' });
+        cursor += 5;
+      });
 
       // Move to next position
       labelCount++;
@@ -478,5 +480,5 @@ function buildA4Pdf({ jsPDF, labels, shopName, getCanvas }) {
   return doc;
 }
 
-window.BarcodeLabels = { THERMAL_DEFAULTS, THERMAL_LIMITS, thermalSizeError, loadThermalSettings, saveThermalSettings, normalizeScanCode, findScanMatch, resolvePosScan, barcodeValueOf, countModules, planThermalLabel, checkThermalLabels, buildThermalPdf, buildA4Pdf };
+window.BarcodeLabels = { THERMAL_DEFAULTS, THERMAL_LIMITS, thermalSizeError, loadThermalSettings, saveThermalSettings, normalizeScanCode, findScanMatch, resolvePosScan, barcodeValueOf, shortTitle, labelCodeLines, countModules, planThermalLabel, checkThermalLabels, buildThermalPdf, buildA4Pdf };
 })();

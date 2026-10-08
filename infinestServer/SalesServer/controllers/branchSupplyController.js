@@ -133,6 +133,7 @@ exports.createBranchSupply = async (req, res) => {
       if (i.hsn) out.hsn = String(i.hsn).trim().slice(0, 20);
       if (Number(i.mrp) > 0) out.mrp = Number(i.mrp);
       if (Number(i.gstPercent) > 0) out.gstPercent = Number(i.gstPercent);
+      if (i.priceCode) out.priceCode = String(i.priceCode).trim().slice(0, 40);
       // include imes only when client provided them (non-empty)
       if (Array.isArray(i.imes) && i.imes.length) out.imes = i.imes.slice(0, qty);
       return out;
@@ -189,20 +190,25 @@ exports.createBranchSupply = async (req, res) => {
         costPrice: it.costPrice
       };
       if (source === 'import' && !(setObj.sellingPrice > 0)) delete setObj.sellingPrice;
+      if (it.priceCode) setObj.priceCode = it.priceCode;
       const update = { $set: setObj, $inc: { qty: it.qty } };
 
-      // If this item references a central InStock item, try to fetch productNo from central
+      // If this item references a central InStock item, try to fetch productNo / price code from central
       try {
         const pid = String(it.productId || '');
-        if ((!update.$set.productNo || update.$set.productNo === '') && pid.includes('_')) {
+        if (((!update.$set.productNo || update.$set.productNo === '') || !update.$set.priceCode) && pid.includes('_')) {
           const [docId, idxStr] = pid.split('_');
           const idx = Number(idxStr);
-          if (docId && Number.isInteger(idx)) {
+          if (isValidObjectId(docId) && Number.isInteger(idx)) {
             const central = await InStock.findById(docId).lean();
             if (central && Array.isArray(central.items) && central.items[idx]) {
               const centralIt = central.items[idx];
-              if (centralIt && centralIt.productNo) {
+              if (centralIt && centralIt.productNo && !update.$set.productNo) {
                 update.$set.productNo = centralIt.productNo;
+              }
+              if (centralIt && centralIt.priceCode && !update.$set.priceCode) {
+                update.$set.priceCode = centralIt.priceCode;
+                it.priceCode = centralIt.priceCode;
               }
             }
           }
@@ -398,6 +404,7 @@ exports.listBranchStock = async (req, res) => {
                   if (!r.model || r.model === '') r.model = it.model || r.model || '';
                     if (!r.validity) r.validity = it.validity || r.validity || null;
                     if (!r.productNo || r.productNo === '') r.productNo = it.productNo || r.productNo || '';
+                    if (!r.priceCode && it.priceCode) r.priceCode = it.priceCode;
                     // DO NOT backfill central imes into branch rows here. Branch IMEs are branch-scoped
                     // and copying central IMEs into branch rows can cause stale/incorrect IME lists to appear
                     // in branch views. (Keep other backfills like brand/model/validity/productNo.)
@@ -461,6 +468,7 @@ exports.listBranchStock = async (req, res) => {
           validity: it.validity || null,
           warrantyMonths: Number(it.warrantyMonths) || 0,
           warrantyDetails: it.warrantyDetails || '',
+          priceCode: it.priceCode || '',
           totalCostPrice: (Number(qty) * Number(costPrice || 0)),
           imes: Array.isArray(it.imes) ? it.imes : [],
           // expose centralImes for frontend dropdowns that need to show central IMEs
@@ -518,6 +526,7 @@ exports.listBranchStock = async (req, res) => {
           validity: br ? (br.validity || c.validity) : c.validity,
           warrantyMonths: Number(br && br.warrantyMonths) || Number(c.warrantyMonths) || 0,
           warrantyDetails: (br && br.warrantyDetails) || c.warrantyDetails || '',
+          priceCode: (br && br.priceCode) || c.priceCode || '',
           totalCostPrice: Number(totalQty) * Number(costPrice || 0),
           // include imes only from branch rows. Do NOT fall back to central imes for branch views.
           imes: Array.isArray(br && br.imes) && br.imes.length ? br.imes : [],
@@ -549,6 +558,7 @@ exports.listBranchStock = async (req, res) => {
             validity: br.validity || null,
             warrantyMonths: Number(br.warrantyMonths) || 0,
             warrantyDetails: br.warrantyDetails || '',
+            priceCode: br.priceCode || '',
             totalCostPrice: Number(qty) * Number(costPrice || 0),
             imes: Array.isArray(br.imes) ? br.imes : []
           });

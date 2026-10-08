@@ -113,6 +113,7 @@ exports.createInStock = async (req, res) => {
           hsn: (i.hsn || '').toString().trim().slice(0, 20),
           mrp: Math.max(0, Number(i.mrp) || 0),
           gstPercent: Math.max(0, Number(i.gstPercent) || 0),
+          priceCode: (i.priceCode || '').toString().trim().slice(0, 40),
         };
       }),
       createdBy: String(userId || ''),

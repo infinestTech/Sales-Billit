@@ -64,6 +64,7 @@ function BarcodeSheet({ entries, onClose, salesUrl, token }) {
                 brand: item.brand || '',
                 model: item.model || '',
                 imei: imei,
+                priceCode: item.priceCode || '',
                 barcodeValue: imei.trim(),
                 type: 'Mobile',
                 quantity: 1
@@ -81,6 +82,7 @@ function BarcodeSheet({ entries, onClose, salesUrl, token }) {
             brand: item.brand || '',
             model: item.model || '',
             imei: null,
+            priceCode: item.priceCode || '',
             barcodeValue: item.productNo || 'N/A',
             type: 'Accessory',
             quantity: quantity,
@@ -139,8 +141,8 @@ function BarcodeSheet({ entries, onClose, salesUrl, token }) {
                   format: 'CODE128',
                   width: 2,
                   height: 60,
-                  displayValue: true,
-                  fontSize: 12,
+                  // The code is printed as its own line below the bars (product code, price code)
+                  displayValue: false,
                   margin: 5
                 });
               }
@@ -537,11 +539,7 @@ function BarcodeSheet({ entries, onClose, salesUrl, token }) {
                     alignItems: 'center',
                     gap: '8px'
                   }}>
-                    <div style={{
-                      width: '100%',
-                      textAlign: 'center',
-                      marginBottom: '8px'
-                    }}>
+                    <div style={{ width: '100%', textAlign: 'center' }}>
                       {shopName && (
                         <div style={{
                           fontSize: '12px',
@@ -555,59 +553,30 @@ function BarcodeSheet({ entries, onClose, salesUrl, token }) {
                           {shopName}
                         </div>
                       )}
-                      <div style={{
+                      <div title={item.productName} style={{
                         fontSize: '16px',
                         fontWeight: '700',
                         color: '#1e293b',
-                        marginBottom: '4px',
                         wordWrap: 'break-word'
                       }}>
-                        {item.productName}
+                        {BL.shortTitle(item.productName)}
                       </div>
-                      {(item.brand || item.model) && (
-                        <div style={{
-                          fontSize: '13px',
-                          color: '#64748b',
-                          marginBottom: '4px'
-                        }}>
-                          {item.brand} {item.model}
-                        </div>
-                      )}
-                      <div style={{
-                        fontSize: '12px',
-                        color: '#94a3b8',
-                        fontWeight: '600'
-                      }}>
-                        Product No: {item.productNo}
-                      </div>
-                      {item.imei && (
-                        <div style={{
-                          fontSize: '11px',
-                          color: '#f59e0b',
-                          fontWeight: '600',
-                          marginTop: '4px',
-                          padding: '4px 8px',
-                          backgroundColor: '#fef3c7',
-                          borderRadius: '4px',
-                          display: 'inline-block'
-                        }}>
-                          IMEI: {item.imei}
-                        </div>
-                      )}
                     </div>
 
                     <canvas id={`barcode-${index}`} style={{ maxWidth: '100%' }}></canvas>
-                    
-                    <div style={{
-                      fontSize: '10px',
-                      padding: '4px 8px',
-                      borderRadius: '4px',
-                      backgroundColor: item.type === 'Mobile' ? '#dbeafe' : '#f0fdf4',
-                      color: item.type === 'Mobile' ? '#1e40af' : '#15803d',
-                      fontWeight: '600',
-                      marginTop: '4px'
-                    }}>
-                      {item.type}
+
+                    <div style={{ textAlign: 'center' }}>
+                      {BL.labelCodeLines(item).map(line => (
+                        <div key={line.kind} style={{
+                          fontSize: line.kind === 'price' ? '14px' : '13px',
+                          fontWeight: line.kind === 'price' ? '700' : '600',
+                          color: '#1e293b',
+                          fontFamily: 'monospace',
+                          wordBreak: 'break-all'
+                        }}>
+                          {line.text}
+                        </div>
+                      ))}
                     </div>
                   </div>
                 </div>

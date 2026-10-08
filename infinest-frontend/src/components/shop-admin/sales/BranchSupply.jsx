@@ -163,6 +163,7 @@ export default function BranchSupply({ salesUrl, token }) {
           validity: row.validity || null,
           warrantyMonths: row.warrantyMonths || 0,
           warrantyDetails: row.warrantyDetails || '',
+          priceCode: row.priceCode || '',
           qty: qtyToSend,
           sellingPrice: sellingPrice,
           costPrice: row.costPrice,
