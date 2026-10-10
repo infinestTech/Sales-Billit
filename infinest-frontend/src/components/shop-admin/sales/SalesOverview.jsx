@@ -14,7 +14,7 @@ async function getJson(path, token) {
   return res.json();
 }
 
-export default function SalesOverview({ session, onNavigate, compact = false }) {
+export default function SalesOverview({ session, onNavigate, compact = false, showTitle = true }) {
   const [stats, setStats] = useState(null);
   const [error, setError] = useState("");
   const token = session?.token;
@@ -68,10 +68,12 @@ export default function SalesOverview({ session, onNavigate, compact = false }) 
 
   return (
     <div className="space-y-3">
-      <div className="flex items-center gap-2">
-        <Truck className="h-5 w-5 text-indigo-600" />
-        <h3 className="text-gray-900 font-semibold text-lg">Sales</h3>
-      </div>
+      {showTitle && (
+        <div className="flex items-center gap-2">
+          <Truck className="h-5 w-5 text-indigo-600" />
+          <h3 className="text-gray-900 font-semibold text-lg">Sales</h3>
+        </div>
+      )}
 
       {!token ? (
         <div className="bg-white border border-gray-200 rounded-xl p-6 shadow-sm text-sm text-gray-600 flex items-center gap-2">
@@ -85,7 +87,7 @@ export default function SalesOverview({ session, onNavigate, compact = false }) 
       ) : (
         <>
           {error && <div className="text-sm text-red-600">{error}</div>}
-          <div className={`grid gap-4 ${compact ? "grid-cols-2" : "grid-cols-1 md:grid-cols-2 lg:grid-cols-4"}`}>
+          <div className={`grid ${compact ? "grid-cols-2 gap-2" : "gap-4 grid-cols-1 md:grid-cols-2 lg:grid-cols-4"}`}>
             {cards.map(({ key, label, value, sub, icon: Icon, color, tab }) => (
               <button
                 key={key}

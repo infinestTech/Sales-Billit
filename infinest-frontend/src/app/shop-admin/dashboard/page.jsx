@@ -7,9 +7,7 @@ import axios from 'axios';
 import {
   Users, Phone, Calendar, Filter, Search, ChevronDown,
   TrendingUp, Package, Wrench, DollarSign, CheckCircle,
-  XCircle, Truck, AlertCircle, UserPlus, Briefcase,
-  ClipboardList, FileText, Wallet, Calculator, Building2,
-  Boxes, History, CreditCard, Store, Send, BarChart3, Award
+  XCircle, Truck, AlertCircle, FileText
 } from 'lucide-react';
 import {
   LineChart, Line, AreaChart, Area, BarChart, Bar,
@@ -29,87 +27,12 @@ import SuppliersPanel from '@/components/shop-admin/panels/SuppliersPanel';
 import { formatPaymentMethodLabel } from '@/constants/paymentMethods';
 import useSalesSession from '@/components/shop-admin/sales/useSalesSession';
 import * as XLSX from 'xlsx';
+import { NAV, buildVisibleNav, isTabAllowed } from '@/components/shop-admin/shopAdminNav';
 
 const SalesWorkspace = dynamic(() => import('@/components/shop-admin/sales/SalesWorkspace'), { ssr: false });
 const SalesOverview = dynamic(() => import('@/components/shop-admin/sales/SalesOverview'), { ssr: false });
 const EmployeePerformance = dynamic(() => import('@/components/shop-admin/EmployeePerformance'), { ssr: false });
 const BusinessAnalytics = dynamic(() => import('@/components/shop-admin/BusinessAnalytics'), { ssr: false });
-
-// Sidebar navigation config: standalone items, section headings and collapsible groups.
-// `product` decides visibility from the shop's plan: 'service', 'sales' or undefined (always shown).
-const NAV = [
-  { type: 'item', id: 'overview', label: 'Overview', icon: TrendingUp },
-  { type: 'item', id: 'business-analytics', label: 'Business Analytics', icon: BarChart3 },
-  {
-    type: 'group', key: 'hr', label: 'HR', icon: Users, children: [
-      { id: 'hr-employees', label: 'Employees', icon: Users },
-      { id: 'hr-attendance', label: 'Attendance', icon: CheckCircle },
-      { id: 'salary', label: 'Salary', icon: DollarSign },
-      { id: 'hr-performance', label: 'Performance', icon: Award },
-    ]
-  },
-  { type: 'heading', key: 'heading-service', label: 'Service', product: 'service' },
-  {
-    type: 'group', key: 'records', label: 'Records', icon: ClipboardList, product: 'service', children: [
-      { id: 'all-records', label: 'All Records', icon: Phone },
-      { id: 'customer-create', label: 'Create Customer', icon: UserPlus },
-      { id: 'dealer-create', label: 'Create Dealer', icon: Briefcase },
-    ]
-  },
-  {
-    type: 'group', key: 'suppliers', label: 'Suppliers', icon: Truck, product: 'service', children: [
-      { id: 'suppliers', label: 'Manage Suppliers', icon: Truck },
-    ]
-  },
-  {
-    type: 'group', key: 'reports', label: 'Reports', icon: FileText, product: 'service', children: [
-      { id: 'revenue', label: 'Revenue', icon: DollarSign },
-      { id: 'report', label: 'Financial Report', icon: AlertCircle },
-    ]
-  },
-  { type: 'heading', key: 'heading-sales', label: 'Sales', product: 'sales' },
-  {
-    type: 'group', key: 'sales-finance', label: 'Financial', icon: Wallet, product: 'sales', children: [
-      { id: 'sales-expenses', label: 'Expenses', icon: Wallet },
-      { id: 'sales-gst', label: 'GST Calculator', icon: Calculator },
-    ]
-  },
-  {
-    type: 'group', key: 'sales-inventory', label: 'Inventory', icon: Boxes, product: 'sales', children: [
-      { id: 'sales-dealers', label: 'Dealers', icon: Building2 },
-      { id: 'sales-inventory', label: 'Product Inventory', icon: Package },
-      { id: 'sales-stock-history', label: 'Stock History', icon: History },
-      { id: 'sales-supplier-credits', label: 'Supplier Credits', icon: CreditCard },
-    ]
-  },
-  {
-    type: 'group', key: 'sales-branches', label: 'Branch Operations', icon: Store, product: 'sales', children: [
-      { id: 'sales-branches', label: 'Branch Management', icon: Store },
-      { id: 'sales-branch-supply', label: 'Branch Supply', icon: Send },
-      { id: 'sales-supply-history', label: 'Supply History', icon: ClipboardList },
-      { id: 'sales-branch-sales', label: 'Branch Sales', icon: BarChart3 },
-    ]
-  },
-];
-
-// Which nav nodes the shop's plan unlocks; headings only make sense when both products are present
-function buildVisibleNav(access) {
-  if (!access) return [];
-  const both = access.service && access.sales;
-  return NAV.filter((node) => {
-    if (node.type === 'heading') return both && access[node.product];
-    return !node.product || access[node.product];
-  });
-}
-
-const ALWAYS_TABS = ['overview', 'business-analytics', 'employees', 'hr-employees', 'hr-attendance', 'salary', 'hr-performance'];
-
-function isTabAllowed(tab, visibleNav) {
-  if (ALWAYS_TABS.includes(tab)) return true;
-  return visibleNav.some((node) =>
-    node.type === 'item' ? node.id === tab : node.type === 'group' && node.children.some((c) => c.id === tab)
-  );
-}
 
 export default function ShopAdminDashboard() {
   const router = useRouter();
@@ -1558,6 +1481,17 @@ export default function ShopAdminDashboard() {
         handleSwitchShop={handleSwitchShop}
         productAccess={productAccess}
         salesSession={salesSession}
+        settings={{
+          revenueVisibleToUsers,
+          togglingRevenue,
+          toggleRevenueVisibility,
+          termsAndConditions,
+          termsDraft,
+          setTermsDraft,
+          savingTerms,
+          termsSaved,
+          saveTermsAndConditions,
+        }}
       />
     );
   }

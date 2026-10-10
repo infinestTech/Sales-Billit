@@ -107,7 +107,7 @@ function ProductSales({ salesUrl, token }) {
 			// validate IME selections: for products that track IMEs, selected IMEs must match selling qty
 			const imeMismatch = sellerProducts.find(it => {
 				const sellingQty = Number(it.sellingQty ?? 0);
-				const availableImes = (Array.isArray(it.centralOnlyImes) && it.centralOnlyImes.length) ? it.centralOnlyImes : (Array.isArray(it.centralImes) && it.centralImes.length) ? it.centralImes : (Array.isArray(it.imes) ? it.imes : []);
+				const availableImes = window.BarcodeLabels.availableImeisOf(it);
 				if (!availableImes || availableImes.length === 0) return false; // not IME-tracked
 				const selected = Array.isArray(it.selectedImes) ? it.selectedImes.length : 0;
 				return selected !== sellingQty;
@@ -254,7 +254,7 @@ function ProductSales({ salesUrl, token }) {
 				const model = found?.model || '';
 				
 				// Extract IMEI numbers from the item - prioritize selectedImes (actually sold)
-				const imes = Array.isArray(i.selectedImes) && i.selectedImes.length > 0 ? i.selectedImes : (Array.isArray(i.imes) ? i.imes : []);
+				const imes = window.BarcodeLabels.realImeis(Array.isArray(i.selectedImes) && i.selectedImes.length > 0 ? i.selectedImes : i.imes);
 				const imeiText = imes.length > 0 ? imes.map(imei => `IMEI: ${imei}`).join(', ') : '';
 				
 				// Build product description with brand/model
@@ -653,7 +653,7 @@ function ProductSales({ salesUrl, token }) {
 				const name = found?.productName || found?.name || i.productName || i.productNo || '';
 				
 				// Extract IMEI numbers from the item - prioritize selectedImes (actually sold)
-				const imes = Array.isArray(i.selectedImes) && i.selectedImes.length > 0 ? i.selectedImes : (Array.isArray(i.imes) ? i.imes : []);
+				const imes = window.BarcodeLabels.realImeis(Array.isArray(i.selectedImes) && i.selectedImes.length > 0 ? i.selectedImes : i.imes);
 				const imeiText = imes.length > 0 ? imes.map(imei => `IMEI: ${imei}`).join(', ') : '';
 				
 				// Combine product name with IMEI information
@@ -923,7 +923,8 @@ function ProductSales({ salesUrl, token }) {
 										const foundByProductNo = scan.byProductNo;
 										if (Number(found.qty) === 0) { setError('This product has zero quantity and cannot be added to sales.'); return; }
 										// Determine if product is IMEI-tracked
-										const availImes = (Array.isArray(found.centralOnlyImes) && found.centralOnlyImes.length) ? found.centralOnlyImes : (Array.isArray(found.centralImes) && found.centralImes.length) ? found.centralImes : (Array.isArray(found.imes) ? found.imes : []);
+										// Only real IMEIs make a product IMEI-tracked (accessories may carry "0" placeholders)
+										const availImes = window.BarcodeLabels.availableImeisOf(found);
 										const isImeiTracked = availImes.length > 0;
 										const existingInCart = sellerProducts.find(x => (x.productId || x._id) === (found.productId || found._id));
 										// Validate before adding
@@ -1000,7 +1001,7 @@ function ProductSales({ salesUrl, token }) {
 									const matchedImei = scan.imei;
 									const foundByProductNo = scan.byProductNo;
 									if (Number(found.qty) === 0) { setError('This product has zero quantity and cannot be added to sales.'); return; }
-									const availImes = (Array.isArray(found.centralOnlyImes) && found.centralOnlyImes.length) ? found.centralOnlyImes : (Array.isArray(found.centralImes) && found.centralImes.length) ? found.centralImes : (Array.isArray(found.imes) ? found.imes : []);
+									const availImes = window.BarcodeLabels.availableImeisOf(found);
 									const isImeiTracked = availImes.length > 0;
 									const existingInCart = sellerProducts.find(x => (x.productId || x._id) === (found.productId || found._id));
 									if (matchedImei && existingInCart && Array.isArray(existingInCart.selectedImes) && existingInCart.selectedImes.includes(matchedImei)) {
@@ -1088,7 +1089,7 @@ function ProductSales({ salesUrl, token }) {
 						) : (
 							<div style={{maxHeight: '500px', overflowY: 'auto'}}>
 								{sellerProducts.filter(p => Number(p.qty) > 0).map((p, i) => {
-									const availableImes = (Array.isArray(p.centralOnlyImes) && p.centralOnlyImes.length) ? p.centralOnlyImes : (Array.isArray(p.centralImes) && p.centralImes.length) ? p.centralImes : (Array.isArray(p.imes) ? p.imes : []);
+									const availableImes = window.BarcodeLabels.availableImeisOf(p);
 									const hasImes = availableImes.length > 0;
 									const selectedCount = Array.isArray(p.selectedImes) ? p.selectedImes.length : 0;
 									

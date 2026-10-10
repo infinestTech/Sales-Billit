@@ -47,12 +47,13 @@ function renderView(view, { token, planId, branchLimit, onNavigate }) {
   }
 }
 
-export default function SalesWorkspace({ view, session, shopId, onNavigate }) {
+export default function SalesWorkspace({ view, session, shopId, onNavigate, compact = false }) {
   const meta = SALES_VIEWS[view];
   if (!meta) return null;
 
   return (
     <div className="space-y-4">
+      {!compact && (
       <div className="bg-white border border-gray-200 rounded-xl px-6 py-4 shadow-sm flex items-center justify-between">
         <div>
           <h2 className="text-xl font-bold text-gray-900">{meta.title}</h2>
@@ -60,6 +61,7 @@ export default function SalesWorkspace({ view, session, shopId, onNavigate }) {
         </div>
         <span className="px-3 py-1 rounded-full text-xs font-semibold bg-indigo-100 text-indigo-700">Sales</span>
       </div>
+      )}
 
       {!session.token ? (
         <div className="bg-white border border-gray-200 rounded-xl p-10 text-center shadow-sm">
@@ -79,7 +81,7 @@ export default function SalesWorkspace({ view, session, shopId, onNavigate }) {
           )}
         </div>
       ) : (
-        <div className="sales-scope rounded-xl border border-gray-200">
+        <div className={`sales-scope rounded-xl border border-gray-200${compact ? " sales-compact" : ""}`}>
           <div className="content">
             <SalesFeatureProvider salesUrl={SALES_API_URL} token={session.token}>
               <React.Fragment key={`${shopId}:${view}`}>

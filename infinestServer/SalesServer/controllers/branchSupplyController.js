@@ -4,6 +4,7 @@ const InStock = require('../models/inStock');
 
 // Use canonical BranchStock model (includes `imes` field)
 const BranchStock = require('../models/branchStock');
+const { cleanImeis, cleanRowImeis } = require('../utils/imei');
 
 const BranchSupply = mongoose.model('BranchSupply', new mongoose.Schema({
   shop_id: { type: String, index: true },
@@ -134,8 +135,9 @@ exports.createBranchSupply = async (req, res) => {
       if (Number(i.mrp) > 0) out.mrp = Number(i.mrp);
       if (Number(i.gstPercent) > 0) out.gstPercent = Number(i.gstPercent);
       if (i.priceCode) out.priceCode = String(i.priceCode).trim().slice(0, 40);
-      // include imes only when client provided them (non-empty)
-      if (Array.isArray(i.imes) && i.imes.length) out.imes = i.imes.slice(0, qty);
+      // include imes only when client provided real ones (placeholders like "0" are dropped)
+      const realImes = cleanImeis(i.imes);
+      if (realImes.length) out.imes = realImes.slice(0, qty);
       return out;
     });
 
@@ -249,8 +251,9 @@ exports.createBranchSupply = async (req, res) => {
             if (central && Array.isArray(central.items) && central.items[idx]) {
               const currentItem = central.items[idx];
               const currentQty = Number(currentItem.quantity || currentItem.qty || 0);
-              const remainingImes = Array.isArray(currentItem.imes) ? currentItem.imes : [];
-              const newQty = Array.isArray(currentItem.imes) && currentItem.imes.length ? remainingImes.length : Math.max(0, currentQty - Number(it.qty || 0));
+              const remainingImes = cleanImeis(currentItem.imes);
+              // Placeholder-only lists ("0") mean an accessory: count by quantity, not by IMEIs
+              const newQty = remainingImes.length ? remainingImes.length : Math.max(0, currentQty - Number(it.qty || 0));
               const qtyPath = `items.${idx}.quantity`;
               const imesPath = `items.${idx}.imes`;
               const setObj2 = { [qtyPath]: newQty };
@@ -438,7 +441,7 @@ exports.listBranchStock = async (req, res) => {
         rowsFiltered = rowsOnly.filter(r => (String(r.productNo || '').toLowerCase().includes(needle)));
       }
       try { console.debug('FLOW listBranchStock: returning onlyBranch rows', { count: Array.isArray(rowsFiltered) ? rowsFiltered.length : 0 }); } catch (__) {}
-      return res.json({ success: true, rows: rowsFiltered, customerNo: customerNo || null });
+      return res.json({ success: true, rows: cleanRowImeis(rowsFiltered), customerNo: customerNo || null });
     }
 
     const q = { shop_id: String(shop_id) };
@@ -490,7 +493,7 @@ exports.listBranchStock = async (req, res) => {
         rowsCentral = (rowsCentral || []).filter(r => (String(r.productNo || '').toLowerCase().includes(needle)));
       }
       try { console.debug('FLOW listBranchStock: returning central-only rows', { count: Array.isArray(rowsCentral) ? rowsCentral.length : 0 }); } catch (__) {}
-      return res.json({ success: true, rows: rowsCentral, customerNo: customerNo || null });
+      return res.json({ success: true, rows: cleanRowImeis(rowsCentral), customerNo: customerNo || null });
     }
 
     // If a branch is requested, merge central items with branch-specific rows
@@ -578,7 +581,7 @@ exports.listBranchStock = async (req, res) => {
     }
 
     try { console.debug('FLOW listBranchStock: returning merged rows', { count: Array.isArray(rows) ? rows.length : 0 }); } catch (__) {}
-    return res.json({ success: true, rows, customerNo: customerNo || null });
+    return res.json({ success: true, rows: cleanRowImeis(rows), customerNo: customerNo || null });
   } catch (err) {
     console.error('listBranchStock error:', err.message || err);
     return res.status(500).json({ success: false, message: 'Server error' });

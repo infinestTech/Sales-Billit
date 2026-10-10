@@ -356,7 +356,7 @@ export default function AttendanceManagement({ shopId, unit = "all" }) {
       {/* ── Daily View ────────────────────────────────────────────────────────── */}
       {activeTab === "daily" && (
         <div className="space-y-4">
-          <div className="bg-white rounded-xl border border-gray-200 p-4 flex items-center gap-4">
+          <div className="bg-white rounded-xl border border-gray-200 p-4 flex flex-wrap items-center gap-4">
             <div className="flex items-center gap-2">
               <label className="text-sm font-medium text-gray-700">Date</label>
               <input

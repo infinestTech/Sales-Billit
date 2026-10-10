@@ -98,17 +98,42 @@ function findScanMatch(scanned, groups) {
 }
 
 /**
+ * Imports and manual entry sometimes fill the IMEI column of accessories with "0", "-" or "NA".
+ * Those are placeholders, not IMEIs: only phones carry real IMEIs.
+ */
+const IMEI_PLACEHOLDERS = new Set(['na', 'n/a', 'nil', 'none', 'null', 'undefined', 'nan', 'no', 'imei']);
+
+function isPlaceholderImei(value) {
+  const v = String(value == null ? '' : value).trim();
+  if (!v) return true;
+  if (/^0+$/.test(v) || /^[^a-z0-9]+$/i.test(v)) return true;
+  return IMEI_PLACEHOLDERS.has(v.toLowerCase());
+}
+
+/** Real IMEIs only (placeholders dropped, trimmed). */
+function realImeis(list) {
+  return (Array.isArray(list) ? list : []).map((x) => String(x == null ? '' : x).trim()).filter((x) => !isPlaceholderImei(x));
+}
+
+/** IMEIs a POS row can sell: central-only, then central, then branch IMEIs — the first non-empty real list. */
+function availableImeisOf(p) {
+  if (!p) return [];
+  const centralOnly = realImeis(p.centralOnlyImes);
+  if (centralOnly.length) return centralOnly;
+  const central = realImeis(p.centralImes);
+  if (central.length) return central;
+  return realImeis(p.imes);
+}
+
+/**
  * POS add-by-scan over branch stock rows: IMEIs first (phones carry one barcode per IMEI), then product numbers.
  * Returns { product, imei, byProductNo } or { ambiguous: true } or null.
  */
 function resolvePosScan(products, scanned) {
-  const imeisOf = (p) => (Array.isArray(p.centralOnlyImes) && p.centralOnlyImes.length ? p.centralOnlyImes
-    : Array.isArray(p.centralImes) && p.centralImes.length ? p.centralImes
-      : Array.isArray(p.imes) ? p.imes : []);
   const imeiCandidates = [];
   const productCandidates = [];
   (products || []).forEach((p) => {
-    imeisOf(p).forEach((imei) => { if (imei) imeiCandidates.push({ code: imei, value: { product: p, imei } }); });
+    availableImeisOf(p).forEach((imei) => imeiCandidates.push({ code: imei, value: { product: p, imei } }));
     if (p.productNo) productCandidates.push({ code: p.productNo, value: { product: p, imei: null } });
   });
   const hit = findScanMatch(scanned, [imeiCandidates, productCandidates]);
@@ -139,7 +164,7 @@ function labelCodeLines(item) {
   const productNo = rawNo === 'N/A' ? '' : rawNo;
   const priceCode = String(item && item.priceCode != null ? item.priceCode : '').trim();
   // Only phones carry a real IMEI — accessories (or placeholder "0" values) never show this line
-  const hasRealImei = item && item.type === 'Mobile' && code && code !== productNo && !/^0+$/.test(code);
+  const hasRealImei = item && item.type === 'Mobile' && code && code !== productNo && !isPlaceholderImei(code);
   const lines = [];
   if (hasRealImei) lines.push({ text: code, kind: 'barcode' });
   if (productNo) lines.push({ text: productNo, kind: 'product' });
@@ -482,5 +507,5 @@ function buildA4Pdf({ jsPDF, labels, shopName, getCanvas }) {
   return doc;
 }
 
-window.BarcodeLabels = { THERMAL_DEFAULTS, THERMAL_LIMITS, thermalSizeError, loadThermalSettings, saveThermalSettings, normalizeScanCode, findScanMatch, resolvePosScan, barcodeValueOf, shortTitle, labelCodeLines, countModules, planThermalLabel, checkThermalLabels, buildThermalPdf, buildA4Pdf };
+window.BarcodeLabels = { THERMAL_DEFAULTS, THERMAL_LIMITS, thermalSizeError, loadThermalSettings, saveThermalSettings, normalizeScanCode, findScanMatch, isPlaceholderImei, realImeis, availableImeisOf, resolvePosScan, barcodeValueOf, shortTitle, labelCodeLines, countModules, planThermalLabel, checkThermalLabels, buildThermalPdf, buildA4Pdf };
 })();

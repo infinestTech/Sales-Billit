@@ -1,4 +1,5 @@
 const InStock = require('../models/inStock');
+const { cleanImeis } = require('../utils/imei');
 
 // Helper function to get product inventory limit
 async function getProductInventoryLimit(userId, shopId, mongoPlanId) {
@@ -94,8 +95,9 @@ exports.createInStock = async (req, res) => {
           return str;
         }
         // Use manual input as-is, only auto-generate if blank
-        // Determine totalQuantity: prefer explicit imes length (for mobiles) if provided, else use quantity
-        const imesArray = Array.isArray(i.imes) ? i.imes.map(x => (x || '').toString()) : [];
+        // Determine totalQuantity: prefer real IMEI count (for mobiles) if provided, else use quantity.
+        // Placeholder IMEIs ("0", "-", "NA") on accessories are dropped.
+        const imesArray = cleanImeis(i.imes);
         const computedTotalQ = imesArray.length > 0 ? imesArray.length : (Number(i.quantity) || 1);
         return {
           productNo: i.productNo && i.productNo.trim() ? i.productNo : randomProductNo(),
@@ -226,7 +228,7 @@ exports.restockItem = async (req, res) => {
 
     // Optional: append new IMEIs for mobile-type items
     if (Array.isArray(imes) && imes.length > 0) {
-      const cleaned = imes.map(x => (x || '').toString().trim()).filter(Boolean);
+      const cleaned = cleanImeis(imes);
       if (cleaned.length > 0) {
         item.imes = Array.isArray(item.imes) ? item.imes.concat(cleaned) : cleaned;
       }

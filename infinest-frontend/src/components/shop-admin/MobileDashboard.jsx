@@ -1,22 +1,135 @@
 "use client";
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import dynamic from 'next/dynamic';
 import axios from 'axios';
 import {
   Users, Phone, Calendar, Filter, Search, ChevronDown,
   TrendingUp, Package, Wrench, DollarSign, CheckCircle,
   XCircle, Truck, AlertCircle, Menu, X, Home,
-  BarChart3, FileText, LogOut, ChevronLeft, ChevronRight, Wallet
+  BarChart3, FileText, LogOut, ChevronLeft, ChevronRight, Wallet,
+  ShoppingBag, Settings, Store, ArrowLeft, Fingerprint, UserPlus, Send, MapPin
 } from 'lucide-react';
 import {
   LineChart, Line, BarChart, Bar, XAxis, YAxis,
   CartesianGrid, Tooltip, Legend, ResponsiveContainer
 } from 'recharts';
-import MobileSalaryManagement from './mobile/MobileSalaryManagement';
 import * as XLSX from 'xlsx';
+import { buildVisibleNav, isTabAllowed, findNavEntry } from './shopAdminNav';
 
 const SalesOverview = dynamic(() => import('./sales/SalesOverview'), { ssr: false });
+const SalesWorkspace = dynamic(() => import('./sales/SalesWorkspace'), { ssr: false });
+const BusinessAnalytics = dynamic(() => import('./BusinessAnalytics'), { ssr: false });
+const EmployeeManagement = dynamic(() => import('./EmployeeManagement'), { ssr: false });
+const AttendanceManagement = dynamic(() => import('./AttendanceManagement'), { ssr: false });
+const SalaryManagement = dynamic(() => import('./SalaryManagement'), { ssr: false });
+const EmployeePerformance = dynamic(() => import('./EmployeePerformance'), { ssr: false });
+const AllRecordsPanel = dynamic(() => import('./panels/AllRecordsPanel'), { ssr: false });
+const CreateCustomerPanel = dynamic(() => import('./panels/CreateCustomerPanel'), { ssr: false });
+const CreateDealerPanel = dynamic(() => import('./panels/CreateDealerPanel'), { ssr: false });
+const SuppliersPanel = dynamic(() => import('./panels/SuppliersPanel'), { ssr: false });
+const ReceiptTermsImages = dynamic(() => import('./ReceiptTermsImages'), { ssr: false });
+const EsslDeviceSettings = dynamic(() => import('./EsslDeviceSettings'), { ssr: false });
+
+// Mobile-only screens layered on top of the shared desktop tab ids
+const HUBS = {
+  'hub-service': { title: 'Service', subtitle: 'Repairs, records, suppliers & reports', groups: ['records', 'suppliers', 'reports'] },
+  'hub-sales': { title: 'Sales', subtitle: 'Inventory, branches & finance', groups: ['sales-inventory', 'sales-branches', 'sales-finance'] },
+  'hub-hr': { title: 'HR', subtitle: 'Staff, attendance, payroll & performance', groups: ['hr'] },
+};
+const HR_TABS = ['hr-employees', 'hr-attendance', 'salary', 'hr-performance'];
+
+// Bottom-tab "home" for any screen, used for the back button and active-tab highlight
+function rootOf(tab) {
+  if (HUBS[tab] || tab === 'overview') return tab;
+  const found = findNavEntry(tab);
+  if (!found?.group) return 'overview';
+  if (found.group.key === 'hr') return 'hub-hr';
+  return found.group.product === 'sales' ? 'hub-sales' : 'hub-service';
+}
+
+const ACCENTS = {
+  green: { tile: 'bg-emerald-50 text-emerald-700', ring: 'focus-visible:ring-emerald-500', text: 'text-emerald-700' },
+  indigo: { tile: 'bg-indigo-50 text-indigo-700', ring: 'focus-visible:ring-indigo-500', text: 'text-indigo-700' },
+  amber: { tile: 'bg-amber-50 text-amber-700', ring: 'focus-visible:ring-amber-500', text: 'text-amber-700' },
+};
+
+function SectionTitle({ icon: Icon, title, accent = 'green', action, onAction }) {
+  return (
+    <div className="flex items-center justify-between">
+      <h2 className="flex items-center gap-2 text-base font-semibold text-gray-900">
+        <span className={`inline-flex h-7 w-7 items-center justify-center rounded-lg ${ACCENTS[accent].tile}`}>
+          <Icon className="h-4 w-4" aria-hidden="true" />
+        </span>
+        {title}
+      </h2>
+      {action && (
+        <button
+          type="button"
+          onClick={onAction}
+          className={`flex items-center gap-0.5 rounded-lg px-2 py-1.5 text-sm font-medium ${ACCENTS[accent].text} focus:outline-none focus-visible:ring-2 ${ACCENTS[accent].ring}`}
+        >
+          {action} <ChevronRight className="h-4 w-4" aria-hidden="true" />
+        </button>
+      )}
+    </div>
+  );
+}
+
+function NavTile({ item, accent = 'green', onClick }) {
+  const Icon = item.icon;
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`flex min-h-[88px] flex-col items-start gap-2 rounded-xl border border-gray-200 bg-white p-3 text-left shadow-sm transition active:scale-[0.98] focus:outline-none focus-visible:ring-2 ${ACCENTS[accent].ring}`}
+    >
+      <span className={`inline-flex h-9 w-9 items-center justify-center rounded-lg ${ACCENTS[accent].tile}`}>
+        <Icon className="h-5 w-5" aria-hidden="true" />
+      </span>
+      <span>
+        <span className="block text-sm font-semibold leading-tight text-gray-900">{item.label}</span>
+        {item.desc && <span className="mt-0.5 block text-xs leading-snug text-gray-500">{item.desc}</span>}
+      </span>
+    </button>
+  );
+}
+
+function StatTile({ label, value, hint, icon: Icon, iconClass, onClick }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={!onClick}
+      className="rounded-xl border border-gray-200 bg-white p-3.5 text-left shadow-sm transition active:scale-[0.98] focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 disabled:active:scale-100"
+    >
+      <div className="flex items-center justify-between gap-2">
+        <span className="text-xs font-medium text-gray-600">{label}</span>
+        <Icon className={`h-4 w-4 ${iconClass}`} aria-hidden="true" />
+      </div>
+      <div className="mt-1.5 text-2xl font-bold text-gray-900">{value}</div>
+      {hint && <div className="mt-0.5 text-[11px] text-gray-500">{hint}</div>}
+    </button>
+  );
+}
+
+function Toggle({ checked, disabled, onChange, label }) {
+  return (
+    <button
+      type="button"
+      role="switch"
+      aria-checked={checked}
+      aria-label={label}
+      onClick={onChange}
+      disabled={disabled}
+      className={`relative inline-flex h-7 w-12 shrink-0 items-center rounded-full transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 focus-visible:ring-offset-2 ${
+        checked ? 'bg-emerald-500' : 'bg-gray-300'
+      } ${disabled ? 'opacity-50' : ''}`}
+    >
+      <span className={`inline-block h-5 w-5 rounded-full bg-white shadow transition-transform ${checked ? 'translate-x-6' : 'translate-x-1'}`} />
+    </button>
+  );
+}
 
 export default function MobileDashboard({
   shopAdmin,
@@ -42,20 +155,54 @@ export default function MobileDashboard({
   handleLogout,
   handleSwitchShop,
   productAccess,
-  salesSession
+  salesSession,
+  settings = {}
 }) {
   const hasService = productAccess ? !!productAccess.service : true;
   const hasSales = !!productAccess?.sales;
+  const isCombo = hasService && hasSales;
+  const visibleNav = useMemo(() => buildVisibleNav(productAccess || { service: true, sales: false }), [productAccess]);
   const [activeTab, setActiveTab] = useState('overview');
+  const [hrUnit, setHrUnit] = useState('all');
+  const effectiveHrUnit = isCombo ? hrUnit : (hasSales ? 'sales' : 'service');
 
+  const isMobileTabAllowed = (tab) => {
+    if (tab === 'settings' || tab === 'hub-hr') return true;
+    if (tab === 'hub-service') return hasService;
+    if (tab === 'hub-sales') return hasSales;
+    return isTabAllowed(tab, visibleNav);
+  };
+
+  // Never leave the admin on a screen their plan doesn't include (e.g. after switching shops)
   useEffect(() => {
-    if (!hasService && (activeTab === 'revenue' || activeTab === 'report')) setActiveTab('overview');
-  }, [hasService, activeTab]);
+    if (!isMobileTabAllowed(activeTab)) setActiveTab('overview');
+  }, [visibleNav, activeTab]);
+
   const [showMobileMenu, setShowMobileMenu] = useState(false);
   const [showShopSelector, setShowShopSelector] = useState(false);
   const [showFilters, setShowFilters] = useState(false);
   const [expandedSection, setExpandedSection] = useState(null);
-  const [localEmployeeAttendance, setLocalEmployeeAttendance] = useState(null);
+
+  const navigate = (tab) => {
+    if (!isMobileTabAllowed(tab)) return;
+    setActiveTab(tab);
+    setShowMobileMenu(false);
+    setShowShopSelector(false);
+    if (typeof window !== 'undefined') window.scrollTo({ top: 0 });
+  };
+
+  // Lock page scroll behind the open drawer
+  useEffect(() => {
+    if (!showMobileMenu) return;
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    const onKey = (e) => { if (e.key === 'Escape') setShowMobileMenu(false); };
+    window.addEventListener('keydown', onKey);
+    return () => {
+      document.body.style.overflow = prev;
+      window.removeEventListener('keydown', onKey);
+    };
+  }, [showMobileMenu]);
 
   // Customer filters
   const [customerFilters, setCustomerFilters] = useState({
@@ -71,12 +218,6 @@ export default function MobileDashboard({
 
   useEffect(() => { setCustomerTotalCount(initialTotalCount); }, [initialTotalCount]);
 
-  // Employee filters
-  const [attendanceFilters, setAttendanceFilters] = useState({
-    fromDate: '',
-    toDate: ''
-  });
-
   // Revenue filters
   const [revenueFilters, setRevenueFilters] = useState({
     period: '1',
@@ -91,8 +232,6 @@ export default function MobileDashboard({
     toDate: ''
   });
 
-  const [showDeleteModal, setShowDeleteModal] = useState(false);
-  const [employeeToDelete, setEmployeeToDelete] = useState(null);
   const [localAnalytics, setLocalAnalytics] = useState(null);
   const [localReportData, setLocalReportData] = useState(null);
   const [loadingReport, setLoadingReport] = useState(false);
@@ -570,41 +709,6 @@ export default function MobileDashboard({
     }
   }, [activeTab, currentShopId]);
 
-  // Local fetch function for employee attendance with filters
-  const fetchLocalEmployeeAttendance = async (employeeId) => {
-    try {
-      const token = localStorage.getItem('shopAdminToken');
-      const params = {
-        shop_id: currentShopId,
-        employee_id: employeeId,
-        _t: Date.now()
-      };
-
-      if (attendanceFilters.fromDate) params.from_date = attendanceFilters.fromDate;
-      if (attendanceFilters.toDate) params.to_date = attendanceFilters.toDate;
-
-      const response = await axios.get(
-        `${API_URL}/api/shop-admin/employee-attendance`,
-        {
-          headers: { 'Authorization': `Bearer ${token}` },
-          params
-        }
-      );
-
-      if (response.data.success) {
-        setLocalEmployeeAttendance(response.data.attendance);
-      } else {
-        setLocalEmployeeAttendance(null);
-      }
-    } catch (error) {
-      console.error('Error fetching employee attendance:', error);
-      setLocalEmployeeAttendance(null);
-    }
-  };
-
-  // Use local attendance if available, otherwise use prop
-  const displayAttendance = localEmployeeAttendance || employeeAttendance;
-
   const getCurrentShop = () => {
     if (!shops || shops.length === 0) return null;
     return shops.find(shop => shop.id === currentShopId) || shops[0];
@@ -651,33 +755,49 @@ export default function MobileDashboard({
     setShowFilters(false);
   };
 
-  const handleDeleteEmployee = async (employeeId) => {
-    try {
-      const token = localStorage.getItem('shopAdminToken');
-      await axios.delete(
-        `${API_URL}/api/shop-admin/employees/${employeeId}`,
-        {
-          headers: { 'Authorization': `Bearer ${token}` },
-          params: { shop_id: currentShopId }
-        }
-      );
-
-      await fetchDashboardData();
-      setShowDeleteModal(false);
-      setEmployeeToDelete(null);
-      if (selectedEmployee?._id === employeeId) {
-        setSelectedEmployee(null);
-      }
-    } catch (error) {
-      console.error('Error deleting employee:', error);
-      alert('Failed to delete employee');
-    }
-  };
-
   // Pagination (server-side)
   const indexOfFirstItem = (currentPage - 1) * itemsPerPage;
   const currentCustomers = filteredCustomers; // server returns the current page only
   const totalPages = Math.ceil(customerTotalCount / itemsPerPage);
+
+  const planLabel = isCombo ? 'Service + Sales' : hasSales ? 'Sales' : 'Service';
+  const rootTab = rootOf(activeTab);
+  const isRootScreen = activeTab === rootTab;
+  const navEntry = findNavEntry(activeTab);
+  const pageTitle = HUBS[activeTab]?.title
+    || (activeTab === 'settings' ? 'Shop Settings' : navEntry?.entry?.label || 'Overview');
+  const pageSubtitle = HUBS[activeTab]?.subtitle
+    || (activeTab === 'settings' ? 'Receipts, visibility & devices' : navEntry?.group?.label || '');
+  const hubAccent = activeTab === 'hub-sales' ? 'indigo' : activeTab === 'hub-hr' ? 'amber' : 'green';
+  const hubGroups = HUBS[activeTab]
+    ? HUBS[activeTab].groups
+      .map((key) => visibleNav.find((n) => n.type === 'group' && n.key === key))
+      .filter(Boolean)
+    : [];
+
+  const quickActions = [
+    hasService && { id: 'customer-create', label: 'New Customer', icon: UserPlus, tone: 'bg-emerald-50 text-emerald-600' },
+    hasService && { id: 'all-records', label: 'All Records', icon: Phone, tone: 'bg-sky-50 text-sky-600' },
+    hasSales && { id: 'sales-inventory', label: 'Inventory', icon: Package, tone: 'bg-indigo-50 text-indigo-600' },
+    hasSales && { id: 'sales-branch-supply', label: 'Branch Supply', icon: Send, tone: 'bg-violet-50 text-violet-600' },
+    hasService && { id: 'revenue', label: 'Revenue', icon: DollarSign, tone: 'bg-green-50 text-green-600' },
+    hasSales && { id: 'sales-branch-sales', label: 'Branch Sales', icon: BarChart3, tone: 'bg-blue-50 text-blue-600' },
+    { id: 'hr-attendance', label: 'Attendance', icon: CheckCircle, tone: 'bg-amber-50 text-amber-600' },
+    { id: 'business-analytics', label: 'Analytics', icon: TrendingUp, tone: 'bg-rose-50 text-rose-600' },
+    // Fill-ins for single-product plans so the grid stays two full rows
+    hasService && { id: 'report', label: 'Report', icon: FileText, tone: 'bg-gray-100 text-gray-700' },
+    hasService && { id: 'suppliers', label: 'Suppliers', icon: Truck, tone: 'bg-orange-50 text-orange-600' },
+    hasSales && { id: 'sales-supplier-credits', label: 'Supplier Dues', icon: Wallet, tone: 'bg-orange-50 text-orange-600' },
+    hasSales && { id: 'sales-expenses', label: 'Expenses', icon: Wallet, tone: 'bg-gray-100 text-gray-700' },
+    { id: 'salary', label: 'Salary', icon: DollarSign, tone: 'bg-teal-50 text-teal-600' },
+  ].filter(Boolean).slice(0, 8);
+
+  const bottomTabs = [
+    { id: 'overview', label: 'Home', icon: Home },
+    hasService && { id: 'hub-service', label: 'Service', icon: Wrench },
+    hasSales && { id: 'hub-sales', label: 'Sales', icon: ShoppingBag },
+    { id: 'hub-hr', label: 'HR', icon: Users },
+  ].filter(Boolean);
 
   if (loading) {
     return (
@@ -691,144 +811,172 @@ export default function MobileDashboard({
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 pb-20">
-      {/* Mobile Header */}
-      <div className="bg-gradient-to-r from-green-600 to-emerald-600 text-white sticky top-0 z-40 shadow-lg">
-        <div className="p-4">
-          <div className="flex items-center justify-between mb-3">
-            <div className="flex items-center gap-3">
-              <button
-                onClick={() => setShowMobileMenu(!showMobileMenu)}
-                className="p-2 hover:bg-white/10 rounded-lg transition"
-              >
-                {showMobileMenu ? <X className="h-6 w-6" /> : <Menu className="h-6 w-6" />}
-              </button>
-              <div>
-                <h1 className="font-bold text-lg">{currentShop?.name || 'Shop'}</h1>
-                <p className="text-green-100 text-xs">{currentShop?.location || 'Location'}</p>
-              </div>
-            </div>
-            {shops.length > 1 && (
-              <button
-                onClick={() => setShowShopSelector(!showShopSelector)}
-                className="p-2 hover:bg-white/10 rounded-lg transition"
-              >
-                <ChevronDown className="h-5 w-5" />
-              </button>
+    <div className="min-h-screen bg-gray-50 pb-[calc(5.5rem+env(safe-area-inset-bottom))]">
+      {/* App bar */}
+      <header className="sticky top-0 z-30 bg-gradient-to-r from-green-600 to-emerald-600 text-white shadow-md">
+        <div className="mx-auto flex h-14 max-w-3xl items-center gap-1 px-2">
+          {isRootScreen ? (
+            <button
+              type="button"
+              onClick={() => setShowMobileMenu(true)}
+              className="inline-flex h-11 w-11 items-center justify-center rounded-lg hover:bg-white/10 focus:outline-none focus-visible:ring-2 focus-visible:ring-white"
+              aria-label="Open menu"
+              aria-expanded={showMobileMenu}
+            >
+              <Menu className="h-6 w-6" aria-hidden="true" />
+            </button>
+          ) : (
+            <button
+              type="button"
+              onClick={() => navigate(rootTab)}
+              className="inline-flex h-11 w-11 items-center justify-center rounded-lg hover:bg-white/10 focus:outline-none focus-visible:ring-2 focus-visible:ring-white"
+              aria-label="Back"
+            >
+              <ArrowLeft className="h-6 w-6" aria-hidden="true" />
+            </button>
+          )}
+          <div className="min-w-0 flex-1 px-1">
+            {activeTab === 'overview' ? (
+              <>
+                <h1 className="truncate text-base font-bold leading-tight">{currentShop?.name || 'Shop'}</h1>
+                <p className="flex items-center gap-1 truncate text-xs text-green-100">
+                  <MapPin className="h-3 w-3 shrink-0" aria-hidden="true" />
+                  {currentShop?.location || 'Location not set'}
+                </p>
+              </>
+            ) : (
+              <>
+                <h1 className="truncate text-base font-bold leading-tight">{pageTitle}</h1>
+                {pageSubtitle && <p className="truncate text-xs text-green-100">{pageSubtitle}</p>}
+              </>
             )}
           </div>
-
-          {/* Quick Stats Bar */}
-          <div className="grid grid-cols-2 gap-2 text-sm">
-            <div className="bg-white/10 rounded-lg p-2">
-              <div className="text-green-100 text-xs">Today's Revenue</div>
-              <div className="font-bold">₹{(overview?.todayRevenue || 0).toLocaleString()}</div>
-            </div>
-            <div className="bg-white/10 rounded-lg p-2">
-              <div className="text-green-100 text-xs">Pending Repairs</div>
-              <div className="font-bold">{overview?.pendingRepairs || 0}</div>
-            </div>
-          </div>
+          {shops.length > 1 && (
+            <button
+              type="button"
+              onClick={() => setShowShopSelector(!showShopSelector)}
+              className="inline-flex h-11 items-center gap-1 rounded-lg px-2 text-xs font-semibold hover:bg-white/10 focus:outline-none focus-visible:ring-2 focus-visible:ring-white"
+              aria-label="Switch shop"
+              aria-expanded={showShopSelector}
+            >
+              <Store className="h-5 w-5" aria-hidden="true" />
+              <ChevronDown className={`h-4 w-4 transition-transform ${showShopSelector ? 'rotate-180' : ''}`} aria-hidden="true" />
+            </button>
+          )}
         </div>
 
-        {/* Shop Selector Dropdown */}
         {showShopSelector && shops.length > 1 && (
-          <div className="bg-gray-800 border-t border-green-700">
+          <div className="max-h-[60vh] overflow-y-auto border-t border-white/20 bg-white text-gray-900 shadow-lg">
+            <p className="px-4 pt-3 pb-1 text-xs font-semibold uppercase tracking-wider text-gray-500">Switch shop</p>
             {shops.map((shop) => (
               <button
                 key={shop.id}
+                type="button"
                 onClick={() => {
                   handleSwitchShop(shop.id);
                   setShowShopSelector(false);
                 }}
-                className={`w-full px-4 py-3 text-left transition ${
-                  shop.id === currentShopId
-                    ? 'bg-green-600 border-l-4 border-green-400'
-                    : 'hover:bg-gray-700 border-l-4 border-transparent'
+                aria-current={shop.id === currentShopId ? 'true' : undefined}
+                className={`flex w-full items-center justify-between gap-3 px-4 py-3 text-left ${
+                  shop.id === currentShopId ? 'bg-emerald-50' : 'hover:bg-gray-50'
                 }`}
               >
-                <p className="text-sm font-medium text-white">{shop.name}</p>
-                <p className="text-xs text-gray-400">{shop.location}</p>
+                <span className="min-w-0">
+                  <span className="block truncate text-sm font-semibold">{shop.name}</span>
+                  <span className="block truncate text-xs text-gray-500">{shop.location || 'Location not set'}</span>
+                </span>
+                {shop.id === currentShopId && <CheckCircle className="h-5 w-5 shrink-0 text-emerald-600" aria-hidden="true" />}
               </button>
             ))}
           </div>
         )}
-
-        {/* Mobile Menu Dropdown */}
-        {showMobileMenu && (
-          <div className="bg-gray-800 border-t border-green-700">
-            <div className="p-4">
-              <div className="mb-3">
-                <div className="text-green-100 text-xs mb-1">Admin</div>
-                <div className="font-semibold">{shopAdmin?.username}</div>
-              </div>
-              <div className="text-green-100 text-xs mb-1">Owner</div>
-              <div className="text-sm">{currentShop?.owner_name || 'N/A'}</div>
-              <div className="text-xs text-gray-400 mt-1">{currentShop?.phone || 'N/A'}</div>
-              <button
-                onClick={() => {
-                  handleLogout();
-                  setShowMobileMenu(false);
-                }}
-                className="mt-4 w-full px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg text-sm font-medium flex items-center justify-center gap-2"
-              >
-                <LogOut className="h-4 w-4" />
-                Logout
-              </button>
-            </div>
-          </div>
-        )}
-      </div>
-
+      </header>
       {/* Main Content */}
-      <div className="p-4">
+      <main className="mx-auto max-w-3xl px-4 pt-4">
         {/* Overview Tab */}
         {activeTab === 'overview' && (
-          <div className="space-y-4">
-            {hasSales && (
-              <>
-                <SalesOverview session={salesSession} compact />
-                <p className="text-xs text-gray-500">
-                  Full sales management (inventory, branches, supplies) is available on a tablet or desktop screen.
-                </p>
-              </>
-            )}
-            {hasService && (<>
-            {/* Stats Grid */}
-            <div className="grid grid-cols-2 gap-3">
-              <div className="bg-white rounded-lg p-4 shadow-sm border border-gray-200">
-                <div className="flex items-center gap-2 mb-2">
-                  <Package className="h-4 w-4 text-purple-600" />
-                  <div className="text-xs text-gray-600">Total Mobiles</div>
+          <div className="space-y-6">
+            {/* Shop summary */}
+            <div className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm">
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <p className="text-xs text-gray-500">Welcome back{shopAdmin?.username ? `, ${shopAdmin.username}` : ''}</p>
+                  <h2 className="mt-0.5 truncate text-lg font-bold text-gray-900">{currentShop?.name || 'Your shop'}</h2>
                 </div>
-                <div className="text-2xl font-bold text-gray-900">{overview?.totalMobiles || 0}</div>
+                <span className="shrink-0 rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-semibold text-emerald-700">{planLabel}</span>
               </div>
-
-              <div className="bg-white rounded-lg p-4 shadow-sm border border-gray-200">
-                <div className="flex items-center gap-2 mb-2">
-                  <Wrench className="h-4 w-4 text-green-600" />
-                  <div className="text-xs text-gray-600">Today's Services</div>
-                </div>
-                <div className="text-2xl font-bold text-gray-900">{overview?.todayMobiles || 0}</div>
-              </div>
-
-              <div className="bg-white rounded-lg p-4 shadow-sm border border-gray-200">
-                <div className="flex items-center gap-2 mb-2">
-                  <Users className="h-4 w-4 text-green-600" />
-                  <div className="text-xs text-gray-600">Employees</div>
-                </div>
-                <div className="text-2xl font-bold text-gray-900">{overview?.totalEmployees || 0}</div>
-              </div>
-
-              <div className="bg-white rounded-lg p-4 shadow-sm border border-gray-200">
-                <div className="flex items-center gap-2 mb-2">
-                  <Users className="h-4 w-4 text-green-600" />
-                  <div className="text-xs text-gray-600">Customers</div>
-                </div>
-                <div className="text-2xl font-bold text-gray-900">{overview?.totalCustomers || 0}</div>
+              <div className="mt-3 grid grid-cols-2 gap-2">
+                <StatTile label="Employees" value={overview?.totalEmployees || 0} icon={Users} iconClass="text-emerald-600" onClick={() => navigate('hr-employees')} />
+                {hasService ? (
+                  <StatTile label="Customers" value={overview?.totalCustomers || 0} icon={Users} iconClass="text-sky-600" onClick={() => navigate('all-records')} />
+                ) : (
+                  <StatTile label="Analytics" value="View" icon={BarChart3} iconClass="text-indigo-600" onClick={() => navigate('business-analytics')} />
+                )}
               </div>
             </div>
 
+            {/* Quick actions */}
+            <section aria-labelledby="sa-quick-actions" className="space-y-3">
+              <h2 id="sa-quick-actions" className="text-base font-semibold text-gray-900">Quick actions</h2>
+              <div className="grid grid-cols-4 gap-2">
+                {quickActions.map(({ id, label, icon: Icon, tone }) => (
+                  <button
+                    key={id}
+                    type="button"
+                    onClick={() => navigate(id)}
+                    className="flex flex-col items-center gap-1.5 rounded-xl border border-gray-200 bg-white px-1 py-3 text-center shadow-sm transition active:scale-[0.97] focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500"
+                  >
+                    <span className={`inline-flex h-10 w-10 items-center justify-center rounded-full ${tone}`}>
+                      <Icon className="h-5 w-5" aria-hidden="true" />
+                    </span>
+                    <span className="text-[11px] font-medium leading-tight text-gray-700">{label}</span>
+                  </button>
+                ))}
+              </div>
+            </section>
+
+            {hasService && (
+              <section aria-label="Service summary" className="space-y-3">
+                <SectionTitle icon={Wrench} title="Service" action="Manage" onAction={() => navigate('hub-service')} />
+                <div className="grid grid-cols-2 gap-2">
+                  <StatTile label="Today's Revenue" value={`₹${(overview?.todayRevenue || 0).toLocaleString('en-IN')}`} hint="Today's earnings" icon={DollarSign} iconClass="text-emerald-600" onClick={() => navigate('revenue')} />
+                  <StatTile label="Pending Repairs" value={overview?.pendingRepairs || 0} hint="Need attention" icon={AlertCircle} iconClass="text-orange-500" onClick={() => navigate('all-records')} />
+                  <StatTile label="Total Mobiles" value={overview?.totalMobiles || 0} hint="All records" icon={Package} iconClass="text-purple-600" onClick={() => navigate('all-records')} />
+                  <StatTile label="Today's Services" value={overview?.todayMobiles || 0} hint="Added today" icon={Wrench} iconClass="text-emerald-600" onClick={() => navigate('all-records')} />
+                </div>
+              </section>
+            )}
+
+            {hasSales && (
+              <section aria-label="Sales summary" className="space-y-3">
+                <SectionTitle icon={ShoppingBag} title="Sales" accent="indigo" action="Manage" onAction={() => navigate('hub-sales')} />
+                <div className="sa-sales-summary">
+                  <SalesOverview session={salesSession} compact showTitle={false} onNavigate={navigate} />
+                </div>
+              </section>
+            )}
+
+            {/* Settings shortcut */}
+            <button
+              type="button"
+              onClick={() => navigate('settings')}
+              className="flex w-full items-center gap-3 rounded-xl border border-gray-200 bg-white p-4 text-left shadow-sm transition active:scale-[0.99] focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500"
+            >
+              <span className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-gray-100 text-gray-700">
+                <Settings className="h-5 w-5" aria-hidden="true" />
+              </span>
+              <span className="min-w-0 flex-1">
+                <span className="block text-sm font-semibold text-gray-900">Shop settings</span>
+                <span className="block truncate text-xs text-gray-500">
+                  {hasService
+                    ? `Revenue ${settings.revenueVisibleToUsers ? 'visible' : 'hidden'} to users · Receipt terms · Biometric`
+                    : 'Biometric attendance device'}
+                </span>
+              </span>
+              <ChevronRight className="h-5 w-5 text-gray-400" aria-hidden="true" />
+            </button>
+
+            {hasService && (<>
             {/* Customer Records */}
             <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
               <div className="bg-gradient-to-r from-green-600 to-emerald-600 p-3 flex items-center justify-between">
@@ -970,214 +1118,6 @@ export default function MobileDashboard({
               )}
             </div>
             </>)}
-          </div>
-        )}
-
-        {/* Employees Tab */}
-        {activeTab === 'employees' && (
-          <div className="space-y-4">
-            {!selectedEmployee ? (
-              <div className="space-y-3">
-                <div className="flex items-center justify-between">
-                  <h2 className="text-lg font-bold text-gray-800">Employees ({employees?.length || 0})</h2>
-                  <button
-                    onClick={() => fetchDashboardData()}
-                    className="px-3 py-1.5 bg-green-600 text-white rounded-lg text-xs font-medium"
-                  >
-                    Refresh
-                  </button>
-                </div>
-
-                {employees && employees.length > 0 ? (
-                  employees.map((emp) => (
-                    <div
-                      key={emp._id}
-                      onClick={() => {
-                        setSelectedEmployee(emp);
-                        fetchLocalEmployeeAttendance(emp._id);
-                      }}
-                      className="bg-white rounded-lg p-4 shadow-sm border border-gray-200"
-                    >
-                      <div className="flex items-start justify-between mb-2">
-                        <div className="flex-1">
-                          <div className="font-semibold text-gray-900">{emp.name || 'No Name'}</div>
-                          <div className="text-xs text-gray-600 mt-0.5">{emp.phone_number || 'N/A'}</div>
-                          <div className="text-sm font-semibold text-green-600 mt-1">
-                            ₹{(emp.salary || 0).toLocaleString()}
-                          </div>
-                        </div>
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setEmployeeToDelete(emp);
-                            setShowDeleteModal(true);
-                          }}
-                          className="p-2 text-red-600 hover:bg-red-50 rounded-lg"
-                        >
-                          <XCircle className="h-5 w-5" />
-                        </button>
-                      </div>
-                      {emp.stats && (
-                        <div className="flex gap-2 mt-2">
-                          <span className="px-2 py-1 bg-green-100 text-green-700 rounded text-xs font-semibold">
-                            Present: {emp.stats.presentDays}
-                          </span>
-                          <span className="px-2 py-1 bg-red-100 text-red-700 rounded text-xs font-semibold">
-                            Absent: {emp.stats.absentDays}
-                          </span>
-                        </div>
-                      )}
-                    </div>
-                  ))
-                ) : (
-                  <div className="bg-white rounded-lg p-12 text-center">
-                    <Users className="h-12 w-12 text-gray-300 mx-auto mb-3" />
-                    <p className="text-gray-600">No employees found</p>
-                  </div>
-                )}
-              </div>
-            ) : (
-              <div className="space-y-4">
-                <button
-                  onClick={() => setSelectedEmployee(null)}
-                  className="flex items-center gap-2 text-green-600 font-medium text-sm"
-                >
-                  <ChevronLeft className="h-4 w-4" />
-                  Back to List
-                </button>
-
-                {/* Employee Info */}
-                <div className="bg-white rounded-lg p-4 shadow-sm border border-gray-200">
-                  <div className="flex items-start justify-between mb-3">
-                    <div>
-                      <h3 className="text-lg font-bold text-gray-900">{selectedEmployee.name}</h3>
-                      <p className="text-sm text-gray-600">{selectedEmployee.phone_number}</p>
-                    </div>
-                    <div className="text-right">
-                      <div className="text-xs text-gray-600">Salary</div>
-                      <div className="text-lg font-bold text-green-600">
-                        ₹{(selectedEmployee.salary || 0).toLocaleString()}
-                      </div>
-                    </div>
-                  </div>
-                  <div className="grid grid-cols-2 gap-2 text-xs">
-                    <div className="bg-gray-50 rounded p-2">
-                      <div className="text-gray-600">Address</div>
-                      <div className="text-gray-900 font-medium mt-0.5">
-                        {selectedEmployee.address || 'N/A'}
-                      </div>
-                    </div>
-                    <div className="bg-gray-50 rounded p-2">
-                      <div className="text-gray-600">Aadhar</div>
-                      <div className="text-gray-900 font-medium mt-0.5">
-                        {selectedEmployee.aadhar_number || 'N/A'}
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Date Filters */}
-                <div className="bg-white rounded-lg p-4 shadow-sm border border-gray-200">
-                  <h4 className="font-semibold text-gray-900 mb-3 text-sm">Attendance Filters</h4>
-                  <div className="space-y-2">
-                    <div className="grid grid-cols-2 gap-2">
-                      <div>
-                        <label className="text-xs text-gray-600">From Date</label>
-                        <input
-                          type="date"
-                          value={attendanceFilters.fromDate}
-                          onChange={(e) => setAttendanceFilters({...attendanceFilters, fromDate: e.target.value})}
-                          className="w-full px-2 py-1.5 border border-gray-300 rounded text-sm"
-                        />
-                      </div>
-                      <div>
-                        <label className="text-xs text-gray-600">To Date</label>
-                        <input
-                          type="date"
-                          value={attendanceFilters.toDate}
-                          onChange={(e) => setAttendanceFilters({...attendanceFilters, toDate: e.target.value})}
-                          className="w-full px-2 py-1.5 border border-gray-300 rounded text-sm"
-                        />
-                      </div>
-                    </div>
-                    <div className="flex gap-2">
-                      <button
-                        onClick={() => fetchLocalEmployeeAttendance(selectedEmployee._id)}
-                        className="flex-1 px-3 py-2 bg-green-600 text-white rounded-lg text-sm font-medium"
-                      >
-                        Apply
-                      </button>
-                      <button
-                        onClick={() => {
-                          setAttendanceFilters({ fromDate: '', toDate: '' });
-                          fetchLocalEmployeeAttendance(selectedEmployee._id);
-                        }}
-                        className="px-3 py-2 bg-gray-200 text-gray-700 rounded-lg text-sm font-medium"
-                      >
-                        Clear
-                      </button>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Attendance Stats */}
-                {displayAttendance && (
-                  <div className="space-y-3">
-                    <div className="grid grid-cols-3 gap-2">
-                      <div className="bg-white rounded-lg p-3 shadow-sm border border-gray-200">
-                        <CheckCircle className="h-5 w-5 text-green-600 mb-1" />
-                        <div className="text-xs text-gray-600">Present</div>
-                        <div className="text-xl font-bold text-gray-900">{displayAttendance.presentDays}</div>
-                      </div>
-                      <div className="bg-white rounded-lg p-3 shadow-sm border border-gray-200">
-                        <XCircle className="h-5 w-5 text-red-600 mb-1" />
-                        <div className="text-xs text-gray-600">Absent</div>
-                        <div className="text-xl font-bold text-gray-900">{displayAttendance.absentDays}</div>
-                      </div>
-                      <div className="bg-white rounded-lg p-3 shadow-sm border border-gray-200">
-                        <AlertCircle className="h-5 w-5 text-orange-600 mb-1" />
-                        <div className="text-xs text-gray-600">Late</div>
-                        <div className="text-xl font-bold text-gray-900">{displayAttendance.lateDays || 0}</div>
-                      </div>
-                    </div>
-
-                    {/* Daily Records */}
-                    <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
-                      <div className="bg-gray-100 p-3">
-                        <h4 className="font-semibold text-gray-900 text-sm">Daily Attendance</h4>
-                      </div>
-                      <div className="divide-y divide-gray-200 max-h-96 overflow-y-auto">
-                        {displayAttendance.dailyRecords && displayAttendance.dailyRecords.length > 0 ? (
-                          displayAttendance.dailyRecords.map((record, idx) => (
-                            <div key={idx} className="p-3 flex items-center justify-between">
-                              <div className="text-sm text-gray-700 font-medium">{record.date}</div>
-                              <div className="flex items-center gap-2">
-                                {record.status === 'present' ? (
-                                  <span className="px-2 py-1 bg-green-100 text-green-700 rounded text-xs font-semibold">
-                                    Present
-                                  </span>
-                                ) : (
-                                  <span className="px-2 py-1 bg-red-100 text-red-700 rounded text-xs font-semibold">
-                                    Absent
-                                  </span>
-                                )}
-                                {record.lateMinutes > 0 && (
-                                  <span className="px-2 py-1 bg-orange-100 text-orange-700 rounded text-xs font-semibold">
-                                    {record.lateMinutes}m late
-                                  </span>
-                                )}
-                              </div>
-                            </div>
-                          ))
-                        ) : (
-                          <div className="p-8 text-center text-gray-500 text-sm">No attendance records</div>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                )}
-              </div>
-            )}
           </div>
         )}
 
@@ -1386,13 +1326,6 @@ export default function MobileDashboard({
           </div>
         )}
 
-        {/* Salary Tab */}
-        {activeTab === 'salary' && (
-          <div className="space-y-4">
-            <MobileSalaryManagement shopId={currentShopId} />
-          </div>
-        )}
-
         {/* Report Tab */}
         {activeTab === 'report' && (
           <div className="space-y-4">
@@ -1578,97 +1511,353 @@ export default function MobileDashboard({
             )}
           </div>
         )}
-      </div>
 
-      {/* Bottom Navigation */}
-      <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 shadow-lg z-50">
-        <div className={`grid ${hasService ? 'grid-cols-5' : 'grid-cols-3'} gap-1`}>
-          <button
-            onClick={() => setActiveTab('overview')}
-            className={`flex flex-col items-center justify-center py-3 ${
-              activeTab === 'overview' ? 'text-green-600' : 'text-gray-600'
-            }`}
-          >
-            <Home className="h-5 w-5 mb-1" />
-            <span className="text-xs font-medium">Overview</span>
-          </button>
-          <button
-            onClick={() => setActiveTab('employees')}
-            className={`flex flex-col items-center justify-center py-3 ${
-              activeTab === 'employees' ? 'text-green-600' : 'text-gray-600'
-            }`}
-          >
-            <Users className="h-5 w-5 mb-1" />
-            <span className="text-xs font-medium">Employees</span>
-          </button>
-          {hasService && (
-          <button
-            onClick={() => setActiveTab('revenue')}
-            className={`flex flex-col items-center justify-center py-3 ${
-              activeTab === 'revenue' ? 'text-green-600' : 'text-gray-600'
-            }`}
-          >
-            <DollarSign className="h-5 w-5 mb-1" />
-            <span className="text-xs font-medium">Revenue</span>
-          </button>
-          )}
-          <button
-            onClick={() => setActiveTab('salary')}
-            className={`flex flex-col items-center justify-center py-3 ${
-              activeTab === 'salary' ? 'text-green-600' : 'text-gray-600'
-            }`}
-          >
-            <Wallet className="h-5 w-5 mb-1" />
-            <span className="text-xs font-medium">Salary</span>
-          </button>
-          {hasService && (
-          <button
-            onClick={() => setActiveTab('report')}
-            className={`flex flex-col items-center justify-center py-3 ${
-              activeTab === 'report' ? 'text-green-600' : 'text-gray-600'
-            }`}
-          >
-            <FileText className="h-5 w-5 mb-1" />
-            <span className="text-xs font-medium">Report</span>
-          </button>
-          )}
-        </div>
-      </div>
-
-      {/* Delete Modal */}
-      {showDeleteModal && employeeToDelete && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-xl p-6 max-w-sm w-full">
-            <div className="flex items-center gap-3 mb-4">
-              <div className="p-2 bg-red-100 rounded-full">
-                <AlertCircle className="h-5 w-5 text-red-600" />
+        {/* Section hubs: Service / Sales / HR */}
+        {HUBS[activeTab] && (
+          <div className="space-y-6">
+            {activeTab === 'hub-service' && (
+              <div className="grid grid-cols-2 gap-2">
+                <StatTile label="Pending Repairs" value={overview?.pendingRepairs || 0} hint="Need attention" icon={AlertCircle} iconClass="text-orange-500" onClick={() => navigate('all-records')} />
+                <StatTile label="Today's Revenue" value={`₹${(overview?.todayRevenue || 0).toLocaleString('en-IN')}`} hint="Today's earnings" icon={DollarSign} iconClass="text-emerald-600" onClick={() => navigate('revenue')} />
               </div>
-              <h3 className="text-lg font-bold text-gray-800">Delete Employee</h3>
-            </div>
-            <p className="text-gray-600 text-sm mb-6">
-              Are you sure you want to delete <strong>{employeeToDelete.name}</strong>? 
-              This action cannot be undone.
-            </p>
-            <div className="flex gap-3">
-              <button
-                onClick={() => {
-                  setShowDeleteModal(false);
-                  setEmployeeToDelete(null);
-                }}
-                className="flex-1 px-4 py-2 bg-gray-200 text-gray-700 rounded-lg font-medium text-sm"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={() => handleDeleteEmployee(employeeToDelete._id)}
-                className="flex-1 px-4 py-2 bg-red-600 text-white rounded-lg font-medium text-sm"
-              >
-                Delete
-              </button>
+            )}
+            {activeTab === 'hub-sales' && (
+              <SalesOverview session={salesSession} compact showTitle={false} onNavigate={navigate} />
+            )}
+            {activeTab === 'hub-hr' && isCombo && (
+              <p className="rounded-xl bg-white p-3 text-xs text-gray-600 shadow-sm border border-gray-200">
+                Your plan includes Service and Sales — HR screens let you filter staff by unit.
+              </p>
+            )}
+            {hubGroups.map((group) => (
+              <section key={group.key} aria-labelledby={`hub-${group.key}`} className="space-y-3">
+                <h2 id={`hub-${group.key}`} className="text-xs font-bold uppercase tracking-wider text-gray-500">{group.label}</h2>
+                <div className="grid grid-cols-2 gap-2">
+                  {group.children.map((child) => (
+                    <NavTile key={child.id} item={child} accent={hubAccent} onClick={() => navigate(child.id)} />
+                  ))}
+                </div>
+              </section>
+            ))}
+            {activeTab === 'hub-service' && (
+              <section aria-labelledby="hub-insights" className="space-y-3">
+                <h2 id="hub-insights" className="text-xs font-bold uppercase tracking-wider text-gray-500">Insights</h2>
+                <div className="grid grid-cols-2 gap-2">
+                  <NavTile item={{ label: 'Business Analytics', desc: 'Sales + service P&L', icon: BarChart3 }} onClick={() => navigate('business-analytics')} />
+                </div>
+              </section>
+            )}
+          </div>
+        )}
+
+        {/* Business / unit filter shared by the HR screens on combo plans */}
+        {HR_TABS.includes(activeTab) && isCombo && (
+          <div className="mb-4 flex items-center justify-between gap-2 rounded-xl border border-gray-200 bg-white px-3 py-2 shadow-sm">
+            <span className="text-xs font-medium text-gray-600">Staff from</span>
+            <div role="radiogroup" aria-label="Business unit" className="inline-flex rounded-lg bg-gray-100 p-1">
+              {[{ id: 'all', label: 'All' }, { id: 'service', label: 'Service' }, { id: 'sales', label: 'Sales' }].map((opt) => (
+                <button
+                  key={opt.id}
+                  type="button"
+                  role="radio"
+                  aria-checked={hrUnit === opt.id}
+                  onClick={() => setHrUnit(opt.id)}
+                  className={`min-w-[60px] rounded-md px-3 py-1.5 text-xs font-semibold transition focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 ${
+                    hrUnit === opt.id ? 'bg-white text-emerald-700 shadow-sm' : 'text-gray-600'
+                  }`}
+                >
+                  {opt.label}
+                </button>
+              ))}
             </div>
           </div>
+        )}
+
+        {/* Full-feature screens shared with the desktop dashboard */}
+        <div className="sa-mobile-panel min-w-0 overflow-x-auto">
+          {activeTab === 'business-analytics' && productAccess && (
+            <BusinessAnalytics shopId={currentShopId} access={productAccess} onNavigate={navigate} />
+          )}
+          {activeTab === 'hr-employees' && (
+            <EmployeeManagement shopId={currentShopId} unit={effectiveHrUnit} allowUnitChoice={isCombo} />
+          )}
+          {activeTab === 'hr-attendance' && (
+            <AttendanceManagement shopId={currentShopId} unit={effectiveHrUnit} />
+          )}
+          {activeTab === 'salary' && (
+            <SalaryManagement shopId={currentShopId} unit={effectiveHrUnit} />
+          )}
+          {activeTab === 'hr-performance' && productAccess && (
+            <EmployeePerformance shopId={currentShopId} unit={effectiveHrUnit} access={productAccess} />
+          )}
+          {activeTab === 'all-records' && <AllRecordsPanel currentShopId={currentShopId} />}
+          {activeTab === 'customer-create' && <CreateCustomerPanel currentShopId={currentShopId} />}
+          {activeTab === 'dealer-create' && <CreateDealerPanel currentShopId={currentShopId} />}
+          {activeTab === 'suppliers' && <SuppliersPanel currentShopId={currentShopId} />}
+          {activeTab.startsWith('sales-') && hasSales && (
+            <SalesWorkspace
+              view={activeTab.slice('sales-'.length)}
+              session={salesSession}
+              shopId={currentShopId}
+              onNavigate={navigate}
+              compact
+            />
+          )}
         </div>
-      )}
+
+        {/* Shop settings (on desktop these live on the Overview page) */}
+        {activeTab === 'settings' && (
+          <div className="space-y-4">
+            {hasService && (
+              <>
+                <div className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
+                  <div className="flex items-start gap-3">
+                    <span className={`inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-lg ${settings.revenueVisibleToUsers ? 'bg-emerald-50 text-emerald-600' : 'bg-red-50 text-red-600'}`}>
+                      <DollarSign className="h-5 w-5" aria-hidden="true" />
+                    </span>
+                    <div className="min-w-0 flex-1">
+                      <h3 id="sa-revenue-visibility" className="text-sm font-semibold text-gray-900">Revenue visibility for users</h3>
+                      <p className="mt-0.5 text-xs text-gray-500">
+                        {settings.revenueVisibleToUsers
+                          ? "Users can see Today's Revenue & the Analytics dashboard"
+                          : "Today's Revenue & the Analytics dashboard are hidden from users"}
+                      </p>
+                    </div>
+                    <Toggle
+                      checked={!!settings.revenueVisibleToUsers}
+                      disabled={settings.togglingRevenue || !settings.toggleRevenueVisibility}
+                      onChange={settings.toggleRevenueVisibility}
+                      label="Revenue visibility for users"
+                    />
+                  </div>
+                </div>
+
+                <div className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
+                  <div className="flex items-start gap-3">
+                    <span className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-blue-50 text-blue-600">
+                      <FileText className="h-5 w-5" aria-hidden="true" />
+                    </span>
+                    <div className="min-w-0">
+                      <h3 className="text-sm font-semibold text-gray-900">Receipt terms &amp; conditions</h3>
+                      <p className="mt-0.5 text-xs text-gray-500">Printed at the bottom of the A4 invoice/receipt. Leave blank to use the default terms.</p>
+                    </div>
+                  </div>
+                  <label htmlFor="sa-terms" className="sr-only">Receipt terms and conditions</label>
+                  <textarea
+                    id="sa-terms"
+                    value={settings.termsDraft || ''}
+                    onChange={(e) => settings.setTermsDraft?.(e.target.value)}
+                    placeholder={"e.g.\n1. No guarantee for liquid / water damage.\n2. Collect your device within 30 days of completion.\n3. We are not responsible for any data loss."}
+                    rows={8}
+                    maxLength={2000}
+                    className="mt-3 w-full resize-y rounded-lg border border-gray-300 p-3 text-base leading-relaxed text-gray-800 focus:border-transparent focus:outline-none focus:ring-2 focus:ring-blue-500 sm:text-sm"
+                  />
+                  <div className="mt-3 flex items-center justify-between gap-3">
+                    <span className="text-xs text-gray-400">{(settings.termsDraft || '').length}/2000</span>
+                    <div className="flex items-center gap-3">
+                      {settings.termsSaved && (
+                        <span role="status" className="flex items-center gap-1 text-sm font-medium text-emerald-600">
+                          <CheckCircle className="h-4 w-4" aria-hidden="true" /> Saved
+                        </span>
+                      )}
+                      <button
+                        type="button"
+                        onClick={settings.saveTermsAndConditions}
+                        disabled={settings.savingTerms || settings.termsDraft === settings.termsAndConditions}
+                        className="min-h-[40px] rounded-lg bg-blue-600 px-5 text-sm font-semibold text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
+                      >
+                        {settings.savingTerms ? 'Saving…' : 'Save'}
+                      </button>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="sa-mobile-panel min-w-0 overflow-x-auto">
+                  <ReceiptTermsImages shopId={currentShopId} />
+                </div>
+              </>
+            )}
+
+            <div className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
+              <div className="mb-3 flex items-start gap-3">
+                <span className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-indigo-50 text-indigo-600">
+                  <Fingerprint className="h-5 w-5" aria-hidden="true" />
+                </span>
+                <div className="min-w-0">
+                  <h3 className="text-sm font-semibold text-gray-900">Biometric attendance device</h3>
+                  <p className="mt-0.5 text-xs text-gray-500">Connect an eSSL M20 to capture attendance by fingerprint / face.</p>
+                </div>
+              </div>
+              <div className="sa-mobile-panel min-w-0 overflow-x-auto">
+                <EsslDeviceSettings shopId={currentShopId} employees={employees} />
+              </div>
+            </div>
+          </div>
+        )}
+      </main>
+
+      {/* Bottom tab bar */}
+      <nav
+        aria-label="Primary"
+        className="fixed inset-x-0 bottom-0 z-30 border-t border-gray-200 bg-white/95 pb-[env(safe-area-inset-bottom)] shadow-[0_-4px_12px_rgba(0,0,0,0.05)] backdrop-blur"
+      >
+        <div className="mx-auto flex max-w-3xl">
+          {bottomTabs.map(({ id, label, icon: Icon }) => {
+            const active = rootTab === id;
+            return (
+              <button
+                key={id}
+                type="button"
+                onClick={() => navigate(id)}
+                aria-current={active ? 'page' : undefined}
+                className={`flex min-h-[60px] flex-1 flex-col items-center justify-center gap-1 text-[11px] font-semibold focus:outline-none focus-visible:bg-gray-100 ${
+                  active ? 'text-emerald-700' : 'text-gray-500'
+                }`}
+              >
+                <span className={`flex h-7 w-12 items-center justify-center rounded-full transition ${active ? 'bg-emerald-100' : ''}`}>
+                  <Icon className="h-5 w-5" aria-hidden="true" />
+                </span>
+                {label}
+              </button>
+            );
+          })}
+          <button
+            type="button"
+            onClick={() => setShowMobileMenu(true)}
+            aria-label="Open full menu"
+            aria-expanded={showMobileMenu}
+            className="flex min-h-[60px] flex-1 flex-col items-center justify-center gap-1 text-[11px] font-semibold text-gray-500 focus:outline-none focus-visible:bg-gray-100"
+          >
+            <span className="flex h-7 w-12 items-center justify-center rounded-full">
+              <Menu className="h-5 w-5" aria-hidden="true" />
+            </span>
+            Menu
+          </button>
+        </div>
+      </nav>
+
+      {/* Slide-in menu: mirrors the desktop sidebar */}
+      <div
+        className={`fixed inset-0 z-[60] ${showMobileMenu ? '' : 'pointer-events-none'}`}
+        aria-hidden={!showMobileMenu}
+      >
+        <div
+          className={`absolute inset-0 bg-black/40 transition-opacity duration-200 ${showMobileMenu ? 'opacity-100' : 'opacity-0'}`}
+          onClick={() => setShowMobileMenu(false)}
+        />
+        <aside
+          role="dialog"
+          aria-modal="true"
+          aria-label="Navigation menu"
+          className={`absolute inset-y-0 left-0 flex w-[85%] max-w-xs flex-col bg-white shadow-2xl transition-transform duration-200 ${
+            showMobileMenu ? 'translate-x-0' : '-translate-x-full'
+          }`}
+        >
+          <div className="bg-gradient-to-br from-green-600 to-emerald-700 p-4 pt-[calc(1rem+env(safe-area-inset-top))] text-white">
+            <div className="flex items-start justify-between gap-2">
+              <div className="min-w-0">
+                <p className="truncate text-lg font-bold">{currentShop?.name || 'Shop'}</p>
+                <p className="truncate text-xs text-green-100">{currentShop?.location || 'Location not set'}</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowMobileMenu(false)}
+                className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-lg hover:bg-white/10 focus:outline-none focus-visible:ring-2 focus-visible:ring-white"
+                aria-label="Close menu"
+                tabIndex={showMobileMenu ? 0 : -1}
+              >
+                <X className="h-5 w-5" aria-hidden="true" />
+              </button>
+            </div>
+            <dl className="mt-3 grid grid-cols-2 gap-2 text-xs">
+              <div className="rounded-lg bg-white/10 p-2">
+                <dt className="text-green-100">Owner</dt>
+                <dd className="truncate font-semibold">{currentShop?.owner_name || 'N/A'}</dd>
+              </div>
+              <div className="rounded-lg bg-white/10 p-2">
+                <dt className="text-green-100">Phone</dt>
+                <dd className="truncate font-semibold">{currentShop?.phone || 'N/A'}</dd>
+              </div>
+              <div className="rounded-lg bg-white/10 p-2">
+                <dt className="text-green-100">Plan</dt>
+                <dd className="truncate font-semibold">{planLabel}</dd>
+              </div>
+              <div className="rounded-lg bg-white/10 p-2">
+                <dt className="text-green-100">Admin</dt>
+                <dd className="truncate font-semibold">{shopAdmin?.username || '—'}</dd>
+              </div>
+            </dl>
+          </div>
+
+          <nav aria-label="All sections" className="flex-1 overflow-y-auto px-3 py-3">
+            {visibleNav.map((node) => {
+              if (node.type === 'heading') {
+                return (
+                  <p key={node.key} className={`mt-4 mb-1 px-3 text-[11px] font-bold uppercase tracking-widest ${node.product === 'sales' ? 'text-indigo-600' : 'text-emerald-700'}`}>
+                    {node.label}
+                  </p>
+                );
+              }
+              const items = node.type === 'item' ? [node] : node.children;
+              return (
+                <div key={node.key || node.id} className="mb-1">
+                  {node.type === 'group' && (
+                    <p className="mt-2 px-3 pb-1 text-xs font-semibold text-gray-500">{node.label}</p>
+                  )}
+                  {items.map((item) => {
+                    const Icon = item.icon;
+                    const active = activeTab === item.id;
+                    return (
+                      <button
+                        key={item.id}
+                        type="button"
+                        onClick={() => navigate(item.id)}
+                        tabIndex={showMobileMenu ? 0 : -1}
+                        aria-current={active ? 'page' : undefined}
+                        className={`flex min-h-[44px] w-full items-center gap-3 rounded-lg px-3 text-left text-sm font-medium transition focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 ${
+                          active ? 'bg-emerald-50 text-emerald-700' : 'text-gray-700 hover:bg-gray-50'
+                        }`}
+                      >
+                        <Icon className={`h-5 w-5 shrink-0 ${active ? 'text-emerald-600' : 'text-gray-400'}`} aria-hidden="true" />
+                        {item.label}
+                      </button>
+                    );
+                  })}
+                </div>
+              );
+            })}
+            <div className="mt-3 border-t border-gray-100 pt-3">
+              <button
+                type="button"
+                onClick={() => navigate('settings')}
+                tabIndex={showMobileMenu ? 0 : -1}
+                aria-current={activeTab === 'settings' ? 'page' : undefined}
+                className={`flex min-h-[44px] w-full items-center gap-3 rounded-lg px-3 text-left text-sm font-medium transition focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 ${
+                  activeTab === 'settings' ? 'bg-emerald-50 text-emerald-700' : 'text-gray-700 hover:bg-gray-50'
+                }`}
+              >
+                <Settings className={`h-5 w-5 ${activeTab === 'settings' ? 'text-emerald-600' : 'text-gray-400'}`} aria-hidden="true" />
+                Shop Settings
+              </button>
+            </div>
+          </nav>
+
+          <div className="border-t border-gray-100 p-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))]">
+            <button
+              type="button"
+              onClick={() => {
+                setShowMobileMenu(false);
+                handleLogout();
+              }}
+              tabIndex={showMobileMenu ? 0 : -1}
+              className="flex min-h-[44px] w-full items-center justify-center gap-2 rounded-lg bg-red-50 text-sm font-semibold text-red-600 hover:bg-red-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-red-500"
+            >
+              <LogOut className="h-4 w-4" aria-hidden="true" />
+              Logout
+            </button>
+          </div>
+        </aside>
+      </div>
     </div>
   );
 }

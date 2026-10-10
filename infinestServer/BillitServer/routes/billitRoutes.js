@@ -92,6 +92,9 @@ const { toggleMobileStatus } = require("../controllers/api/toggleMobileStatusCon
 
 router.post("/toggle-status",authenticateToken, toggleMobileStatus);
 
+const { updateMobileDetails } = require("../controllers/api/updateMobileDetailsController");
+router.post("/update-mobile-details", authenticateToken, updateMobileDetails);
+
 
 const { updatePaidAmount } = require("../controllers/api/updatePaidAmountController");
 

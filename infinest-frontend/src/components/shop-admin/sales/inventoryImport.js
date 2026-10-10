@@ -125,6 +125,15 @@ function extractMeta(rows) {
   return meta;
 }
 
+const IMEI_PLACEHOLDERS = new Set(["na", "n/a", "nil", "none", "null", "undefined", "nan", "no", "imei"]);
+
+export function isPlaceholderImei(value) {
+  const v = String(value == null ? "" : value).trim();
+  if (!v) return true;
+  if (/^0+$/.test(v) || /^[^a-z0-9]+$/i.test(v)) return true;
+  return IMEI_PLACEHOLDERS.has(v.toLowerCase());
+}
+
 function buildItem(raw, rowNumber) {
   const quantity = Math.round(toNumber(raw.quantity));
   const total = toNumber(raw.total);
@@ -137,7 +146,8 @@ function buildItem(raw, rowNumber) {
   const gstPercent = toNumber(raw.cgstPercent) + toNumber(raw.sgstPercent) + toNumber(raw.igstPercent);
   const mrp = toNumber(raw.mrp);
   const selling = toNumber(raw.sellingPrice) || mrp;
-  const imes = text(raw.imei).split(/[,;\s]+/).filter(Boolean);
+  // Accessories often carry "0", "-" or "NA" in the IMEI column; only real IMEIs make an item a phone
+  const imes = text(raw.imei).split(/[,;\s]+/).filter((v) => v && !isPlaceholderImei(v));
 
   const errors = [];
   if (!text(raw.productName)) errors.push("Product name missing");

@@ -283,7 +283,7 @@ export default function EmployeeManagement({ shopId, unit = "service", allowUnit
   return (
     <div className="space-y-4">
       {/* Header */}
-      <div className="flex items-center justify-between bg-white p-4 rounded-xl border border-gray-200">
+      <div className="flex flex-wrap items-center justify-between gap-3 bg-white p-4 rounded-xl border border-gray-200">
         <div className="flex items-center gap-3">
           <h2 className="text-xl font-bold text-gray-800">Employee Management</h2>
           <span className="px-2 py-1 bg-green-100 text-green-700 rounded-full text-xs font-semibold">

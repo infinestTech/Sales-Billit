@@ -4025,3 +4025,8 @@
     height: 32px;
   }
 }
+
+/* Shop-admin mobile dashboard: the app bar already shows the page title */
+.sales-scope.sales-compact .content {
+  padding: 12px;
+}

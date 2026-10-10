@@ -5,7 +5,7 @@
 import { useEffect, useState } from "react"
 import Pagination from "./Pagination"
 import api from "../api"
-import { Calendar, Smartphone, AlertCircle, CheckCircle, RotateCcw, DollarSign, Truck, Package, Eye, Banknote, CreditCard, Wrench } from "lucide-react"
+import { Calendar, Smartphone, AlertCircle, CheckCircle, RotateCcw, DollarSign, Truck, Package, Eye, Banknote, CreditCard, Wrench, Pencil, X } from "lucide-react"
 import { FaWhatsapp } from "react-icons/fa"
 import { useRouter } from "next/navigation"
 import { jwtDecode } from "jwt-decode"
@@ -67,6 +67,92 @@ const MobileNameTable = ({ mobileData, setMobileData, onRevenueUpdate, hideActio
   const [waMessageText, setWaMessageText] = useState("")
   const [waMessageSending, setWaMessageSending] = useState(false)
   const [waMessageError, setWaMessageError] = useState("")
+
+  // Edit device details modal (name, model, IMEI, issue, technician, date — never payments)
+  const [editModal, setEditModal] = useState({ open: false, mobile: null })
+  const [editForm, setEditForm] = useState({ mobile_name: "", model: "", imei: "", issue: "", technician_name: "", added_date: "" })
+  const [editSaving, setEditSaving] = useState(false)
+  const [editError, setEditError] = useState("")
+
+  const toDateInput = (value) => {
+    if (!value) return ""
+    const d = new Date(value)
+    if (Number.isNaN(d.getTime())) return ""
+    const pad = (n) => String(n).padStart(2, "0")
+    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`
+  }
+
+  const openEditModal = (mobile) => {
+    setEditForm({
+      mobile_name: mobile.mobile_name || "",
+      model: mobile.model || "",
+      imei: mobile.imei || "",
+      issue: mobile.issue || "",
+      technician_name: mobile.technician_name || "",
+      added_date: toDateInput(mobile.added_date),
+    })
+    setEditError("")
+    setEditModal({ open: true, mobile })
+  }
+
+  const closeEditModal = () => {
+    if (editSaving) return
+    setEditModal({ open: false, mobile: null })
+    setEditError("")
+  }
+
+  const saveEditModal = async () => {
+    const mobile = editModal.mobile
+    if (!mobile?._id || editSaving) return
+    if (!editForm.mobile_name.trim()) {
+      setEditError("Mobile name is required")
+      return
+    }
+    if (!editForm.added_date) {
+      setEditError("Date is required")
+      return
+    }
+    const updates = {
+      mobile_name: editForm.mobile_name,
+      model: editForm.model,
+      imei: editForm.imei,
+      issue: editForm.issue,
+      technician_name: editForm.technician_name,
+    }
+    // Only send the date when it changed, keeping the original time-of-day otherwise
+    if (editForm.added_date !== toDateInput(mobile.added_date)) {
+      const [y, m, d] = editForm.added_date.split("-").map(Number)
+      const original = mobile.added_date ? new Date(mobile.added_date) : new Date()
+      const next = Number.isNaN(original.getTime()) ? new Date() : new Date(original)
+      next.setFullYear(y, m - 1, d)
+      updates.added_date = next.toISOString()
+    }
+    setEditSaving(true)
+    setEditError("")
+    try {
+      const token = localStorage.getItem("token")
+      const response = await api.post(
+        "/api/update-mobile-details",
+        { id: mobile._id, updates },
+        { headers: { Authorization: `Bearer ${token}` } },
+      )
+      const updated = response.data.updatedMobile || {}
+      const pick = (({ mobile_name, model, imei, issue, technician_name, added_date, update_date }) =>
+        ({ mobile_name, model, imei, issue, technician_name, added_date, update_date }))(updated)
+      setMobileData(validMobileData.map((m) =>
+        String(m._id) === String(mobile._id) ? { ...m, ...pick } : m,
+      ))
+      setEditModal({ open: false, mobile: null })
+      window.dispatchEvent(new CustomEvent("show-notification-toast", {
+        detail: { message: "Mobile details updated", type: "success" }
+      }))
+    } catch (error) {
+      if (error.message === "Session expired") return
+      setEditError(error.response?.data?.error || "Failed to update mobile details. Please try again.")
+    } finally {
+      setEditSaving(false)
+    }
+  }
 
   const openWaMessageModal = (mobile) => {
     setWaMessageText("")
@@ -740,10 +826,23 @@ const MobileNameTable = ({ mobileData, setMobileData, onRevenueUpdate, hideActio
                   <span className="text-sm font-medium text-gray-700">{formatDate(mobile.added_date)}</span>
                 </td>
                 <td className="px-6 py-4 border-b border-gray-200">
-                  <div className="flex flex-col">
-                    <span className="font-semibold text-gray-800">{mobile.mobile_name}</span>
-                    {mobile.model && (
-                      <span className="text-xs text-gray-500 mt-0.5">{mobile.model}</span>
+                  <div className="flex items-start gap-2">
+                    <div className="flex flex-col">
+                      <span className="font-semibold text-gray-800">{mobile.mobile_name}</span>
+                      {mobile.model && (
+                        <span className="text-xs text-gray-500 mt-0.5">{mobile.model}</span>
+                      )}
+                    </div>
+                    {!hideActions && mobile._id && (
+                      <button
+                        type="button"
+                        onClick={() => openEditModal(mobile)}
+                        className="mt-0.5 inline-flex items-center justify-center w-7 h-7 rounded-md text-gray-400 hover:text-blue-600 hover:bg-blue-50 transition-colors"
+                        title="Edit mobile details"
+                        aria-label="Edit mobile details"
+                      >
+                        <Pencil className="h-3.5 w-3.5" />
+                      </button>
                     )}
                   </div>
                 </td>
@@ -907,6 +1006,70 @@ const MobileNameTable = ({ mobileData, setMobileData, onRevenueUpdate, hideActio
 
 
 
+
+      {/* Edit Mobile Details Modal */}
+      {editModal.open && (
+        <>
+          <div className="fixed inset-0 bg-black/30 z-40" onClick={closeEditModal}></div>
+          <div className="fixed left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 bg-white rounded-xl shadow-xl border border-gray-200 p-6 w-[92vw] max-w-lg z-50 max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between mb-4">
+              <h4 className="text-lg font-semibold text-gray-900 flex items-center gap-2">
+                <Pencil className="h-4 w-4 text-blue-600" />
+                Edit Mobile Details
+              </h4>
+              <button onClick={closeEditModal} className="text-gray-400 hover:text-gray-600" aria-label="Close">
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              {[
+                { key: "mobile_name", label: "Mobile Name *", type: "text" },
+                { key: "model", label: "Model", type: "text" },
+                { key: "imei", label: "IMEI", type: "text" },
+                { key: "technician_name", label: "Technician", type: "text" },
+                { key: "added_date", label: "Date *", type: "date" },
+              ].map(({ key, label, type }) => (
+                <div key={key}>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">{label}</label>
+                  <input
+                    type={type}
+                    value={editForm[key]}
+                    onChange={(e) => setEditForm((f) => ({ ...f, [key]: e.target.value }))}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                </div>
+              ))}
+              <div className="sm:col-span-2">
+                <label className="block text-sm font-medium text-gray-700 mb-1">Issue</label>
+                <textarea
+                  rows={3}
+                  value={editForm.issue}
+                  onChange={(e) => setEditForm((f) => ({ ...f, issue: e.target.value }))}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+            </div>
+            <p className="mt-3 text-xs text-gray-500">Paid amount can't be changed here — use the payment "+ Add" option.</p>
+            {editError && <p className="mt-3 text-sm text-red-600">{editError}</p>}
+            <div className="mt-5 flex justify-end gap-2">
+              <button
+                onClick={closeEditModal}
+                disabled={editSaving}
+                className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 disabled:opacity-60"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={saveEditModal}
+                disabled={editSaving}
+                className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 disabled:opacity-60"
+              >
+                {editSaving ? "Saving..." : "Save Changes"}
+              </button>
+            </div>
+          </div>
+        </>
+      )}
 
       {/* Add Payment Popup */}
       {paymentModalOpen && (
