@@ -48,6 +48,13 @@ HR employees carry `business_unit` (`service` | `sales`; missing = service). HR 
 - **Analytics** — SalesServer aggregates sales (`/api/sales-analytics/*` for tokens, `/internal/sales-analytics/*` with `x-internal-key`). BillitServer combines them with attendance and service in `controllers/performanceController.js`: `GET /api/shop-admin/hr/performance[/:id]`, `GET /api/shop-admin/analytics/business` (sales + service P&L), `GET|PATCH /api/shop-admin/shop-settings/pos`. If SalesServer is unreachable these return `warnings` instead of failing.
 - **Payroll** — `Employee.incentive` (sales/service commission %, monthly sales target + bonus) is added to `net_salary` during salary generation (`sales_commission`, `service_commission`, `target_bonus_earned`, `incentive_total` on `HrSalaryRecord`).
 
+### Service suppliers: credit, stock bills & settlement (BillitServer)
+
+- `Supplier.totalAmount` is the credit balance shown in both portals. Shop-admin adds `openingCredit` (optional; when set, the products behind it are required and must total it exactly), credit/cash purchases and payments (`/api/shop-admin/suppliers/:id/{ledger,purchases,pay}`).
+- Bill items go into the service spares inventory (`Product` + `ProductHistory`, linked by `supplierId`) and are recorded as a `SupplierPurchase` (`models/supplierPurchase.js`). Payments are logged in `SupplierHistory` like the user portal's Pay Credit.
+- `utils/supplierLedger.js` builds the ledger: settlement is oldest-first (outstanding balance belongs to the newest credit purchases), and also covers user-portal credit spares and repair credits (`Added: <name> x<qty> - ₹<amt>` history messages). Usage on repairs is matched by `Mobile.productName`.
+- `supplierController.updateSupplier` skips the repair flow's credit increment when the spare was just taken from stock (recent `SELL`), so stock isn't charged twice.
+
 ### Request-ordering gotchas in BillitServer (`server_Billit.js`)
 
 - `webhookRoutes` (Razorpay) and `admsRoutes` (eSSL device) are mounted **before `express.json()`** because they need the raw/text body (signature verification and plain-text device payloads respectively). Do not move `express.json()` above them.

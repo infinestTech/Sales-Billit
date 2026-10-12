@@ -5,7 +5,7 @@ import { fetchMobileImages } from "@/utils/mobileImagesApi"
 
 // Shows the front/back photos captured for a mobile entry, fetched on demand via
 // short-lived signed R2 URLs (never stored/cached beyond this modal's lifetime).
-export default function MobileImagesModal({ mobileId, onClose }) {
+export default function MobileImagesModal({ mobileId, onClose, fetchImages = fetchMobileImages }) {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState("")
   const [images, setImages] = useState([])
@@ -15,7 +15,7 @@ export default function MobileImagesModal({ mobileId, onClose }) {
     let cancelled = false
     setLoading(true)
     setError("")
-    fetchMobileImages(mobileId)
+    fetchImages(mobileId)
       .then(({ images }) => {
         if (!cancelled) setImages(images)
       })

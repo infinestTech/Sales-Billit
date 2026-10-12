@@ -13,6 +13,9 @@ const supplierSchema = new mongoose.Schema({
   address: { type: String, trim: true },
   totalAmount: { type: Number, default: 0 },
   lastPaymentMethod: { type: String, enum: PAYMENT_METHOD_ENUM, default: "" },
+  // Keep in sync with the Supplier schema in mongoModels.js (whichever registers first is used)
+  openingCredit: { type: Number, default: 0 },
+  openingCreditDate: { type: Date },
   createdAt: { type: Date, default: Date.now }
 });
 

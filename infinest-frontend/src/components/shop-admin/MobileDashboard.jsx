@@ -28,12 +28,14 @@ const AllRecordsPanel = dynamic(() => import('./panels/AllRecordsPanel'), { ssr:
 const CreateCustomerPanel = dynamic(() => import('./panels/CreateCustomerPanel'), { ssr: false });
 const CreateDealerPanel = dynamic(() => import('./panels/CreateDealerPanel'), { ssr: false });
 const SuppliersPanel = dynamic(() => import('./panels/SuppliersPanel'), { ssr: false });
+const ExpensesPanel = dynamic(() => import('./panels/ExpensesPanel'), { ssr: false });
+const MobileRegistryPanel = dynamic(() => import('./panels/MobileRegistryPanel'), { ssr: false });
 const ReceiptTermsImages = dynamic(() => import('./ReceiptTermsImages'), { ssr: false });
 const EsslDeviceSettings = dynamic(() => import('./EsslDeviceSettings'), { ssr: false });
 
 // Mobile-only screens layered on top of the shared desktop tab ids
 const HUBS = {
-  'hub-service': { title: 'Service', subtitle: 'Repairs, records, suppliers & reports', groups: ['records', 'suppliers', 'reports'] },
+  'hub-service': { title: 'Service', subtitle: 'Repairs, records, suppliers, reports & expenses', groups: ['records', 'suppliers', 'reports', 'finance'] },
   'hub-sales': { title: 'Sales', subtitle: 'Inventory, branches & finance', groups: ['sales-inventory', 'sales-branches', 'sales-finance'] },
   'hub-hr': { title: 'HR', subtitle: 'Staff, attendance, payroll & performance', groups: ['hr'] },
 };
@@ -488,6 +490,16 @@ export default function MobileDashboard({
               <div class="value" style="color: #7c3aed;">${reportToUse.summary?.profitMargin?.toFixed(1) || 0}%</div>
             </div>
           </div>
+          ${reportToUse.summary?.paymentMethodTotals ? (() => {
+            const t = reportToUse.summary.paymentMethodTotals;
+            const tiles = [['Cash', t.cash], ['Gpay / UPI', t.gpay], ['Card', t.card]];
+            if (t.other > 0) tiles.push(['Other', t.other]);
+            return `
+          <div class="label" style="margin-top: 12px; font-weight: 600;">Payment Breakdown (Revenue)</div>
+          <div style="display: grid; grid-template-columns: repeat(${tiles.length}, 1fr); gap: 10px; margin-top: 6px;">
+            ${tiles.map(([label, amt]) => `<div class="summary-box"><div class="label">${label}</div><div class="value">₹${(amt || 0).toLocaleString('en-IN')}</div></div>`).join('')}
+          </div>`;
+          })() : ''}
         </div>
 
         ${reportToUse.customerPayments && reportToUse.customerPayments.length > 0 ? `
@@ -1434,6 +1446,24 @@ export default function MobileDashboard({
                   </div>
                 </div>
 
+                {(localReportData || reportData).summary?.paymentMethodTotals && (() => {
+                  const t = (localReportData || reportData).summary.paymentMethodTotals;
+                  const tiles = [['Cash', t.cash], ['Gpay / UPI', t.gpay], ['Card', t.card], ...(t.other > 0 ? [['Other', t.other]] : [])];
+                  return (
+                    <div>
+                      <div className="text-xs font-semibold text-gray-700 mb-2">Payment Breakdown (Revenue)</div>
+                      <div className="grid grid-cols-2 gap-3">
+                        {tiles.map(([label, amt]) => (
+                          <div key={label} className="bg-gray-50 rounded-lg p-3 border border-gray-200">
+                            <div className="text-xs text-gray-600 font-medium">{label}</div>
+                            <div className="text-lg font-bold text-gray-900">₹{(amt || 0).toLocaleString('en-IN')}</div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  );
+                })()}
+
                 {/* Collapsible Sections */}
                 {(localReportData || reportData).customerPayments && (localReportData || reportData).customerPayments.length > 0 && (
                   <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
@@ -1591,9 +1621,11 @@ export default function MobileDashboard({
             <EmployeePerformance shopId={currentShopId} unit={effectiveHrUnit} access={productAccess} />
           )}
           {activeTab === 'all-records' && <AllRecordsPanel currentShopId={currentShopId} />}
+          {activeTab === 'mobile-registry' && <MobileRegistryPanel currentShopId={currentShopId} />}
           {activeTab === 'customer-create' && <CreateCustomerPanel currentShopId={currentShopId} />}
           {activeTab === 'dealer-create' && <CreateDealerPanel currentShopId={currentShopId} />}
           {activeTab === 'suppliers' && <SuppliersPanel currentShopId={currentShopId} />}
+          {activeTab === 'expenses' && <ExpensesPanel currentShopId={currentShopId} />}
           {activeTab.startsWith('sales-') && hasSales && (
             <SalesWorkspace
               view={activeTab.slice('sales-'.length)}

@@ -1,5 +1,10 @@
 const { Supplier } = require("../../models/supplier");
 const { Product, ProductHistory, SupplierHistory } = require("../../models/mongoModels");
+const { REPAIR_CREDIT_RE, FROM_STOCK_MARK } = require("../../utils/supplierLedger");
+const mongoose = require("mongoose");
+
+// ObjectIds embed their creation time, so this lets us find documents created after `ms`
+const objectIdFromTime = (ms) => mongoose.Types.ObjectId.createFromTime(Math.floor(ms / 1000));
 
 
 // Add a new supplier
@@ -168,6 +173,38 @@ exports.updateSupplier = async (req, res) => {
 
     const update = {};
     let prevForHistory = undefined;
+    let historyMessage = message;
+    // Spares added to a repair from existing stock were already paid for or credited when that stock was
+    // purchased, so the repair flow's "Added: ..." credit increment must not be applied a second time.
+    // The repair flow reduces stock (SELL) just before this call, which is how we recognise it.
+    let skipStockCredit = false;
+    if ((paidAmount === undefined || paidAmount === null || paidAmount === "") && typeof message === "string") {
+      const m = REPAIR_CREDIT_RE.exec(message);
+      if (m) {
+        try {
+          const name = m[1].trim();
+          const qty = Number(m[2]) || 0;
+          const stockProducts = await Product.find({
+            userId: shop_id,
+            name: { $regex: `^\\s*${name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\s*$`, $options: "i" }
+          }).select("_id").lean();
+          if (stockProducts.length && qty > 0) {
+            const recentSell = await ProductHistory.exists({
+              productId: { $in: stockProducts.map((p) => p._id) },
+              changeType: "SELL",
+              quantity: qty,
+              _id: { $gte: objectIdFromTime(Date.now() - 5 * 60 * 1000) },
+            });
+            if (recentSell) {
+              skipStockCredit = true;
+              historyMessage = `${message} (${FROM_STOCK_MARK} — supplier credit not added again)`;
+            }
+          }
+        } catch (e) {
+          console.warn("stock-credit check failed:", e?.message || e);
+        }
+      }
+    }
     // If frontend sends a paidAmount, subtract it from current supplier total server-side
     if (typeof paidAmount !== "undefined" && paidAmount !== null && paidAmount !== "") {
       const paid = Number(paidAmount);
@@ -183,7 +220,7 @@ exports.updateSupplier = async (req, res) => {
       prevForHistory = curr;
       const newTotal = curr - paid;
       update.totalAmount = newTotal;
-    } else if (typeof totalAmount !== "undefined" && totalAmount !== null && totalAmount !== "") {
+    } else if (!skipStockCredit && typeof totalAmount !== "undefined" && totalAmount !== null && totalAmount !== "") {
       const amt = Number(totalAmount);
       if (Number.isNaN(amt)) {
         return res.status(400).json({ success: false, message: "totalAmount must be a number" });
@@ -197,7 +234,7 @@ exports.updateSupplier = async (req, res) => {
     }
 
 
-    if (!Object.keys(update).length && !message) {
+    if (!Object.keys(update).length && !historyMessage) {
       return res.status(400).json({ success: false, message: "Nothing to update" });
     }
 
@@ -213,7 +250,7 @@ exports.updateSupplier = async (req, res) => {
       supplierId,
       userId: shop_id,
       changeType: "ADMIN_EDIT",
-      message: message || "Admin edited supplier details",
+      message: historyMessage || "Admin edited supplier details",
       totalAmount: typeof update.totalAmount === "number" ? update.totalAmount : undefined,
       paymentMethod: update.lastPaymentMethod || "",
     };

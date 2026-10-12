@@ -69,6 +69,9 @@ const shopAdminApi = {
   createSupplier: (payload) => request("post", "/suppliers", { data: payload }),
   updateSupplier: (id, payload) => request("put", `/suppliers/${id}`, { data: payload }),
   deleteSupplier: (id) => request("delete", `/suppliers/${id}`),
+  supplierLedger: (id) => request("get", `/suppliers/${id}/ledger`),
+  addSupplierPurchase: (id, payload) => request("post", `/suppliers/${id}/purchases`, { data: payload }),
+  paySupplier: (id, payload) => request("post", `/suppliers/${id}/pay`, { data: payload }),
 
   // products
   listProducts: () => request("get", "/products"),
@@ -89,6 +92,13 @@ const shopAdminApi = {
 
   // mobile registry
   mobileRegistry: () => request("get", "/mobile-registry"),
+  registryList: (body) => request("post", "/registry/list", { data: body }),
+  registryDealerNames: () => request("get", "/registry/dealers").then((r) => r?.names || []),
+  registryUpdateTechnician: (mobileId, technicianName) => request("put", `/registry/technician/${mobileId}`, { data: { technicianName } }),
+  registryToggleStatus: (body) => request("post", "/registry/toggle-status", { data: body }),
+  registryAddPayment: (body) => request("post", "/registry/payment", { data: body }),
+  registryImages: (mobileId) => request("get", `/registry/images/${mobileId}`)
+    .then((r) => ({ images: r?.images || [], expiresIn: r?.expiresIn })),
 
   // meta
   paymentMethods: () => request("get", "/meta/payment-methods"),

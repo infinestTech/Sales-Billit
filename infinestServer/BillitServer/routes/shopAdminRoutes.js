@@ -1493,38 +1493,36 @@ router.get('/reports/financial', shopAdminAuth, async (req, res) => {
         const netProfit = totalRevenue - totalExpenses;
         const profitMargin = totalRevenue > 0 ? (netProfit / totalRevenue) * 100 : 0;
 
-        // Payment Method Breakdown
-        const paymentBreakdown = await Mobile.aggregate([
-            {
-                $match: {
-                    shop_id: req.shopId,
-                    created_at: { $gte: startDate, $lte: endDate },
-                    paid_amount: { $gt: 0 }
-                }
-            },
-            {
-                $group: {
-                    _id: { 
-                        $cond: {
-                            if: { $ne: ['$paymentMethod', null] },
-                            then: '$paymentMethod',
-                            else: { $ifNull: ['$payment', 'Cash'] }
-                        }
-                    },
-                    total: { $sum: { $ifNull: ['$paid_amount', 0] } },
-                    count: { $sum: 1 }
-                }
-            },
-            {
-                $project: {
-                    _id: 0,
-                    method: '$_id',
-                    total: 1,
-                    count: 1
-                }
-            },
-            { $sort: { total: -1 } }
-        ]);
+        // Payment Method Breakdown — built from the same payment rows as Total Revenue so it always adds up.
+        // Combined methods ("Gpay H + Cash", "Cash + Card", ...) are split evenly, matching the Excel export.
+        const revenuePayments = [...finalCustomerPayments, ...allDealerPayments];
+        const methodTotals = { cash: 0, gpay: 0, card: 0, other: 0 };
+        const byMethod = new Map();
+        for (const p of revenuePayments) {
+            const amt = Number(p.amount) || 0;
+            if (!amt) continue;
+            const raw = String(p.paymentMethod || 'Cash').trim() || 'Cash';
+            const label = raw.replace(/upi/gi, 'Gpay');
+            const key = label.toLowerCase();
+            const entry = byMethod.get(key) || { method: label, total: 0, count: 0 };
+            entry.total += amt;
+            entry.count += 1;
+            byMethod.set(key, entry);
+
+            const parts = key.split('+').map((s) => s.trim()).filter(Boolean);
+            const share = amt / parts.length;
+            for (const part of parts) {
+                if (part === 'cash') methodTotals.cash += share;
+                else if (part.startsWith('gpay')) methodTotals.gpay += share;
+                else if (part === 'card') methodTotals.card += share;
+                else methodTotals.other += share;
+            }
+        }
+        const round2 = (n) => Math.round(n * 100) / 100;
+        Object.keys(methodTotals).forEach((k) => { methodTotals[k] = round2(methodTotals[k]); });
+        const paymentBreakdown = [...byMethod.values()]
+            .map((e) => ({ ...e, total: round2(e.total) }))
+            .sort((a, b) => b.total - a.total);
 
         res.json({
             success: true,
@@ -1541,7 +1539,8 @@ router.get('/reports/financial', shopAdminAuth, async (req, res) => {
                     totalSpareReturns,
                     totalExpenses,
                     netProfit,
-                    profitMargin
+                    profitMargin,
+                    paymentMethodTotals: methodTotals
                 },
                 customerPayments: finalCustomerPayments,
                 dealerPayments: allDealerPayments,
@@ -3008,10 +3007,39 @@ router.put('/records/paid-amount', shopAdminAuth, async (req, res) => {
 });
 
 // -------------------- SUPPLIERS --------------------
+const { SupplierHistory: SupplierHistoryModel } = require('../models/mongoModels');
+const { SupplierPurchase } = require('../models/supplierPurchase');
+const supplierLedger = require('../utils/supplierLedger');
+
+const parseEntryDate = (value) => {
+    if (!value) return new Date();
+    const d = new Date(value);
+    return isNaN(d) ? null : d;
+};
+
 router.get('/suppliers', shopAdminAuth, async (req, res) => {
     try {
         const suppliers = await SupplierModel.find({ userId: req.shopId }).sort({ createdAt: -1 }).lean();
-        res.json({ success: true, suppliers });
+        const ids = suppliers.map((s) => s._id);
+        // Stock currently on hand per supplier (service spares linked to that supplier)
+        const stockAgg = ids.length ? await Product.aggregate([
+            { $match: { userId: req.shopId, supplierId: { $in: ids } } },
+            { $group: { _id: '$supplierId', spares: { $sum: 1 }, inStock: { $sum: '$quantity' }, stockValue: { $sum: { $multiply: ['$quantity', '$costPrice'] } } } }
+        ]) : [];
+        const stockMap = new Map(stockAgg.map((r) => [String(r._id), r]));
+        res.json({
+            success: true,
+            suppliers: suppliers.map((s) => {
+                const st = stockMap.get(String(s._id));
+                return {
+                    ...s,
+                    openingCredit: s.openingCredit || 0,
+                    spareCount: st?.spares || 0,
+                    stockInHand: st?.inStock || 0,
+                    stockValue: supplierLedger.round2(st?.stockValue || 0)
+                };
+            })
+        });
     } catch (err) {
         console.error('list suppliers error:', err);
         res.status(500).json({ success: false, message: 'Server error' });
@@ -3020,19 +3048,162 @@ router.get('/suppliers', shopAdminAuth, async (req, res) => {
 
 router.post('/suppliers', shopAdminAuth, async (req, res) => {
     try {
-        const { supplierName, agencyName, phoneNumber, address } = req.body;
+        const { supplierName, agencyName, phoneNumber, address, openingCredit, openingDate, items } = req.body;
         if (!supplierName?.toString().trim()) return res.status(400).json({ success: false, message: 'supplierName required' });
+
+        const opening = openingCredit === '' || openingCredit == null ? 0 : Number(openingCredit);
+        if (!Number.isFinite(opening) || opening < 0) return res.status(400).json({ success: false, message: 'Opening credit must be a positive amount' });
+
+        let normalized = null;
+        let date = new Date();
+        if (opening > 0) {
+            // The opening credit must be backed by the stock it was for, and the two must tally exactly
+            normalized = supplierLedger.normalizeItems(items);
+            if (normalized.error) return res.status(400).json({ success: false, message: normalized.error });
+            if (supplierLedger.toPaise(normalized.total) !== supplierLedger.toPaise(opening)) {
+                return res.status(400).json({ success: false, message: `Products total ₹${normalized.total} does not match the opening credit ₹${opening}` });
+            }
+            date = parseEntryDate(openingDate);
+            if (!date) return res.status(400).json({ success: false, message: 'Invalid opening date' });
+        }
+
         const supplier = await SupplierModel.create({
             userId: req.shopId,
             supplierName: supplierName.toString().trim(),
             agencyName: (agencyName || '').toString().trim(),
             phoneNumber: (phoneNumber || '').toString().trim(),
             address: (address || '').toString().trim(),
-            totalAmount: 0
+            totalAmount: opening,
+            openingCredit: opening,
+            openingCreditDate: opening > 0 ? date : undefined,
+            lastPaymentMethod: opening > 0 ? 'credit' : ''
         });
+
+        if (opening > 0) {
+            try {
+                const stored = await supplierLedger.stockItems({
+                    shopId: req.shopId, supplierId: supplier._id, items: normalized.items,
+                    purchaseType: 'credit', date, note: 'Opening stock (credit)'
+                });
+                await SupplierPurchase.create({
+                    userId: req.shopId, supplierId: supplier._id, kind: 'opening', purchaseType: 'credit',
+                    paymentMethod: 'credit', date, items: stored, totalAmount: normalized.total,
+                    notes: 'Opening credit'
+                });
+                await SupplierHistoryModel.create({
+                    supplierId: supplier._id, userId: req.shopId, changeDate: date, changeType: 'NOTE',
+                    message: `Opening credit: ₹${opening} (${stored.length} product${stored.length === 1 ? '' : 's'})`,
+                    totalAmount: opening, previousAmount: 0, paymentMethod: 'credit'
+                });
+            } catch (e) {
+                await SupplierModel.deleteOne({ _id: supplier._id }).catch(() => {});
+                throw e;
+            }
+        }
         res.json({ success: true, supplier });
     } catch (err) {
         console.error('add supplier error:', err);
+        res.status(500).json({ success: false, message: 'Server error' });
+    }
+});
+
+// Full ledger: purchases with oldest-first settlement status, payments and spare stock usage
+router.get('/suppliers/:id/ledger', shopAdminAuth, async (req, res) => {
+    try {
+        if (!mongooseLib.Types.ObjectId.isValid(req.params.id)) return res.status(400).json({ success: false, message: 'Invalid supplier' });
+        const supplier = await SupplierModel.findOne({ _id: req.params.id, userId: req.shopId }).lean();
+        if (!supplier) return res.status(404).json({ success: false, message: 'Supplier not found' });
+        const ledger = await supplierLedger.buildSupplierLedger(req.shopId, supplier);
+        res.json({ success: true, ...ledger });
+    } catch (err) {
+        console.error('supplier ledger error:', err);
+        res.status(500).json({ success: false, message: 'Server error' });
+    }
+});
+
+// New stock / restock from a supplier, on credit (adds to the balance) or paid in cash
+router.post('/suppliers/:id/purchases', shopAdminAuth, async (req, res) => {
+    try {
+        if (!mongooseLib.Types.ObjectId.isValid(req.params.id)) return res.status(400).json({ success: false, message: 'Invalid supplier' });
+        const supplier = await SupplierModel.findOne({ _id: req.params.id, userId: req.shopId });
+        if (!supplier) return res.status(404).json({ success: false, message: 'Supplier not found' });
+
+        const { purchaseType, paymentMethod, billNo, date: rawDate, items, notes } = req.body;
+        if (!['credit', 'cash'].includes(purchaseType)) return res.status(400).json({ success: false, message: 'Choose credit or cash' });
+        if (purchaseType === 'cash' && (!paymentMethod || !PAYMENT_METHOD_ENUM.includes(paymentMethod))) {
+            return res.status(400).json({ success: false, message: 'Select how the purchase was paid' });
+        }
+        const normalized = supplierLedger.normalizeItems(items);
+        if (normalized.error) return res.status(400).json({ success: false, message: normalized.error });
+        if (normalized.total <= 0) return res.status(400).json({ success: false, message: 'Purchase total must be above 0' });
+        const date = parseEntryDate(rawDate);
+        if (!date) return res.status(400).json({ success: false, message: 'Invalid date' });
+
+        const stored = await supplierLedger.stockItems({
+            shopId: req.shopId, supplierId: supplier._id, items: normalized.items, purchaseType, date,
+            note: purchaseType === 'credit' ? 'Credit purchase from supplier' : `Cash purchase (${paymentMethod})`
+        });
+        const purchase = await SupplierPurchase.create({
+            userId: req.shopId, supplierId: supplier._id, kind: 'purchase', purchaseType,
+            paymentMethod: purchaseType === 'credit' ? 'credit' : paymentMethod,
+            billNo: (billNo || '').toString().trim(), date, items: stored, totalAmount: normalized.total,
+            notes: (notes || '').toString().trim()
+        });
+
+        const previous = Number(supplier.totalAmount) || 0;
+        let updated = supplier;
+        if (purchaseType === 'credit') {
+            updated = await SupplierModel.findOneAndUpdate(
+                { _id: supplier._id, userId: req.shopId },
+                { $inc: { totalAmount: normalized.total }, $set: { lastPaymentMethod: 'credit' } },
+                { new: true }
+            );
+        }
+        await SupplierHistoryModel.create({
+            supplierId: supplier._id, userId: req.shopId, changeDate: date, changeType: 'NOTE',
+            message: `${purchaseType === 'credit' ? 'Credit' : 'Cash'} purchase${purchase.billNo ? ` (Bill ${purchase.billNo})` : ''}: ₹${normalized.total} — ${stored.map((i) => `${i.name} x${i.quantity}`).join(', ')}`,
+            totalAmount: Number(updated.totalAmount) || 0,
+            previousAmount: previous,
+            paymentMethod: purchaseType === 'credit' ? 'credit' : paymentMethod
+        });
+        res.json({ success: true, purchase, supplier: updated });
+    } catch (err) {
+        console.error('supplier purchase error:', err);
+        res.status(500).json({ success: false, message: 'Server error' });
+    }
+});
+
+// Pay off supplier credit — recorded exactly like the user portal's "Pay Credit"
+router.post('/suppliers/:id/pay', shopAdminAuth, async (req, res) => {
+    try {
+        if (!mongooseLib.Types.ObjectId.isValid(req.params.id)) return res.status(400).json({ success: false, message: 'Invalid supplier' });
+        const { amount, paymentMethod, note, date: rawDate } = req.body;
+        const paid = supplierLedger.round2(amount);
+        if (!(paid > 0)) return res.status(400).json({ success: false, message: 'Enter a valid amount' });
+        if (!paymentMethod || !PAYMENT_METHOD_ENUM.includes(paymentMethod)) return res.status(400).json({ success: false, message: 'Select a payment method' });
+        const date = parseEntryDate(rawDate);
+        if (!date) return res.status(400).json({ success: false, message: 'Invalid date' });
+
+        const supplier = await SupplierModel.findOne({ _id: req.params.id, userId: req.shopId });
+        if (!supplier) return res.status(404).json({ success: false, message: 'Supplier not found' });
+        const previous = Number(supplier.totalAmount) || 0;
+        if (supplierLedger.toPaise(paid) > supplierLedger.toPaise(previous)) {
+            return res.status(400).json({ success: false, message: `Amount is more than the outstanding credit (₹${previous})` });
+        }
+        const updated = await SupplierModel.findOneAndUpdate(
+            { _id: supplier._id, userId: req.shopId, totalAmount: supplier.totalAmount },
+            { $set: { totalAmount: supplierLedger.round2(previous - paid), lastPaymentMethod: paymentMethod } },
+            { new: true }
+        );
+        if (!updated) return res.status(409).json({ success: false, message: 'Balance changed meanwhile, please retry' });
+        await SupplierHistoryModel.create({
+            supplierId: supplier._id, userId: req.shopId, changeDate: date, changeType: 'ADMIN_EDIT',
+            message: (note || '').toString().trim() || `Payment: ₹${paid}`,
+            totalAmount: updated.totalAmount, paidAmount: paid, previousAmount: previous, paymentMethod
+        });
+        res.json({ success: true, supplier: updated });
+    } catch (err) {
+        console.error('supplier pay error:', err);
         res.status(500).json({ success: false, message: 'Server error' });
     }
 });
@@ -3198,9 +3369,14 @@ router.post('/products/:id/restock', shopAdminAuth, async (req, res) => {
 // -------------------- EXPENSES --------------------
 router.get('/expenses', shopAdminAuth, async (req, res) => {
     try {
-        const { fromDate, toDate } = req.query;
+        const { fromDate, toDate, date } = req.query;
         const filter = { userId: req.shopId };
-        if (fromDate || toDate) {
+        if (date) {
+            // Single IST calendar day (YYYY-MM-DD), same as the user-portal Daily Expenses page
+            const day = new Date(date);
+            if (isNaN(day)) return res.status(400).json({ success: false, message: 'Invalid date' });
+            filter.createdAt = { $gte: getISTStartOfDay(day), $lte: getISTEndOfDay(day) };
+        } else if (fromDate || toDate) {
             filter.createdAt = {};
             if (fromDate) filter.createdAt.$gte = new Date(fromDate);
             if (toDate) filter.createdAt.$lte = new Date(toDate);
@@ -3216,13 +3392,22 @@ router.get('/expenses', shopAdminAuth, async (req, res) => {
 
 router.post('/expenses', shopAdminAuth, async (req, res) => {
     try {
-        const { title, amount, paymentMethod } = req.body;
-        if (!title || amount == null) return res.status(400).json({ success: false, message: 'title & amount required' });
+        const { title, amount, paymentMethod, createdAt } = req.body;
+        const amt = Number(amount);
+        if (!title || !title.toString().trim() || !Number.isFinite(amt) || amt <= 0) {
+            return res.status(400).json({ success: false, message: 'Title and a valid amount are required' });
+        }
+        if (paymentMethod && !PAYMENT_METHOD_ENUM.includes(paymentMethod)) {
+            return res.status(400).json({ success: false, message: 'Invalid payment method' });
+        }
+        const when = createdAt ? new Date(createdAt) : new Date();
+        if (isNaN(when)) return res.status(400).json({ success: false, message: 'Invalid date' });
         const expense = await Expense.create({
             userId: req.shopId,
             title: title.toString().trim(),
-            amount: Number(amount),
-            paymentMethod: paymentMethod || 'Cash'
+            amount: amt,
+            paymentMethod: paymentMethod || 'Cash',
+            createdAt: when
         });
         res.json({ success: true, expense });
     } catch (err) {
@@ -3237,8 +3422,14 @@ router.put('/expenses/:id', shopAdminAuth, async (req, res) => {
         const update = {};
         if (title != null) update.title = title.toString().trim();
         if (amount != null) update.amount = Number(amount);
-        if (paymentMethod != null) update.paymentMethod = paymentMethod;
-        const expense = await Expense.findOneAndUpdate({ _id: req.params.id, userId: req.shopId }, update, { new: true });
+        if (paymentMethod != null) {
+            if (!PAYMENT_METHOD_ENUM.includes(paymentMethod)) return res.status(400).json({ success: false, message: 'Invalid payment method' });
+            update.paymentMethod = paymentMethod;
+        }
+        if (update.amount != null && (!Number.isFinite(update.amount) || update.amount <= 0)) {
+            return res.status(400).json({ success: false, message: 'Invalid amount' });
+        }
+        const expense = await Expense.findOneAndUpdate({ _id: req.params.id, userId: req.shopId }, update, { new: true, runValidators: true });
         if (!expense) return res.status(404).json({ success: false, message: 'Expense not found' });
         res.json({ success: true, expense });
     } catch (err) {
@@ -3292,6 +3483,51 @@ router.get('/mobile-registry', shopAdminAuth, async (req, res) => {
         res.status(500).json({ success: false, message: 'Server error' });
     }
 });
+
+// -------------------- MOBILE REGISTRY PAGE (same as user-portal /mobilename) --------------------
+// Reuses the user-portal controllers so filters, status cycle, warranty and WhatsApp behave identically.
+const { getMobileRegistry: registryListController } = require('../controllers/api/mobileRegistryController');
+const { toggleMobileStatus: registryToggleController } = require('../controllers/api/toggleMobileStatusController');
+const { addPaymentEntry: registryPaymentController } = require('../controllers/api/addPaymentEntryController');
+const { updateTechnician: registryTechnicianController } = require('../controllers/api/updateTechnicianController');
+const { getMobileImages: registryImagesController } = require('../controllers/api/mobileImagesController');
+
+// The user-portal controllers read the shop from req.user (JWT); give them the admin's current shop
+const asShopUser = (req, res, next) => {
+    req.user = { shop_id: String(req.shopId) };
+    next();
+};
+
+// Those controllers look mobiles up by id only, so make sure the mobile belongs to the admin's shop
+const requireShopMobile = (getId) => async (req, res, next) => {
+    try {
+        const id = getId(req);
+        if (!id || !mongooseLib.Types.ObjectId.isValid(String(id))) return res.status(400).json({ error: 'Invalid mobile id' });
+        const owned = await Mobile.exists({ _id: id, shop_id: req.shopId });
+        if (!owned) return res.status(404).json({ error: 'Mobile record not found' });
+        next();
+    } catch (err) {
+        console.error('registry ownership check error:', err);
+        res.status(500).json({ error: 'Server error' });
+    }
+};
+
+router.post('/registry/list', shopAdminAuth, asShopUser, registryListController);
+
+router.get('/registry/dealers', shopAdminAuth, async (req, res) => {
+    try {
+        const dealers = await Dealer.find({ shop_id: req.shopId }).select('client_name').lean();
+        res.json({ success: true, names: [...new Set(dealers.map((d) => d.client_name).filter(Boolean))].sort() });
+    } catch (err) {
+        console.error('registry dealers error:', err);
+        res.status(500).json({ success: false, message: 'Server error' });
+    }
+});
+
+router.post('/registry/toggle-status', shopAdminAuth, requireShopMobile((req) => req.body?.id), registryToggleController);
+router.post('/registry/payment', shopAdminAuth, requireShopMobile((req) => req.body?.id), registryPaymentController);
+router.put('/registry/technician/:id', shopAdminAuth, requireShopMobile((req) => req.params.id), registryTechnicianController);
+router.get('/registry/images/:mobileId', shopAdminAuth, asShopUser, registryImagesController);
 
 // -------------------- META --------------------
 router.get('/meta/payment-methods', shopAdminAuth, (req, res) => {

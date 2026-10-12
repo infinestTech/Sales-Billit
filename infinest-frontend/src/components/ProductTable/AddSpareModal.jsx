@@ -99,9 +99,9 @@ const AddSpareModal = ({ shop_id, onClose, onSuccess }) => {
 
   return (
     <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md border border-gray-200 overflow-hidden">
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md border border-gray-200 overflow-hidden flex flex-col max-h-[calc(100dvh-2rem)]">
         {/* Header */}
-        <div className="bg-gradient-to-r from-orange-500 to-amber-500 px-6 py-4 flex items-center justify-between">
+        <div className="bg-gradient-to-r from-orange-500 to-amber-500 px-6 py-4 flex items-center justify-between flex-shrink-0">
           <div className="flex items-center space-x-3">
             <div className="p-2 bg-white/20 rounded-lg">
               <Package className="h-5 w-5 text-white" />
@@ -117,7 +117,7 @@ const AddSpareModal = ({ shop_id, onClose, onSuccess }) => {
         </div>
 
         {/* Form */}
-        <form onSubmit={handleSubmit} className="p-6 space-y-5">
+        <form onSubmit={handleSubmit} className="p-6 space-y-5 flex-1 min-h-0 overflow-y-auto">
 
           {/* Spare Name */}
           <div className="space-y-2">

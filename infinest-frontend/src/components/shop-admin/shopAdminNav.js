@@ -1,7 +1,7 @@
 import {
   Users, Phone, TrendingUp, Truck, DollarSign, CheckCircle, AlertCircle, UserPlus, Briefcase,
   ClipboardList, FileText, Wallet, Calculator, Building2, Boxes, History, CreditCard, Store, Send,
-  BarChart3, Award, Package,
+  BarChart3, Award, Package, Receipt, Smartphone,
 } from 'lucide-react';
 
 // Shop-admin navigation shared by the desktop sidebar and the mobile dashboard.
@@ -22,6 +22,7 @@ export const NAV = [
   {
     type: 'group', key: 'records', label: 'Records', icon: ClipboardList, product: 'service', children: [
       { id: 'all-records', label: 'All Records', icon: Phone, desc: 'Customer & dealer jobs' },
+      { id: 'mobile-registry', label: 'Mobile Registry', icon: Smartphone, desc: 'Track & manage device repairs' },
       { id: 'customer-create', label: 'Create Customer', icon: UserPlus, desc: 'New customer record' },
       { id: 'dealer-create', label: 'Create Dealer', icon: Briefcase, desc: 'New dealer record' },
     ]
@@ -35,6 +36,11 @@ export const NAV = [
     type: 'group', key: 'reports', label: 'Reports', icon: FileText, product: 'service', children: [
       { id: 'revenue', label: 'Revenue', icon: DollarSign, desc: 'Income, expenses & profit' },
       { id: 'report', label: 'Financial Report', icon: AlertCircle, desc: 'Printable / Excel report' },
+    ]
+  },
+  {
+    type: 'group', key: 'finance', label: 'Finance', icon: Receipt, product: 'service', children: [
+      { id: 'expenses', label: 'Expenses', icon: Receipt, desc: 'Daily shop expenses' },
     ]
   },
   { type: 'heading', key: 'heading-sales', label: 'Sales', product: 'sales' },

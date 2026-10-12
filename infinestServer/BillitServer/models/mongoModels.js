@@ -360,6 +360,9 @@ const supplierSchema = new mongoose.Schema({
   address: { type: String, trim: true },
   totalAmount: { type: Number, default: 0 },
   lastPaymentMethod: { type: String, enum: PAYMENT_METHOD_ENUM, default: "" },
+  // Credit already owed when the supplier was added (backed by a SupplierPurchase of kind "opening")
+  openingCredit: { type: Number, default: 0 },
+  openingCreditDate: { type: Date },
   createdAt: { type: Date, default: Date.now }
 });
 

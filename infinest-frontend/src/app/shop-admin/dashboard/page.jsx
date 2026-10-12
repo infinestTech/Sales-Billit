@@ -24,6 +24,8 @@ import CreateCustomerPanel from '@/components/shop-admin/panels/CreateCustomerPa
 import CreateDealerPanel from '@/components/shop-admin/panels/CreateDealerPanel';
 import AllRecordsPanel from '@/components/shop-admin/panels/AllRecordsPanel';
 import SuppliersPanel from '@/components/shop-admin/panels/SuppliersPanel';
+import ExpensesPanel from '@/components/shop-admin/panels/ExpensesPanel';
+import MobileRegistryPanel from '@/components/shop-admin/panels/MobileRegistryPanel';
 import { formatPaymentMethodLabel } from '@/constants/paymentMethods';
 import useSalesSession from '@/components/shop-admin/sales/useSalesSession';
 import * as XLSX from 'xlsx';
@@ -933,6 +935,23 @@ export default function ShopAdminDashboard() {
               <div class="value" style="color: #16a34a;">₹${reportData.summary?.totalSpareReturns?.toLocaleString() || 0}</div>
             </div>` : ''}
           </div>
+          ${reportData.summary?.paymentMethodTotals ? (() => {
+            const t = reportData.summary.paymentMethodTotals;
+            const revenue = reportData.summary?.totalRevenue || 0;
+            const tiles = [['Cash', t.cash, '#059669'], ['Gpay / UPI', t.gpay, '#0284c7'], ['Card', t.card, '#4f46e5']];
+            if (t.other > 0) tiles.push(['Other', t.other, '#374151']);
+            return `
+          <div class="label" style="margin-top: 15px; font-weight: 600;">Payment Breakdown (Revenue)</div>
+          <div style="display: grid; grid-template-columns: repeat(${tiles.length}, 1fr); gap: 10px; margin-top: 6px;">
+            ${tiles.map(([label, amt, color]) => `
+            <div class="summary-box">
+              <div class="label">${label}</div>
+              <div class="value" style="color: ${color};">₹${(amt || 0).toLocaleString('en-IN')}</div>
+              <div class="label">${revenue > 0 ? ((amt || 0) / revenue * 100).toFixed(1) : '0.0'}% of revenue</div>
+            </div>`).join('')}
+          </div>
+          <div class="label" style="margin-top: 4px; font-size: 9px;">Split payments (e.g. Gpay + Cash) are divided equally between their methods.</div>`;
+          })() : ''}
         </div>
 
         ${reportData.customerPayments && reportData.customerPayments.length > 0 ? `
@@ -2277,8 +2296,16 @@ export default function ShopAdminDashboard() {
           <AllRecordsPanel currentShopId={currentShopId} />
         )}
 
+        {activeTab === 'mobile-registry' && (
+          <MobileRegistryPanel currentShopId={currentShopId} />
+        )}
+
         {activeTab === 'suppliers' && (
           <SuppliersPanel currentShopId={currentShopId} />
+        )}
+
+        {activeTab === 'expenses' && (
+          <ExpensesPanel currentShopId={currentShopId} />
         )}
 
         {activeTab === 'revenue' && (
@@ -2751,6 +2778,31 @@ export default function ShopAdminDashboard() {
                       </div>
                     )}
                   </div>
+                  {reportData.summary?.paymentMethodTotals && (() => {
+                    const t = reportData.summary.paymentMethodTotals;
+                    const revenue = reportData.summary?.totalRevenue || 0;
+                    const tiles = [
+                      { key: 'cash', label: 'Cash', cls: 'bg-emerald-50 border-emerald-200 text-emerald-700', val: 'text-emerald-900' },
+                      { key: 'gpay', label: 'Gpay / UPI', cls: 'bg-sky-50 border-sky-200 text-sky-700', val: 'text-sky-900' },
+                      { key: 'card', label: 'Card', cls: 'bg-indigo-50 border-indigo-200 text-indigo-700', val: 'text-indigo-900' },
+                      ...(t.other > 0 ? [{ key: 'other', label: 'Other', cls: 'bg-gray-50 border-gray-200 text-gray-700', val: 'text-gray-900' }] : []),
+                    ];
+                    return (
+                      <div className="mt-4">
+                        <div className="text-sm font-semibold text-gray-700 mb-2">Payment Breakdown (Revenue)</div>
+                        <div className={`grid grid-cols-2 ${tiles.length > 3 ? 'md:grid-cols-4' : 'md:grid-cols-3'} gap-4`}>
+                          {tiles.map((tile) => (
+                            <div key={tile.key} className={`p-4 rounded-lg border ${tile.cls}`}>
+                              <div className="text-sm font-medium">{tile.label}</div>
+                              <div className={`text-xl font-bold mt-1 ${tile.val}`}>₹{(t[tile.key] || 0).toLocaleString('en-IN')}</div>
+                              <div className="text-xs opacity-80 mt-1">{revenue > 0 ? ((t[tile.key] || 0) / revenue * 100).toFixed(1) : '0.0'}% of revenue</div>
+                            </div>
+                          ))}
+                        </div>
+                        <p className="text-xs text-gray-500 mt-2">Split payments (e.g. Gpay + Cash) are divided equally between their methods.</p>
+                      </div>
+                    );
+                  })()}
                 </div>
 
                 {/* Customer Payments */}

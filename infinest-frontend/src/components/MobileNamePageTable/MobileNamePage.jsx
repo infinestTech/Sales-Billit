@@ -9,8 +9,24 @@ import jsPDF from "jspdf"
 import autoTable from "jspdf-autotable"
 import { PAYMENT_METHOD_OPTIONS } from "@/constants/paymentMethods"
 import MobileImagesModal from "./MobileImagesModal"
+import { fetchMobileImages } from "@/utils/mobileImagesApi"
 
-const MobileNamePage = ({ shopId }) => {
+const userAuth = () => ({ headers: { Authorization: `Bearer ${localStorage.getItem("token")}` } })
+
+// Default data source: the user-portal endpoints. The shop-admin dashboard passes its own `client`
+// with the same shape so both portals share this page.
+export const userRegistryClient = {
+  list: (body) => api.post("/api/mobile-registry", body, userAuth()).then((r) => r.data),
+  dealerNames: (shopId) =>
+    api.post("/api/dealers", { shop_id: shopId }, userAuth())
+      .then((r) => [...new Set((r.data || []).map((d) => d.clientName).filter(Boolean))].sort()),
+  updateTechnician: (mobileId, technicianName) => api.put(`/api/updateTechnician/${mobileId}`, { technicianName }, userAuth()),
+  toggleStatus: (body) => api.post("/api/toggle-status", body, userAuth()).then((r) => r.data),
+  addPayment: (body) => api.post("/api/add-payment-entry", body, userAuth()),
+  fetchImages: fetchMobileImages,
+}
+
+const MobileNamePage = ({ shopId, client = userRegistryClient, embedded = false }) => {
   const searchParams = useSearchParams()
   const [rows, setRows] = useState([])
   const [total, setTotal] = useState(0)
@@ -88,14 +104,9 @@ const MobileNamePage = ({ shopId }) => {
     if (!shopId) return
     try {
       setLoading(true)
-      const token = localStorage.getItem("token")
-      const response = await api.post(
-        "/api/mobile-registry",
-        { page, limit: invoicesPerPage, ...buildRegistryFilters() },
-        { headers: { Authorization: `Bearer ${token}` } },
-      )
-      setRows(response.data.mobiles || [])
-      setTotal(response.data.total || 0)
+      const data = await client.list({ page, limit: invoicesPerPage, ...buildRegistryFilters() })
+      setRows(data.mobiles || [])
+      setTotal(data.total || 0)
     } catch (error) {
       console.error("Error fetching mobile registry:", error.message)
       setRows([])
@@ -108,14 +119,7 @@ const MobileNamePage = ({ shopId }) => {
   const fetchDealerNames = async () => {
     try {
       if (!shopId) return
-      const token = localStorage.getItem("token")
-      const response = await api.post(
-        "/api/dealers",
-        { shop_id: shopId },
-        { headers: { Authorization: `Bearer ${token}` } },
-      )
-      const names = [...new Set((response.data || []).map((d) => d.clientName).filter(Boolean))].sort()
-      setDealerNames(names)
+      setDealerNames(await client.dealerNames(shopId))
     } catch (error) {
       console.error("Error fetching dealer list:", error.message)
     }
@@ -136,17 +140,7 @@ const MobileNamePage = ({ shopId }) => {
     try {
       if (technicianName.trim() === "") return
 
-      const token = localStorage.getItem("token")
-
-      await api.put(
-        `/api/updateTechnician/${mobileId}`,
-        { technicianName },
-        {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        },
-      )
+      await client.updateTechnician(mobileId, technicianName)
 
       setRows((prev) =>
         prev.map((mobile) => (mobile.id === mobileId ? { ...mobile, technician: technicianName } : mobile)),
@@ -184,13 +178,8 @@ const MobileNamePage = ({ shopId }) => {
   }, [shopId, clientFilter, selectedStatus, dateFrom, dateTo, appliedFilters, currentPage])
 
   const callToggle = async (mobileId, field, extra = {}) => {
-    const token = localStorage.getItem("token")
-    const res = await api.post(
-      "/api/toggle-status",
-      { id: mobileId, field, ...extra },
-      { headers: { Authorization: `Bearer ${token}` } },
-    )
-    return res.data.updatedMobile
+    const data = await client.toggleStatus({ id: mobileId, field, ...extra })
+    return data?.updatedMobile
   }
 
   const openStatusModal = (mobile) => {
@@ -258,17 +247,12 @@ const MobileNamePage = ({ shopId }) => {
           }
         }
         if (addAmount > 0) {
-          const token = localStorage.getItem("token")
-          await api.post(
-            "/api/add-payment-entry",
-            {
-              id: mobile.id,
-              amount: addAmount,
-              method: deliverPayMethod,
-              date: new Date().toISOString(),
-            },
-            { headers: { Authorization: `Bearer ${token}` } },
-          )
+          await client.addPayment({
+            id: mobile.id,
+            amount: addAmount,
+            method: deliverPayMethod,
+            date: new Date().toISOString(),
+          })
         }
         await callToggle(mobile.id, "delivered", {
           hasWarranty: warrantyHasInput,
@@ -353,15 +337,10 @@ const MobileNamePage = ({ shopId }) => {
   const handleExportPDF = async () => {
     try {
       setExporting(true)
-      const token = localStorage.getItem("token")
       // Bounded bulk fetch (server caps at 3000) instead of ever loading the whole shop client-side
-      const response = await api.post(
-        "/api/mobile-registry",
-        { page: 1, limit: 3000, forExport: true, ...buildRegistryFilters() },
-        { headers: { Authorization: `Bearer ${token}` } },
-      )
-      const exportRows = response.data.mobiles || []
-      const grandTotal = response.data.total || exportRows.length
+      const exportData = await client.list({ page: 1, limit: 3000, forExport: true, ...buildRegistryFilters() })
+      const exportRows = exportData.mobiles || []
+      const grandTotal = exportData.total || exportRows.length
 
       const doc = new jsPDF({ orientation: "landscape" })
 
@@ -427,7 +406,9 @@ const MobileNamePage = ({ shopId }) => {
   }
 
   return (
-    <div className="h-screen bg-white flex flex-col">
+    <div className={embedded
+      ? "bg-white flex flex-col rounded-2xl shadow-lg border border-gray-200 overflow-hidden text-gray-900"
+      : "h-screen bg-white flex flex-col"}>
       {/* Header */}
       <div className="bg-gradient-to-r from-blue-600 to-indigo-600 px-8 py-6 flex-shrink-0">
         <div className="flex items-center space-x-3">
@@ -1115,7 +1096,7 @@ const MobileNamePage = ({ shopId }) => {
       )}
 
       {viewImagesMobileId && (
-        <MobileImagesModal mobileId={viewImagesMobileId} onClose={() => setViewImagesMobileId(null)} />
+        <MobileImagesModal mobileId={viewImagesMobileId} fetchImages={client.fetchImages} onClose={() => setViewImagesMobileId(null)} />
       )}
     </div>
   )
