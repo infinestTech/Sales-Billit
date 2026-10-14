@@ -195,6 +195,89 @@ router.post('/login', async (req, res) => {
 const axiosIPv4 = require('../utils/axiosConfig');
 const { resolveShopProductAccess } = require('../utils/shopProductAccess');
 
+// ==============================
+// 🔁 One-click switch: Service portal -> Shop Admin (Sales) without a second login
+// Only for shops on a combo plan. The caller proves ownership with the normal Service JWT; we issue a
+// Shop Admin session for a dedicated, password-less "service link" admin that can see ONLY this shop
+// (so a shared/multi-shop admin account is never impersonated or logged out).
+// ==============================
+const authenticateToken = require('../middleware/authenticateToken');
+
+// Lets the Service portal decide whether to show the "Switch to Sales" button
+router.get('/sso/from-service/eligible', authenticateToken, async (req, res) => {
+    try {
+        const shop = await Shop.findOne({ _id: req.shop_id, mysql_user_id: req.userId }).select('_id').lean();
+        const access = shop && await resolveShopProductAccess(shop._id);
+        res.json({ success: true, eligible: !!(access && access.service && access.sales) });
+    } catch (error) {
+        res.json({ success: true, eligible: false });
+    }
+});
+
+router.post('/sso/from-service', authenticateToken, async (req, res) => {
+    try {
+        const shop = await Shop.findOne({ _id: req.shop_id, mysql_user_id: req.userId }).select('_id shop_name owner_name').lean();
+        if (!shop) {
+            return res.status(403).json({ success: false, message: 'Shop not found for this account' });
+        }
+
+        const access = await resolveShopProductAccess(shop._id);
+        if (!access || !access.service || !access.sales) {
+            return res.status(403).json({ success: false, message: 'This feature is only available on the Combo plan' });
+        }
+
+        const username = `service-link-${shop._id}`;
+        let shopAdmin = await ShopAdmin.findOne({ username });
+        if (shopAdmin && !shopAdmin.is_active) {
+            return res.status(403).json({ success: false, message: 'Shop Admin access is disabled for this shop' });
+        }
+        if (!shopAdmin) {
+            // Random password nobody knows: the account can only be entered through this endpoint
+            const unusablePassword = await bcrypt.hash(require('crypto').randomBytes(32).toString('hex'), 10);
+            shopAdmin = await ShopAdmin.create({
+                username,
+                password: unusablePassword,
+                shop_ids: [shop._id],
+                current_shop_id: shop._id,
+                full_name: shop.owner_name || shop.shop_name || 'Shop Owner',
+                created_by: 'service-link',
+                sessionLimit: 2
+            });
+        }
+
+        shopAdmin.last_login = new Date();
+        await shopAdmin.save();
+
+        const token = jwt.sign({ adminId: shopAdmin._id }, SHOP_ADMIN_JWT_SECRET, { expiresIn: '7d' });
+        await SessionManager.createSession(shopAdmin._id.toString(), token, {
+            ip: req.ip || req.connection.remoteAddress,
+            userAgent: req.headers['user-agent'],
+            userType: 'shop_admin',
+            sessionLimit: shopAdmin.sessionLimit || 2
+        });
+
+        res.json({
+            success: true,
+            token,
+            shopAdmin: {
+                id: shopAdmin._id,
+                username: shopAdmin.username,
+                full_name: shopAdmin.full_name,
+                email: shopAdmin.email,
+                shops: [{
+                    id: shop._id,
+                    name: shop.shop_name || (shop.owner_name ? `${shop.owner_name}'s Shop` : 'Shop'),
+                    owner_name: shop.owner_name
+                }],
+                current_shop_id: shop._id
+            }
+        });
+    } catch (error) {
+        console.error('Service -> Shop Admin SSO error:', error);
+        res.status(500).json({ success: false, message: 'Could not open Sales right now' });
+    }
+});
+
 router.get('/product-access', shopAdminAuth, async (req, res) => {
     try {
         const access = await resolveShopProductAccess(req.shopId);

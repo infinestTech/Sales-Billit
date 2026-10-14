@@ -8,6 +8,7 @@ import { PlanFeatureProvider } from "@/context/PlanFeatureContext"
 import NotificationInbox from "@/components/NotificationInbox"
 import NotificationMessage from "@/components/NotificationMessage"
 import MobileLayout from "@/components/mobile/MobileLayout"
+import SwitchToSalesButton from "@/components/layout/SwitchToSalesButton"
 import { logSystem } from "@/utils/logger"
 
 export default function MainLayout({ children }) {
@@ -97,6 +98,8 @@ export default function MainLayout({ children }) {
             setIsLimitReached={setIsLimitReached} 
           />
 
+          <SwitchToSalesButton />
+
           {/* Mobile Toast */}
           {toastData && (
             <NotificationMessage message={toastData.message} type={toastData.type} onClose={() => setToastData(null)} />
@@ -120,6 +123,8 @@ export default function MainLayout({ children }) {
               <div className="mx-auto max-w-screen-2xl">{children}</div>
             </main>
           </div>
+
+          <SwitchToSalesButton />
 
           {/* Notifications */}
           <NotificationInbox shopId={shopId} token={token} refreshSignal={refreshNotifications} />
