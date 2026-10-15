@@ -188,6 +188,67 @@ router.post('/billit-login', async (req, res) => {
   }
 });
 
+// 🔁 Sales branch portal -> Service portal without a second login (combo shops only).
+// SalesServer (POST /api/service-sso) issues a 60s single-use code, signed with a secret derived from
+// INTERNAL_API_KEY, only to owners who entered Sales from the Service portal. We swap it for the
+// normal Service JWT + session, exactly like /billit-login would.
+const SERVICE_SSO_SECRET = () => (process.env.INTERNAL_API_KEY ? process.env.INTERNAL_API_KEY + ':service-sso' : '');
+const usedServiceSsoCodes = new Map(); // jti -> expiry ms (single-process best effort)
+
+router.post('/service-sso', async (req, res) => {
+  try {
+    const secret = SERVICE_SSO_SECRET();
+    if (!secret) return res.status(500).json({ message: 'Service sign-in is not configured.' });
+    let decoded;
+    try { decoded = jwt.verify(String(req.body?.code || ''), secret); }
+    catch { return res.status(401).json({ message: 'This sign-in link has expired. Please try again from the Sales portal.' }); }
+
+    const now = Date.now();
+    for (const [k, exp] of usedServiceSsoCodes) if (exp < now) usedServiceSsoCodes.delete(k);
+    if (!decoded.jti || usedServiceSsoCodes.has(decoded.jti)) {
+      return res.status(401).json({ message: 'This sign-in link was already used. Please try again from the Sales portal.' });
+    }
+    usedServiceSsoCodes.set(decoded.jti, now + 5 * 60 * 1000);
+
+    const shop = await Shop.findById(decoded.svc_shop).select('_id mysql_user_id').lean();
+    if (!shop) return res.status(404).json({ message: 'Shop not found.' });
+    const { resolveShopProductAccess } = require('../utils/shopProductAccess');
+    const access = await resolveShopProductAccess(shop._id);
+    if (!access || !access.service || !access.sales) {
+      return res.status(403).json({ message: 'Switching to Service is only available on the Combo plan.' });
+    }
+
+    const mysqlUserId = shop.mysql_user_id;
+    const user = await User.findOne({ mysql_user_id: mysqlUserId }).populate('role_id');
+    if (!user) return res.status(404).json({ message: 'User not found in Billit database.' });
+    if (!user.isSubscriptionActive) return res.status(403).json({ message: 'Subscription expired.' });
+
+    const token = jwt.sign(
+      { userId: mysqlUserId, mongoPlanId: user.role_id?.mongoPlanId, shop_id: shop._id },
+      process.env.JWT_SECRET,
+      { expiresIn: '7d' }
+    );
+
+    let sessionLimit = 1;
+    try {
+      const { data } = await axios.get(`${process.env.AUTH_SERVER_URL}/admin/get-user-session-limit/${mysqlUserId}`);
+      if (data.success && data.sessionLimit) sessionLimit = data.sessionLimit;
+    } catch (err) {
+      console.log('⚠️ Could not fetch session limit, using default:', err.message);
+    }
+    await SessionManager.createSession(mysqlUserId, token, {
+      ip: req.ip || req.connection.remoteAddress,
+      userAgent: req.headers['user-agent'],
+      sessionLimit
+    });
+
+    return res.json({ token, message: 'Login successful!' });
+  } catch (err) {
+    console.error('Service SSO error:', err?.response?.data || err);
+    return res.status(500).json({ message: 'Could not open Service right now.' });
+  }
+});
+
 // ✅ Logout endpoint - invalidates user's session
 router.post('/logout', async (req, res) => {
   try {

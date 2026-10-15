@@ -107,7 +107,9 @@ window.ENV_CONFIG = {
   SALES_API_URL: '\${process.env.VITE_SALES_API_URL || 'https://sales.mobilebillingsoftware.com'}',
   AUTH_API_URL: '\${process.env.VITE_AUTH_API_URL || 'https://auth.mobilebillingsoftware.com'}',
   WHATSAPP_WEB_URL: '\${process.env.VITE_WHATSAPP_WEB_URL || 'https://web.whatsapp.com'}',
-  SHOP_ADMIN_URL: '\${process.env.VITE_SHOP_ADMIN_URL || 'https://mobilebillingsoftware.com/shop-admin-login'}'
+  SHOP_ADMIN_URL: '\${process.env.VITE_SHOP_ADMIN_URL || 'https://mobilebillingsoftware.com/shop-admin-login'}',
+  // Service (Billit) app used by Switch to Service for combo plans
+  SERVICE_APP_URL: '\${process.env.VITE_SERVICE_APP_URL || 'https://mobilebillingsoftware.com'}'
 };
 
 // For backward compatibility, also set SALES_URL

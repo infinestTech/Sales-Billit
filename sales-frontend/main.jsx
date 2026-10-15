@@ -301,6 +301,9 @@ function App() {
     return <BranchLogin salesUrl={SALES_URL} />;
   }
 
+  // Combo owners who came from the Service portal can switch back without signing in
+  const canSwitchToService = branchUser && branchUser.via === 'service' && window.SwitchToServiceButton;
+
   // Render mobile or desktop layout based on device detection
   if (isMobile) {
     return (
@@ -318,6 +321,7 @@ function App() {
         planId={planId}
         branchLimit={branchLimit}
         branchUser={branchUser}
+        headerActions={canSwitchToService ? <window.SwitchToServiceButton salesUrl={SALES_URL} token={effectiveToken} compact /> : null}
       >
         {React.createElement(window.MobileViewRenderer, {
           view: view,
@@ -344,6 +348,7 @@ function App() {
             role: branchUser ? 'Branch Manager' : 'Administrator'
           }}
           onLogout={branchUser ? branchLogout : logout}
+          actions={canSwitchToService ? <window.SwitchToServiceButton salesUrl={SALES_URL} token={effectiveToken} /> : null}
         />
 
         <div className="content">

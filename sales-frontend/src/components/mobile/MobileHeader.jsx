@@ -1,4 +1,4 @@
-function MobileHeader({ title, subtitle, user, onLogout, onMenuToggle, isMenuOpen }) {
+function MobileHeader({ title, subtitle, user, onLogout, onMenuToggle, isMenuOpen, actions }) {
   return (
     <header className="mobile-header">
       <div className="mobile-header-left">
@@ -18,6 +18,7 @@ function MobileHeader({ title, subtitle, user, onLogout, onMenuToggle, isMenuOpe
       </div>
       
       <div className="mobile-header-right">
+        {actions}
         {user && (
           <React.Fragment>
             <div className="mobile-user-avatar" title={user.name || user.email}>

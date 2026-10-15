@@ -1,4 +1,4 @@
-function MobileLayout({ children, title, subtitle, user, onLogout, active, onSelect, planId, branchLimit, branchUser }) {
+function MobileLayout({ children, title, subtitle, user, onLogout, active, onSelect, planId, branchLimit, branchUser, headerActions }) {
   const [isSidebarOpen, setIsSidebarOpen] = React.useState(false);
 
   const handleMenuToggle = () => {
@@ -16,6 +16,7 @@ function MobileLayout({ children, title, subtitle, user, onLogout, active, onSel
         subtitle={subtitle}
         user={user}
         onLogout={onLogout}
+        actions={headerActions}
         onMenuToggle={handleMenuToggle}
         isMenuOpen={isSidebarOpen}
       />

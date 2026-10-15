@@ -10,7 +10,6 @@ function BarcodeSheet({ entries, onClose, salesUrl, token }) {
   const [filteredData, setFilteredData] = React.useState([]);
   const [filters, setFilters] = React.useState({
     type: 'all', // 'all', 'mobile', 'accessory'
-    productNo: 'all',
     customQuantity: {}
   });
   const [downloading, setDownloading] = React.useState(false);
@@ -19,7 +18,9 @@ function BarcodeSheet({ entries, onClose, salesUrl, token }) {
   const [priceCipher, setPriceCipher] = React.useState('');
   const [cipherLoaded, setCipherLoaded] = React.useState(false);
   const [cipherPrompt, setCipherPrompt] = React.useState(false);
-  const [qtyPage, setQtyPage] = React.useState(1);
+  const [search, setSearch] = React.useState('');
+  const [selected, setSelected] = React.useState(() => new Set()); // product keys ticked in the picker
+  const pendingDownload = React.useRef(false); // set by "Only this": download once previews are drawn
   const BL = window.BarcodeLabels;
 
   // 'a4' keeps the original sheet; 'thermal' prints one label per PDF page for the label printer
@@ -105,37 +106,6 @@ function BarcodeSheet({ entries, onClose, salesUrl, token }) {
     setBarcodeData(data);
   }, [entries, priceCipher]);
 
-  // Apply filters
-  React.useEffect(() => {
-    let filtered = [...barcodeData];
-
-    // Filter by type
-    if (filters.type !== 'all') {
-      const targetType = filters.type === 'mobile' ? 'Mobile' : 'Accessory';
-      filtered = filtered.filter(item => item.type === targetType);
-    }
-
-    // Filter by product
-    if (filters.productNo !== 'all') {
-      filtered = filtered.filter(item => item.productNo === filters.productNo);
-    }
-
-    // Expand accessories based on custom quantity
-    const expanded = [];
-    filtered.forEach(item => {
-      if (item.type === 'Accessory') {
-        const qty = filters.customQuantity[item.productNo] || item.quantity;
-        for (let i = 0; i < qty; i++) {
-          expanded.push({ ...item, id: `${item.id}-${i}` });
-        }
-      } else {
-        expanded.push(item);
-      }
-    });
-
-    setFilteredData(expanded);
-  }, [barcodeData, filters]);
-
   // Generate barcodes
   React.useEffect(() => {
     if (filteredData.length > 0 && window.JsBarcode) {
@@ -161,41 +131,97 @@ function BarcodeSheet({ entries, onClose, salesUrl, token }) {
             console.error('Barcode generation error:', error);
           }
         });
+        if (pendingDownload.current) {
+          pendingDownload.current = false;
+          handleDownloadPDF();
+        }
       }, 100);
     }
   }, [filteredData]);
 
-  // Get unique products for filter
-  const uniqueProducts = React.useMemo(() => {
-    const products = new Map();
+  // One row per product: accessories carry a quantity, mobiles one label per IMEI
+  const products = React.useMemo(() => {
+    const map = new Map();
     barcodeData.forEach(item => {
-      if (!products.has(item.productNo)) {
-        products.set(item.productNo, {
-          productNo: item.productNo,
-          productName: item.productName,
-          brand: item.brand,
-          model: item.model,
-          type: item.type
-        });
+      const key = item.type + '|' + item.productNo;
+      let p = map.get(key);
+      if (!p) {
+        p = { key, productNo: item.productNo, productName: item.productName, type: item.type, labels: [] };
+        map.set(key, p);
       }
+      p.labels.push(item);
     });
-    return Array.from(products.values());
+    return Array.from(map.values()).sort((a, b) => String(a.productName).localeCompare(String(b.productName)));
   }, [barcodeData]);
 
-  // Accessories matching the current type/product filter, shown (paginated) in the quantity customizer below
-  const accessoryQtyItems = React.useMemo(() => barcodeData.filter(item =>
-    item.type === 'Accessory' &&
-    (filters.type === 'all' || filters.type === 'accessory') &&
-    (filters.productNo === 'all' || filters.productNo === item.productNo)
-  ), [barcodeData, filters.type, filters.productNo]);
+  // Search matches name, product code or IMEI. Value per visible product: null = whole product,
+  // or the Set of label ids when only some IMEIs of a phone matched (only those labels print).
+  const query = search.trim().toLowerCase();
+  const searchHits = React.useMemo(() => {
+    const hits = new Map();
+    const wantType = filters.type === 'mobile' ? 'Mobile' : filters.type === 'accessory' ? 'Accessory' : null;
+    products.forEach(p => {
+      if (wantType && p.type !== wantType) return;
+      if (!query) { hits.set(p.key, null); return; }
+      if (String(p.productName).toLowerCase().includes(query) || String(p.productNo).toLowerCase().includes(query)) { hits.set(p.key, null); return; }
+      if (p.type === 'Mobile') {
+        const ids = p.labels.filter(l => String(l.imei || '').toLowerCase().includes(query)).map(l => l.id);
+        if (ids.length) hits.set(p.key, new Set(ids));
+      }
+    });
+    return hits;
+  }, [products, query, filters.type]);
+  const visibleProducts = React.useMemo(() => products.filter(p => searchHits.has(p.key)), [products, searchHits]);
 
-  // Reset to the first page whenever the filtered accessory list changes
-  React.useEffect(() => { setQtyPage(1); }, [filters.type, filters.productNo]);
+  // Ticked products print on their own (whatever the search shows); with nothing ticked, everything visible prints
+  const selectionMode = selected.size > 0;
+  const printProducts = React.useMemo(
+    () => (selectionMode ? products.filter(p => selected.has(p.key)) : visibleProducts),
+    [selectionMode, products, selected, visibleProducts]
+  );
 
-  const QTY_PAGE_SIZE = 12;
-  const qtyTotalPages = Math.max(1, Math.ceil(accessoryQtyItems.length / QTY_PAGE_SIZE));
-  const clampedQtyPage = Math.min(qtyPage, qtyTotalPages);
-  const qtyPageItems = accessoryQtyItems.slice((clampedQtyPage - 1) * QTY_PAGE_SIZE, clampedQtyPage * QTY_PAGE_SIZE);
+  const accessoryQty = (item) => {
+    const q = filters.customQuantity[item.productNo];
+    return Math.max(0, q != null ? q : (parseInt(item.quantity) || 0));
+  };
+  const labelsOf = (p) => {
+    const only = searchHits.get(p.key);
+    const out = [];
+    p.labels.forEach(item => {
+      if (item.type === 'Accessory') {
+        const qty = accessoryQty(item);
+        for (let i = 0; i < qty; i++) out.push({ ...item, id: `${item.id}-${i}` });
+      } else if (!only || only.has(item.id)) {
+        out.push(item);
+      }
+    });
+    return out;
+  };
+
+  React.useEffect(() => {
+    const out = [];
+    printProducts.forEach(p => { labelsOf(p).forEach(l => out.push(l)); });
+    setFilteredData(out);
+  }, [printProducts, searchHits, filters.customQuantity]);
+
+  const toggleSelected = (key) => setSelected(prev => {
+    const next = new Set(prev);
+    if (next.has(key)) next.delete(key); else next.add(key);
+    return next;
+  });
+  const allVisibleSelected = visibleProducts.length > 0 && visibleProducts.every(p => selected.has(p.key));
+  const toggleAllVisible = () => setSelected(prev => {
+    const next = new Set(prev);
+    visibleProducts.forEach(p => { if (allVisibleSelected) next.delete(p.key); else next.add(p.key); });
+    return next;
+  });
+  // "Only this": print one product by itself. The download starts once its label previews are drawn.
+  const downloadOnly = (key) => {
+    if (selected.size === 1 && selected.has(key)) { handleDownloadPDF(); return; }
+    pendingDownload.current = true;
+    setSelected(new Set([key]));
+  };
+  const PRODUCT_LIST_LIMIT = 200;
 
   // Thermal: flag labels whose code is too long or whose bars would be too short to scan
   const thermalCheck = React.useMemo(() => {
@@ -345,67 +371,47 @@ function BarcodeSheet({ entries, onClose, salesUrl, token }) {
             border: '1px solid #e2e8f0'
           }}>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '16px' }}>
-              {/* Type Filter */}
-              <div>
-                <label style={{ display: 'block', fontSize: '12px', fontWeight: '600', color: '#475569', marginBottom: '6px' }}>
-                  Filter by Type
+              {/* Search */}
+              <div style={{ gridColumn: '1 / -1', minWidth: 0 }}>
+                <label htmlFor="barcode-search" style={{ display: 'block', fontSize: '12px', fontWeight: '600', color: '#475569', marginBottom: '6px' }}>
+                  Search products
                 </label>
-                <select
-                  value={filters.type}
-                  onChange={e => setFilters(prev => ({ ...prev, type: e.target.value, productNo: 'all' }))}
-                  style={{
-                    width: '100%',
-                    padding: '8px 12px',
-                    border: '1px solid #cbd5e1',
-                    borderRadius: '6px',
-                    fontSize: '14px',
-                    cursor: 'pointer'
-                  }}
-                >
-                  <option value="all">All Types</option>
-                  <option value="mobile">Mobiles Only</option>
-                  <option value="accessory">Accessories Only</option>
-                </select>
+                <div style={{ position: 'relative' }}>
+                  <input
+                    id="barcode-search"
+                    type="search"
+                    value={search}
+                    onChange={e => setSearch(e.target.value)}
+                    placeholder="Product name, product code or IMEI…"
+                    autoComplete="off"
+                    style={{ width: '100%', boxSizing: 'border-box', padding: '8px 12px', border: '1px solid #cbd5e1', borderRadius: '6px', fontSize: '14px' }}
+                  />
+                </div>
               </div>
 
-              {/* Product Filter */}
+              {/* Type */}
               <div>
                 <label style={{ display: 'block', fontSize: '12px', fontWeight: '600', color: '#475569', marginBottom: '6px' }}>
-                  Filter by Product
+                  Type
                 </label>
-                <select
-                  value={filters.productNo}
-                  onChange={e => setFilters(prev => ({ ...prev, productNo: e.target.value }))}
-                  style={{
-                    width: '100%',
-                    padding: '8px 12px',
-                    border: '1px solid #cbd5e1',
-                    borderRadius: '6px',
-                    fontSize: '14px',
-                    cursor: 'pointer'
-                  }}
-                >
-                  <option value="all">All Products</option>
-                  {uniqueProducts
-                    .filter(p => filters.type === 'all' || 
-                      (filters.type === 'mobile' && p.type === 'Mobile') ||
-                      (filters.type === 'accessory' && p.type === 'Accessory'))
-                    .map(product => {
-                      let displayText = product.productName;
-                      if (product.brand) {
-                        displayText = `${product.brand} - ${displayText}`;
-                      }
-                      if (product.model) {
-                        displayText = `${displayText} - ${product.model}`;
-                      }
-                      displayText = `${displayText} (${product.type})`;
-                      return (
-                        <option key={product.productNo} value={product.productNo}>
-                          {displayText}
-                        </option>
-                      );
-                    })}
-                </select>
+                <div role="radiogroup" aria-label="Product type" style={{ display: 'flex', width: '100%', boxSizing: 'border-box', background: '#f1f5f9', borderRadius: '8px', padding: '3px', gap: '2px' }}>
+                  {[['all', 'All'], ['mobile', 'Mobiles'], ['accessory', 'Accessories']].map(([value, text]) => (
+                    <button
+                      key={value}
+                      type="button"
+                      role="radio"
+                      aria-checked={filters.type === value}
+                      onClick={() => setFilters(prev => ({ ...prev, type: value }))}
+                      style={{
+                        flex: 1, border: 'none', borderRadius: '6px', padding: '7px 6px', fontSize: '12px', fontWeight: 600, cursor: 'pointer',
+                        whiteSpace: 'nowrap', minWidth: 0, minHeight: 0, margin: 0,
+                        background: filters.type === value ? 'white' : 'transparent',
+                        color: filters.type === value ? '#4338ca' : '#475569',
+                        boxShadow: filters.type === value ? '0 1px 3px rgba(15,23,42,.12)' : 'none'
+                      }}
+                    >{text}</button>
+                  ))}
+                </div>
               </div>
 
               {/* Label layout */}
@@ -491,61 +497,103 @@ function BarcodeSheet({ entries, onClose, salesUrl, token }) {
               </div>
             )}
 
-            {/* Quantity Controls for Accessories */}
-            {accessoryQtyItems.length > 0 && (
-              <div style={{ marginTop: '16px', paddingTop: '16px', borderTop: '1px solid #e2e8f0' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '8px', marginBottom: '8px' }}>
-                  <label style={{ fontSize: '12px', fontWeight: '600', color: '#475569' }}>
-                    Customize Quantity (Accessories) · {accessoryQtyItems.length} product{accessoryQtyItems.length !== 1 ? 's' : ''}
-                  </label>
-                  {qtyTotalPages > 1 && (
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                      <button
-                        type="button"
-                        onClick={() => setQtyPage(p => Math.max(1, p - 1))}
-                        disabled={clampedQtyPage <= 1}
-                        style={{ padding: '4px 10px', fontSize: '12px', borderRadius: '6px', border: '1px solid #cbd5e1', backgroundColor: clampedQtyPage <= 1 ? '#f1f5f9' : 'white', color: '#475569', cursor: clampedQtyPage <= 1 ? 'not-allowed' : 'pointer' }}
-                      >
-                        ← Prev
+            {/* Product picker: tick products to print only those, or download one product on its own */}
+            <div style={{ marginTop: '16px', paddingTop: '16px', borderTop: '1px solid #e2e8f0' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '8px', marginBottom: '8px' }}>
+                <label style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '13px', fontWeight: 600, color: '#334155', cursor: visibleProducts.length ? 'pointer' : 'default' }}>
+                  <input
+                    type="checkbox"
+                    checked={allVisibleSelected}
+                    disabled={!visibleProducts.length}
+                    onChange={toggleAllVisible}
+                    style={{ width: 'auto', height: 'auto', margin: 0 }}
+                    ref={el => { if (el) el.indeterminate = !allVisibleSelected && visibleProducts.some(p => selected.has(p.key)); }}
+                  />
+                  {query || filters.type !== 'all'
+                    ? `${visibleProducts.length} matching product${visibleProducts.length !== 1 ? 's' : ''}`
+                    : `All ${visibleProducts.length} product${visibleProducts.length !== 1 ? 's' : ''}`}
+                </label>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '10px', fontSize: '13px', color: '#475569' }}>
+                  {selectionMode ? (
+                    <>
+                      <span style={{ background: '#eef2ff', color: '#4338ca', borderRadius: '999px', padding: '3px 10px', fontWeight: 600 }}>
+                        Printing {selected.size} selected product{selected.size !== 1 ? 's' : ''} only
+                      </span>
+                      <button type="button" onClick={() => setSelected(new Set())} style={{ border: 'none', background: 'none', color: '#4f46e5', fontWeight: 600, cursor: 'pointer', padding: 0, minWidth: 0, minHeight: 0 }}>
+                        Clear selection
                       </button>
-                      <span style={{ fontSize: '12px', color: '#64748b' }}>Page {clampedQtyPage} of {qtyTotalPages}</span>
-                      <button
-                        type="button"
-                        onClick={() => setQtyPage(p => Math.min(qtyTotalPages, p + 1))}
-                        disabled={clampedQtyPage >= qtyTotalPages}
-                        style={{ padding: '4px 10px', fontSize: '12px', borderRadius: '6px', border: '1px solid #cbd5e1', backgroundColor: clampedQtyPage >= qtyTotalPages ? '#f1f5f9' : 'white', color: '#475569', cursor: clampedQtyPage >= qtyTotalPages ? 'not-allowed' : 'pointer' }}
-                      >
-                        Next →
-                      </button>
-                    </div>
+                    </>
+                  ) : (
+                    <span>Tick products to print only those</span>
                   )}
                 </div>
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(250px, 1fr))', gap: '12px' }}>
-                  {qtyPageItems.map(item => (
-                      <div key={item.productNo} style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                        <span style={{ fontSize: '13px', color: '#64748b', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                          {item.productName}
-                        </span>
-                        <input
-                          type="number"
-                          min="0"
-                          max={item.maxQuantity}
-                          value={filters.customQuantity[item.productNo] ?? item.quantity}
-                          onChange={e => handleQuantityChange(item.productNo, e.target.value)}
-                          style={{
-                            width: '70px',
-                            padding: '6px 8px',
-                            border: '1px solid #cbd5e1',
-                            borderRadius: '4px',
-                            fontSize: '13px'
-                          }}
-                        />
-                        <span style={{ fontSize: '12px', color: '#94a3b8' }}>/ {item.maxQuantity}</span>
-                      </div>
-                    ))}
-                </div>
               </div>
-            )}
+
+              <div style={{ border: '1px solid #e2e8f0', borderRadius: '8px', maxHeight: '260px', overflowY: 'auto', background: 'white' }}>
+                {visibleProducts.length === 0 && (
+                  <div style={{ padding: '18px', textAlign: 'center', color: '#94a3b8', fontSize: '13px' }}>
+                    {products.length ? 'No products match your search' : 'No products to label'}
+                  </div>
+                )}
+                {visibleProducts.slice(0, PRODUCT_LIST_LIMIT).map(p => {
+                  const isChecked = selected.has(p.key);
+                  const only = searchHits.get(p.key);
+                  const isAccessory = p.type === 'Accessory';
+                  const first = p.labels[0] || {};
+                  const max = parseInt(first.maxQuantity ?? first.quantity) || 0;
+                  const mobileCount = only ? only.size : p.labels.length;
+                  return (
+                    <div key={p.key} style={{
+                      display: 'flex', alignItems: 'center', gap: '10px', padding: '8px 12px', borderBottom: '1px solid #f1f5f9',
+                      background: isChecked ? '#f5f7ff' : 'white', flexWrap: 'wrap'
+                    }}>
+                      <input type="checkbox" checked={isChecked} onChange={() => toggleSelected(p.key)} aria-label={'Select ' + p.productName} style={{ flexShrink: 0, width: 'auto', height: 'auto', margin: 0 }} />
+                      <div style={{ flex: '1 1 220px', minWidth: 0 }}>
+                        <div style={{ fontSize: '13px', fontWeight: 600, color: '#0f172a', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={p.productName}>
+                          {p.productName}
+                        </div>
+                        <div style={{ fontSize: '11px', color: '#64748b' }}>
+                          {isAccessory ? '🎧 Accessory' : '📱 Mobile'} · {p.productNo}
+                          {!isAccessory && (only ? ` · ${only.size} of ${p.labels.length} IMEIs match` : ` · ${p.labels.length} IMEI${p.labels.length !== 1 ? 's' : ''}`)}
+                        </div>
+                      </div>
+                      {isAccessory ? (
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '12px', color: '#64748b' }}>
+                          <span>Labels</span>
+                          <input
+                            type="number"
+                            min="0"
+                            max={max || undefined}
+                            value={filters.customQuantity[p.productNo] ?? (parseInt(first.quantity) || 0)}
+                            onChange={e => handleQuantityChange(p.productNo, e.target.value)}
+                            aria-label={'Number of labels for ' + p.productName}
+                            style={{ width: '64px', padding: '5px 8px', border: '1px solid #cbd5e1', borderRadius: '6px', fontSize: '13px' }}
+                          />
+                          <span style={{ color: '#94a3b8' }}>/ {max}</span>
+                        </div>
+                      ) : (
+                        <span style={{ fontSize: '12px', color: '#64748b' }}>{mobileCount} label{mobileCount !== 1 ? 's' : ''}</span>
+                      )}
+                      <button
+                        type="button"
+                        onClick={() => downloadOnly(p.key)}
+                        disabled={downloading || labelsOf(p).length === 0}
+                        title="Download labels for this product only"
+                        style={{
+                          border: '1px solid #c7d2fe', background: '#eef2ff', color: '#4338ca', borderRadius: '6px', padding: '5px 10px',
+                          fontSize: '12px', fontWeight: 600, cursor: downloading ? 'wait' : 'pointer', whiteSpace: 'nowrap', minWidth: 0, minHeight: 0, margin: 0
+                        }}
+                      >⬇ Only this</button>
+                    </div>
+                  );
+                })}
+                {visibleProducts.length > PRODUCT_LIST_LIMIT && (
+                  <div style={{ padding: '10px 12px', fontSize: '12px', color: '#64748b', textAlign: 'center' }}>
+                    Showing the first {PRODUCT_LIST_LIMIT} of {visibleProducts.length} — search to narrow the list
+                  </div>
+                )}
+              </div>
+            </div>
           </div>
         </div>
 

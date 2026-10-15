@@ -20,7 +20,8 @@ module.exports = async function requireUser(req, res, next) {
           shop_id: decoded.shop_id, 
           isBranch: true, 
           branchName: decoded.name, 
-          isAdmin: !!decoded.isAdmin 
+          isAdmin: !!decoded.isAdmin,
+          via: decoded.via || null // 'service' = owner signed in from the Service portal (combo SSO)
         };
         return next();
       }

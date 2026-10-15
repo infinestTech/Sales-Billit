@@ -1,4 +1,4 @@
-function HeaderBar({ title, subtitle, user, onLogout }) {
+function HeaderBar({ title, subtitle, user, onLogout, actions }) {
   const [currentTime, setCurrentTime] = React.useState(new Date());
 
   React.useEffect(() => {
@@ -23,6 +23,7 @@ function HeaderBar({ title, subtitle, user, onLogout }) {
         </div>
       </div>
       <div className="header-right">
+        {actions}
         <div className="header-time">
           <span className="time-icon">🕐</span>
           <span className="time-text">{formatTime(currentTime)}</span>

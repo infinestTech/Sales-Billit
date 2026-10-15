@@ -220,11 +220,35 @@ app.post('/auth/branch-sso', async (req, res) => {
     const branch = await Branch.findOne({ _id: decoded.sso_branch, shop_id: decoded.sso_shop }).lean();
     if (!branch) return res.status(404).json({ success: false, message: 'Branch not found' });
 
-    const payload = { branch_id: String(branch._id), shop_id: branch.shop_id, name: branch.name, isAdmin: !!branch.isAdmin };
+    // via: 'service' marks an owner who came from the Service portal; only they get the switch back to Service
+    const payload = { branch_id: String(branch._id), shop_id: branch.shop_id, name: branch.name, isAdmin: !!branch.isAdmin, via: 'service' };
     const token = jwt.sign(payload, process.env.JWT_SECRET || 'dev-sales-secret', { expiresIn: '2h' });
     return res.json({ success: true, message: 'Branch login successful', token, payload });
   } catch (err) {
     console.error('Branch SSO error:', err.message || err);
+    return res.status(500).json({ success: false, message: 'Server error' });
+  }
+});
+
+// ---- Branch portal -> Service portal (combo shops) ----
+// Only an owner who entered Sales from the Service portal (branch token with via: 'service') may switch
+// back; branch staff who signed in with a branch password never can. The 60s single-use code is signed
+// with a secret derived from INTERNAL_API_KEY and exchanged by BillitServer POST /api/service-sso,
+// which re-checks the combo plan and issues the Service session.
+app.post('/api/service-sso', require('./middleware/requireUser'), (req, res) => {
+  try {
+    if (!req.user || !req.user.isBranch || req.user.via !== 'service') {
+      return res.status(403).json({ success: false, message: 'Switching to Service is only available when you opened Sales from the Service portal.' });
+    }
+    if (!process.env.INTERNAL_API_KEY) return res.status(500).json({ success: false, message: 'Service sign-in is not configured' });
+    const code = jwt.sign(
+      { svc_shop: String(req.user.shop_id), jti: require('crypto').randomBytes(12).toString('hex') },
+      process.env.INTERNAL_API_KEY + ':service-sso',
+      { expiresIn: '60s' }
+    );
+    return res.json({ success: true, code });
+  } catch (err) {
+    console.error('Service SSO code error:', err.message || err);
     return res.status(500).json({ success: false, message: 'Server error' });
   }
 });
