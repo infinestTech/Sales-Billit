@@ -1,11 +1,24 @@
 "use client";
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import axios from 'axios';
 
+// Where to go after signing in: only shop-admin pages (e.g. /shop-admin/dashboard?tab=sales-price-code)
+function safeNext() {
+  if (typeof window === 'undefined') return '';
+  const next = new URLSearchParams(window.location.search).get('next') || '';
+  return next.startsWith('/shop-admin/') ? next : '';
+}
+
 export default function ShopAdminLoginPage() {
   const router = useRouter();
+
+  // Already signed in and sent here with a destination (e.g. from the branch portal): go straight there
+  useEffect(() => {
+    const next = safeNext();
+    if (next && localStorage.getItem('shopAdminToken') && localStorage.getItem('shopAdminInfo')) router.replace(next);
+  }, []);
   const [formData, setFormData] = useState({
     username: '',
     password: ''
@@ -61,7 +74,7 @@ export default function ShopAdminLoginPage() {
         console.log('✅ Fresh data stored to localStorage');
         
         // Redirect to shop admin dashboard
-        router.push('/shop-admin/dashboard');
+        router.push(safeNext() || '/shop-admin/dashboard');
       }
     } catch (err) {
       console.error('❌ Login error:', err.response?.data || err.message);

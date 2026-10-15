@@ -111,7 +111,9 @@ const shopSchema = new mongoose.Schema({
   },
   // Point-of-sale rules read by SalesServer (shared `shops` collection).
   sales_settings: {
-    require_employee_code: { type: Boolean, default: false }
+    require_employee_code: { type: Boolean, default: false },
+    // Secret price code: one character per digit in the order 1234567890 ('' = not set). See utils/priceCipher.js
+    price_cipher: { type: String, default: '' }
   },
   created_at: { type: Date, default: Date.now }
 });

@@ -71,12 +71,23 @@ function BranchInStock({ salesUrl, token }) {
     } catch (e) { setError(e.message); }
   };
 
-  // Suppliers and form-level state for Add modal
+  // Suppliers for the Add Purchase form
   const [suppliers, setSuppliers] = React.useState([]);
-  const [supplierId, setSupplierId] = React.useState('');
-  const [supplierAmount, setSupplierAmount] = React.useState('');
-  const [gstAmount, setGstAmount] = React.useState('');
-  const [category, setCategory] = React.useState('');
+
+  // Price code cipher (shop-admin setting) -> encoded cost price shown under the cost column
+  const [priceCipher, setPriceCipher] = React.useState('');
+  React.useEffect(() => {
+    const tk = getAuthToken();
+    if (!salesUrl || !tk || !window.BarcodeLabels) return undefined;
+    let alive = true;
+    fetch(salesUrl + '/api/shop-info', { headers: { Authorization: 'Bearer ' + tk } })
+      .then(r => (r.ok ? r.json() : null))
+      .then(d => { if (alive && d) setPriceCipher(window.BarcodeLabels.normalizePriceCipher(d.priceCipher)); })
+      .catch(() => {});
+    return () => { alive = false; };
+  }, [salesUrl, token]);
+  const priceCodeOf = (row) => (window.BarcodeLabels && priceCipher)
+    ? window.BarcodeLabels.encodePriceCode(row.costPrice ?? row.cost ?? 0, priceCipher) : '';
 
   const loadSuppliers = async () => {
     try {
@@ -92,124 +103,8 @@ function BranchInStock({ salesUrl, token }) {
     } catch (e) { /* ignore */ }
   };
 
-  // Add New Stock modal state
+  // Add Purchase form (src/components/BranchStockEntry.jsx)
   const [openAdd, setOpenAdd] = React.useState(false);
-  const [itemsToAdd, setItemsToAdd] = React.useState([{ productNo: '', productName: '', brand: '', model: '', qty: 1, costPrice: '', sellingPrice: '', validity: '', warrantyMonths: '', warrantyDetails: '', imes: [] }]);
-  const [adding, setAdding] = React.useState(false);
-  const [addError, setAddError] = React.useState('');
-
-  const updateAddItem = (idx, field, value) => setItemsToAdd(list => list.map((it, i) => {
-    if (i !== idx) return it;
-    // if quantity changed and category is Mobile, ensure imes array length matches quantity
-    if (field === 'qty') {
-      const qty = Number(value) || 0;
-      const prevImes = Array.isArray(it.imes) ? it.imes.slice(0, qty) : [];
-      while (prevImes.length < qty) prevImes.push('');
-      return { ...it, [field]: value, imes: prevImes };
-    }
-    return { ...it, [field]: value };
-  }));
-  const addAddRow = () => setItemsToAdd(list => [...list, { productNo: '', productName: '', brand: '', model: '', qty: 1, costPrice: '', sellingPrice: '', validity: '', warrantyMonths: '', warrantyDetails: '', imes: [] }]);
-  const removeAddRow = (idx) => setItemsToAdd(list => list.filter((_, i) => i !== idx));
-
-  const submitAdd = async () => {
-    setAdding(true); setAddError('');
-    try {
-      const storedBranchToken = typeof window !== 'undefined' ? (localStorage.getItem('branch_token') || '') : '';
-      const effectiveToken = token || storedBranchToken || '';
-      const url = new URL((salesUrl || '') + '/api/branch-supply');
-      // gather existing productNos from current branch entries to avoid collisions
-      const existingNos = new Set((Array.isArray(entries) ? entries : []).map(r => String(r.productNo || r.productId || '').trim()).filter(Boolean));
-
-      // generator: A0..A9, B0..B9 ... Z9 then AA0.. if needed
-      function generateNextProductNo(usedSet) {
-        const letters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
-        const digits = '0123456789';
-        // first try single-letter + digit
-        for (let i = 0; i < letters.length; i++) {
-          for (let j = 0; j < digits.length; j++) {
-            const candidate = letters[i] + digits[j];
-            if (!usedSet.has(candidate)) return candidate;
-          }
-        }
-        // fallback: two-letters + digit
-        for (let a = 0; a < letters.length; a++) {
-          for (let b = 0; b < letters.length; b++) {
-            for (let d = 0; d < digits.length; d++) {
-              const candidate = letters[a] + letters[b] + digits[d];
-              if (!usedSet.has(candidate)) return candidate;
-            }
-          }
-        }
-        // last resort: random but ensure not used
-        while (true) {
-          const rand = Math.random().toString(36).slice(2, 6).toUpperCase();
-          if (!usedSet.has(rand)) return rand;
-        }
-      }
-
-      const body = {
-        branch_id: undefined, // optional: allow server to pick branch from token
-        supplier_id: supplierId || undefined,
-        supplierAmount: Number(supplierAmount) || 0,
-        gstAmount: Number(gstAmount) || 0,
-        category: category || undefined,
-        items: (() => {
-          const used = new Set(existingNos);
-          const mapped = [];
-          for (const it of itemsToAdd) {
-            let pno = it.productNo && it.productNo.trim() ? it.productNo.trim() : '';
-            if (!pno) {
-              pno = generateNextProductNo(used);
-            }
-            // mark as used to avoid duplicates within same submit
-            used.add(pno);
-            mapped.push({
-              productId: it.productId || null,
-              productNo: pno,
-              productName: it.productName,
-              brand: it.brand,
-              model: it.model,
-              qty: Number(it.qty) || 0,
-              costPrice: Number(it.costPrice) || 0,
-              sellingPrice: Number(it.sellingPrice) || 0,
-              validity: it.validity || null,
-              warrantyMonths: Number(it.warrantyMonths) || 0,
-              warrantyDetails: (it.warrantyDetails || '').trim(),
-              imes: Array.isArray(it.imes) ? it.imes.filter(x => x && x.trim()) : []
-            });
-          }
-          return mapped;
-        })()
-      };
-      let res = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + effectiveToken }, body: JSON.stringify(body) });
-      if (res.status === 401 && storedBranchToken && storedBranchToken !== effectiveToken) {
-        res = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + storedBranchToken }, body: JSON.stringify(body) });
-      }
-      const data = await res.json();
-      if (!res.ok || !data.success) throw new Error(data.message || 'Failed to add');
-      setOpenAdd(false);
-  setItemsToAdd([{ productNo: '', productName: '', brand: '', model: '', qty: 1, costPrice: '', sellingPrice: '', validity: '', warrantyMonths: '', warrantyDetails: '', imes: [] }]);
-  setSupplierId(''); setSupplierAmount(''); setGstAmount(''); setCategory('');
-      // reload entries and notify other components
-      await loadEntries();
-  try { window.dispatchEvent(new CustomEvent('branch-stock-updated', { detail: { supply: data.supply || null, rows: data.rows || [] } })); } catch (__) {}
-    } catch (e) { setAddError(e.message); } finally { setAdding(false); }
-  };
-
-  // Keep imes length in sync when category is Mobile
-  React.useEffect(() => {
-    setItemsToAdd(prev => prev.map(item => {
-      const qty = Number(item.qty) || 0;
-      if (category === 'Mobile') {
-        const imes = Array.isArray(item.imes) ? item.imes.slice(0, qty) : [];
-        while (imes.length < qty) imes.push('');
-        return { ...item, imes };
-      }
-      // clear imes for non-mobile categories to avoid showing inputs
-      return { ...item, imes: [] };
-    }));
-  }, [category]);
 
   React.useEffect(() => { loadEntries(); loadSuppliers(); }, [token]);
   React.useEffect(() => {
@@ -220,13 +115,6 @@ function BranchInStock({ salesUrl, token }) {
     window.addEventListener('branch-stock-updated', onUpdated);
     return () => window.removeEventListener('branch-stock-updated', onUpdated);
   }, [token]);
-
-  const canSubmitAdd = React.useMemo(() => {
-    if (!supplierId) return false;
-    if (!Array.isArray(itemsToAdd) || itemsToAdd.length === 0) return false;
-    if (!itemsToAdd.every(it => it.productName && Number(it.qty) > 0)) return false;
-    return true;
-  }, [supplierId, itemsToAdd]);
 
   const currency = (n) => new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 2 }).format(n || 0);
 
@@ -316,7 +204,7 @@ function BranchInStock({ salesUrl, token }) {
         productName: row.productName || '',
         brand: row.brand || '',
         model: row.model || '',
-        priceCode: row.priceCode || '',
+        costPrice: row.costPrice ?? row.cost ?? 0,
         quantity: row.branchQty ?? row.qty ?? 0,
         imes: Array.isArray(row.imes) ? row.imes : (row.imei ? [row.imei] : [])
       });
@@ -602,7 +490,7 @@ function BranchInStock({ salesUrl, token }) {
               e.target.style.boxShadow = '0 4px 12px rgba(102, 126, 234, 0.3)';
             }}
           >
-            📦 Add New Stock
+            📦 Add Purchase
           </button>
 
           <button
@@ -952,7 +840,7 @@ function BranchInStock({ salesUrl, token }) {
                       color: '#374151',
                       borderBottom: '2px solid #e5e7eb',
                       minWidth: '120px'
-                    }}>Cost Price</th>
+                    }}>Cost Price / Code</th>
                     <th style={{
                       padding: '16px 12px',
                       textAlign: 'right',
@@ -1070,6 +958,15 @@ function BranchInStock({ salesUrl, token }) {
                             return unitCost != null ? currency(unitCost) : '-';
                           })()}
                         </span>
+                        {priceCodeOf(it) && (
+                          <div title="Price code (encoded cost price)" style={{ marginTop: '4px' }}>
+                            <span style={{
+                              display: 'inline-block', fontFamily: 'ui-monospace, Menlo, Consolas, monospace', fontSize: '12px',
+                              fontWeight: 700, letterSpacing: '1px', color: '#4338ca', background: '#eef2ff',
+                              border: '1px solid #c7d2fe', borderRadius: '6px', padding: '1px 7px'
+                            }}>{priceCodeOf(it)}</span>
+                          </div>
+                        )}
                       </td>
                       <td style={{ padding: '16px 12px', textAlign: 'right' }}>
                         <span style={{
@@ -1147,656 +1044,19 @@ function BranchInStock({ salesUrl, token }) {
       </div>
 
       {/* Add Stock Modal */}
-      {openAdd && (
-        <div style={{
-          position: 'fixed',
-          top: 0,
-          left: 0,
-          right: 0,
-          bottom: 0,
-          backgroundColor: 'rgba(0, 0, 0, 0.5)',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          zIndex: 1000,
-          padding: '20px'
-        }}>
-          <div style={{
-            background: 'white',
-            borderRadius: '16px',
-            width: '100%',
-            maxWidth: '1200px',
-            maxHeight: '90vh',
-            overflowY: 'auto',
-            boxShadow: '0 25px 50px rgba(0, 0, 0, 0.25)'
-          }}>
-            {/* Modal Header */}
-            <div style={{
-              display: 'flex',
-              justifyContent: 'space-between',
-              alignItems: 'center',
-              padding: '24px 32px',
-              borderBottom: '1px solid #e5e7eb',
-              position: 'sticky',
-              top: 0,
-              background: 'white',
-              borderRadius: '16px 16px 0 0',
-              zIndex: 10
-            }}>
-              <div>
-                <h2 style={{ 
-                  fontSize: '24px', 
-                  fontWeight: '700', 
-                  color: '#1e293b',
-                  margin: 0,
-                  marginBottom: '4px',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '8px'
-                }}>
-                  📦 Add Branch Stock
-                </h2>
-                <p style={{ 
-                  color: '#64748b', 
-                  fontSize: '14px', 
-                  margin: 0 
-                }}>Add new products to your branch inventory</p>
-              </div>
-              <button 
-                style={{
-                  background: '#f1f5f9',
-                  color: '#475569',
-                  border: 'none',
-                  borderRadius: '8px',
-                  padding: '8px 16px',
-                  fontSize: '14px',
-                  cursor: 'pointer'
-                }}
-                onClick={() => { 
-                  setOpenAdd(false); 
-                  setAddError(''); 
-                  setItemsToAdd([{ productNo: '', productName: '', brand: '', model: '', qty: 1, costPrice: '', sellingPrice: '', validity: '', warrantyMonths: '', warrantyDetails: '', imes: [] }]); 
-                }}
-              >
-                ✕ Close
-              </button>
-            </div>
-
-            <div style={{ padding: '32px' }}>
-              {addError && (
-                <div style={{
-                  background: '#fef2f2',
-                  border: '1px solid #fecaca',
-                  color: '#dc2626',
-                  padding: '12px 16px',
-                  borderRadius: '8px',
-                  marginBottom: '24px',
-                  fontSize: '14px'
-                }}>
-                  {addError}
-                </div>
-              )}
-
-              {/* Supply Information Section */}
-              <div style={{ marginBottom: '32px' }}>
-                <h3 style={{ 
-                  fontSize: '18px', 
-                  fontWeight: '600', 
-                  color: '#1e293b',
-                  marginBottom: '16px',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '8px'
-                }}>
-                  ℹ️ Supply Information
-                </h3>
-                
-                <div style={{ 
-                  display: 'grid', 
-                  gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', 
-                  gap: '20px' 
-                }}>
-                  <div>
-                    <label style={{ 
-                      display: 'block', 
-                      fontSize: '14px', 
-                      fontWeight: '500', 
-                      color: '#374151',
-                      marginBottom: '6px'
-                    }}>Supplier *</label>
-                    <select 
-                      value={supplierId} 
-                      onChange={e=>setSupplierId(e.target.value)}
-                      style={{
-                        width: '100%',
-                        padding: '12px 16px',
-                        border: '2px solid #e5e7eb',
-                        borderRadius: '8px',
-                        fontSize: '14px',
-                        backgroundColor: 'white',
-                        cursor: 'pointer',
-                        outline: 'none'
-                      }}
-                    >
-                      <option value="">Select supplier</option>
-                      {suppliers.map(s => (
-                        <option key={s._id} value={s._id}>
-                          {s.supplierName || s.agencyName || s._id}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-
-                  <div>
-                    <label style={{ 
-                      display: 'block', 
-                      fontSize: '14px', 
-                      fontWeight: '500', 
-                      color: '#374151',
-                      marginBottom: '6px'
-                    }}>Supplier Amount</label>
-                    <input 
-                      type="number" 
-                      value={supplierAmount} 
-                      onChange={e=>setSupplierAmount(e.target.value)} 
-                      placeholder="0.00"
-                      style={{
-                        width: '100%',
-                        padding: '12px 16px',
-                        border: '2px solid #e5e7eb',
-                        borderRadius: '8px',
-                        fontSize: '14px',
-                        outline: 'none'
-                      }}
-                    />
-                  </div>
-
-                  <div>
-                    <label style={{ 
-                      display: 'block', 
-                      fontSize: '14px', 
-                      fontWeight: '500', 
-                      color: '#374151',
-                      marginBottom: '6px'
-                    }}>GST Amount</label>
-                    <input 
-                      type="number" 
-                      value={gstAmount} 
-                      onChange={e=>setGstAmount(e.target.value)} 
-                      placeholder="0.00"
-                      style={{
-                        width: '100%',
-                        padding: '12px 16px',
-                        border: '2px solid #e5e7eb',
-                        borderRadius: '8px',
-                        fontSize: '14px',
-                        outline: 'none'
-                      }}
-                    />
-                  </div>
-
-                  <div>
-                    <label style={{ 
-                      display: 'block', 
-                      fontSize: '14px', 
-                      fontWeight: '500', 
-                      color: '#374151',
-                      marginBottom: '6px'
-                    }}>Category</label>
-                    <select 
-                      value={category} 
-                      onChange={e=>setCategory(e.target.value)}
-                      style={{
-                        width: '100%',
-                        padding: '12px 16px',
-                        border: '2px solid #e5e7eb',
-                        borderRadius: '8px',
-                        fontSize: '14px',
-                        backgroundColor: 'white',
-                        cursor: 'pointer',
-                        outline: 'none'
-                      }}
-                    >
-                      <option value="">Select category</option>
-                      <option value="Accessories">Accessories</option>
-                      <option value="Mobile">Mobile</option>
-                    </select>
-                  </div>
-                </div>
-              </div>
-              {/* Products Section */}
-              <div>
-                <div style={{ 
-                  display: 'flex', 
-                  justifyContent: 'space-between', 
-                  alignItems: 'center', 
-                  marginBottom: '16px' 
-                }}>
-                  <h3 style={{ 
-                    fontSize: '18px', 
-                    fontWeight: '600', 
-                    color: '#1e293b',
-                    margin: 0,
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '8px'
-                  }}>
-                    📋 Product Details
-                  </h3>
-                  <button 
-                    style={{
-                      background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)',
-                      color: 'white',
-                      border: 'none',
-                      borderRadius: '8px',
-                      padding: '8px 16px',
-                      fontSize: '14px',
-                      fontWeight: '500',
-                      cursor: 'pointer',
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: '4px'
-                    }}
-                    type="button" 
-                    onClick={addAddRow}
-                  >
-                    ➕ Add Product
-                  </button>
-                </div>
-
-                <div style={{ 
-                  border: '1px solid #e5e7eb',
-                  borderRadius: '12px',
-                  overflow: 'hidden',
-                  background: '#fff'
-                }}>
-                  <div style={{ overflowX: 'auto' }}>
-                    <table style={{ 
-                      width: '100%', 
-                      borderCollapse: 'collapse',
-                      fontSize: '14px'
-                    }}>
-                      <thead>
-                        <tr style={{ background: '#f8fafc' }}>
-                          <th style={{
-                            padding: '12px',
-                            textAlign: 'left',
-                            fontWeight: '600',
-                            color: '#374151',
-                            borderBottom: '1px solid #e5e7eb',
-                            minWidth: '120px'
-                          }}>Product No</th>
-                          <th style={{
-                            padding: '12px',
-                            textAlign: 'left',
-                            fontWeight: '600',
-                            color: '#374151',
-                            borderBottom: '1px solid #e5e7eb',
-                            minWidth: '150px'
-                          }}>Product Name *</th>
-                          <th style={{
-                            padding: '12px',
-                            textAlign: 'left',
-                            fontWeight: '600',
-                            color: '#374151',
-                            borderBottom: '1px solid #e5e7eb',
-                            minWidth: '100px'
-                          }}>Brand</th>
-                          <th style={{
-                            padding: '12px',
-                            textAlign: 'left',
-                            fontWeight: '600',
-                            color: '#374151',
-                            borderBottom: '1px solid #e5e7eb',
-                            minWidth: '100px'
-                          }}>Model</th>
-                          <th style={{
-                            padding: '12px',
-                            textAlign: 'center',
-                            fontWeight: '600',
-                            color: '#374151',
-                            borderBottom: '1px solid #e5e7eb',
-                            width: '80px'
-                          }}>Qty</th>
-                          <th style={{
-                            padding: '12px',
-                            textAlign: 'right',
-                            fontWeight: '600',
-                            color: '#374151',
-                            borderBottom: '1px solid #e5e7eb',
-                            minWidth: '120px'
-                          }}>Cost Price</th>
-                          <th style={{
-                            padding: '12px',
-                            textAlign: 'right',
-                            fontWeight: '600',
-                            color: '#374151',
-                            borderBottom: '1px solid #e5e7eb',
-                            minWidth: '120px'
-                          }}>Selling Price</th>
-                          {category === 'Mobile' && (
-                            <th style={{
-                              padding: '12px',
-                              textAlign: 'left',
-                              fontWeight: '600',
-                              color: '#374151',
-                              borderBottom: '1px solid #e5e7eb',
-                              minWidth: '220px'
-                            }}>IMEI Numbers</th>
-                          )}
-                          <th style={{
-                            padding: '12px',
-                            textAlign: 'center',
-                            fontWeight: '600',
-                            color: '#374151',
-                            borderBottom: '1px solid #e5e7eb',
-                            minWidth: '130px'
-                          }}>Validity</th>
-                          <th style={{
-                            padding: '12px',
-                            textAlign: 'center',
-                            fontWeight: '600',
-                            color: '#374151',
-                            borderBottom: '1px solid #e5e7eb',
-                            minWidth: '120px'
-                          }}>Warranty (months)</th>
-                          <th style={{
-                            padding: '12px',
-                            textAlign: 'center',
-                            fontWeight: '600',
-                            color: '#374151',
-                            borderBottom: '1px solid #e5e7eb',
-                            minWidth: '180px'
-                          }}>Warranty Details</th>
-                          <th style={{
-                            padding: '12px',
-                            textAlign: 'center',
-                            fontWeight: '600',
-                            color: '#374151',
-                            borderBottom: '1px solid #e5e7eb',
-                            width: '60px'
-                          }}></th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {itemsToAdd.map((it, idx) => (
-                          <tr key={idx} style={{ borderBottom: '1px solid #f1f5f9' }}>
-                            <td style={{ padding: '12px' }}>
-                              <input 
-                                value={it.productNo} 
-                                onChange={e=>updateAddItem(idx,'productNo',e.target.value)} 
-                                placeholder="Auto-generated"
-                                style={{
-                                  width: '100%',
-                                  padding: '8px 12px',
-                                  border: '1px solid #d1d5db',
-                                  borderRadius: '6px',
-                                  fontSize: '13px',
-                                  outline: 'none'
-                                }}
-                              />
-                            </td>
-                            <td style={{ padding: '12px' }}>
-                              <input 
-                                value={it.productName} 
-                                onChange={e=>updateAddItem(idx,'productName',e.target.value)} 
-                                placeholder="Enter product name"
-                                style={{
-                                  width: '100%',
-                                  padding: '8px 12px',
-                                  border: '2px solid #d1d5db',
-                                  borderRadius: '6px',
-                                  fontSize: '13px',
-                                  outline: 'none'
-                                }}
-                              />
-                            </td>
-                            <td style={{ padding: '12px' }}>
-                              <input 
-                                value={it.brand} 
-                                onChange={e=>updateAddItem(idx,'brand',e.target.value)} 
-                                placeholder="Brand"
-                                style={{
-                                  width: '100%',
-                                  padding: '8px 12px',
-                                  border: '1px solid #d1d5db',
-                                  borderRadius: '6px',
-                                  fontSize: '13px',
-                                  outline: 'none'
-                                }}
-                              />
-                            </td>
-                            <td style={{ padding: '12px' }}>
-                              <input 
-                                value={it.model} 
-                                onChange={e=>updateAddItem(idx,'model',e.target.value)} 
-                                placeholder="Model"
-                                style={{
-                                  width: '100%',
-                                  padding: '8px 12px',
-                                  border: '1px solid #d1d5db',
-                                  borderRadius: '6px',
-                                  fontSize: '13px',
-                                  outline: 'none'
-                                }}
-                              />
-                            </td>
-                            <td style={{ padding: '12px' }}>
-                              <input 
-                                type="number" 
-                                value={it.qty === undefined ? '' : it.qty} 
-                                onChange={e=>updateAddItem(idx,'qty',e.target.value)} 
-                                placeholder="1"
-                                min="1"
-                                style={{
-                                  width: '100%',
-                                  padding: '8px 12px',
-                                  border: '1px solid #d1d5db',
-                                  borderRadius: '6px',
-                                  fontSize: '13px',
-                                  textAlign: 'center',
-                                  outline: 'none'
-                                }}
-                              />
-                            </td>
-                            <td style={{ padding: '12px' }}>
-                              <input 
-                                type="number" 
-                                value={it.costPrice} 
-                                onChange={e=>updateAddItem(idx,'costPrice',e.target.value)} 
-                                placeholder="0.00"
-                                step="0.01"
-                                style={{
-                                  width: '100%',
-                                  padding: '8px 12px',
-                                  border: '1px solid #d1d5db',
-                                  borderRadius: '6px',
-                                  fontSize: '13px',
-                                  textAlign: 'right',
-                                  outline: 'none'
-                                }}
-                              />
-                            </td>
-                            <td style={{ padding: '12px' }}>
-                              <input 
-                                type="number" 
-                                value={it.sellingPrice} 
-                                onChange={e=>updateAddItem(idx,'sellingPrice',e.target.value)} 
-                                placeholder="0.00"
-                                step="0.01"
-                                style={{
-                                  width: '100%',
-                                  padding: '8px 12px',
-                                  border: '1px solid #d1d5db',
-                                  borderRadius: '6px',
-                                  fontSize: '13px',
-                                  textAlign: 'right',
-                                  outline: 'none'
-                                }}
-                              />
-                            </td>
-                            {category === 'Mobile' && (
-                              <td style={{ padding: '12px' }}>
-                                <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
-                                  {(() => {
-                                    const qty = Number(it.qty) || 1;
-                                    const imesArr = Array.isArray(it.imes) && it.imes.length ? it.imes.slice(0, qty) : Array.from({ length: qty }, () => '');
-                                    return imesArr.map((im, iim) => (
-                                      <input
-                                        key={iim}
-                                        value={im}
-                                        onChange={e => {
-                                          const val = e.target.value;
-                                          setItemsToAdd(list => list.map((row, rIdx) => {
-                                            if (rIdx !== idx) return row;
-                                            const qtyLocal = Number(row.qty) || 1;
-                                            const newImes = Array.isArray(row.imes) ? row.imes.slice(0, qtyLocal) : Array.from({ length: qtyLocal }, () => '');
-                                            while (newImes.length < qtyLocal) newImes.push('');
-                                            newImes[iim] = val;
-                                            return { ...row, imes: newImes };
-                                          }));
-                                        }}
-                                        placeholder={`IMEI ${iim+1}`}
-                                        style={{ 
-                                          width: '140px',
-                                          padding: '6px 8px',
-                                          border: '1px solid #d1d5db',
-                                          borderRadius: '4px',
-                                          fontSize: '12px',
-                                          outline: 'none'
-                                        }}
-                                      />
-                                    ));
-                                  })()}
-                                </div>
-                              </td>
-                            )}
-                            <td style={{ padding: '12px' }}>
-                              <input 
-                                type="date" 
-                                value={it.validity || ''} 
-                                onChange={e=>updateAddItem(idx,'validity',e.target.value)}
-                                style={{
-                                  width: '100%',
-                                  padding: '8px 12px',
-                                  border: '1px solid #d1d5db',
-                                  borderRadius: '6px',
-                                  fontSize: '13px',
-                                  outline: 'none'
-                                }}
-                              />
-                            </td>
-                            <td style={{ padding: '12px' }}>
-                              <input
-                                type="number"
-                                min="0"
-                                value={it.warrantyMonths ?? ''}
-                                onChange={e=>updateAddItem(idx,'warrantyMonths',e.target.value)}
-                                placeholder="0"
-                                style={{
-                                  width: '100%',
-                                  padding: '8px 12px',
-                                  border: '1px solid #d1d5db',
-                                  borderRadius: '6px',
-                                  fontSize: '13px',
-                                  outline: 'none'
-                                }}
-                              />
-                            </td>
-                            <td style={{ padding: '12px' }}>
-                              <input
-                                value={it.warrantyDetails || ''}
-                                onChange={e=>updateAddItem(idx,'warrantyDetails',e.target.value)}
-                                placeholder="e.g. Brand warranty"
-                                maxLength={300}
-                                style={{
-                                  width: '100%',
-                                  padding: '8px 12px',
-                                  border: '1px solid #d1d5db',
-                                  borderRadius: '6px',
-                                  fontSize: '13px',
-                                  outline: 'none'
-                                }}
-                              />
-                            </td>
-                            <td style={{ padding: '12px', textAlign: 'center' }}>
-                              <button 
-                                style={{
-                                  background: '#fee2e2',
-                                  color: '#dc2626',
-                                  border: 'none',
-                                  borderRadius: '6px',
-                                  padding: '6px 8px',
-                                  fontSize: '12px',
-                                  cursor: 'pointer'
-                                }}
-                                type="button" 
-                                onClick={()=>removeAddRow(idx)}
-                              >
-                                🗑️
-                              </button>
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            {/* Modal Footer */}
-            <div style={{
-              display: 'flex',
-              justifyContent: 'flex-end',
-              gap: '12px',
-              padding: '24px 32px',
-              borderTop: '1px solid #e5e7eb',
-              background: '#f8fafc',
-              borderRadius: '0 0 16px 16px'
-            }}>
-              <button 
-                style={{
-                  background: '#f1f5f9',
-                  color: '#475569',
-                  border: 'none',
-                  borderRadius: '8px',
-                  padding: '10px 20px',
-                  fontSize: '14px',
-                  cursor: 'pointer'
-                }}
-                onClick={() => { 
-                  setOpenAdd(false); 
-                  setAddError(''); 
-                  setItemsToAdd([{ productNo: '', productName: '', brand: '', model: '', qty: 1, costPrice: '', sellingPrice: '', validity: '', warrantyMonths: '', warrantyDetails: '', imes: [] }]); 
-                }}
-              >
-                Cancel
-              </button>
-              <button 
-                disabled={adding || !canSubmitAdd}
-                onClick={async ()=>{ await submitAdd(); }}
-                style={{
-                  background: canSubmitAdd && !adding 
-                    ? 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)' 
-                    : '#9ca3af',
-                  color: 'white',
-                  border: 'none',
-                  borderRadius: '8px',
-                  padding: '10px 24px',
-                  fontSize: '14px',
-                  fontWeight: '600',
-                  cursor: canSubmitAdd && !adding ? 'pointer' : 'not-allowed',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '8px'
-                }}
-              >
-                {adding ? '💾 Saving...' : '✅ Save Stock'}
-              </button>
-            </div>
-          </div>
-        </div>
+      {openAdd && window.BranchStockEntry && (
+        <window.BranchStockEntry
+          salesUrl={salesUrl}
+          getToken={getAuthToken}
+          suppliers={suppliers}
+          branchEntries={entries}
+          onClose={() => setOpenAdd(false)}
+          onSaved={async (data) => {
+            setOpenAdd(false);
+            await loadEntries();
+            try { window.dispatchEvent(new CustomEvent('branch-stock-updated', { detail: { supply: data.supply || null, rows: data.rows || [] } })); } catch (__) {}
+          }}
+        />
       )}
 
       {/* Supplier bill import (Excel / JSON) */}

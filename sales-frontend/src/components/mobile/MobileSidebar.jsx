@@ -111,7 +111,7 @@ function MobileSidebar({ active = 'instock', onSelect, planId, branchLimit, bran
                 />
                 <MobileNavItem 
                   id="instock" 
-                  label="Product Inventory" 
+                  label="Purchase Inventory" 
                   icon="📦" 
                   description="Track stock levels"
                   activeId={active} 
@@ -134,7 +134,7 @@ function MobileSidebar({ active = 'instock', onSelect, planId, branchLimit, bran
                 </div>
                 <MobileNavItem 
                   id="product-sales" 
-                  label="Product Sales" 
+                  label="Sales" 
                   icon="🛒" 
                   description="Process customer sales"
                   activeId={active} 
@@ -199,7 +199,7 @@ function MobileSidebar({ active = 'instock', onSelect, planId, branchLimit, bran
                 />
                 <MobileNavItem 
                   id="instock" 
-                  label="Product Inventory" 
+                  label="Purchase Inventory" 
                   icon="📦" 
                   description="Central stock management"
                   activeId={active} 

@@ -208,7 +208,6 @@ function BranchStockImport({ salesUrl, getToken, suppliers, branchEntries, onClo
         hsn: i.hsn,
         mrp: i.mrp,
         gstPercent: i.gstPercent,
-        priceCode: i.priceCode,
       })),
     };
     const res = await authFetch('/api/branch-supply',  { method: 'POST', body: JSON.stringify(body) });
@@ -291,7 +290,7 @@ function BranchStockImport({ salesUrl, getToken, suppliers, branchEntries, onClo
             <div>
               <div style={{ fontWeight: '600', color: '#3730a3' }}>{fileName ? `📄 ${fileName}` : 'Drop the bill file here or choose a file'}</div>
               <div style={{ fontSize: '12px', color: '#6366f1', marginTop: '4px' }}>
-                Columns: S.No, Code, Product, HSN, MRP, Rate, Qty, T.Value, CGST %, CGST Amt, SGST %, SGST Amt, Total (optional: Brand, Model, IMEI, Selling Price, Warranty, Validity, Price Code)
+                Columns: S.No, Code, Product, HSN, MRP, Rate, Qty, T.Value, CGST %, CGST Amt, SGST %, SGST Amt, Total (optional: Brand, Model, IMEI, Selling Price, Warranty, Validity)
               </div>
             </div>
             <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
@@ -447,7 +446,6 @@ function BranchStockImport({ salesUrl, getToken, suppliers, branchEntries, onClo
                             <span style={{ fontFamily: 'monospace' }}>{i.productNo || '-'}</span>
                             {i.originalCode ? <div style={{ fontSize: '11px', color: '#d97706' }}>was {i.originalCode}</div> : null}
                             {i.autoCode ? <div style={{ fontSize: '11px', color: '#6366f1' }}>auto</div> : null}
-                            {i.priceCode ? <div style={{ fontSize: '11px', color: '#475569' }}>Price code: <span style={{ fontFamily: 'monospace' }}>{i.priceCode}</span></div> : null}
                           </td>
                           <td style={{ ...td, minWidth: '220px' }}>
                             <div style={{ fontWeight: '500', color: '#1e293b' }}>{i.productName || '-'}</div>

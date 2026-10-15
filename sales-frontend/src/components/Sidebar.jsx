@@ -39,7 +39,7 @@ function Sidebar({ active = 'instock', onSelect, planId, branchLimit, branchUser
           // Branch users see a minimal branch nav
           <>
             <SectionTitle title="Point of Sale" icon="🛒" />
-            <Item id="product-sales" label="Product Sales" icon={"💳"} activeId={active} onClick={onSelect} />
+            <Item id="product-sales" label="Sales" icon={"💳"} activeId={active} onClick={onSelect} />
 
             <div style={{borderTop: '2px solid var(--border)', margin: '16px 0'}}></div>
 
@@ -48,7 +48,7 @@ function Sidebar({ active = 'instock', onSelect, planId, branchLimit, branchUser
 
             <SectionTitle title="Inventory" icon="📦" />
             <Item id="supplier" label="Dealers" icon={"🏢"} activeId={active} onClick={onSelect} />
-            <Item id="instock" label="Product Inventory" icon={"📦"} activeId={active} onClick={onSelect} />
+            <Item id="instock" label="Purchase Inventory" icon={"📦"} activeId={active} onClick={onSelect} />
             <Item id="stock-history" label="Stock History" icon={"📚"} activeId={active} onClick={onSelect} />
 
             <SectionTitle title="Other Sales" icon="📈" />
@@ -64,7 +64,7 @@ function Sidebar({ active = 'instock', onSelect, planId, branchLimit, branchUser
 
             <SectionTitle title="Inventory Management" icon="📦" />
             <Item id="supplier" label="Dealers" icon={"🏢"} activeId={active} onClick={onSelect} />
-            <Item id="instock" label="Product Inventory" icon={"📦"} activeId={active} onClick={onSelect} />
+            <Item id="instock" label="Purchase Inventory" icon={"📦"} activeId={active} onClick={onSelect} />
             <Item id="stock-history" label="Stock History" icon={"📚"} activeId={active} onClick={onSelect} />
             <Item id="supplier-credits" label="Supplier Credits" icon={"💳"} activeId={active} onClick={onSelect} />
 

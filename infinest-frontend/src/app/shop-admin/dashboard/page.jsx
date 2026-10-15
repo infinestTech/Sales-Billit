@@ -29,9 +29,10 @@ import MobileRegistryPanel from '@/components/shop-admin/panels/MobileRegistryPa
 import { formatPaymentMethodLabel } from '@/constants/paymentMethods';
 import useSalesSession from '@/components/shop-admin/sales/useSalesSession';
 import * as XLSX from 'xlsx';
-import { NAV, buildVisibleNav, isTabAllowed } from '@/components/shop-admin/shopAdminNav';
+import { NAV, buildVisibleNav, isTabAllowed, PRICE_CODE_TAB, isSalesWorkspaceTab, tabFromUrl } from '@/components/shop-admin/shopAdminNav';
 
 const SalesWorkspace = dynamic(() => import('@/components/shop-admin/sales/SalesWorkspace'), { ssr: false });
+const PriceCodeSettings = dynamic(() => import('@/components/shop-admin/sales/PriceCodeSettings'), { ssr: false });
 const SalesOverview = dynamic(() => import('@/components/shop-admin/sales/SalesOverview'), { ssr: false });
 const EmployeePerformance = dynamic(() => import('@/components/shop-admin/EmployeePerformance'), { ssr: false });
 const BusinessAnalytics = dynamic(() => import('@/components/shop-admin/BusinessAnalytics'), { ssr: false });
@@ -155,6 +156,15 @@ export default function ShopAdminDashboard() {
     checkMobile();
     window.addEventListener('resize', checkMobile);
     return () => window.removeEventListener('resize', checkMobile);
+  }, []);
+
+  // Deep link (?tab=) and in-app requests to switch tabs; tabs the plan doesn't include fall back to overview
+  useEffect(() => {
+    const tab = tabFromUrl();
+    if (tab) setActiveTab(tab);
+    const onNavigate = (e) => { if (e?.detail?.tab) setActiveTab(e.detail.tab); };
+    window.addEventListener('shop-admin-navigate', onNavigate);
+    return () => window.removeEventListener('shop-admin-navigate', onNavigate);
   }, []);
 
   useEffect(() => {
@@ -1500,6 +1510,7 @@ export default function ShopAdminDashboard() {
         handleSwitchShop={handleSwitchShop}
         productAccess={productAccess}
         salesSession={salesSession}
+        initialTab={activeTab}
         settings={{
           revenueVisibleToUsers,
           togglingRevenue,
@@ -2275,7 +2286,11 @@ export default function ShopAdminDashboard() {
           <BusinessAnalytics shopId={currentShopId} access={productAccess} onNavigate={setActiveTab} />
         )}
 
-        {activeTab.startsWith('sales-') && hasSales && (
+        {activeTab === PRICE_CODE_TAB && hasSales && (
+          <PriceCodeSettings shopId={currentShopId} />
+        )}
+
+        {isSalesWorkspaceTab(activeTab) && hasSales && (
           <SalesWorkspace
             view={activeTab.slice('sales-'.length)}
             session={salesSession}

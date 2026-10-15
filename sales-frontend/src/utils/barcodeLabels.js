@@ -143,7 +143,8 @@ function resolvePosScan(products, scanned) {
 }
 
 // ── Label content ─────────────────────────────────────────────────────────────
-// Every label reads, top to bottom: shop name, short product title, barcode, product code, price code.
+// Every label reads, top to bottom: shop name, short product title, barcode, product code, price code
+// (the encoded cost price — callers set item.priceCode with encodePriceCode below).
 
 const barcodeValueOf = (item) => String(item && item.barcodeValue != null ? item.barcodeValue : '').trim();
 
@@ -170,6 +171,27 @@ function labelCodeLines(item) {
   if (productNo) lines.push({ text: productNo, kind: 'product' });
   if (priceCode) lines.push({ text: priceCode, kind: 'price' });
   return lines;
+}
+
+// ── Price code ────────────────────────────────────────────────────────────────
+// The shop assigns one character to each digit, in the order 1 2 3 4 5 6 7 8 9 0 (set in shop-admin,
+// served by SalesServer GET /api/shop-info as `priceCipher`). The price code is the cost price in whole
+// rupees written with those characters, e.g. cipher "COMPUTERSX": ₹1450 -> "CPUX".
+
+const PRICE_CODE_DIGITS = '1234567890';
+
+/** The 10-character cipher, or '' when it is missing or malformed. */
+function normalizePriceCipher(cipher) {
+  const chars = Array.from(String(cipher == null ? '' : cipher));
+  return chars.length === 10 && new Set(chars).size === 10 ? chars.join('') : '';
+}
+
+/** Cost price -> price code ('' when there is no cipher or no positive cost). Paise are rounded off. */
+function encodePriceCode(costPrice, cipher) {
+  const chars = Array.from(normalizePriceCipher(cipher));
+  const rupees = Math.round(Number(costPrice));
+  if (!chars.length || !Number.isFinite(rupees) || rupees <= 0) return '';
+  return String(rupees).split('').map((d) => chars[PRICE_CODE_DIGITS.indexOf(d)]).join('');
 }
 
 // ── Thermal labels ────────────────────────────────────────────────────────────
@@ -507,5 +529,5 @@ function buildA4Pdf({ jsPDF, labels, shopName, getCanvas }) {
   return doc;
 }
 
-window.BarcodeLabels = { THERMAL_DEFAULTS, THERMAL_LIMITS, thermalSizeError, loadThermalSettings, saveThermalSettings, normalizeScanCode, findScanMatch, isPlaceholderImei, realImeis, availableImeisOf, resolvePosScan, barcodeValueOf, shortTitle, labelCodeLines, countModules, planThermalLabel, checkThermalLabels, buildThermalPdf, buildA4Pdf };
+window.BarcodeLabels = { THERMAL_DEFAULTS, THERMAL_LIMITS, thermalSizeError, loadThermalSettings, saveThermalSettings, normalizeScanCode, findScanMatch, isPlaceholderImei, realImeis, availableImeisOf, resolvePosScan, barcodeValueOf, shortTitle, labelCodeLines, PRICE_CODE_DIGITS, normalizePriceCipher, encodePriceCode, countModules, planThermalLabel, checkThermalLabels, buildThermalPdf, buildA4Pdf };
 })();

@@ -1,7 +1,7 @@
 import {
   Users, Phone, TrendingUp, Truck, DollarSign, CheckCircle, AlertCircle, UserPlus, Briefcase,
   ClipboardList, FileText, Wallet, Calculator, Building2, Boxes, History, CreditCard, Store, Send,
-  BarChart3, Award, Package, Receipt, Smartphone,
+  BarChart3, Award, Package, Receipt, Smartphone, KeyRound,
 } from 'lucide-react';
 
 // Shop-admin navigation shared by the desktop sidebar and the mobile dashboard.
@@ -56,6 +56,7 @@ export const NAV = [
       { id: 'sales-inventory', label: 'Product Inventory', icon: Package, desc: 'Master stock & imports' },
       { id: 'sales-stock-history', label: 'Stock History', icon: History, desc: 'Stock sent over time' },
       { id: 'sales-supplier-credits', label: 'Supplier Credits', icon: CreditCard, desc: 'Credit accounts & dues' },
+      { id: 'sales-price-code', label: 'Price Code', icon: KeyRound, desc: 'Secret code for cost prices' },
     ]
   },
   {
@@ -67,6 +68,24 @@ export const NAV = [
     ]
   },
 ];
+
+// Sales tab rendered by the dashboard itself (PriceCodeSettings), not by SalesWorkspace
+export const PRICE_CODE_TAB = 'sales-price-code';
+export const isSalesWorkspaceTab = (tab) => tab.startsWith('sales-') && tab !== PRICE_CODE_TAB;
+
+// Deep links: /shop-admin/dashboard?tab=<id> (e.g. from the branch portal's label printer), and the
+// 'shop-admin-navigate' window event ({ detail: { tab } }) fired by screens that want to switch tabs.
+// The ?tab= value is read once and then removed from the address bar.
+export function tabFromUrl() {
+  if (typeof window === 'undefined') return null;
+  const url = new URL(window.location.href);
+  const tab = url.searchParams.get('tab');
+  if (tab) {
+    url.searchParams.delete('tab');
+    window.history.replaceState(window.history.state, '', url.pathname + url.search + url.hash);
+  }
+  return tab;
+}
 
 // Which nav nodes the shop's plan unlocks; headings only make sense when both products are present
 export function buildVisibleNav(access) {

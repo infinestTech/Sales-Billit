@@ -15,10 +15,11 @@ import {
   CartesianGrid, Tooltip, Legend, ResponsiveContainer
 } from 'recharts';
 import * as XLSX from 'xlsx';
-import { buildVisibleNav, isTabAllowed, findNavEntry } from './shopAdminNav';
+import { buildVisibleNav, isTabAllowed, findNavEntry, PRICE_CODE_TAB, isSalesWorkspaceTab } from './shopAdminNav';
 
 const SalesOverview = dynamic(() => import('./sales/SalesOverview'), { ssr: false });
 const SalesWorkspace = dynamic(() => import('./sales/SalesWorkspace'), { ssr: false });
+const PriceCodeSettings = dynamic(() => import('./sales/PriceCodeSettings'), { ssr: false });
 const BusinessAnalytics = dynamic(() => import('./BusinessAnalytics'), { ssr: false });
 const EmployeeManagement = dynamic(() => import('./EmployeeManagement'), { ssr: false });
 const AttendanceManagement = dynamic(() => import('./AttendanceManagement'), { ssr: false });
@@ -158,6 +159,7 @@ export default function MobileDashboard({
   handleSwitchShop,
   productAccess,
   salesSession,
+  initialTab,
   settings = {}
 }) {
   const hasService = productAccess ? !!productAccess.service : true;
@@ -192,6 +194,16 @@ export default function MobileDashboard({
     setShowShopSelector(false);
     if (typeof window !== 'undefined') window.scrollTo({ top: 0 });
   };
+
+  // Deep link (?tab=, read by the dashboard page) and in-app requests to switch tabs (e.g. the label printer's 'Set up price code')
+  useEffect(() => {
+    if (initialTab && initialTab !== activeTab) navigate(initialTab);
+  }, []);
+  useEffect(() => {
+    const onNavigate = (e) => { if (e?.detail?.tab) navigate(e.detail.tab); };
+    window.addEventListener('shop-admin-navigate', onNavigate);
+    return () => window.removeEventListener('shop-admin-navigate', onNavigate);
+  }, [visibleNav]);
 
   // Lock page scroll behind the open drawer
   useEffect(() => {
@@ -1626,7 +1638,8 @@ export default function MobileDashboard({
           {activeTab === 'dealer-create' && <CreateDealerPanel currentShopId={currentShopId} />}
           {activeTab === 'suppliers' && <SuppliersPanel currentShopId={currentShopId} />}
           {activeTab === 'expenses' && <ExpensesPanel currentShopId={currentShopId} />}
-          {activeTab.startsWith('sales-') && hasSales && (
+          {activeTab === PRICE_CODE_TAB && hasSales && <PriceCodeSettings shopId={currentShopId} />}
+          {isSalesWorkspaceTab(activeTab) && hasSales && (
             <SalesWorkspace
               view={activeTab.slice('sales-'.length)}
               session={salesSession}

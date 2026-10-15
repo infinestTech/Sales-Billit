@@ -37,6 +37,10 @@ function BarcodeSheet({ entries, onClose, salesUrl, token }) {
   });
   const [downloading, setDownloading] = React.useState(false);
   const [shopName, setShopName] = React.useState('');
+  // Price code cipher from shop-admin; labels print the encoded cost price. '' = not set up yet
+  const [priceCipher, setPriceCipher] = React.useState('');
+  const [cipherLoaded, setCipherLoaded] = React.useState(false);
+  const [cipherPrompt, setCipherPrompt] = React.useState(false);
   const [qtyPage, setQtyPage] = React.useState(1);
 
   // 'a4' keeps the original sheet; 'thermal' prints one label per PDF page for the label printer
@@ -58,8 +62,13 @@ function BarcodeSheet({ entries, onClose, salesUrl, token }) {
     let cancelled = false;
     fetch(salesUrl + '/api/shop-info', { headers: { Authorization: 'Bearer ' + effectiveToken } })
       .then(r => (r.ok ? r.json() : null))
-      .then(d => { if (!cancelled && d && d.shopName) setShopName(d.shopName); })
-      .catch(() => {});
+      .then(d => {
+        if (cancelled || !d) return;
+        if (d.shopName) setShopName(d.shopName);
+        setPriceCipher(BL.normalizePriceCipher(d.priceCipher));
+      })
+      .catch(() => {})
+      .finally(() => { if (!cancelled) setCipherLoaded(true); });
     return () => { cancelled = true; };
   }, [salesUrl, token]);
   const [barcodeLibReady, setBarcodeLibReady] = React.useState(() => typeof window !== 'undefined' && !!window.JsBarcode);
@@ -92,7 +101,7 @@ function BarcodeSheet({ entries, onClose, salesUrl, token }) {
                 brand: item.brand || '',
                 model: item.model || '',
                 imei: imei,
-                priceCode: item.priceCode || '',
+                priceCode: BL.encodePriceCode(item.costPrice, priceCipher),
                 barcodeValue: imei.trim(),
                 type: 'Mobile',
                 quantity: 1
@@ -110,7 +119,7 @@ function BarcodeSheet({ entries, onClose, salesUrl, token }) {
             brand: item.brand || '',
             model: item.model || '',
             imei: null,
-            priceCode: item.priceCode || '',
+            priceCode: BL.encodePriceCode(item.costPrice, priceCipher),
             barcodeValue: item.productNo || 'N/A',
             type: 'Accessory',
             quantity: quantity,
@@ -121,7 +130,7 @@ function BarcodeSheet({ entries, onClose, salesUrl, token }) {
     });
     
     setBarcodeData(data);
-  }, [entries]);
+  }, [entries, priceCipher]);
 
   // Apply filters
   React.useEffect(() => {
@@ -221,7 +230,20 @@ function BarcodeSheet({ entries, onClose, salesUrl, token }) {
     return BL.checkThermalLabels({ jsPDF, JsBarcode: window.JsBarcode, labels: filteredData, settings: thermalSettings, shopName });
   }, [layout, thermalError, thermalSettings, filteredData, shopName, barcodeLibReady]);
 
-  const handleDownloadPDF = async () => {
+  // Opens the shop-admin "Price Code" screen (same app: switch the dashboard tab)
+  const openPriceCodeSetup = () => {
+    try { window.dispatchEvent(new CustomEvent('shop-admin-navigate', { detail: { tab: 'sales-price-code' } })); } catch (_) {}
+    onClose && onClose();
+  };
+  const canSetupPriceCode = true;
+
+  // `force` is true only from the "Download anyway" button of the missing price code prompt
+  const handleDownloadPDF = async (force) => {
+    if (cipherLoaded && !priceCipher && force !== true) {
+      setCipherPrompt(true);
+      return;
+    }
+    setCipherPrompt(false);
     if (filteredData.length === 0) {
       alert('No labels to download!');
       return;
@@ -551,6 +573,52 @@ function BarcodeSheet({ entries, onClose, salesUrl, token }) {
             )}
           </div>
         </div>
+
+        {cipherLoaded && !priceCipher && (
+          <div role="status" style={{
+            display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px', flexWrap: 'wrap',
+            padding: '12px 24px', background: '#fffbeb', borderBottom: '1px solid #fde68a', color: '#92400e', fontSize: '14px'
+          }}>
+            <span>⚠️ <strong>Price code is not set up.</strong> Labels will print without the encoded cost price.</span>
+            {canSetupPriceCode && (
+              <button type="button" onClick={openPriceCodeSetup} style={{
+                padding: '8px 14px', background: '#f59e0b', color: 'white', border: 'none', borderRadius: '8px',
+                fontSize: '13px', fontWeight: 600, cursor: 'pointer'
+              }}>Set up price code</button>
+            )}
+          </div>
+        )}
+
+        {cipherPrompt && (
+          <div style={{
+            position: 'fixed', inset: 0, background: 'rgba(15, 23, 42, 0.45)', zIndex: 10000,
+            display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px'
+          }} onClick={(e) => { if (e.target === e.currentTarget) setCipherPrompt(false); }}>
+            <div role="alertdialog" aria-modal="true" aria-labelledby="price-code-prompt-title" style={{
+              background: 'white', borderRadius: '14px', padding: '24px', maxWidth: '440px', width: '100%',
+              boxShadow: '0 20px 50px rgba(15, 23, 42, 0.3)'
+            }}>
+              <h3 id="price-code-prompt-title" style={{ margin: '0 0 8px', fontSize: '18px', color: '#0f172a' }}>⚠️ No price code on these labels</h3>
+              <p style={{ margin: '0 0 20px', color: '#475569', fontSize: '14px', lineHeight: 1.5 }}>
+                The shop's price code (the secret letters for each digit of the cost price) hasn't been set up yet,
+                so these labels will be printed without it.
+              </p>
+              <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end', flexWrap: 'wrap' }}>
+                <button type="button" onClick={() => setCipherPrompt(false)} style={{
+                  padding: '10px 16px', background: '#f1f5f9', color: '#475569', border: 'none', borderRadius: '8px', fontSize: '14px', cursor: 'pointer'
+                }}>Cancel</button>
+                <button type="button" onClick={() => handleDownloadPDF(true)} style={{
+                  padding: '10px 16px', background: '#e2e8f0', color: '#0f172a', border: 'none', borderRadius: '8px', fontSize: '14px', fontWeight: 600, cursor: 'pointer'
+                }}>Download anyway</button>
+                {canSetupPriceCode && (
+                  <button type="button" onClick={() => { setCipherPrompt(false); openPriceCodeSetup(); }} style={{
+                    padding: '10px 16px', background: '#6366f1', color: 'white', border: 'none', borderRadius: '8px', fontSize: '14px', fontWeight: 600, cursor: 'pointer'
+                  }}>Set up price code</button>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Barcode Grid */}
         <div style={{

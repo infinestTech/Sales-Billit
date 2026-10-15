@@ -1,0 +1,11 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "sales-frontend",
+      "runtimeExecutable": "node",
+      "runtimeArgs": ["sales-frontend/server.js"],
+      "port": 3020
+    }
+  ]
+}
