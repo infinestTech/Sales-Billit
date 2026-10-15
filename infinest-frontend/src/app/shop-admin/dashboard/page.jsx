@@ -157,12 +157,6 @@ export default function ShopAdminDashboard() {
     return () => window.removeEventListener('resize', checkMobile);
   }, []);
 
-  // Deep link from the Service portal's "Switch to Sales" button (?tab=<nav id>); invalid ids fall back to overview
-  useEffect(() => {
-    const tab = new URLSearchParams(window.location.search).get('tab');
-    if (tab) setActiveTab(tab);
-  }, []);
-
   useEffect(() => {
     // Check shop admin authentication
     const token = localStorage.getItem('shopAdminToken');

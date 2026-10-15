@@ -101,10 +101,68 @@ function App() {
     };
   }, []);
 
+  // Single sign-on from the Service portal (combo plans): ?sso=<one-time code> is swapped for a branch token
+  const [ssoCode] = React.useState(() => { try { return new URLSearchParams(location.search).get('sso') || ''; } catch (_) { return ''; } });
+  const [ssoBusy, setSsoBusy] = React.useState(!!ssoCode);
+  const [ssoError, setSsoError] = React.useState('');
+  React.useEffect(() => {
+    if (!ssoCode) return;
+    // Take the one-time code out of the address bar and drop any previous branch session right away
+    try { history.replaceState(null, '', location.pathname + location.hash); } catch (_) {}
+    try { localStorage.removeItem('branch_token'); } catch (_) {}
+    setBranchUser(null);
+    fetch(SALES_URL + '/auth/branch-sso', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ code: ssoCode })
+    })
+      .then(r => r.json().catch(() => ({})).then(d => ({ ok: r.ok, d })))
+      .then(({ ok, d }) => {
+        if (!ok || !d.success || !d.token) throw new Error(d.message || 'Could not sign you in to Sales');
+        localStorage.setItem('branch_token', d.token);
+        setBranchUser(decodeJwt(d.token));
+        try { location.hash = '#product-sales'; } catch (_) {}
+      })
+      .catch(e => setSsoError(e.message || 'Could not sign you in to Sales'))
+      .finally(() => setSsoBusy(false));
+  }, []);
+
   const effectiveToken = branchUser ? (localStorage.getItem('branch_token') || '') : '';
+
+  if (ssoBusy) {
+    return (
+      <div className="auth-container">
+        <div className="auth-card">
+          <div className="auth-header">
+            <div className="auth-logo">🏪</div>
+            <h2 className="auth-title">Opening Sales…</h2>
+            <p className="auth-subtitle">Signing you in from the Service portal</p>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   // Not signed in as a branch: only the branch login is available
   if (!branchUser) {
+    if (ssoError) {
+      return (
+        <div className="auth-container">
+          <div className="auth-card">
+            <div className="auth-header">
+              <div className="auth-logo">🏪</div>
+              <h2 className="auth-title">Couldn't sign you in</h2>
+              <p className="auth-subtitle">{ssoError}</p>
+            </div>
+            <div className="auth-footer">
+              <p style={{ color: 'var(--text-muted)', fontSize: '14px' }}>
+                <a href="#branch-login" className="auth-link" onClick={() => setSsoError('')}>Sign in as Branch</a>
+              </p>
+            </div>
+          </div>
+        </div>
+      );
+    }
     if ((location.hash || '#instock').slice(1) === 'branch-login') {
       if (isMobile) {
         return window.MobileBranchLogin ? React.createElement(window.MobileBranchLogin, { salesUrl: SALES_URL }) : null;

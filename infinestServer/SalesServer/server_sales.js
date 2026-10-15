@@ -156,6 +156,79 @@ app.post('/auth/branch-login', async (req, res) => {
   }
 });
 
+// ---- Service portal -> branch portal single sign-on (combo shops) ----
+// BillitServer (internal key) lists a shop's branches and mints a 60s, single-use code for one of them;
+// the branch portal swaps the code for a normal 2h branch token. The code is signed with a derived secret
+// and uses sso_* claims, so it can never be used as an API token itself.
+const BRANCH_SSO_SECRET = () => (process.env.JWT_SECRET || 'dev-sales-secret') + ':branch-sso';
+const usedBranchSsoCodes = new Map(); // jti -> expiry ms (single-process best effort)
+
+app.get('/internal/shop-branches', async (req, res) => {
+  try {
+    const apiKey = req.headers['x-internal-key'];
+    if (!apiKey || apiKey !== process.env.INTERNAL_API_KEY) return res.status(403).json({ message: 'Forbidden' });
+    const shopId = String(req.query.shop_id || '');
+    if (!shopId) return res.status(400).json({ message: 'shop_id is required' });
+    const Branch = require('./models/branch');
+    const list = await Branch.find({ shop_id: shopId }).select('name address').sort({ createdAt: 1 }).lean();
+    return res.json({ success: true, branches: list.map(b => ({ id: String(b._id), name: b.name, address: b.address || '' })) });
+  } catch (err) {
+    console.error('Sales /internal/shop-branches error:', err.message || err);
+    return res.status(500).json({ message: 'Failed to list branches' });
+  }
+});
+
+app.post('/internal/branch-sso-code', async (req, res) => {
+  try {
+    const apiKey = req.headers['x-internal-key'];
+    if (!apiKey || apiKey !== process.env.INTERNAL_API_KEY) return res.status(403).json({ message: 'Forbidden' });
+    const { shop_id, branch_id } = req.body || {};
+    if (!shop_id || !branch_id || !mongoose.Types.ObjectId.isValid(String(branch_id))) {
+      return res.status(400).json({ message: 'shop_id and branch_id are required' });
+    }
+    const Branch = require('./models/branch');
+    const branch = await Branch.findOne({ _id: branch_id, shop_id: String(shop_id) }).select('_id').lean();
+    if (!branch) return res.status(404).json({ message: 'Branch not found for this shop' });
+    const code = jwt.sign(
+      { sso_branch: String(branch._id), sso_shop: String(shop_id), jti: require('crypto').randomBytes(12).toString('hex') },
+      BRANCH_SSO_SECRET(),
+      { expiresIn: '60s' }
+    );
+    return res.json({ success: true, code });
+  } catch (err) {
+    console.error('Sales /internal/branch-sso-code error:', err.message || err);
+    return res.status(500).json({ message: 'Failed to issue code' });
+  }
+});
+
+app.post('/auth/branch-sso', async (req, res) => {
+  try {
+    const { code } = req.body || {};
+    if (!code) return res.status(400).json({ success: false, message: 'code is required' });
+    let decoded;
+    try { decoded = jwt.verify(String(code), BRANCH_SSO_SECRET()); }
+    catch { return res.status(401).json({ success: false, message: 'This sign-in link has expired. Please try again from the Service portal.' }); }
+
+    const now = Date.now();
+    for (const [k, exp] of usedBranchSsoCodes) if (exp < now) usedBranchSsoCodes.delete(k);
+    if (usedBranchSsoCodes.has(decoded.jti)) {
+      return res.status(401).json({ success: false, message: 'This sign-in link was already used. Please try again from the Service portal.' });
+    }
+    usedBranchSsoCodes.set(decoded.jti, now + 5 * 60 * 1000);
+
+    const Branch = require('./models/branch');
+    const branch = await Branch.findOne({ _id: decoded.sso_branch, shop_id: decoded.sso_shop }).lean();
+    if (!branch) return res.status(404).json({ success: false, message: 'Branch not found' });
+
+    const payload = { branch_id: String(branch._id), shop_id: branch.shop_id, name: branch.name, isAdmin: !!branch.isAdmin };
+    const token = jwt.sign(payload, process.env.JWT_SECRET || 'dev-sales-secret', { expiresIn: '2h' });
+    return res.json({ success: true, message: 'Branch login successful', token, payload });
+  } catch (err) {
+    console.error('Branch SSO error:', err.message || err);
+    return res.status(500).json({ success: false, message: 'Server error' });
+  }
+});
+
 // Helper: fetch branchLimit from MongoDB Feature model
 async function fetchBranchLimitByMongoPlanId(mongoPlanId) {
   try {

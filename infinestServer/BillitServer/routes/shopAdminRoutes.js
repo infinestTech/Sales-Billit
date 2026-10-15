@@ -196,85 +196,64 @@ const axiosIPv4 = require('../utils/axiosConfig');
 const { resolveShopProductAccess } = require('../utils/shopProductAccess');
 
 // ==============================
-// 🔁 One-click switch: Service portal -> Shop Admin (Sales) without a second login
-// Only for shops on a combo plan. The caller proves ownership with the normal Service JWT; we issue a
-// Shop Admin session for a dedicated, password-less "service link" admin that can see ONLY this shop
-// (so a shared/multi-shop admin account is never impersonated or logged out).
+// 🔁 One-click switch: Service portal -> Sales branch portal without a second login (combo shops only)
+// The caller proves ownership with the normal Service JWT. We list the shop's branches (SalesServer),
+// and for the chosen one get a 60s single-use code that the branch portal exchanges for a branch token.
 // ==============================
 const authenticateToken = require('../middleware/authenticateToken');
+
+async function resolveComboShop(req) {
+    const shop = await Shop.findOne({ _id: req.shop_id, mysql_user_id: req.userId }).select('_id').lean();
+    if (!shop) return { error: [403, 'Shop not found for this account'] };
+    const access = await resolveShopProductAccess(shop._id);
+    if (!access || !access.service || !access.sales) return { error: [403, 'This feature is only available on the Combo plan'] };
+    return { shop };
+}
+
+const salesInternal = () => ({
+    baseURL: process.env.SALES_SERVER_URL || 'http://127.0.0.1:9000',
+    headers: { 'x-internal-key': process.env.INTERNAL_API_KEY }
+});
 
 // Lets the Service portal decide whether to show the "Switch to Sales" button
 router.get('/sso/from-service/eligible', authenticateToken, async (req, res) => {
     try {
-        const shop = await Shop.findOne({ _id: req.shop_id, mysql_user_id: req.userId }).select('_id').lean();
-        const access = shop && await resolveShopProductAccess(shop._id);
-        res.json({ success: true, eligible: !!(access && access.service && access.sales) });
+        const { error } = await resolveComboShop(req);
+        res.json({ success: true, eligible: !error });
     } catch (error) {
         res.json({ success: true, eligible: false });
     }
 });
 
+// Body: { branch_id? }. One branch -> code straight away; several -> the list to choose from first.
 router.post('/sso/from-service', authenticateToken, async (req, res) => {
     try {
-        const shop = await Shop.findOne({ _id: req.shop_id, mysql_user_id: req.userId }).select('_id shop_name owner_name').lean();
-        if (!shop) {
-            return res.status(403).json({ success: false, message: 'Shop not found for this account' });
-        }
+        const { shop, error } = await resolveComboShop(req);
+        if (error) return res.status(error[0]).json({ success: false, message: error[1] });
 
-        const access = await resolveShopProductAccess(shop._id);
-        if (!access || !access.service || !access.sales) {
-            return res.status(403).json({ success: false, message: 'This feature is only available on the Combo plan' });
-        }
-
-        const username = `service-link-${shop._id}`;
-        let shopAdmin = await ShopAdmin.findOne({ username });
-        if (shopAdmin && !shopAdmin.is_active) {
-            return res.status(403).json({ success: false, message: 'Shop Admin access is disabled for this shop' });
-        }
-        if (!shopAdmin) {
-            // Random password nobody knows: the account can only be entered through this endpoint
-            const unusablePassword = await bcrypt.hash(require('crypto').randomBytes(32).toString('hex'), 10);
-            shopAdmin = await ShopAdmin.create({
-                username,
-                password: unusablePassword,
-                shop_ids: [shop._id],
-                current_shop_id: shop._id,
-                full_name: shop.owner_name || shop.shop_name || 'Shop Owner',
-                created_by: 'service-link',
-                sessionLimit: 2
-            });
-        }
-
-        shopAdmin.last_login = new Date();
-        await shopAdmin.save();
-
-        const token = jwt.sign({ adminId: shopAdmin._id }, SHOP_ADMIN_JWT_SECRET, { expiresIn: '7d' });
-        await SessionManager.createSession(shopAdmin._id.toString(), token, {
-            ip: req.ip || req.connection.remoteAddress,
-            userAgent: req.headers['user-agent'],
-            userType: 'shop_admin',
-            sessionLimit: shopAdmin.sessionLimit || 2
+        const cfg = salesInternal();
+        const { data: list } = await axiosIPv4.get(`${cfg.baseURL}/internal/shop-branches`, {
+            headers: cfg.headers, params: { shop_id: String(shop._id) }
         });
+        const branches = list?.branches || [];
+        if (!branches.length) {
+            return res.status(404).json({ success: false, message: 'No sales branch exists yet. Create one in Shop Admin → Sales → Branch Management first.' });
+        }
 
-        res.json({
-            success: true,
-            token,
-            shopAdmin: {
-                id: shopAdmin._id,
-                username: shopAdmin.username,
-                full_name: shopAdmin.full_name,
-                email: shopAdmin.email,
-                shops: [{
-                    id: shop._id,
-                    name: shop.shop_name || (shop.owner_name ? `${shop.owner_name}'s Shop` : 'Shop'),
-                    owner_name: shop.owner_name
-                }],
-                current_shop_id: shop._id
-            }
-        });
+        let branchId = req.body?.branch_id ? String(req.body.branch_id) : null;
+        if (!branchId && branches.length === 1) branchId = branches[0].id;
+        if (!branchId) return res.json({ success: true, needsBranch: true, branches });
+        if (!branches.some(b => b.id === branchId)) {
+            return res.status(404).json({ success: false, message: 'Branch not found' });
+        }
+
+        const { data } = await axiosIPv4.post(`${cfg.baseURL}/internal/branch-sso-code`,
+            { shop_id: String(shop._id), branch_id: branchId }, { headers: cfg.headers });
+        if (!data?.code) return res.status(502).json({ success: false, message: 'Sales server did not issue a sign-in code' });
+        res.json({ success: true, code: data.code });
     } catch (error) {
-        console.error('Service -> Shop Admin SSO error:', error);
-        res.status(500).json({ success: false, message: 'Could not open Sales right now' });
+        console.error('Service -> Sales branch SSO error:', error.response?.data || error.message);
+        res.status(502).json({ success: false, message: 'Could not connect to the Sales server' });
     }
 });
 
