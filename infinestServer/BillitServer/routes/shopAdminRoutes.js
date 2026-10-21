@@ -2736,36 +2736,6 @@ router.get('/analytics/business', shopAdminAuth,  performanceController.getBusin
 router.get('/shop-settings/pos', shopAdminAuth,   performanceController.getPosSettings);
 router.patch('/shop-settings/pos', shopAdminAuth, performanceController.updatePosSettings);
 
-// Price code cipher printed on barcode labels / shown in inventory as the encoded cost price
-const { parsePriceCipher } = require('../utils/priceCipher');
-router.get('/shop-settings/price-code', shopAdminAuth, async (req, res) => {
-    try {
-        const shop = await Shop.findById(req.shopId).select('sales_settings').lean();
-        if (!shop) return res.status(404).json({ success: false, message: 'Shop not found' });
-        const { cipher = '' } = parsePriceCipher(shop.sales_settings?.price_cipher || '');
-        res.json({ success: true, data: { cipher } });
-    } catch (error) {
-        console.error('Get price code error:', error);
-        res.status(500).json({ success: false, message: 'Failed to load the price code' });
-    }
-});
-router.patch('/shop-settings/price-code', shopAdminAuth, async (req, res) => {
-    try {
-        const parsed = parsePriceCipher(req.body?.cipher);
-        if (parsed.error) return res.status(400).json({ success: false, message: parsed.error });
-        const shop = await Shop.findByIdAndUpdate(
-            req.shopId,
-            { $set: { 'sales_settings.price_cipher': parsed.cipher } },
-            { new: true }
-        ).select('sales_settings').lean();
-        if (!shop) return res.status(404).json({ success: false, message: 'Shop not found' });
-        res.json({ success: true, data: { cipher: shop.sales_settings?.price_cipher || '' } });
-    } catch (error) {
-        console.error('Update price code error:', error);
-        res.status(500).json({ success: false, message: 'Failed to save the price code' });
-    }
-});
-
 // ============================================================================
 // CRUD ENDPOINTS — Records / Suppliers / Inventory / Expenses (shop-scoped)
 // All endpoints below run under shopAdminAuth and use req.shopId for scoping.

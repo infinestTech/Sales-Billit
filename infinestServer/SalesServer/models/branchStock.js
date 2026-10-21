@@ -15,6 +15,7 @@ const BranchStockSchema = new mongoose.Schema({
   validity: { type: Date },
   warrantyMonths: { type: Number, default: 0 },
   warrantyDetails: { type: String, default: '' },
+  hsn: { type: String, default: '' }, // from the supplier bill / inventory; printed on sale receipts
   priceCode: { type: String, default: '' }
 }, { timestamps: true });
 

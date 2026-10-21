@@ -2,7 +2,7 @@
 /**
  * Price code cipher: the shop assigns one character to each digit, in the order 1 2 3 4 5 6 7 8 9 0.
  * Labels and inventory show the cost price written with those characters (₹1450 -> "CPUX" for "COMPUTERSX").
- * Stored as a 10-character string on Shop.sales_settings.price_cipher ('' = not set up).
+ * Stored as a 10-character string on the shared Shop.sales_settings.price_cipher ('' = not set up); set from the branch portal.
  */
 
 const DIGIT_ORDER = '1234567890';

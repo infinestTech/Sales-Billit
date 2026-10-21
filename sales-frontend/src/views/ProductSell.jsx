@@ -1,18 +1,3 @@
-// Constant payment methods used across the application
-window.__SELL_PAYMENT_METHODS__ = [
-  { value: 'Cash', label: 'Cash' },
-  { value: 'Gpay', label: 'Gpay' },
-  { value: 'Card', label: 'Card' },
-  { value: 'Gpay-H', label: 'Gpay-H' },
-  { value: 'Gpay-S', label: 'Gpay-S' },
-  { value: 'Cash + Card', label: 'Cash + Card' },
-  { value: 'Gpay H + CASH', label: 'Gpay H + Cash' },
-  { value: 'Gpay S + CASH', label: 'Gpay S + Cash' },
-  { value: 'Gpay H + CARD', label: 'Gpay H + Card' },
-  { value: 'Gpay S + CARD', label: 'Gpay S + Card' }
-];
-window.__SELL_PAYMENT_METHOD_VALUES__ = window.__SELL_PAYMENT_METHODS__.map(function(m) { return m.value; });
-
 function ProductSell({ salesUrl, token }) {
   const [products, setProducts] = React.useState([]);
   const [sellerProducts, setSellerProducts] = React.useState([]);
@@ -21,7 +6,6 @@ function ProductSell({ salesUrl, token }) {
   const [error, setError] = React.useState('');
   const [showAlert, setShowAlert] = React.useState(false);
   const [whatsappStock, setWhatsappStock] = React.useState([]);
-  const [selectedBank, setSelectedBank] = React.useState('select');
   const [sellingBusy, setSellingBusy] = React.useState(false);
   const [lastSale, setLastSale] = React.useState(null);
   const [previewHtml, setPreviewHtml] = React.useState('');
@@ -71,12 +55,14 @@ function ProductSell({ salesUrl, token }) {
 
   const totalCount = sellerProducts.reduce((s, it) => s + Number(it.sellingQty ?? it.qty ?? 0), 0);
   const totalAmount = sellerProducts.reduce((s, it) => s + lineTotal(it), 0);
+  const payment = window.usePaymentSplit(totalAmount);
 
   async function doSell() {
     try {
       if (sellerProducts.length === 0) { setError('No products to sell'); return; }
       if (!(customerNo || '').toString().replace(/[^0-9]/g, '')) { setError('Customer mobile number is required'); return; }
-      if (!selectedBank || selectedBank === 'select') { setError('Select a payment method'); return; }
+      const payError = payment.validate();
+      if (payError) { setError(payError); return; }
       const empError = empCode.validateForSale();
       if (empError) { setError(empError); return; }
       setSellingBusy(true); setError('');
@@ -84,8 +70,9 @@ function ProductSell({ salesUrl, token }) {
       const payload = {
         items: sellerProducts.map(it => ({ productId: it._id || it.productId, productNo: it.productNo || '', productName: it.productName || it.name || '', qty: Number(it.sellingQty ?? it.qty ?? 0), sellingPrice: Number(it.sellingPrice || 0), lineTotal: Number(lineTotal(it)) })),
         customerNo,
-        paymentMethod: selectedBank,
-        amountPaid: Number(totalAmount || 0),
+        paymentMethod: payment.method,
+        paymentSplits: payment.splits(),
+        amountPaid: payment.received,
         employeeCode: empCode.code || undefined
       };
 
@@ -97,7 +84,7 @@ function ProductSell({ salesUrl, token }) {
       const data = await res.json();
       if (!res.ok) throw new Error(data.message || data.error || 'Sell failed');
       setLastSale(data.sale || data || null);
-      setSellerProducts([]); setCustomerNo(''); setSelectedBank('select'); empCode.reset(); setError('Sale saved');
+      setSellerProducts([]); setCustomerNo(''); payment.reset(); empCode.reset(); setError('Sale saved');
       // refresh product lists to reflect updated stock
       try { 
         const bsUrl = new URL((salesUrl || '') + '/api/branch-stock'); bsUrl.searchParams.set('only_branch','1');
@@ -108,64 +95,17 @@ function ProductSell({ salesUrl, token }) {
     finally { setSellingBusy(false); }
   }
 
+  // 80 mm Tax Invoice receipt (src/utils/salesReceipt.js)
   async function printSale() {
     try {
       const sale = lastSale || { items: sellerProducts, totalAmount, customerNo, createdAt: new Date().toISOString() };
-      // fetch branch info
-      let shopName = '';
-      let shopContact = '';
-      try {
-        const res = await fetch(new URL((salesUrl || '') + '/api/branches'), { headers: { Authorization: 'Bearer ' + token } });
-        const data = await res.json();
-        if (res.ok && Array.isArray(data.branches) && data.branches.length > 0) {
-          const payload = decodeJwt();
-          const branchId = payload?.branch_id || payload?._id || '';
-          let found = null;
-          if (branchId) found = data.branches.find(b => String(b._id) === String(branchId));
-          if (!found) found = data.branches[0];
-          shopName = found?.name || '';
-          shopContact = found?.phoneNumber || found?.phone || '';
-        }
-      } catch (e) { /* ignore */ }
-      if (!shopName || !shopContact) {
-        const payload = decodeJwt();
-        shopName = shopName || payload.shopName || payload.name || payload.branchName || '';
-        shopContact = shopContact || payload.phone || payload.phoneNumber || payload.branchPhone || '';
-      }
-
-      // fetch branch stock to resolve prices
-      let stock = [];
-      try {
-        const sres = await fetch(new URL((salesUrl || '') + '/api/branch-stock?only_branch=1'), { headers: { Authorization: 'Bearer ' + token } });
-        const sdata = await sres.json();
-        if (sres.ok && Array.isArray(sdata.rows)) stock = sdata.rows;
-      } catch (e) { /* ignore */ }
-
-      const items = (sale.items || []).map(i => {
-        const found = (stock || []).find(p => (String(p._id) && String(p._id) === String(i.productId || i._id)) || (p.productId && String(p.productId) === String(i.productId)) || (p.productNo && i.productNo && String(p.productNo) === String(i.productNo)));
-        const name = found?.productName || found?.name || i.productName || i.productNo || '';
-        const qty = Number(i.qty || i.sellingQty || 0);
-        const unit = Number(found?.sellingPrice ?? found?.unitSellingPrice ?? i.sellingPrice ?? 0).toFixed(2);
-        const line = (qty * Number(unit)).toFixed(2);
-        return `<tr><td style="padding:6px">${name}</td><td style="text-align:right;padding:6px">${qty}</td><td style="text-align:right;padding:6px">${unit}</td><td style="text-align:right;padding:6px">${line}</td></tr>`;
-      }).join('');
-      const total = Number(sale.totalAmount || 0).toFixed(2);
-      const date = new Date(sale.createdAt || Date.now()).toLocaleString();
-      const html = `<!doctype html><html><head><meta charset="utf-8"><title>Receipt</title><style> @page { size: 72mm auto; margin: 2mm; } body{font-family:monospace,Arial,Helvetica,sans-serif;padding:6px;color:#111; width:72mm; box-sizing:border-box;} h2{margin:0 0 6px;font-size:14px} .shop{ text-align:center; margin-bottom:6px; } .shop strong{ display:block; font-size:12px } .shop .contact{ font-size:11px; margin-top:2px } .date{ font-size:11px; margin-bottom:6px } table{width:100%;border-collapse:collapse;margin-top:6px;font-size:11px} th,td{padding:4px 2px} thead th{border-bottom:1px dashed #bbb; text-align:left; font-size:11px} tbody td{border-bottom:1px dashed #eee} .right{ text-align:right } footer{margin-top:8px;text-align:right;font-weight:700;font-size:12px} .center{ text-align:center }</style></head><body>` +
-        `<div class="center"><h2 style="margin:0">CASH RECEIPT</h2></div><div class="shop"><strong>${shopName || 'Shop'}</strong><div class="contact">${shopContact || ''}</div></div>` +
-        `<div class="date"><strong>Date:</strong> ${date}</div>` +
-        `<table><thead><tr><th>Item</th><th class="right">Qty</th><th class="right">Unit</th><th class="right">Line</th></tr></thead><tbody>${items}</tbody></table>` +
-        `<footer>Total: ${total}</footer></body></html>`;
-      const w = window.open('', '_blank');
-      if (!w) {
-        // fallback to in-page preview when popups are blocked
-        setPreviewHtml(html);
+      const shop = await window.SalesReceipt.loadShop(salesUrl, token);
+      const receiptHtml = window.SalesReceipt.buildHtml(sale, shop);
+      if (!window.SalesReceipt.print(receiptHtml)) {
+        setPreviewHtml(receiptHtml);
         setShowPreview(true);
         setError('Popup blocked: showing preview. Allow popups to print directly.');
-        return;
       }
-      w.document.open(); w.document.write(html); w.document.close(); w.focus();
-      setTimeout(() => { try { w.print(); } catch (e) { /* ignore */ } }, 300);
     } catch (e) { setError('Failed to open printer: ' + (e.message || e)); }
   }
 
@@ -332,21 +272,8 @@ function ProductSell({ salesUrl, token }) {
           <input value={customerNo} onChange={e => setCustomerNo(e.target.value)} placeholder="Enter mobile number" />
         </div>
 
-        <div>
-          <label>Payment <span style={{color:'red'}}>*</span></label><br />
-          <select value={selectedBank} onChange={e => setSelectedBank(e.target.value)}>
-            <option value="select">Select</option>
-            <option value="Cash">Cash</option>
-            <option value="Gpay">Gpay</option>
-            <option value="Card">Card</option>
-            <option value="Gpay-H">Gpay-H</option>
-            <option value="Gpay-S">Gpay-S</option>
-            <option value="Cash + Card">Cash + Card</option>
-            <option value="Gpay H + CASH">Gpay H + Cash</option>
-            <option value="Gpay S + CASH">Gpay S + Cash</option>
-            <option value="Gpay H + CARD">Gpay H + Card</option>
-            <option value="Gpay S + CARD">Gpay S + Card</option>
-          </select>
+        <div style={{minWidth: 260}}>
+          <window.PaymentSplitInput state={payment} compact />
         </div>
       </div>
 

@@ -183,7 +183,8 @@ function App() {
   const getTitle = () => {
     if (branchUser) return 'Branch Dashboard';
     switch (view) {
-      case 'supplier': return 'Supplier Management';
+      case 'supplier': return 'Dealers';
+      case 'dealer-credits': return 'Dealer Credits';
       case 'supplier-credits': return 'Supplier Credits';
       case 'branch': return 'Branch Management';
       case 'whatsapp-contact': return 'WhatsApp Contacts';
@@ -193,6 +194,7 @@ function App() {
       case 'branch-expense': return 'Expenses';
       case 'branch-sales-report': return 'Branch Sales Report';
       case 'seconds-sales': return 'Quick Sales';
+      case 'price-code': return 'Price Code';
       case 'offer': return 'Promotions';
       default: return 'Master Inventory';
     }
@@ -259,6 +261,14 @@ function App() {
               <div className="card"><div className="empty-state"><div className="empty-icon">📊</div><div className="empty-title">Loading…</div></div></div>
             ));
           })()
+        ) : view === 'dealer-credits' ? (
+          (window.DealerCredits ? React.createElement(window.DealerCredits, { salesUrl: SALES_URL, token: effectiveToken }) : (
+            <div className="card"><div className="empty-state"><div className="empty-icon">💳</div><div className="empty-title">Loading…</div></div></div>
+          ))
+        ) : view === 'price-code' ? (
+          (window.PriceCodeSettings ? React.createElement(window.PriceCodeSettings, { salesUrl: SALES_URL, token: effectiveToken }) : (
+            <div className="card"><div className="empty-state"><div className="empty-icon">🔑</div><div className="empty-title">Loading…</div></div></div>
+          ))
         ) : view === 'stock-history' ? (
           (window.StockHistory ? React.createElement(window.StockHistory, { salesUrl: SALES_URL, token: effectiveToken, branchUser }) : (
             <div className="card">
@@ -301,8 +311,8 @@ function App() {
     return <BranchLogin salesUrl={SALES_URL} />;
   }
 
-  // Combo owners who came from the Service portal can switch back without signing in
-  const canSwitchToService = branchUser && branchUser.via === 'service' && window.SwitchToServiceButton;
+  // Combo-plan shops get "Switch to Service" (the button checks the plan itself; see SwitchToServiceButton.jsx)
+  const canSwitchToService = branchUser && window.SwitchToServiceButton;
 
   // Render mobile or desktop layout based on device detection
   if (isMobile) {

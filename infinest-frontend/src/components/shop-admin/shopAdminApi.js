@@ -100,9 +100,6 @@ const shopAdminApi = {
   registryImages: (mobileId) => request("get", `/registry/images/${mobileId}`)
     .then((r) => ({ images: r?.images || [], expiresIn: r?.expiresIn })),
 
-  // price code cipher: one character per digit in the order 1234567890 ("" = not set up)
-  priceCode: () => request("get", "/shop-settings/price-code").then((r) => r?.data?.cipher || ""),
-  updatePriceCode: (cipher) => request("patch", "/shop-settings/price-code", { data: { cipher } }).then((r) => r?.data?.cipher || ""),
 
   // meta
   paymentMethods: () => request("get", "/meta/payment-methods"),

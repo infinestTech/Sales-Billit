@@ -31,8 +31,14 @@ exports.createSupplier = async (req, res) => {
       phoneNumber = '',
       address = '',
       gstNumber = '',
-      panNumber = ''
+      panNumber = '',
+      email = ''
     } = req.body || {};
+    const openingCredit = Math.round((Number(req.body && req.body.openingCredit) || 0) * 100) / 100;
+    if (!String(supplierName).trim() && !String(agencyName).trim()) {
+      return res.status(400).json({ success: false, message: 'Enter the dealer or agency name' });
+    }
+    if (openingCredit < 0) return res.status(400).json({ success: false, message: 'Opening credit cannot be negative' });
 
     // If this is a branch user, allow access regardless of plan feature flag / limits
     if (!req.user?.isBranch) {
@@ -71,6 +77,8 @@ exports.createSupplier = async (req, res) => {
       address,
       gstNumber,
       panNumber,
+      email,
+      openingCredit,
       createdBy: String(userId || ''),
       updatedBy: String(userId || ''),
     };
@@ -82,6 +90,20 @@ exports.createSupplier = async (req, res) => {
     }
 
     const doc = await Supplier.create(supplierData);
+
+    // Opening credit joins the dealer's credit ledger as its oldest bill, so payments settle it first
+    if (openingCredit > 0) {
+      const SupplierCredit = require('../models/supplierCredit');
+      await SupplierCredit.create({
+        shop_id,
+        supplier_id: doc._id,
+        branch_id: String(supplierData.branch_id || ''),
+        kind: 'opening',
+        totalAmount: openingCredit,
+        note: 'Opening credit',
+        createdBy: String(req.user.branch_id || userId || ''),
+      });
+    }
 
 
     return res.json({ success: true, supplier: doc });

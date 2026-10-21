@@ -1603,6 +1603,7 @@ const WA_EVENT_LABELS = {
   mobile_delivered: 'Mobile delivered (billing)',
   mobile_returned: 'Mobile returned',
   balance_reminder: 'Balance reminder (manual)',
+  sales_bill: 'Sales bill — PDF invoice (Sales POS)',
 };
 
 function WhatsAppTab({ getAuthHeaders }) {

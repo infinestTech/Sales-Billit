@@ -21,6 +21,7 @@ const mysqlUserRoutes = require('./routes/mysqlUserRoutes');
 const secondsSalesRoutes = require('./routes/secondsSalesRoutes');
 const featureRoutes = require('./routes/featureRoutes');
 const supplierCreditRoutes = require('./routes/supplierCreditRoutes');
+const dealerLedgerRoutes = require('./routes/dealerLedgerRoutes');
 const shopInfoRoutes = require('./routes/shopInfoRoutes');
 const salesPerformanceRoutes = require('./routes/salesPerformanceRoutes');
 
@@ -231,6 +232,35 @@ app.post('/auth/branch-sso', async (req, res) => {
 });
 
 // ---- Branch portal -> Service portal (combo shops) ----
+// GET /api/service-switch -> { available, instant }: the header shows "Switch to Service" for every combo-plan
+// shop. `instant` (one-click SSO below) only for owners who came from Service; a branch-password session
+// is sent to the Service sign-in page instead, so branch staff never get the owner's Service account.
+const comboCache = new Map(); // shop_id -> { combo, expires }
+async function isComboShop(shopId) {
+  const cached = comboCache.get(String(shopId));
+  if (cached && cached.expires > Date.now()) return cached.combo;
+  let combo = false;
+  try {
+    const shop = await Shop.findById(shopId).select('mysql_user_id').lean();
+    if (shop && shop.mysql_user_id && process.env.AUTH_SERVER_URL) {
+      const { data } = await axios.get(
+        `${process.env.AUTH_SERVER_URL}/internal-user-product-access/${encodeURIComponent(shop.mysql_user_id)}`,
+        { headers: { 'x-internal-key': process.env.INTERNAL_API_KEY || '' } }
+      );
+      combo = !!(data && data.service && data.sales);
+    }
+  } catch (err) {
+    console.warn('service-switch: plan lookup failed:', err.response ? err.response.status : err.message);
+    return false; // not cached, retry next time
+  }
+  comboCache.set(String(shopId), { combo, expires: Date.now() + 60 * 1000 });
+  return combo;
+}
+app.get('/api/service-switch', require('./middleware/requireUser'), async (req, res) => {
+  const available = await isComboShop(req.user.shop_id);
+  return res.json({ success: true, available, instant: available && !!req.user.isBranch && req.user.via === 'service' });
+});
+
 // Only an owner who entered Sales from the Service portal (branch token with via: 'service') may switch
 // back; branch staff who signed in with a branch password never can. The 60s single-use code is signed
 // with a secret derived from INTERNAL_API_KEY and exchanged by BillitServer POST /api/service-sso,
@@ -589,6 +619,7 @@ app.use(mysqlUserRoutes);
 app.use(secondsSalesRoutes);
 app.use(featureRoutes);
 app.use(supplierCreditRoutes);
+app.use(dealerLedgerRoutes);
 app.use(shopInfoRoutes);
 app.use(salesPerformanceRoutes);
 

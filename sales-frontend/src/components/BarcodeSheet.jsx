@@ -229,12 +229,11 @@ function BarcodeSheet({ entries, onClose, salesUrl, token }) {
     return BL.checkThermalLabels({ jsPDF: window.jspdf.jsPDF, JsBarcode: window.JsBarcode, labels: filteredData, settings: thermalSettings, shopName });
   }, [layout, thermalError, thermalSettings, filteredData, shopName]);
 
-  // Opens the shop-admin "Price Code" screen in a new tab; the owner signs in there first if needed
-  const shopAdminBase = String((window.ENV_CONFIG && window.ENV_CONFIG.SHOP_ADMIN_URL) || '').replace(/\/shop-admin-login\/?$/, '').replace(/\/+$/, '');
-  const canSetupPriceCode = !!shopAdminBase;
+  // Goes to this portal's Inventory → Price Code screen (src/views/PriceCodeSettings.jsx)
+  const canSetupPriceCode = true;
   const openPriceCodeSetup = () => {
-    if (!shopAdminBase) return;
-    window.open(shopAdminBase + '/shop-admin-login?next=' + encodeURIComponent('/shop-admin/dashboard?tab=sales-price-code'), '_blank', 'noopener');
+    if (onClose) onClose();
+    try { location.hash = '#price-code'; } catch (_) {}
   };
 
   // `force` is true only from the "Download anyway" button of the missing price code prompt

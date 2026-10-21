@@ -45,11 +45,13 @@ function Sidebar({ active = 'instock', onSelect, planId, branchLimit, branchUser
 
             <SectionTitle title="Financial" icon="💰" />
             <Item id="branch-expense" label="Expenses" icon={"💸"} activeId={active} onClick={onSelect} />
+            <Item id="dealer-credits" label="Dealer Credits" icon={"💳"} activeId={active} onClick={onSelect} />
 
             <SectionTitle title="Inventory" icon="📦" />
             <Item id="supplier" label="Dealers" icon={"🏢"} activeId={active} onClick={onSelect} />
             <Item id="instock" label="Purchase Inventory" icon={"📦"} activeId={active} onClick={onSelect} />
             <Item id="stock-history" label="Stock History" icon={"📚"} activeId={active} onClick={onSelect} />
+            <Item id="price-code" label="Price Code" icon={"🔑"} activeId={active} onClick={onSelect} />
 
             <SectionTitle title="Other Sales" icon="📈" />
             <Item id="seconds-sales" label="Seconds Mobile Sales" icon={"⚡"} activeId={active} onClick={onSelect} />

@@ -8,12 +8,20 @@ const SaleItem = new mongoose.Schema({
   sellingPrice: { type: Number, default: 0 },
   imes: { type: [String], default: [] },
   lineTotal: { type: Number, default: 0 },
+  hsn: { type: String, default: '' }, // HSN code snapshot from branch stock, printed on the receipt
   costPrice: { type: Number, default: 0 } // unit cost snapshot from branch stock, for profit reporting
+}, { _id: false });
+
+// Amount received in one payment mode (Cash / Gpay / Card); see utils/paymentSplits.js
+const PaymentSplit = new mongoose.Schema({
+  method: { type: String, enum: ['Cash', 'Gpay', 'Card'] },
+  amount: { type: Number, default: 0 }
 }, { _id: false });
 
 const SaleSchema = new mongoose.Schema({
   shop_id: { type: String, index: true },
   branch_id: { type: String, index: true },
+  invoiceNo: { type: Number }, // printed invoice number, sequential per branch (models/counter.js)
   seller_id: { type: String, default: '' },
   // Salesperson (HR employee from the shared `employees` collection), captured at the POS
   employee_id: { type: String, default: '' },
@@ -33,7 +41,9 @@ const SaleSchema = new mongoose.Schema({
   sgstAmount: { type: Number, default: 0 }, // SGST amount
   igstAmount: { type: Number, default: 0 }, // IGST amount
   totalAmount: { type: Number, default: 0 },
-  paymentMethod: { type: String, enum: ['Cash','cash','Gpay','gpay','UPI','upi','Card','card','Gpay-H','Gpay-h','gpay-h','UPI-H','UPI-h','upi-h','Gpay-S','Gpay-s','gpay-s','UPI-S','UPI-s','upi-s','Cash + Card','Gpay H + CASH','UPI H + CASH','Gpay S + CASH','UPI S + CASH','Gpay H + CARD','UPI H + CARD','Gpay S + CARD','UPI S + CARD','online',''], default: 'Cash' },
+  // Current labels: Cash, Gpay, Card and their combinations; the rest are kept for older sales
+  paymentMethod: { type: String, enum: ['Cash','Gpay','Card','Cash + Gpay','Cash + Card','Gpay + Card','Cash + Gpay + Card','cash','gpay','UPI','upi','card','Gpay-H','Gpay-h','gpay-h','UPI-H','UPI-h','upi-h','Gpay-S','Gpay-s','gpay-s','UPI-S','UPI-s','upi-s','Gpay H + CASH','UPI H + CASH','Gpay S + CASH','UPI S + CASH','Gpay H + CARD','UPI H + CARD','Gpay S + CARD','UPI S + CARD','online',''], default: 'Cash' },
+  paymentSplits: { type: [PaymentSplit], default: [] }, // amount received per mode; sums to totalAmount
   amountPaid: { type: Number, default: 0 },
   bank_id: { type: String, default: '' },
   createdBy: { type: String, default: '' }

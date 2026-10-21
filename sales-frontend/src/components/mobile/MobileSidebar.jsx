@@ -94,6 +94,14 @@ function MobileSidebar({ active = 'instock', onSelect, planId, branchLimit, bran
                   activeId={active} 
                   onClick={onSelect} 
                 />
+                <MobileNavItem 
+                  id="dealer-credits" 
+                  label="Dealer Credits" 
+                  icon="💳" 
+                  description="Pay what you owe dealers"
+                  activeId={active} 
+                  onClick={onSelect} 
+                />
               </div>
 
               <div className="mobile-nav-section">
@@ -122,6 +130,14 @@ function MobileSidebar({ active = 'instock', onSelect, planId, branchLimit, bran
                   label="Stock History" 
                   icon="📚" 
                   description="View stock movements"
+                  activeId={active} 
+                  onClick={onSelect} 
+                />
+                <MobileNavItem 
+                  id="price-code" 
+                  label="Price Code" 
+                  icon="🔑" 
+                  description="Secret code for cost prices"
                   activeId={active} 
                   onClick={onSelect} 
                 />

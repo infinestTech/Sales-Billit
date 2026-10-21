@@ -22,6 +22,8 @@
  *   MSG91_TPL_RETURNED
  *   MSG91_TPL_BALANCE_REMINDER
  *   MSG91_TPL_CUSTOMER_MESSAGE  — defaults to "fixel_customer_message"
+ *   MSG91_TPL_SALES_BILL        — branch-portal sale invoice; defaults to the delivered-receipt template
+ *                                 (MSG91_TPL_DELIVERED), which already carries a PDF document header
  */
 
 const axios = require("axios");
@@ -39,12 +41,19 @@ const EVENT_TEMPLATE_ENV = {
   mobile_returned: "MSG91_TPL_RETURNED",
   balance_reminder: "MSG91_TPL_BALANCE_REMINDER",
   customer_message: "MSG91_TPL_CUSTOMER_MESSAGE",
+  sales_bill: "MSG91_TPL_SALES_BILL",
 };
 
 // Used when the env var for an event is not set
 const EVENT_TEMPLATE_DEFAULT = {
   customer_message: "fixel_customer_message",
 };
+// Used when the env var for an event is not set: another event's template (same placeholders)
+const EVENT_TEMPLATE_FALLBACK_ENV = {
+  sales_bill: "MSG91_TPL_DELIVERED",
+};
+// Events that send only when the admin switched them on (missing = off); the rest send unless switched off
+const OPT_IN_EVENTS = ["sales_bill"];
 
 // Normalize to E.164 without "+", default country India (91) if 10 digits.
 function normalizePhone(raw) {
@@ -133,7 +142,8 @@ async function sendWaEvent({ shopId, event, to, vars = {}, header = null, logVar
     await logAttempt({ ...base, status: "skipped", error: reason });
     return { status: "skipped", reason };
   }
-  if (wa.events && wa.events[event] === false) {
+  const eventOn = OPT_IN_EVENTS.includes(event) ? wa.events?.[event] === true : wa.events?.[event] !== false;
+  if (!eventOn) {
     const reason = `Event '${event}' disabled for shop`;
     await logAttempt({ ...base, status: "skipped", error: reason });
     return { status: "skipped", reason };
@@ -142,7 +152,10 @@ async function sendWaEvent({ shopId, event, to, vars = {}, header = null, logVar
   const authKey = process.env.MSG91_AUTH_KEY;
   const integratedNumber = process.env.MSG91_INTEGRATED_NUMBER;
   const namespace = process.env.MSG91_NAMESPACE || null;
-  const templateName = process.env[EVENT_TEMPLATE_ENV[event]] || EVENT_TEMPLATE_DEFAULT[event];
+  const templateName =
+    process.env[EVENT_TEMPLATE_ENV[event]] ||
+    (EVENT_TEMPLATE_FALLBACK_ENV[event] && process.env[EVENT_TEMPLATE_FALLBACK_ENV[event]]) ||
+    EVENT_TEMPLATE_DEFAULT[event];
   const langCode = process.env.MSG91_LANG_CODE || "en";
 
   if (!authKey || !integratedNumber || !templateName) {
@@ -225,4 +238,4 @@ function fireWaEvent(opts) {
   });
 }
 
-module.exports = { sendWaEvent, fireWaEvent, normalizePhone };
+module.exports = { sendWaEvent, fireWaEvent, normalizePhone, OPT_IN_EVENTS };

@@ -1,18 +1,36 @@
-// Combo plans: an owner who opened Sales from the Service portal can jump back without signing in.
-// SalesServer issues a 60s one-time code (POST /api/service-sso, only for branch tokens with via: 'service');
-// the Service app's /service-sso page swaps it for the Service session. Rendered in the desktop and mobile headers.
+// Combo plans: "Switch to Service" in the desktop and mobile headers. It asks SalesServer
+// GET /api/service-switch whether the shop has a combo plan and renders nothing otherwise.
+// - Owner who opened Sales from the Service portal (branch token via: 'service'): one-click switch —
+//   SalesServer issues a 60s one-time code (POST /api/service-sso) that the Service app's /service-sso page
+//   swaps for the Service session.
+// - Anyone signed in with a branch password: opens the Service sign-in page, so branch staff never get the
+//   owner's Service account without the owner's login.
 function SwitchToServiceButton({ salesUrl, token, compact }) {
   const [busy, setBusy] = React.useState(false);
+  const [mode, setMode] = React.useState(null); // null (hidden) | 'instant' | 'login'
   const serviceUrl = String((window.ENV_CONFIG && window.ENV_CONFIG.SERVICE_APP_URL) || '').replace(/\/+$/, '');
-  if (!serviceUrl) return null;
+  const authToken = token || localStorage.getItem('branch_token') || '';
+
+  React.useEffect(() => {
+    let alive = true;
+    if (!serviceUrl || !authToken) return undefined;
+    fetch(salesUrl + '/api/service-switch', { headers: { Authorization: 'Bearer ' + authToken } })
+      .then(r => r.json().catch(() => ({})))
+      .then(d => { if (alive && d && d.available) setMode(d.instant ? 'instant' : 'login'); })
+      .catch(() => {});
+    return () => { alive = false; };
+  }, [salesUrl, authToken, serviceUrl]);
+
+  if (!serviceUrl || !mode) return null;
 
   const go = async () => {
     if (busy) return;
+    if (mode === 'login') { window.location.href = serviceUrl + '/billit-login'; return; }
     setBusy(true);
     try {
       const res = await fetch(salesUrl + '/api/service-sso', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + (token || localStorage.getItem('branch_token') || '') }
+        headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + authToken }
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok || !data.code) throw new Error(data.message || 'Could not open Service');
@@ -28,7 +46,7 @@ function SwitchToServiceButton({ salesUrl, token, compact }) {
       type="button"
       onClick={go}
       disabled={busy}
-      title="Open the Service portal"
+      title={mode === 'instant' ? 'Open the Service portal' : 'Sign in to the Service portal with the owner account'}
       aria-label="Switch to Service"
       style={{
         display: 'inline-flex', alignItems: 'center', gap: '6px', whiteSpace: 'nowrap',

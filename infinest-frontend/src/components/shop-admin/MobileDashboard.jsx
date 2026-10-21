@@ -15,11 +15,10 @@ import {
   CartesianGrid, Tooltip, Legend, ResponsiveContainer
 } from 'recharts';
 import * as XLSX from 'xlsx';
-import { buildVisibleNav, isTabAllowed, findNavEntry, PRICE_CODE_TAB, isSalesWorkspaceTab } from './shopAdminNav';
+import { buildVisibleNav, isTabAllowed, findNavEntry, isSalesWorkspaceTab } from './shopAdminNav';
 
 const SalesOverview = dynamic(() => import('./sales/SalesOverview'), { ssr: false });
 const SalesWorkspace = dynamic(() => import('./sales/SalesWorkspace'), { ssr: false });
-const PriceCodeSettings = dynamic(() => import('./sales/PriceCodeSettings'), { ssr: false });
 const BusinessAnalytics = dynamic(() => import('./BusinessAnalytics'), { ssr: false });
 const EmployeeManagement = dynamic(() => import('./EmployeeManagement'), { ssr: false });
 const AttendanceManagement = dynamic(() => import('./AttendanceManagement'), { ssr: false });
@@ -1638,7 +1637,6 @@ export default function MobileDashboard({
           {activeTab === 'dealer-create' && <CreateDealerPanel currentShopId={currentShopId} />}
           {activeTab === 'suppliers' && <SuppliersPanel currentShopId={currentShopId} />}
           {activeTab === 'expenses' && <ExpensesPanel currentShopId={currentShopId} />}
-          {activeTab === PRICE_CODE_TAB && hasSales && <PriceCodeSettings shopId={currentShopId} />}
           {isSalesWorkspaceTab(activeTab) && hasSales && (
             <SalesWorkspace
               view={activeTab.slice('sales-'.length)}

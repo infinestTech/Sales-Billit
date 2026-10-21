@@ -668,6 +668,7 @@ router.get('/shops/whatsapp', internalAuth, async (req, res) => {
             mobile_delivered: true,
             mobile_returned: false,
             balance_reminder: true,
+            sales_bill: false,
         };
 
         // Aggregate WhatsApp send stats per shop in one query
@@ -737,6 +738,7 @@ router.patch('/shops/:shopId/whatsapp', internalAuth, async (req, res) => {
                 'mobile_delivered',
                 'mobile_returned',
                 'balance_reminder',
+                'sales_bill',
             ];
             allowed.forEach((k) => {
                 if (typeof events[k] === 'boolean') {

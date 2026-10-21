@@ -130,4 +130,4 @@ const sendCustomerMessage = async (req, res) => {
   }
 };
 
-module.exports = { sendCustomerMessage };
+module.exports = { sendCustomerMessage, describeFailure };

@@ -96,7 +96,23 @@ async function buildSummary({ shop_id, branch_id, start, end }) {
         totals: [{ $group: { _id: null, ...TOTALS_GROUP } }],
         byDay: [{ $group: { _id: dayExpr, ...TOTALS_GROUP } }, { $sort: { _id: 1 } }],
         byBranch: [{ $group: { _id: '$branch_id', ...TOTALS_GROUP } }, { $sort: { netSales: -1 } }],
-        byPayment: [{ $group: { _id: { $ifNull: ['$paymentMethod', 'Cash'] }, count: { $sum: 1 }, amount: { $sum: '$totalAmount' } } }, { $sort: { amount: -1 } }],
+        // Per payment mode: split sales count once under each mode they used; older sales use their label
+        byPayment: [
+          {
+            $project: {
+              parts: {
+                $cond: [
+                  { $gt: [{ $size: { $ifNull: ['$paymentSplits', []] } }, 0] },
+                  '$paymentSplits',
+                  [{ method: { $ifNull: ['$paymentMethod', 'Cash'] }, amount: '$totalAmount' }]
+                ]
+              }
+            }
+          },
+          { $unwind: '$parts' },
+          { $group: { _id: '$parts.method', count: { $sum: 1 }, amount: { $sum: '$parts.amount' } } },
+          { $sort: { amount: -1 } }
+        ],
         byEmployee: [
           {
             $group: {

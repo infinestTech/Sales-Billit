@@ -614,4 +614,4 @@ doc.y = y;
   });
 }
 
-module.exports = { generateReceiptPdfBuffer };
+module.exports = { generateReceiptPdfBuffer, loadShopProfile, registerFonts, FONT, RUPEE };

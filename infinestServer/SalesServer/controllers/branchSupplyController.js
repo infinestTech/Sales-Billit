@@ -193,12 +193,13 @@ exports.createBranchSupply = async (req, res) => {
       };
       if (source === 'import' && !(setObj.sellingPrice > 0)) delete setObj.sellingPrice;
       if (it.priceCode) setObj.priceCode = it.priceCode;
+      if (it.hsn) setObj.hsn = it.hsn;
       const update = { $set: setObj, $inc: { qty: it.qty } };
 
-      // If this item references a central InStock item, try to fetch productNo / price code from central
+      // If this item references a central InStock item, try to fetch productNo / price code / HSN from central
       try {
         const pid = String(it.productId || '');
-        if (((!update.$set.productNo || update.$set.productNo === '') || !update.$set.priceCode) && pid.includes('_')) {
+        if (((!update.$set.productNo || update.$set.productNo === '') || !update.$set.priceCode || !update.$set.hsn) && pid.includes('_')) {
           const [docId, idxStr] = pid.split('_');
           const idx = Number(idxStr);
           if (isValidObjectId(docId) && Number.isInteger(idx)) {
@@ -212,6 +213,7 @@ exports.createBranchSupply = async (req, res) => {
                 update.$set.priceCode = centralIt.priceCode;
                 it.priceCode = centralIt.priceCode;
               }
+              if (centralIt && centralIt.hsn && !update.$set.hsn) update.$set.hsn = centralIt.hsn;
             }
           }
         }

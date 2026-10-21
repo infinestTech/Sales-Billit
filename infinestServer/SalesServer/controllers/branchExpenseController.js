@@ -1,9 +1,10 @@
 const mongoose = require('mongoose');
 
-// Same payment methods used across the app (BillitServer constants/paymentMethods.js)
+// Same labels as sales (Cash, Gpay, Card and their combinations); older labels stay valid for existing clients
+const { PAYMENT_METHODS } = require('../utils/paymentSplits');
 const EXPENSE_PAYMENT_METHODS = [
-  'Cash', 'Gpay', 'Card', 'Gpay-H', 'Gpay-S', 'Cash + Card',
-  'Gpay H + CASH', 'Gpay S + CASH', 'Gpay H + CARD', 'Gpay S + CARD'
+  ...PAYMENT_METHODS,
+  'Gpay-H', 'Gpay-S', 'Gpay H + CASH', 'Gpay S + CASH', 'Gpay H + CARD', 'Gpay S + CARD'
 ];
 
 const BranchExpense = mongoose.model('BranchExpense', new mongoose.Schema({

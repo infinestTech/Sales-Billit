@@ -1,18 +1,3 @@
-// Constant payment methods used across the application
-window.__MOBILE_PAYMENT_METHODS__ = [
-  { value: 'Cash', label: 'Cash' },
-  { value: 'Gpay', label: 'Gpay' },
-  { value: 'Card', label: 'Card' },
-  { value: 'Gpay-H', label: 'Gpay-H' },
-  { value: 'Gpay-S', label: 'Gpay-S' },
-  { value: 'Cash + Card', label: 'Cash + Card' },
-  { value: 'Gpay H + CASH', label: 'Gpay H + Cash' },
-  { value: 'Gpay S + CASH', label: 'Gpay S + Cash' },
-  { value: 'Gpay H + CARD', label: 'Gpay H + Card' },
-  { value: 'Gpay S + CARD', label: 'Gpay S + Card' }
-];
-window.__MOBILE_PAYMENT_METHOD_VALUES__ = window.__MOBILE_PAYMENT_METHODS__.map(function(m) { return m.value; });
-
 function MobileProductSales({ salesUrl, token }) {
   const [products, setProducts] = React.useState([]);
   const [sellerProducts, setSellerProducts] = React.useState([]);
@@ -21,12 +6,12 @@ function MobileProductSales({ salesUrl, token }) {
   const [customerName, setCustomerName] = React.useState('');
   const [error, setError] = React.useState('');
   const [showAlert, setShowAlert] = React.useState(false);
-  const [selectedBank, setSelectedBank] = React.useState('select');
   const [sellingBusy, setSellingBusy] = React.useState(false);
   const [lastSale, setLastSale] = React.useState(null);
   const [previewHtml, setPreviewHtml] = React.useState('');
   const [showPreview, setShowPreview] = React.useState(false);
   const empCode = window.useEmployeeCode(salesUrl, token);
+  const waBilling = window.SalesWhatsApp.useWhatsappBilling(salesUrl, token);
 
   // state to toggle IME list per product index
   const [showImes, setShowImes] = React.useState({});
@@ -95,6 +80,7 @@ function MobileProductSales({ salesUrl, token }) {
     totalAmount += cgstAmount + sgstAmount;
   }
   totalAmount = Number(totalAmount.toFixed(1));
+  const payment = window.usePaymentSplit(totalAmount);
 
   function addByProductNo() {
     if (!(productNo || '').toString().trim()) return;
@@ -175,8 +161,9 @@ function MobileProductSales({ salesUrl, token }) {
         setError('Customer mobile number is required');
         return;
       }
-      if (!selectedBank || selectedBank === 'select') {
-        setError('Select a payment method');
+      const payError = payment.validate();
+      if (payError) {
+        setError(payError);
         return;
       }
       const empError = empCode.validateForSale();
@@ -187,7 +174,6 @@ function MobileProductSales({ salesUrl, token }) {
       setSellingBusy(true);
       setError('');
       const url = new URL(salesUrl + '/api/sales');
-      const paymentMethod = selectedBank;
       const payload = {
         items: sellerProducts.map((it) => ({
           productId: it.productId || it._id || '',
@@ -210,8 +196,9 @@ function MobileProductSales({ salesUrl, token }) {
         sgstAmount: Number(sgstAmount.toFixed(2)),
         igstAmount: Number(igstAmount.toFixed(2)),
         totalAmount: Number(totalAmount.toFixed(2)),
-        paymentMethod,
-        amountPaid: Number(totalAmount || 0),
+        paymentMethod: payment.method,
+        paymentSplits: payment.splits(),
+        amountPaid: payment.received,
         employeeCode: empCode.code || undefined
       };
       const res = await fetch(url, {
@@ -257,13 +244,18 @@ function MobileProductSales({ salesUrl, token }) {
       setSellerProducts([]);
       setCustomerNo('');
       setCustomerName('');
-      setSelectedBank('select');
+      payment.reset();
       empCode.reset();
       setCgst(0);
       setSgst(0);
       setIgst(0);
       setDiscount(0);
       setError('Sale saved');
+      // WhatsApp billing (admin switch): send the invoice PDF to the customer straight away
+      if (waBilling.enabled && savedSale && savedSale._id && savedSale.customerNo) {
+        const sent = await waBilling.send(savedSale._id);
+        setError(sent.ok ? 'Sale saved — invoice sent successfully on WhatsApp' : 'Sale recorded, but the WhatsApp bill was not sent: ' + sent.message);
+      }
     } catch (e) {
       setError(e.message || 'Sell failed');
     } finally {
@@ -294,6 +286,10 @@ function MobileProductSales({ salesUrl, token }) {
 
   async function printSale() {
     try {
+      // Saved sales open the A4 invoice PDF (same file that is sent on WhatsApp)
+      const pdf = lastSale && lastSale._id ? await window.SalesWhatsApp.openInvoice(salesUrl, token, lastSale._id) : null;
+      if (pdf === 'opened') return;
+      if (pdf && pdf.blocked) { setPreviewHtml(pdf.html); setShowPreview(true); setError('Popup blocked: showing the invoice here. Allow popups to open it in its own tab.'); return; }
       const sale = lastSale || { items: sellerProducts, totalAmount, customerNo, createdAt: new Date().toISOString() };
       // fetch branch info
       let shopName = '';
@@ -537,265 +533,17 @@ function MobileProductSales({ salesUrl, token }) {
     }
   }
 
+  // 80 mm Tax Invoice receipt (src/utils/salesReceipt.js)
   async function printSmallReceipt() {
     try {
-      const sale = lastSale || { items: sellerProducts, totalAmount, customerNo, customerName, createdAt: new Date().toISOString() };
-      // fetch branch info
-      let shopName = '';
-      let shopContact = '';
-      let shopGst = '';
-      let shopAddress = '';
-      try {
-        const res = await fetch(new URL(salesUrl + '/api/branches'), { headers: { Authorization: 'Bearer ' + token } });
-        const data = await res.json();
-        if (res.ok && Array.isArray(data.branches) && data.branches.length > 0) {
-          const payload = decodeJwt();
-          const branchId = payload?.branch_id || payload?._id || '';
-          let found = null;
-          if (branchId) found = data.branches.find((b) => String(b._id) === String(branchId));
-          if (!found) found = data.branches[0];
-          shopName = found?.name || '';
-          shopContact = found?.phoneNumber || found?.phone || '';
-          shopGst = found?.gstNo || found?.gst || '';
-          shopAddress = found?.address || found?.branchAddress || '';
-        }
-      } catch (e) {
-        /* ignore */
-      }
-      if (!shopName || !shopContact) {
-        const payload = decodeJwt();
-        shopName = shopName || payload.shopName || payload.name || payload.branchName || '';
-        shopContact = shopContact || payload.phone || payload.phoneNumber || payload.branchPhone || '';
-        shopGst = shopGst || payload.gstNo || payload.gst || '';
-        shopAddress = shopAddress || payload.address || payload.branchAddress || '';
-      }
-      // fetch branch stock to resolve prices
-      let stock = [];
-      try {
-        const sres = await fetch(new URL(salesUrl + '/api/branch-stock?only_branch=1'), { headers: { Authorization: 'Bearer ' + token } });
-        const sdata = await sres.json();
-        if (sres.ok && Array.isArray(sdata.rows)) stock = sdata.rows;
-      } catch (e) {
-        /* ignore */
-      }
-
-      const cgstPercent = sale.cgst || cgst;
-      const sgstPercent = sale.sgst || sgst;
-      const igstPercent = sale.igst || igst;
-      const cgstAmt = sale.cgstAmount ?? cgstAmount;
-      const sgstAmt = sale.sgstAmount ?? sgstAmount;
-      const igstAmt = sale.igstAmount ?? igstAmount;
-
-      const items = (sale.items || [])
-        .map((i, idx) => {
-          const found = (stock || []).find(
-            (p) =>
-              (String(p._id) && String(p._id) === String(i.productId || i._id)) ||
-              (p.productId && String(p.productId) === String(i.productId)) ||
-              (p.productNo && i.productNo && String(p.productNo) === String(i.productNo))
-          );
-          const name = found?.productName || found?.name || i.productName || i.productNo || '';
-
-          const imes = window.BarcodeLabels.realImeis(Array.isArray(i.selectedImes) && i.selectedImes.length > 0 ? i.selectedImes : i.imes);
-          const imeiText = imes.length > 0 ? imes.map((imei) => `IMEI: ${imei}`).join(', ') : '';
-
-          const productDescription = imeiText
-            ? `${name}<br><span style="font-size:9px;color:#6c757d;font-style:italic;">${imeiText}</span>`
-            : name;
-
-          const qty = Number(i.qty || i.sellingQty || 0);
-          const unit = Number(found?.sellingPrice ?? found?.unitSellingPrice ?? i.sellingPrice ?? 0).toFixed(2);
-          const line = (qty * Number(unit)).toFixed(2);
-          const hasImei = imes.length > 0;
-
-          return `<tr>
-					<td style="padding:8px;text-align:center;vertical-align:top;font-weight:600;background:#f8f9fa">${idx + 1}</td>
-					<td style="padding:8px;vertical-align:top;line-height:1.4;${hasImei ? 'font-size:10px;' : ''}">${productDescription}</td>
-					<td style="padding:8px;text-align:center;vertical-align:top;color:#6c757d">&nbsp;</td>
-					<td style="padding:8px;text-align:right;vertical-align:top;font-weight:500">${qty}</td>
-					<td style="padding:8px;text-align:right;vertical-align:top;font-family:monospace">₹${unit}</td>
-					<td style="padding:8px;text-align:right;vertical-align:top;font-weight:600;font-family:monospace">₹${line}</td>
-				</tr>`;
-        })
-        .join('');
-      const date = new Date(sale.createdAt || Date.now()).toLocaleString();
-
-      const outSubTotal = Number((sale.subTotal ?? subTotal) || 0);
-      const outDiscount = Number((sale.discountAmount ?? discountAmount) || 0);
-      const outTaxable = Number((sale.taxableAmount ?? Math.max(0, outSubTotal - outDiscount)) || 0);
-      const outTotal = Number(sale.totalAmount ?? totalAmount).toFixed(2);
-
-      const receiptHtml =
-        `<!doctype html><html><head><meta charset="utf-8"><title>Receipt</title><style>
-			@page { size: 80mm auto; margin: 6mm; }
-			body {
-				font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
-				padding: 12px;
-				color: #212529;
-				width: 80mm;
-				box-sizing: border-box;
-				line-height: 1.4;
-				background: #fff;
-			}
-			.top-box {
-				border: 2px solid #2c3e50;
-				padding: 10px;
-				margin-bottom: 12px;
-				background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
-				border-radius: 4px;
-			}
-			.top-left { float: left; font-size: 11px; font-weight: 600; color: #495057; }
-			.top-right { float: right; font-size: 11px; font-weight: 600; color: #495057; }
-			.center-title {
-				clear: both;
-				text-align: center;
-				font-weight: 800;
-				margin: 10px 0;
-				font-size: 14px;
-				color: #2c3e50;
-				letter-spacing: 1px;
-				text-transform: uppercase;
-			}
-			.branch-name {
-				font-size: 18px;
-				font-weight: 900;
-				text-align: center;
-				padding: 8px 0;
-				border-bottom: 2px solid #2c3e50;
-				color: #2c3e50;
-				letter-spacing: 0.5px;
-			}
-			.address {
-				font-size: 11px;
-				text-align: center;
-				margin-top: 6px;
-				color: #6c757d;
-				font-style: italic;
-			}
-			.cust-line {
-				margin-top: 10px;
-				font-size: 12px;
-				color: #495057;
-			}
-			.cust-dotted {
-				border-bottom: 2px dotted #6c757d;
-				padding-bottom: 8px;
-				margin-bottom: 10px;
-				font-weight: 600;
-			}
-			table.items {
-				width: 100%;
-				border-collapse: collapse;
-				margin-top: 12px;
-				font-size: 11px;
-				box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-				border-radius: 4px;
-				overflow: hidden;
-			}
-			table.items th {
-				background: linear-gradient(135deg, #2c3e50 0%, #34495e 100%);
-				color: white;
-				padding: 10px 8px;
-				font-weight: 700;
-				text-align: center;
-				font-size: 10px;
-				text-transform: uppercase;
-				letter-spacing: 0.5px;
-				border: none;
-			}
-			table.items td {
-				border: 1px solid #dee2e6;
-				padding: 8px;
-				background: #fff;
-			}
-			table.items tbody tr:nth-child(even) { background: #f8f9fa; }
-			table.items tbody tr:hover { background: #e3f2fd; }
-			table.totals {
-				width: 50%;
-				float: right;
-				border-collapse: collapse;
-				margin-top: 12px;
-				font-size: 11px;
-				background: #f8f9fa;
-				border-radius: 4px;
-				overflow: hidden;
-			}
-			table.totals td {
-				padding: 8px 12px;
-				border: none;
-				border-bottom: 1px solid #dee2e6;
-			}
-			table.totals tr:last-child td {
-				border-bottom: none;
-				background: #2c3e50;
-				color: white;
-				font-weight: 800;
-			}
-			.right { text-align: right; }
-		</style></head><body>` +
-        `<div class="top-box">
-					<div class="top-left">📋 GSTIN: ${shopGst || 'N/A'}</div>
-					<div class="top-right">📞 ${shopContact || 'Contact N/A'}</div>
-					<div style="clear:both"></div>
-				</div>` +
-        `<div class="center-title">💰 PRODUCT SALES RECEIPT 💰</div>` +
-        `<div class="branch-name">${shopName || 'Branch Name'}</div>` +
-        `<div class="address">📍 ${shopAddress || 'Branch Address'}</div>` +
-        `<div class="cust-line cust-dotted">
-					<strong>👤 Customer:</strong> ${sale.customerName || customerName || 'Walk-in Customer'}
-				</div>` +
-        `<div class="cust-line">
-					<strong>📱 Phone:</strong> ${sale.customerNo || customerNo || 'N/A'} &nbsp;&nbsp;&nbsp;
-					<strong>📅 Date:</strong> ${date}
-				</div>` +
-        (sale.employee_name ? `<div class="cust-line"><strong>🧑‍💼 Sales Exec:</strong> ${sale.employee_name} (${sale.employee_code})</div>` : '') +
-        `<table class="items">
-					<thead>
-						<tr>
-							<th style="width:8%">#</th>
-							<th style="width:52%">📦 Product Details</th>
-							<th style="width:10%">HSN</th>
-							<th style="width:10%">Qty</th>
-							<th style="width:10%">Rate</th>
-							<th style="width:10%">Amount</th>
-						</tr>
-					</thead>
-					<tbody>${items}</tbody>
-				</table>` +
-        `<table class="totals">` +
-        `<tr><td>📊 Sub Total:</td><td class="right">₹ ${outSubTotal.toFixed(2)}</td></tr>` +
-        (sale.discount
-          ? `<tr><td>🏷️ Discount (${sale.discount}%):</td><td class="right">- ₹ ${outDiscount.toFixed(2)}</td></tr>`
-          : '') +
-        `<tr><td>💵 Taxable Amount:</td><td class="right">₹ ${outTaxable.toFixed(2)}</td></tr>` +
-        (cgstPercent > 0 ? `<tr><td>🏛️ CGST ${cgstPercent}%:</td><td class="right">₹ ${Number(cgstAmt).toFixed(2)}</td></tr>` : '') +
-        (sgstPercent > 0 ? `<tr><td>🏛️ SGST ${sgstPercent}%:</td><td class="right">₹ ${Number(sgstAmt).toFixed(2)}</td></tr>` : '') +
-        (igstPercent > 0 ? `<tr><td>🏛️ IGST ${igstPercent}%:</td><td class="right">₹ ${Number(igstAmt).toFixed(2)}</td></tr>` : '') +
-        `<tr><td>💰 GRAND TOTAL:</td><td class="right">₹ ${outTotal}</td></tr>` +
-        `</table>` +
-        `<div style="clear:both;margin-top:20px;text-align:center;font-size:11px;color:#6c757d;border-top:1px solid #dee2e6;padding-top:10px;">
-					🙏 Thank you for your business! 🙏<br>
-					<span style="font-size:10px;font-style:italic;">Visit again soon!</span>
-				</div></body></html>`;
-
-      const w = window.open('', '_blank');
-      if (!w) {
+      const sale = lastSale || { items: sellerProducts, totalAmount, subTotal, customerNo, customerName, createdAt: new Date().toISOString() };
+      const shop = await window.SalesReceipt.loadShop(salesUrl, token);
+      const receiptHtml = window.SalesReceipt.buildHtml(sale, shop);
+      if (!window.SalesReceipt.print(receiptHtml)) {
         setPreviewHtml(receiptHtml);
         setShowPreview(true);
         setError('Popup blocked: showing preview. Allow popups to print directly.');
-        return;
       }
-      w.document.open();
-      w.document.write(receiptHtml);
-      w.document.close();
-      w.focus();
-      setTimeout(() => {
-        try {
-          w.print();
-        } catch (e) {
-          /* ignore */
-        }
-      }, 300);
     } catch (e) {
       setError('Failed to open small receipt printer: ' + (e.message || e));
     }
@@ -912,22 +660,7 @@ function MobileProductSales({ salesUrl, token }) {
           style={{ width: '100%', marginTop: 6, marginBottom: 10 }}
         />
 
-        <label>
-          Payment <span style={{ color: 'red' }}>*</span>
-        </label>
-        <select value={selectedBank} onChange={(e) => setSelectedBank(e.target.value)} style={{ width: '100%', marginTop: 6 }}>
-          <option value="select">Select</option>
-          <option value="Cash">Cash</option>
-          <option value="Gpay">Gpay</option>
-          <option value="Card">Card</option>
-          <option value="Gpay-H">Gpay-H</option>
-          <option value="Gpay-S">Gpay-S</option>
-          <option value="Cash + Card">Cash + Card</option>
-          <option value="Gpay H + CASH">Gpay H + Cash</option>
-          <option value="Gpay S + CASH">Gpay S + Cash</option>
-          <option value="Gpay H + CARD">Gpay H + Card</option>
-          <option value="Gpay S + CARD">Gpay S + Card</option>
-        </select>
+        <window.PaymentSplitInput state={payment} compact />
       </div>
 
       <div className="card" style={{ marginBottom: 12 }}>
@@ -1143,6 +876,10 @@ function MobileProductSales({ salesUrl, token }) {
           <button
             className="btn secondary"
             onClick={() => {
+              if (waBilling.enabled && lastSale && lastSale._id) {
+                waBilling.send(lastSale._id).then((r) => setError(r.ok ? r.message : 'WhatsApp bill not sent: ' + r.message));
+                return;
+              }
               (async () => {
                 const sale = lastSale || { items: sellerProducts, customerNo };
                 let digits = (sale.customerNo || '').toString().replace(/[^0-9]/g, '');
@@ -1200,7 +937,7 @@ function MobileProductSales({ salesUrl, token }) {
               })();
             }}
           >
-            WhatsApp
+            {waBilling.enabled ? (waBilling.sending ? 'Sending…' : 'Send Bill on WhatsApp') : 'WhatsApp'}
           </button>
         </div>
       </div>

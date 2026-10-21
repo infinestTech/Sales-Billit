@@ -340,6 +340,16 @@ const { getReceiptPdf } = require("../controllers/api/receiptPdfController");
 // Public PDF version of the A4 receipt — used as the document attachment for WhatsApp delivery messages
 router.get("/receipt/pdf/:id", getReceiptPdf);
 
+// Branch-portal sales invoices: public signed PDF (WhatsApp document / POS "A4" button) and the
+// internal send used by SalesServer POST /api/sales/:id/whatsapp
+const { getSalesInvoicePdf, sendSalesBillWhatsapp } = require("../controllers/api/salesInvoiceController");
+const requireInternalKey = (req, res, next) =>
+  process.env.INTERNAL_API_KEY && req.headers["x-internal-key"] === process.env.INTERNAL_API_KEY
+    ? next()
+    : res.status(403).json({ success: false, error: "Unauthorized" });
+router.get("/sales-invoice/pdf/:id", getSalesInvoicePdf);
+router.post("/internal/sales-bill/whatsapp", requireInternalKey, sendSalesBillWhatsapp);
+
 
 
 

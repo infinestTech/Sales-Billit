@@ -11,6 +11,7 @@ const WhatsappSaleSchema = new mongoose.Schema({
   items: { type: Array, default: [] },
   totalAmount: { type: Number, default: 0 },
   paymentMethod: { type: String, default: 'cash' },
+  paymentSplits: { type: Array, default: [] }, // [{ method: 'Cash' | 'Gpay' | 'Card', amount }]; see utils/paymentSplits.js
   amountPaid: { type: Number, default: 0 },
   bank_id: { type: String, default: '' },
   createdBy: { type: String, default: '' },

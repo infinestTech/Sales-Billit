@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import axios from 'axios';
 
-// Where to go after signing in: only shop-admin pages (e.g. /shop-admin/dashboard?tab=sales-price-code)
+// Where to go after signing in: only shop-admin pages (e.g. /shop-admin/dashboard?tab=sales-inventory)
 function safeNext() {
   if (typeof window === 'undefined') return '';
   const next = new URLSearchParams(window.location.search).get('next') || '';

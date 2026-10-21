@@ -106,13 +106,15 @@ const shopSchema = new mongoose.Schema({
       mobile_ready: { type: Boolean, default: true },
       mobile_delivered: { type: Boolean, default: true },
       mobile_returned: { type: Boolean, default: false },
-      balance_reminder: { type: Boolean, default: true }
+      balance_reminder: { type: Boolean, default: true },
+      // Branch-portal sale invoice PDF (sent from SalesServer via /api/internal/sales-bill/whatsapp); opt-in
+      sales_bill: { type: Boolean, default: false }
     }
   },
   // Point-of-sale rules read by SalesServer (shared `shops` collection).
   sales_settings: {
     require_employee_code: { type: Boolean, default: false },
-    // Secret price code: one character per digit in the order 1234567890 ('' = not set). See utils/priceCipher.js
+    // Secret price code: one character per digit in the order 1234567890 ('' = not set). Set from the branch portal; see SalesServer utils/priceCipher.js
     price_cipher: { type: String, default: '' }
   },
   created_at: { type: Date, default: Date.now }

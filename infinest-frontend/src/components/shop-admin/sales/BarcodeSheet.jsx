@@ -256,12 +256,12 @@ function BarcodeSheet({ entries, onClose, salesUrl, token }) {
     return BL.checkThermalLabels({ jsPDF, JsBarcode: window.JsBarcode, labels: filteredData, settings: thermalSettings, shopName });
   }, [layout, thermalError, thermalSettings, filteredData, shopName, barcodeLibReady]);
 
-  // Opens the shop-admin "Price Code" screen (same app: switch the dashboard tab)
+  // The price code is set in the branch portal (Inventory → Price Code); open it in a new tab
+  const salesPortalUrl = (process.env.NEXT_PUBLIC_SALES_FRONTEND_URL || '').replace(/\/+$/, '');
   const openPriceCodeSetup = () => {
-    try { window.dispatchEvent(new CustomEvent('shop-admin-navigate', { detail: { tab: 'sales-price-code' } })); } catch (_) {}
-    onClose && onClose();
+    if (salesPortalUrl) window.open(salesPortalUrl + '/#price-code', '_blank', 'noopener');
   };
-  const canSetupPriceCode = true;
+  const canSetupPriceCode = !!salesPortalUrl;
 
   // `force` is true only from the "Download anyway" button of the missing price code prompt
   const handleDownloadPDF = async (force) => {

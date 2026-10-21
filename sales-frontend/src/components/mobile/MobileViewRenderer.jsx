@@ -65,8 +65,9 @@ function MobileViewRenderer({ view, salesUrl, token, branchUser, ...props }) {
   // Map views to mobile components
   const viewComponents = {
     'instock': window.MobileInStock,
-    'branch-expense': window.MobileBranchExpense,
-    'supplier': window.MobileCreateSupplier,
+    'branch-expense': window.BranchNewExpense,
+    'supplier': window.CreateSupplier,
+    'dealer-credits': window.DealerCredits,
     'branch': window.MobileCreateBranch,
     'branch-supply-history': window.MobileBranchSupplyHistory,
     'product-sales': window.MobileProductSales,
@@ -104,6 +105,8 @@ function renderDesktopView(view, salesUrl, token, branchUser, props) {
         return window.BranchInStock ? React.createElement(window.BranchInStock, { salesUrl, token }) : null;
       }
       return window.InStockView ? React.createElement(window.InStockView, { salesUrl, token }) : null;
+    case 'price-code':
+      return window.PriceCodeSettings ? React.createElement(window.PriceCodeSettings, { salesUrl, token }) : null;
     case 'stock-history':
       return window.StockHistory ? React.createElement(window.StockHistory, { salesUrl, token, branchUser }) : null;
     case 'supplier-credits':

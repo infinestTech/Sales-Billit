@@ -29,12 +29,19 @@
   <script type="text/babel" data-presets="react" src="/src/utils/salesFeatureAccess.js"></script>
   <script type="text/babel" data-presets="react" src="/src/components/FeatureGuard.jsx"></script>
   <script type="text/babel" data-presets="react" src="/src/components/EmployeeCodeInput.jsx"></script>
+  <script type="text/babel" data-presets="react" src="/src/components/PaymentSplitInput.jsx"></script>
 
   <!-- Supplier bill import (Excel/CSV/JSON) for branches: SheetJS + shared parser (plain JS, no Babel) -->
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
   <script src="/src/utils/inventoryImport.js"></script>
   <!-- Barcode label layouts + POS scan matching (plain JS, shared with shop-admin via scripts/sync-shared.js) -->
   <script src="/src/utils/barcodeLabels.js"></script>
+  <!-- 80 mm "Tax Invoice" receipt printed after a sale (plain JS) -->
+  <script src="/src/utils/salesReceipt.js"></script>
+  <!-- WhatsApp billing (MSG91) + A4 invoice PDF links (plain JS) -->
+  <script src="/src/utils/salesWhatsapp.js"></script>
+  <!-- Dealers + Dealer Credits shared styles/helpers (plain JS) -->
+  <script src="/src/utils/dealerUi.js"></script>
   <script type="text/babel" data-presets="react" src="/src/components/BranchStockImport.jsx"></script>
   <script type="text/babel" data-presets="react" src="/src/components/BranchStockEntry.jsx"></script>
   <script type="text/babel" data-presets="react" src="/src/components/SwitchToServiceButton.jsx"></script>
@@ -58,8 +65,6 @@
   
   <!-- Mobile view components (optimized for mobile) -->
   <script type="text/babel" data-presets="react" src="/src/views/mobile/MobileInStock.jsx"></script>
-  <script type="text/babel" data-presets="react" src="/src/views/mobile/MobileBranchExpense.jsx"></script>
-  <script type="text/babel" data-presets="react" src="/src/views/mobile/MobileCreateSupplier.jsx"></script>
   <script type="text/babel" data-presets="react" src="/src/views/mobile/MobileCreateBranch.jsx"></script>
   <script type="text/babel" data-presets="react" src="/src/views/mobile/MobileBranchSupplyHistory.jsx"></script>
   <script type="text/babel" data-presets="react" src="/src/views/mobile/MobileBranchSalesReport.jsx"></script>
@@ -70,6 +75,7 @@
   
   <!-- View components -->
   <script type="text/babel" data-presets="react" src="/src/views/CreateSupplier.jsx"></script>
+  <script type="text/babel" data-presets="react" src="/src/views/DealerCredits.jsx"></script>
   <script type="text/babel" data-presets="react" src="/src/views/InStockView.jsx"></script>
   <script type="text/babel" data-presets="react" src="/src/views/BranchLogin.jsx"></script>
   <script type="text/babel" data-presets="react" src="/src/views/BranchInStock.jsx"></script>
@@ -88,6 +94,7 @@
   <script type="text/babel" data-presets="react" src="/src/components/GstCalculator.jsx"></script>
   <script type="text/babel" data-presets="react" src="/src/views/GstCalculatorView.jsx"></script>
   <script type="text/babel" data-presets="react" src="/src/views/StockHistory.jsx"></script>
+  <script type="text/babel" data-presets="react" src="/src/views/PriceCodeSettings.jsx"></script>
   <script type="text/babel" data-presets="react" src="/src/views/SupplierCredits.jsx"></script>
   <script type="text/babel" data-presets="react" src="/src/components/BarcodeSheet.jsx"></script>
     

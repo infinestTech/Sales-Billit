@@ -29,10 +29,9 @@ import MobileRegistryPanel from '@/components/shop-admin/panels/MobileRegistryPa
 import { formatPaymentMethodLabel } from '@/constants/paymentMethods';
 import useSalesSession from '@/components/shop-admin/sales/useSalesSession';
 import * as XLSX from 'xlsx';
-import { NAV, buildVisibleNav, isTabAllowed, PRICE_CODE_TAB, isSalesWorkspaceTab, tabFromUrl } from '@/components/shop-admin/shopAdminNav';
+import { NAV, buildVisibleNav, isTabAllowed, isSalesWorkspaceTab, tabFromUrl } from '@/components/shop-admin/shopAdminNav';
 
 const SalesWorkspace = dynamic(() => import('@/components/shop-admin/sales/SalesWorkspace'), { ssr: false });
-const PriceCodeSettings = dynamic(() => import('@/components/shop-admin/sales/PriceCodeSettings'), { ssr: false });
 const SalesOverview = dynamic(() => import('@/components/shop-admin/sales/SalesOverview'), { ssr: false });
 const EmployeePerformance = dynamic(() => import('@/components/shop-admin/EmployeePerformance'), { ssr: false });
 const BusinessAnalytics = dynamic(() => import('@/components/shop-admin/BusinessAnalytics'), { ssr: false });
@@ -2284,10 +2283,6 @@ export default function ShopAdminDashboard() {
 
         {activeTab === 'business-analytics' && productAccess && (
           <BusinessAnalytics shopId={currentShopId} access={productAccess} onNavigate={setActiveTab} />
-        )}
-
-        {activeTab === PRICE_CODE_TAB && hasSales && (
-          <PriceCodeSettings shopId={currentShopId} />
         )}
 
         {isSalesWorkspaceTab(activeTab) && hasSales && (

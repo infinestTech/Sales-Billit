@@ -1,4 +1,6 @@
 const Sale = require('../models/sale');
+const Counter = require('../models/counter');
+const { parsePayment } = require('../utils/paymentSplits');
 const { normalizeCode, resolveEmployeeByCode, isEmployeeCodeRequired } = require('./employeeController');
 
 exports.listSales = async (req, res) => {
@@ -70,8 +72,6 @@ exports.createSale = async (req, res) => {
     }
     const customerNo = req.body.customerNo || '';
     const customerName = req.body.customerName || '';
-    const paymentMethod = req.body.paymentMethod || 'cash';
-    const amountPaid = Number(req.body.amountPaid || 0);
     // Subtotal and discount/taxable calculation
     const computedSubTotal = Number(req.body.subTotal || items.reduce((s, it) => s + (Number(it.qty || it.sellingQty || 0) * Number(it.sellingPrice || 0)), 0));
     const discount = Number(req.body.discount || 0);
@@ -93,6 +93,9 @@ exports.createSale = async (req, res) => {
     }
     totalAmount = Number(totalAmount.toFixed(2));
 
+    const payment = parsePayment(req.body, totalAmount);
+    if (payment.error) return res.status(400).json({ success: false, message: payment.error });
+
     // Check branch stock availability before creating the sale
     try {
       const BranchStock = require('../models/branchStock');
@@ -113,6 +116,7 @@ exports.createSale = async (req, res) => {
         const bs = await BranchStock.findOne(query).lean();
         const available = bs ? Number(bs.qty || 0) : 0;
         it.costPrice = Number(bs?.costPrice || 0);
+        it.hsn = String(bs?.hsn || it.hsn || '');
         if (available < required) {
           const idDesc = it.productId || it.productNo || it.productName || 'unknown';
           return res.status(400).json({ success: false, message: `Insufficient stock for ${idDesc}: available ${available}, requested ${required}` });
@@ -139,9 +143,11 @@ exports.createSale = async (req, res) => {
       return res.status(500).json({ success: false, message: 'Server error during availability check' });
     }
 
+    const invoiceNo = await nextInvoiceNo(shop_id, branch_id);
     const doc = await Sale.create({
       shop_id,
       branch_id,
+      invoiceNo,
       seller_id,
       employee_id: employee ? employee.id : '',
       employee_code: employee ? employee.code : '',
@@ -160,8 +166,9 @@ exports.createSale = async (req, res) => {
       sgstAmount,
       igstAmount,
       totalAmount,
-      paymentMethod,
-      amountPaid,
+      paymentMethod: payment.paymentMethod,
+      paymentSplits: payment.paymentSplits,
+      amountPaid: payment.amountPaid,
       createdBy: req.user.userId || req.user.branch_id || ''
     });
 
@@ -204,3 +211,19 @@ exports.createSale = async (req, res) => {
     return res.status(500).json({ success: false, message: 'Server error' });
   }
 };
+
+// Next printed invoice number for a branch. The first sale after this was introduced continues from the
+// number of sales the branch already has, so numbering does not restart at 1 for existing branches.
+async function nextInvoiceNo(shop_id, branch_id) {
+  const key = `sale_invoice:${shop_id}:${branch_id}`;
+  if (!(await Counter.exists({ _id: key }))) {
+    const existing = await Sale.countDocuments({ shop_id, branch_id });
+    try {
+      await Counter.create({ _id: key, seq: existing });
+    } catch (e) {
+      if (e.code !== 11000) throw e; // another sale created it first
+    }
+  }
+  const counter = await Counter.findOneAndUpdate({ _id: key }, { $inc: { seq: 1 } }, { new: true }).lean();
+  return counter.seq;
+}

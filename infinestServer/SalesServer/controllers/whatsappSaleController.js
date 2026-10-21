@@ -1,5 +1,6 @@
 const mongoose = require('mongoose');
 const WhatsappSale = require('../models/whatsappSale');
+const { parsePayment } = require('../utils/paymentSplits');
 const { normalizeCode, resolveEmployeeByCode, isEmployeeCodeRequired } = require('./employeeController');
 
 exports.createWhatsappSale = async (req, res) => {
@@ -11,10 +12,10 @@ exports.createWhatsappSale = async (req, res) => {
 
     const items = Array.isArray(req.body.items) ? req.body.items : [];
     const customerNo = req.body.customerNo || '';
-    const paymentMethod = req.body.paymentMethod || 'cash';
-    const amountPaid = Number(req.body.amountPaid || 0);
-
     const totalAmount = items.reduce((s, it) => s + (Number(it.qty || it.sellingQty || 0) * Number(it.sellingPrice || 0)), 0);
+    const payment = parsePayment(req.body, totalAmount);
+    if (payment.error) return res.status(400).json({ success: false, message: payment.error });
+    const { paymentMethod, paymentSplits, amountPaid } = payment;
 
     const employeeCode = normalizeCode(req.body.employeeCode || req.body.employee_code);
     let employee = null;
@@ -27,7 +28,7 @@ exports.createWhatsappSale = async (req, res) => {
 
     // Create record
     const doc = await WhatsappSale.create({
-      shop_id, branch_id, seller_id, customerNo, items, totalAmount, paymentMethod, amountPaid,
+      shop_id, branch_id, seller_id, customerNo, items, totalAmount, paymentMethod, paymentSplits, amountPaid,
       employee_id: employee ? employee.id : '',
       employee_code: employee ? employee.code : '',
       employee_name: employee ? employee.name : '',

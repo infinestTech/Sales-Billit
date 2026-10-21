@@ -578,16 +578,7 @@ function SecondsSales({ salesUrl, token }) {
                   onBlur={(e) => e.target.style.borderColor = '#bbf7d0'}
                 >
                   <option value="">Select payment method</option>
-                  <option value="Cash">Cash</option>
-                  <option value="Gpay">Gpay</option>
-                  <option value="Card">Card</option>
-                  <option value="Gpay-H">Gpay-H</option>
-                  <option value="Gpay-S">Gpay-S</option>
-                  <option value="Cash + Card">Cash + Card</option>
-                  <option value="Gpay H + CASH">Gpay H + Cash</option>
-                  <option value="Gpay S + CASH">Gpay S + Cash</option>
-                  <option value="Gpay H + CARD">Gpay H + Card</option>
-                  <option value="Gpay S + CARD">Gpay S + Card</option>
+                  {window.SalesPayments.METHODS.map(m => <option key={m} value={m}>{m}</option>)}
                 </select>
               </div>
             </div>
