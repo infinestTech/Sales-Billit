@@ -11,7 +11,7 @@ function bseNewItem(type) {
     key: 'it' + (++bseKeySeq),
     type: type === 'accessory' ? 'accessory' : 'mobile',
     productName: '', productNo: '',
-    qty: 1, costPrice: '', sellingPrice: '',
+    qty: 1, costPrice: '',
     warrantyMonths: '', warrantyDetails: '',
     imeis: [], imeiDraft: '', imeiNote: ''
   };
@@ -52,7 +52,7 @@ const BSE_CSS = `
 .bse-g-bill{grid-template-columns:2fr 1fr 1fr}
 .bse-g-bill2{grid-template-columns:1fr 1fr 1fr;margin-top:14px}
 .bse-g-name{grid-template-columns:2fr 1fr}
-.bse-g-price{grid-template-columns:repeat(4,1fr);margin-top:14px}
+.bse-g-price{grid-template-columns:repeat(3,1fr);margin-top:14px}
 .bse-f label{display:block;font-size:12px;font-weight:600;color:#475569;margin-bottom:6px}
 .bse-f label .req{color:#ef4444}
 .bse-f label .opt{color:#94a3b8;font-weight:400}
@@ -155,7 +155,7 @@ function BranchStockEntry({ salesUrl, getToken, suppliers, branchEntries, onClos
   const rememberType = (t) => { try { localStorage.setItem(BSE_LAST_TYPE_KEY, t); } catch (_) {} };
   const addItem = (type) => { const it = bseNewItem(type); focusKey.current = it.key; rememberType(type); setItems(l => [...l, it]); };
   const duplicateItem = (it) => {
-    const copy = { ...bseNewItem(it.type), productName: it.productName, costPrice: it.costPrice, sellingPrice: it.sellingPrice, warrantyMonths: it.warrantyMonths, warrantyDetails: it.warrantyDetails, qty: it.type === 'accessory' ? it.qty : 1 };
+    const copy = { ...bseNewItem(it.type), productName: it.productName, costPrice: it.costPrice, warrantyMonths: it.warrantyMonths, warrantyDetails: it.warrantyDetails, qty: it.type === 'accessory' ? it.qty : 1 };
     focusKey.current = copy.key;
     setItems(l => { const i = l.findIndex(x => x.key === it.key); const n = l.slice(); n.splice(i + 1, 0, copy); return n; });
   };
@@ -180,9 +180,9 @@ function BranchStockEntry({ salesUrl, getToken, suppliers, branchEntries, onClos
   // ---- derived values & validation ----
   const qtyOf = (it) => it.type === 'mobile' ? it.imeis.length : Math.max(0, Math.floor(bseNum(it.qty)));
   const totals = React.useMemo(() => {
-    let units = 0, cost = 0, value = 0;
-    items.forEach(it => { const q = qtyOf(it); units += q; cost += q * bseNum(it.costPrice); value += q * bseNum(it.sellingPrice); });
-    return { units, cost, value };
+    let units = 0, cost = 0;
+    items.forEach(it => { const q = qtyOf(it); units += q; cost += q * bseNum(it.costPrice); });
+    return { units, cost };
   }, [items]);
   const creditAmount = bseNum(billAmount) > 0 ? bseNum(billAmount) : totals.cost;
 
@@ -234,7 +234,6 @@ function BranchStockEntry({ salesUrl, getToken, suppliers, branchEntries, onClos
         category: it.type === 'mobile' ? 'Mobile' : 'Accessories',
         qty: qtyOf(it),
         costPrice: bseNum(it.costPrice),
-        sellingPrice: bseNum(it.sellingPrice),
         warrantyMonths: Math.max(0, Math.floor(bseNum(it.warrantyMonths))),
         warrantyDetails: it.warrantyDetails.trim(),
         imes: it.type === 'mobile' ? it.imeis : []
@@ -305,14 +304,6 @@ function BranchStockEntry({ salesUrl, getToken, suppliers, branchEntries, onClos
         onWheel={e => e.currentTarget.blur()} />
     </div>
   );
-
-  const marginHint = (it) => {
-    const c = bseNum(it.costPrice), s = bseNum(it.sellingPrice);
-    if (!(c > 0) || !(s > 0)) return null;
-    const m = s - c, pct = (m / c) * 100;
-    if (m < 0) return <div className="bse-hint warn">Below cost by {bseMoney(-m)}</div>;
-    return <div className="bse-hint good">Margin {bseMoney(m)} ({pct.toFixed(1)}%)</div>;
-  };
 
   const selectedSupplier = suppliers.find(s => s._id === supplierId);
 
@@ -441,11 +432,6 @@ function BranchStockEntry({ salesUrl, getToken, suppliers, branchEntries, onClos
                     <div className="bse-hint bad">{ie.costPrice || ''}</div>
                   </div>
                   <div className="bse-f">
-                    <label>Selling price</label>
-                    {Money({ value: it.sellingPrice, onChange: e => patch(it.key, { sellingPrice: e.target.value }), label: 'Selling price' })}
-                    {marginHint(it) || <div className="bse-hint" />}
-                  </div>
-                  <div className="bse-f">
                     <label htmlFor={'w-' + it.key}>Warranty <span className="opt">(months)</span></label>
                     <input id={'w-' + it.key} className="bse-in" type="number" inputMode="numeric" min="0" value={it.warrantyMonths}
                       onChange={e => patch(it.key, { warrantyMonths: e.target.value })} placeholder="0" onWheel={e => e.currentTarget.blur()} />
@@ -506,7 +492,6 @@ function BranchStockEntry({ salesUrl, getToken, suppliers, branchEntries, onClos
             <div>Items<b>{items.length}</b></div>
             <div>Units<b>{totals.units}</b></div>
             <div>Cost total<b>{bseMoney(totals.cost)}</b></div>
-            <div>Selling value<b>{bseMoney(totals.value)}</b></div>
           </div>
           <div className="bse-actions">
             {showErrors && errors.count > 0 && <span style={{ color: '#dc2626', fontSize: 13, fontWeight: 600 }}>Fix {errors.count} highlighted {errors.count === 1 ? 'section' : 'sections'}</span>}

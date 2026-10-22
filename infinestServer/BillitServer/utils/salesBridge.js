@@ -32,6 +32,16 @@ async function fetchEmployeeSalesDetail(shopId, employeeId, from, to) {
   return data.detail;
 }
 
+/** Sales financial report: profit from cost vs sold price, expenses, dealer payments, net profit and cash flow. */
+async function fetchSalesFinancialReport(shopId, { from, to, branch_id, employee_id, payment } = {}) {
+  const params = { shop_id: String(shopId), from, to };
+  if (branch_id) params.branch_id = String(branch_id);
+  if (employee_id) params.employee_id = String(employee_id);
+  if (payment) params.payment = String(payment);
+  const data = await internalGet('/internal/financial-report', params);
+  return { range: data.range, report: data.report };
+}
+
 const describeSalesError = (err) => err?.response?.data?.message || err?.message || 'Sales server unavailable';
 
-module.exports = { fetchSalesSummary, fetchEmployeeSalesDetail, describeSalesError };
+module.exports = { fetchSalesSummary, fetchEmployeeSalesDetail, fetchSalesFinancialReport, describeSalesError };

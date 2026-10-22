@@ -177,7 +177,6 @@ export default function InStockImport({ salesUrl, token, suppliers, existingEntr
         model: i.model,
         quantity: i.quantity,
         costPrice: i.costPrice,
-        sellingPrice: i.sellingPrice,
         validity: i.validity || undefined,
         imes: i.imes,
         warrantyMonths: i.warrantyMonths,
@@ -396,7 +395,7 @@ export default function InStockImport({ salesUrl, token, suppliers, existingEntr
                 <table style={{ width: '100%', borderCollapse: 'collapse' }}>
                   <thead style={{ position: 'sticky', top: 0, background: '#f8fafc' }}>
                     <tr>
-                      {['Row', 'Code', 'Product', 'HSN', 'Qty', 'Rate (cost)', 'MRP / Selling', 'GST', 'Total', 'Extras', ''].map(h => <th key={h} style={th}>{h}</th>)}
+                      {['Row', 'Code', 'Product', 'HSN', 'Qty', 'Rate (cost)', 'GST', 'Total', 'Extras', ''].map(h => <th key={h} style={th}>{h}</th>)}
                     </tr>
                   </thead>
                   <tbody>
@@ -414,11 +413,6 @@ export default function InStockImport({ salesUrl, token, suppliers, existingEntr
                         <td style={td}>{i.hsn || '-'}</td>
                         <td style={td}>{i.quantity}</td>
                         <td style={td}>{currency(i.costPrice)}</td>
-                        <td style={td}>
-                          {i.mrp ? <div>MRP {currency(i.mrp)}</div> : null}
-                          {i.sellingPrice && i.sellingPrice !== i.mrp ? <div>Sell {currency(i.sellingPrice)}</div> : null}
-                          {!i.mrp && !i.sellingPrice ? '-' : null}
-                        </td>
                         <td style={td}>{i.gstPercent ? `${i.gstPercent}% · ${currency(i.gstAmount)}` : '-'}</td>
                         <td style={{ ...td, fontWeight: '600' }}>{currency(i.lineTotal)}</td>
                         <td style={{ ...td, fontSize: '12px', color: '#64748b' }}>

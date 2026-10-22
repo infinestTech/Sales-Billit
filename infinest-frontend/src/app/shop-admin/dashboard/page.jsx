@@ -35,6 +35,7 @@ const SalesWorkspace = dynamic(() => import('@/components/shop-admin/sales/Sales
 const SalesOverview = dynamic(() => import('@/components/shop-admin/sales/SalesOverview'), { ssr: false });
 const EmployeePerformance = dynamic(() => import('@/components/shop-admin/EmployeePerformance'), { ssr: false });
 const BusinessAnalytics = dynamic(() => import('@/components/shop-admin/BusinessAnalytics'), { ssr: false });
+const FinancialReport = dynamic(() => import('@/components/shop-admin/FinancialReport'), { ssr: false });
 
 export default function ShopAdminDashboard() {
   const router = useRouter();
@@ -1525,6 +1526,482 @@ export default function ShopAdminDashboard() {
     );
   }
 
+  // Service financial report (also shown inside FinancialReport's "Service" view for combo plans)
+  const serviceReportView = () => (
+          <div className="space-y-6">
+            {/* Filter Section - Not printed */}
+            <div className="bg-white p-6 rounded-xl shadow-lg border border-gray-200 print:hidden">
+              <div className="flex items-center justify-between mb-4">
+                <div>
+                  <h2 className="text-2xl font-bold text-gray-800 flex items-center">
+                    <AlertCircle className="h-7 w-7 mr-3 text-green-600" />
+                    Financial Report
+                  </h2>
+                  <p className="text-gray-600 text-sm mt-1">Comprehensive financial analysis and report</p>
+                </div>
+                <div className="flex gap-2 items-center">
+                  <select
+                    value={reportFormat}
+                    onChange={(e) => setReportFormat(e.target.value)}
+                    className="px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white text-gray-900 focus:outline-none focus:ring-2 focus:ring-green-500"
+                  >
+                    <option value="pdf">PDF</option>
+                    <option value="excel">Excel</option>
+                  </select>
+                  <button 
+                    onClick={handleExportReport}
+                    disabled={!reportData}
+                    className="px-4 py-2 bg-green-600 hover:bg-green-700 disabled:bg-gray-300 text-white rounded-lg text-sm font-medium transition flex items-center gap-2"
+                  >
+                    {reportFormat === 'excel' ? (
+                      <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                        <polyline points="14 2 14 8 20 8"></polyline>
+                        <line x1="16" y1="13" x2="8" y2="13"></line>
+                        <line x1="16" y1="17" x2="8" y2="17"></line>
+                        <polyline points="10 9 9 9 8 9"></polyline>
+                      </svg>
+                    ) : (
+                      <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                        <polyline points="6 9 6 2 18 2 18 9"></polyline>
+                        <path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"></path>
+                        <rect x="6" y="14" width="12" height="8"></rect>
+                      </svg>
+                    )}
+                    {reportFormat === 'excel' ? 'Export Excel' : 'Print Report'}
+                  </button>
+                </div>
+              </div>
+
+              {/* Date Filters */}
+              <div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
+                <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Report Period</label>
+                    <select
+                      value={reportFilters.period}
+                      onChange={(e) => setReportFilters({ period: e.target.value, fromDate: '', toDate: '' })}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white text-gray-900"
+                    >
+                      <option value="1" className="text-gray-900">Today</option>
+                      <option value="7" className="text-gray-900">Last 7 Days</option>
+                      <option value="30" className="text-gray-900">Last 30 Days</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2 flex items-center">
+                      <Calendar className="h-4 w-4 mr-1 text-gray-500" />
+                      From Date
+                    </label>
+                    <input
+                      type="date"
+                      value={reportFilters.fromDate}
+                      onChange={(e) => setReportFilters({ ...reportFilters, fromDate: e.target.value, period: '' })}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-900 bg-white"
+                      style={{ colorScheme: 'light' }}
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2 flex items-center">
+                      <Calendar className="h-4 w-4 mr-1 text-gray-500" />
+                      To Date
+                    </label>
+                    <input
+                      type="date"
+                      value={reportFilters.toDate}
+                      onChange={(e) => setReportFilters({ ...reportFilters, toDate: e.target.value, period: '' })}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-900 bg-white"
+                      style={{ colorScheme: 'light' }}
+                    />
+                  </div>
+                  <div className="flex items-end gap-2">
+                    <button
+                      onClick={fetchFinancialReport}
+                      disabled={loadingReport}
+                      className="flex-1 px-4 py-2 bg-green-600 hover:bg-green-700 disabled:bg-gray-400 text-white rounded-lg font-medium transition"
+                    >
+                      {loadingReport ? 'Loading...' : 'Generate'}
+                    </button>
+                    <button
+                      onClick={() => {
+                        setReportFilters({ period: '1', fromDate: '', toDate: '' });
+                        setReportData(null);
+                      }}
+                      className="px-4 py-2 bg-gray-200 hover:bg-gray-300 text-gray-700 rounded-lg font-medium transition"
+                    >
+                      Clear
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Report Content - Will be printed */}
+            {reportData && (
+              <div className="bg-white rounded-xl shadow-lg border border-gray-200 print:shadow-none print:border-0">
+                {/* Report Header */}
+                <div className="p-8 border-b border-gray-200">
+                  <div className="text-center mb-6">
+                    <h1 className="text-3xl font-bold text-gray-900 mb-2">FINANCIAL REPORT</h1>
+                    <h2 className="text-xl font-semibold text-gray-700">{currentShop?.name}</h2>
+                    <p className="text-gray-600 mt-1">{currentShop?.location}</p>
+                    <div className="mt-4 text-sm text-gray-600">
+                      <p>Report Period: <span className="font-semibold">{reportData.periodStart} to {reportData.periodEnd}</span></p>
+                      <p>Generated On: <span className="font-semibold">{new Date().toLocaleDateString('en-IN')}</span></p>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Financial Summary */}
+                <div className="p-8 border-b border-gray-200">
+                  <h3 className="text-xl font-bold text-gray-900 mb-4">FINANCIAL SUMMARY</h3>
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
+                    <div className="p-4 bg-green-50 rounded-lg border border-green-200">
+                      <div className="text-sm text-green-700 font-medium">Total Revenue</div>
+                      <div className="text-2xl font-bold text-green-900 mt-1">₹{reportData.summary?.totalRevenue?.toLocaleString() || 0}</div>
+                    </div>
+                    <div className="p-4 bg-red-50 rounded-lg border border-red-200">
+                      <div className="text-sm text-red-700 font-medium">Total Expenses</div>
+                      <div className="text-2xl font-bold text-red-900 mt-1">₹{reportData.summary?.totalExpenses?.toLocaleString() || 0}</div>
+                    </div>
+                    <div className="p-4 bg-green-50 rounded-lg border border-green-200">
+                      <div className="text-sm text-green-700 font-medium">Net Profit</div>
+                      <div className="text-2xl font-bold text-green-900 mt-1">₹{reportData.summary?.netProfit?.toLocaleString() || 0}</div>
+                    </div>
+                    <div className="p-4 bg-purple-50 rounded-lg border border-purple-200">
+                      <div className="text-sm text-purple-700 font-medium">Profit Margin</div>
+                      <div className="text-2xl font-bold text-purple-900 mt-1">{reportData.summary?.profitMargin?.toFixed(1) || 0}%</div>
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="p-4 bg-emerald-50 rounded-lg border border-emerald-200">
+                      <div className="text-sm text-emerald-700 font-medium">Customer Payments</div>
+                      <div className="text-xl font-bold text-emerald-900 mt-1">₹{reportData.summary?.totalCustomerPayments?.toLocaleString() || 0}</div>
+                    </div>
+                    <div className="p-4 bg-blue-50 rounded-lg border border-blue-200">
+                      <div className="text-sm text-blue-700 font-medium">Dealer Payments</div>
+                      <div className="text-xl font-bold text-blue-900 mt-1">₹{reportData.summary?.totalDealerPayments?.toLocaleString() || 0}</div>
+                    </div>
+                    {(reportData.summary?.totalSparePurchases > 0) && (
+                      <div className="p-4 bg-amber-50 rounded-lg border border-amber-200">
+                        <div className="text-sm text-amber-700 font-medium">Spare Stock Purchases</div>
+                        <div className="text-xl font-bold text-amber-900 mt-1">₹{reportData.summary?.totalSparePurchases?.toLocaleString() || 0}</div>
+                      </div>
+                    )}
+                    {(reportData.summary?.totalSpareReturns > 0) && (
+                      <div className="p-4 bg-green-50 rounded-lg border border-green-200">
+                        <div className="text-sm text-green-700 font-medium">Spare Returns (Credit)</div>
+                        <div className="text-xl font-bold text-green-900 mt-1">₹{reportData.summary?.totalSpareReturns?.toLocaleString() || 0}</div>
+                      </div>
+                    )}
+                  </div>
+                  {reportData.summary?.paymentMethodTotals && (() => {
+                    const t = reportData.summary.paymentMethodTotals;
+                    const revenue = reportData.summary?.totalRevenue || 0;
+                    const tiles = [
+                      { key: 'cash', label: 'Cash', cls: 'bg-emerald-50 border-emerald-200 text-emerald-700', val: 'text-emerald-900' },
+                      { key: 'gpay', label: 'Gpay / UPI', cls: 'bg-sky-50 border-sky-200 text-sky-700', val: 'text-sky-900' },
+                      { key: 'card', label: 'Card', cls: 'bg-indigo-50 border-indigo-200 text-indigo-700', val: 'text-indigo-900' },
+                      ...(t.other > 0 ? [{ key: 'other', label: 'Other', cls: 'bg-gray-50 border-gray-200 text-gray-700', val: 'text-gray-900' }] : []),
+                    ];
+                    return (
+                      <div className="mt-4">
+                        <div className="text-sm font-semibold text-gray-700 mb-2">Payment Breakdown (Revenue)</div>
+                        <div className={`grid grid-cols-2 ${tiles.length > 3 ? 'md:grid-cols-4' : 'md:grid-cols-3'} gap-4`}>
+                          {tiles.map((tile) => (
+                            <div key={tile.key} className={`p-4 rounded-lg border ${tile.cls}`}>
+                              <div className="text-sm font-medium">{tile.label}</div>
+                              <div className={`text-xl font-bold mt-1 ${tile.val}`}>₹{(t[tile.key] || 0).toLocaleString('en-IN')}</div>
+                              <div className="text-xs opacity-80 mt-1">{revenue > 0 ? ((t[tile.key] || 0) / revenue * 100).toFixed(1) : '0.0'}% of revenue</div>
+                            </div>
+                          ))}
+                        </div>
+                        <p className="text-xs text-gray-500 mt-2">Split payments (e.g. Gpay + Cash) are divided equally between their methods.</p>
+                      </div>
+                    );
+                  })()}
+                </div>
+
+                {/* Customer Payments */}
+                {reportData.customerPayments && reportData.customerPayments.length > 0 && (
+                  <div className="p-8 border-b border-gray-200">
+                    <h3 className="text-xl font-bold text-gray-900 mb-4">CUSTOMER PAYMENTS</h3>
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-sm">
+                        <thead>
+                          <tr className="bg-gray-100 border-b border-gray-300">
+                            <th className="px-4 py-3 text-left font-semibold text-gray-700">S.No</th>
+                            <th className="px-4 py-3 text-left font-semibold text-gray-700">Date</th>
+                            <th className="px-4 py-3 text-left font-semibold text-gray-700">Customer Name</th>
+                            <th className="px-4 py-3 text-left font-semibold text-gray-700">Mobile/Device</th>
+                            <th className="px-4 py-3 text-left font-semibold text-gray-700">Payment Method</th>
+                            <th className="px-4 py-3 text-right font-semibold text-gray-700">Amount</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {reportData.customerPayments.map((payment, idx) => (
+                            <tr key={idx} className="border-b border-gray-200 hover:bg-gray-50">
+                              <td className="px-4 py-3 text-gray-900">{idx + 1}</td>
+                              <td className="px-4 py-3 text-gray-900">{new Date(payment.date).toLocaleDateString('en-IN')}</td>
+                              <td className="px-4 py-3 font-medium text-gray-900">{payment.customerName}</td>
+                              <td className="px-4 py-3 text-gray-900">{payment.mobileName}</td>
+                              <td className="px-4 py-3">
+                                <span className="px-2 py-1 bg-green-100 text-green-800 rounded text-xs">
+                                  {payment.paymentMethod || 'N/A'}
+                                </span>
+                              </td>
+                              <td className="px-4 py-3 text-right font-semibold text-green-700">₹{payment.amount?.toLocaleString()}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                        <tfoot>
+                          <tr className="bg-gray-100 font-bold">
+                            <td colSpan="5" className="px-4 py-3 text-right text-gray-900">TOTAL CUSTOMER PAYMENTS:</td>
+                            <td className="px-4 py-3 text-right text-green-700">₹{reportData.summary?.totalCustomerPayments?.toLocaleString()}</td>
+                          </tr>
+                        </tfoot>
+                      </table>
+                    </div>
+                  </div>
+                )}
+
+                {/* Dealer Payments */}
+                {reportData.dealerPayments && reportData.dealerPayments.length > 0 && (
+                  <div className="p-8 border-b border-gray-200">
+                    <h3 className="text-xl font-bold text-gray-900 mb-4">DEALER PAYMENTS</h3>
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-sm">
+                        <thead>
+                          <tr className="bg-gray-100 border-b border-gray-300">
+                            <th className="px-4 py-3 text-left font-semibold text-gray-700">S.No</th>
+                            <th className="px-4 py-3 text-left font-semibold text-gray-700">Date</th>
+                            <th className="px-4 py-3 text-left font-semibold text-gray-700">Dealer Name</th>
+                            <th className="px-4 py-3 text-left font-semibold text-gray-700">Mobile/Device</th>
+                            <th className="px-4 py-3 text-left font-semibold text-gray-700">Payment Method</th>
+                            <th className="px-4 py-3 text-right font-semibold text-gray-700">Amount</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {reportData.dealerPayments.map((payment, idx) => (
+                            <tr key={idx} className="border-b border-gray-200 hover:bg-gray-50">
+                              <td className="px-4 py-3 text-gray-900">{idx + 1}</td>
+                              <td className="px-4 py-3 text-gray-900">{new Date(payment.date).toLocaleDateString('en-IN')}</td>
+                              <td className="px-4 py-3 font-medium text-gray-900">{payment.dealerName}</td>
+                              <td className="px-4 py-3 text-gray-900">{payment.mobileName}</td>
+                              <td className="px-4 py-3">
+                                <span className="px-2 py-1 bg-blue-100 text-blue-800 rounded text-xs">
+                                  {payment.paymentMethod || 'N/A'}
+                                </span>
+                              </td>
+                              <td className="px-4 py-3 text-right font-semibold text-blue-700">₹{payment.amount?.toLocaleString()}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                        <tfoot>
+                          <tr className="bg-gray-100 font-bold">
+                            <td colSpan="5" className="px-4 py-3 text-right text-gray-900">TOTAL DEALER PAYMENTS:</td>
+                            <td className="px-4 py-3 text-right text-blue-700">₹{reportData.summary?.totalDealerPayments?.toLocaleString()}</td>
+                          </tr>
+                        </tfoot>
+                      </table>
+                    </div>
+                  </div>
+                )}
+
+                {/* Supplier Payments */}
+                {reportData.supplierPayments && reportData.supplierPayments.length > 0 && (
+                  <div className="p-8 border-b border-gray-200">
+                    <h3 className="text-xl font-bold text-gray-900 mb-4">SUPPLIER PAYMENTS</h3>
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-sm">
+                        <thead>
+                          <tr className="bg-gray-100 border-b border-gray-300">
+                            <th className="px-4 py-3 text-left font-semibold text-gray-700">S.No</th>
+                            <th className="px-4 py-3 text-left font-semibold text-gray-700">Date</th>
+                            <th className="px-4 py-3 text-left font-semibold text-gray-700">Supplier Name</th>
+                            <th className="px-4 py-3 text-left font-semibold text-gray-700">Product/Part</th>
+                            <th className="px-4 py-3 text-left font-semibold text-gray-700">Payment Method</th>
+                            <th className="px-4 py-3 text-right font-semibold text-gray-700">Amount</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {reportData.supplierPayments.map((payment, idx) => (
+                            <tr key={idx} className="border-b border-gray-200 hover:bg-gray-50">
+                              <td className="px-4 py-3 text-gray-900">{idx + 1}</td>
+                              <td className="px-4 py-3 text-gray-900">{new Date(payment.date).toLocaleDateString('en-IN')}</td>
+                              <td className="px-4 py-3 font-medium text-gray-900">{payment.supplierName}</td>
+                              <td className="px-4 py-3 text-gray-900">{payment.productName}</td>
+                              <td className="px-4 py-3">
+                                <span className="px-2 py-1 bg-orange-100 text-orange-800 rounded text-xs">
+                                  {payment.paymentMethod || 'N/A'}
+                                </span>
+                              </td>
+                              <td className="px-4 py-3 text-right font-semibold text-red-700">₹{payment.amount?.toLocaleString()}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                        <tfoot>
+                          <tr className="bg-gray-100 font-bold">
+                            <td colSpan="5" className="px-4 py-3 text-right text-gray-900">TOTAL SUPPLIER PAYMENTS:</td>
+                            <td className="px-4 py-3 text-right text-red-700">₹{reportData.summary?.totalSupplierPayments?.toLocaleString()}</td>
+                          </tr>
+                        </tfoot>
+                      </table>
+                    </div>
+                  </div>
+                )}
+
+                {/* Operating Expenses */}
+                {reportData.expenses && reportData.expenses.length > 0 && (
+                  <div className="p-8 border-b border-gray-200">
+                    <h3 className="text-xl font-bold text-gray-900 mb-4">OPERATING EXPENSES</h3>
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-sm">
+                        <thead>
+                          <tr className="bg-gray-100 border-b border-gray-300">
+                            <th className="px-4 py-3 text-left font-semibold text-gray-700">S.No</th>
+                            <th className="px-4 py-3 text-left font-semibold text-gray-700">Date</th>
+                            <th className="px-4 py-3 text-left font-semibold text-gray-700">Category</th>
+                            <th className="px-4 py-3 text-left font-semibold text-gray-700">Description</th>
+                            <th className="px-4 py-3 text-right font-semibold text-gray-700">Amount</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {reportData.expenses.map((expense, idx) => (
+                            <tr key={idx} className="border-b border-gray-200 hover:bg-gray-50">
+                              <td className="px-4 py-3 text-gray-900">{idx + 1}</td>
+                              <td className="px-4 py-3 text-gray-900">{new Date(expense.date).toLocaleDateString('en-IN')}</td>
+                              <td className="px-4 py-3 font-medium text-gray-900">{expense.category}</td>
+                              <td className="px-4 py-3 text-gray-900">{expense.description}</td>
+                              <td className="px-4 py-3 text-right font-semibold text-red-700">₹{expense.amount?.toLocaleString()}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                        <tfoot>
+                          <tr className="bg-gray-100 font-bold">
+                            <td colSpan="4" className="px-4 py-3 text-right text-gray-900">TOTAL OPERATING EXPENSES:</td>
+                            <td className="px-4 py-3 text-right text-red-700">₹{reportData.summary?.totalOperatingExpenses?.toLocaleString()}</td>
+                          </tr>
+                        </tfoot>
+                      </table>
+                    </div>
+                  </div>
+                )}
+
+                {/* Payment Method Breakdown */}
+                <div className="p-8">
+                  <h3 className="text-xl font-bold text-gray-900 mb-4">PAYMENT METHOD BREAKDOWN</h3>
+                  <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+                    {reportData.paymentBreakdown?.map((payment, idx) => (
+                      <div key={idx} className="p-4 bg-gray-50 rounded-lg border border-gray-200">
+                        <div className="text-sm text-gray-600 font-medium">{formatPaymentMethodLabel(payment.method)}</div>
+                        <div className="text-xl font-bold text-gray-900 mt-1">₹{payment.total?.toLocaleString()}</div>
+                        <div className="text-xs text-gray-500 mt-1">{payment.count} transactions</div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Spare Stock Purchases */}
+                {reportData.sparePurchases && reportData.sparePurchases.length > 0 && (
+                  <div className="p-8 border-t border-amber-200 bg-amber-50">
+                    <h3 className="text-xl font-bold text-gray-900 mb-4">SPARE STOCK PURCHASES</h3>
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-sm">
+                        <thead>
+                          <tr className="bg-amber-100 border-b border-amber-300">
+                            <th className="px-4 py-3 text-left font-semibold text-gray-700">S.No</th>
+                            <th className="px-4 py-3 text-left font-semibold text-gray-700">Date</th>
+                            <th className="px-4 py-3 text-left font-semibold text-gray-700">Spare Name</th>
+                            <th className="px-4 py-3 text-left font-semibold text-gray-700">Category</th>
+                            <th className="px-4 py-3 text-center font-semibold text-gray-700">Qty</th>
+                            <th className="px-4 py-3 text-right font-semibold text-gray-700">Cost/Unit</th>
+                            <th className="px-4 py-3 text-right font-semibold text-gray-700">Amount</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {reportData.sparePurchases.map((item, idx) => (
+                            <tr key={idx} className="border-b border-amber-100 hover:bg-amber-50">
+                              <td className="px-4 py-3 text-gray-900">{idx + 1}</td>
+                              <td className="px-4 py-3 text-gray-900">{new Date(item.date).toLocaleDateString('en-IN')}</td>
+                              <td className="px-4 py-3 font-medium text-gray-900">{item.spareName}</td>
+                              <td className="px-4 py-3 text-gray-700">{item.category || '—'}</td>
+                              <td className="px-4 py-3 text-center text-gray-900">{item.quantity}</td>
+                              <td className="px-4 py-3 text-right text-gray-700">₹{item.costPrice?.toLocaleString()}</td>
+                              <td className="px-4 py-3 text-right font-semibold text-amber-700">₹{item.amount?.toLocaleString()}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                        <tfoot>
+                          <tr className="bg-amber-100 font-bold">
+                            <td colSpan="6" className="px-4 py-3 text-right text-gray-900">TOTAL SPARE PURCHASES:</td>
+                            <td className="px-4 py-3 text-right text-amber-700">₹{reportData.summary?.totalSparePurchases?.toLocaleString()}</td>
+                          </tr>
+                        </tfoot>
+                      </table>
+                    </div>
+                  </div>
+                )}
+
+                {/* Spare Returns to Supplier */}
+                {reportData.spareReturns && reportData.spareReturns.length > 0 && (
+                  <div className="p-8 border-t border-green-200 bg-green-50">
+                    <h3 className="text-xl font-bold text-gray-900 mb-4">SPARE RETURNS TO SUPPLIER</h3>
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-sm">
+                        <thead>
+                          <tr className="bg-green-100 border-b border-green-300">
+                            <th className="px-4 py-3 text-left font-semibold text-gray-700">S.No</th>
+                            <th className="px-4 py-3 text-left font-semibold text-gray-700">Date</th>
+                            <th className="px-4 py-3 text-left font-semibold text-gray-700">Spare Name</th>
+                            <th className="px-4 py-3 text-left font-semibold text-gray-700">Category</th>
+                            <th className="px-4 py-3 text-center font-semibold text-gray-700">Qty Returned</th>
+                            <th className="px-4 py-3 text-right font-semibold text-gray-700">Cost/Unit</th>
+                            <th className="px-4 py-3 text-right font-semibold text-gray-700">Return Value</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {reportData.spareReturns.map((item, idx) => (
+                            <tr key={idx} className="border-b border-green-100 hover:bg-green-50">
+                              <td className="px-4 py-3 text-gray-900">{idx + 1}</td>
+                              <td className="px-4 py-3 text-gray-900">{new Date(item.date).toLocaleDateString('en-IN')}</td>
+                              <td className="px-4 py-3 font-medium text-gray-900">{item.spareName}</td>
+                              <td className="px-4 py-3 text-gray-700">{item.category || '—'}</td>
+                              <td className="px-4 py-3 text-center text-gray-900">{item.quantity}</td>
+                              <td className="px-4 py-3 text-right text-gray-700">₹{item.costPrice?.toLocaleString()}</td>
+                              <td className="px-4 py-3 text-right font-semibold text-green-700">₹{item.amount?.toLocaleString()}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                        <tfoot>
+                          <tr className="bg-green-100 font-bold">
+                            <td colSpan="6" className="px-4 py-3 text-right text-gray-900">TOTAL RETURNS (CREDIT):</td>
+                            <td className="px-4 py-3 text-right text-green-700">₹{reportData.summary?.totalSpareReturns?.toLocaleString()}</td>
+                          </tr>
+                        </tfoot>
+                      </table>
+                    </div>
+                  </div>
+                )}
+
+                {/* Footer */}
+                <div className="p-8 bg-gray-50 border-t border-gray-200 text-center text-sm text-gray-600">
+                  <p>This is a computer-generated report and does not require a signature.</p>
+                  <p className="mt-1">For queries, please contact: {currentShop?.phone || 'N/A'}</p>
+                </div>
+              </div>
+            )}
+
+            {!reportData && !loadingReport && (
+              <div className="bg-white rounded-xl shadow-lg border border-gray-200 p-12 text-center">
+                <AlertCircle className="h-16 w-16 text-gray-300 mx-auto mb-4" />
+                <p className="text-gray-600 text-lg">No report generated yet</p>
+                <p className="text-gray-500 text-sm mt-2">Select a time period and click "Generate" to create your financial report</p>
+              </div>
+            )}
+          </div>
+  );
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 flex">
       {/* Sidebar - Fixed */}
@@ -2620,480 +3097,9 @@ export default function ShopAdminDashboard() {
           </div>
         )}
 
-        {activeTab === 'report' && (
-          <div className="space-y-6">
-            {/* Filter Section - Not printed */}
-            <div className="bg-white p-6 rounded-xl shadow-lg border border-gray-200 print:hidden">
-              <div className="flex items-center justify-between mb-4">
-                <div>
-                  <h2 className="text-2xl font-bold text-gray-800 flex items-center">
-                    <AlertCircle className="h-7 w-7 mr-3 text-green-600" />
-                    Financial Report
-                  </h2>
-                  <p className="text-gray-600 text-sm mt-1">Comprehensive financial analysis and report</p>
-                </div>
-                <div className="flex gap-2 items-center">
-                  <select
-                    value={reportFormat}
-                    onChange={(e) => setReportFormat(e.target.value)}
-                    className="px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white text-gray-900 focus:outline-none focus:ring-2 focus:ring-green-500"
-                  >
-                    <option value="pdf">PDF</option>
-                    <option value="excel">Excel</option>
-                  </select>
-                  <button 
-                    onClick={handleExportReport}
-                    disabled={!reportData}
-                    className="px-4 py-2 bg-green-600 hover:bg-green-700 disabled:bg-gray-300 text-white rounded-lg text-sm font-medium transition flex items-center gap-2"
-                  >
-                    {reportFormat === 'excel' ? (
-                      <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
-                        <polyline points="14 2 14 8 20 8"></polyline>
-                        <line x1="16" y1="13" x2="8" y2="13"></line>
-                        <line x1="16" y1="17" x2="8" y2="17"></line>
-                        <polyline points="10 9 9 9 8 9"></polyline>
-                      </svg>
-                    ) : (
-                      <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                        <polyline points="6 9 6 2 18 2 18 9"></polyline>
-                        <path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"></path>
-                        <rect x="6" y="14" width="12" height="8"></rect>
-                      </svg>
-                    )}
-                    {reportFormat === 'excel' ? 'Export Excel' : 'Print Report'}
-                  </button>
-                </div>
-              </div>
-
-              {/* Date Filters */}
-              <div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
-                <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">Report Period</label>
-                    <select
-                      value={reportFilters.period}
-                      onChange={(e) => setReportFilters({ period: e.target.value, fromDate: '', toDate: '' })}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white text-gray-900"
-                    >
-                      <option value="1" className="text-gray-900">Today</option>
-                      <option value="7" className="text-gray-900">Last 7 Days</option>
-                      <option value="30" className="text-gray-900">Last 30 Days</option>
-                    </select>
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2 flex items-center">
-                      <Calendar className="h-4 w-4 mr-1 text-gray-500" />
-                      From Date
-                    </label>
-                    <input
-                      type="date"
-                      value={reportFilters.fromDate}
-                      onChange={(e) => setReportFilters({ ...reportFilters, fromDate: e.target.value, period: '' })}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-900 bg-white"
-                      style={{ colorScheme: 'light' }}
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2 flex items-center">
-                      <Calendar className="h-4 w-4 mr-1 text-gray-500" />
-                      To Date
-                    </label>
-                    <input
-                      type="date"
-                      value={reportFilters.toDate}
-                      onChange={(e) => setReportFilters({ ...reportFilters, toDate: e.target.value, period: '' })}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-900 bg-white"
-                      style={{ colorScheme: 'light' }}
-                    />
-                  </div>
-                  <div className="flex items-end gap-2">
-                    <button
-                      onClick={fetchFinancialReport}
-                      disabled={loadingReport}
-                      className="flex-1 px-4 py-2 bg-green-600 hover:bg-green-700 disabled:bg-gray-400 text-white rounded-lg font-medium transition"
-                    >
-                      {loadingReport ? 'Loading...' : 'Generate'}
-                    </button>
-                    <button
-                      onClick={() => {
-                        setReportFilters({ period: '1', fromDate: '', toDate: '' });
-                        setReportData(null);
-                      }}
-                      className="px-4 py-2 bg-gray-200 hover:bg-gray-300 text-gray-700 rounded-lg font-medium transition"
-                    >
-                      Clear
-                    </button>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            {/* Report Content - Will be printed */}
-            {reportData && (
-              <div className="bg-white rounded-xl shadow-lg border border-gray-200 print:shadow-none print:border-0">
-                {/* Report Header */}
-                <div className="p-8 border-b border-gray-200">
-                  <div className="text-center mb-6">
-                    <h1 className="text-3xl font-bold text-gray-900 mb-2">FINANCIAL REPORT</h1>
-                    <h2 className="text-xl font-semibold text-gray-700">{currentShop?.name}</h2>
-                    <p className="text-gray-600 mt-1">{currentShop?.location}</p>
-                    <div className="mt-4 text-sm text-gray-600">
-                      <p>Report Period: <span className="font-semibold">{reportData.periodStart} to {reportData.periodEnd}</span></p>
-                      <p>Generated On: <span className="font-semibold">{new Date().toLocaleDateString('en-IN')}</span></p>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Financial Summary */}
-                <div className="p-8 border-b border-gray-200">
-                  <h3 className="text-xl font-bold text-gray-900 mb-4">FINANCIAL SUMMARY</h3>
-                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
-                    <div className="p-4 bg-green-50 rounded-lg border border-green-200">
-                      <div className="text-sm text-green-700 font-medium">Total Revenue</div>
-                      <div className="text-2xl font-bold text-green-900 mt-1">₹{reportData.summary?.totalRevenue?.toLocaleString() || 0}</div>
-                    </div>
-                    <div className="p-4 bg-red-50 rounded-lg border border-red-200">
-                      <div className="text-sm text-red-700 font-medium">Total Expenses</div>
-                      <div className="text-2xl font-bold text-red-900 mt-1">₹{reportData.summary?.totalExpenses?.toLocaleString() || 0}</div>
-                    </div>
-                    <div className="p-4 bg-green-50 rounded-lg border border-green-200">
-                      <div className="text-sm text-green-700 font-medium">Net Profit</div>
-                      <div className="text-2xl font-bold text-green-900 mt-1">₹{reportData.summary?.netProfit?.toLocaleString() || 0}</div>
-                    </div>
-                    <div className="p-4 bg-purple-50 rounded-lg border border-purple-200">
-                      <div className="text-sm text-purple-700 font-medium">Profit Margin</div>
-                      <div className="text-2xl font-bold text-purple-900 mt-1">{reportData.summary?.profitMargin?.toFixed(1) || 0}%</div>
-                    </div>
-                  </div>
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="p-4 bg-emerald-50 rounded-lg border border-emerald-200">
-                      <div className="text-sm text-emerald-700 font-medium">Customer Payments</div>
-                      <div className="text-xl font-bold text-emerald-900 mt-1">₹{reportData.summary?.totalCustomerPayments?.toLocaleString() || 0}</div>
-                    </div>
-                    <div className="p-4 bg-blue-50 rounded-lg border border-blue-200">
-                      <div className="text-sm text-blue-700 font-medium">Dealer Payments</div>
-                      <div className="text-xl font-bold text-blue-900 mt-1">₹{reportData.summary?.totalDealerPayments?.toLocaleString() || 0}</div>
-                    </div>
-                    {(reportData.summary?.totalSparePurchases > 0) && (
-                      <div className="p-4 bg-amber-50 rounded-lg border border-amber-200">
-                        <div className="text-sm text-amber-700 font-medium">Spare Stock Purchases</div>
-                        <div className="text-xl font-bold text-amber-900 mt-1">₹{reportData.summary?.totalSparePurchases?.toLocaleString() || 0}</div>
-                      </div>
-                    )}
-                    {(reportData.summary?.totalSpareReturns > 0) && (
-                      <div className="p-4 bg-green-50 rounded-lg border border-green-200">
-                        <div className="text-sm text-green-700 font-medium">Spare Returns (Credit)</div>
-                        <div className="text-xl font-bold text-green-900 mt-1">₹{reportData.summary?.totalSpareReturns?.toLocaleString() || 0}</div>
-                      </div>
-                    )}
-                  </div>
-                  {reportData.summary?.paymentMethodTotals && (() => {
-                    const t = reportData.summary.paymentMethodTotals;
-                    const revenue = reportData.summary?.totalRevenue || 0;
-                    const tiles = [
-                      { key: 'cash', label: 'Cash', cls: 'bg-emerald-50 border-emerald-200 text-emerald-700', val: 'text-emerald-900' },
-                      { key: 'gpay', label: 'Gpay / UPI', cls: 'bg-sky-50 border-sky-200 text-sky-700', val: 'text-sky-900' },
-                      { key: 'card', label: 'Card', cls: 'bg-indigo-50 border-indigo-200 text-indigo-700', val: 'text-indigo-900' },
-                      ...(t.other > 0 ? [{ key: 'other', label: 'Other', cls: 'bg-gray-50 border-gray-200 text-gray-700', val: 'text-gray-900' }] : []),
-                    ];
-                    return (
-                      <div className="mt-4">
-                        <div className="text-sm font-semibold text-gray-700 mb-2">Payment Breakdown (Revenue)</div>
-                        <div className={`grid grid-cols-2 ${tiles.length > 3 ? 'md:grid-cols-4' : 'md:grid-cols-3'} gap-4`}>
-                          {tiles.map((tile) => (
-                            <div key={tile.key} className={`p-4 rounded-lg border ${tile.cls}`}>
-                              <div className="text-sm font-medium">{tile.label}</div>
-                              <div className={`text-xl font-bold mt-1 ${tile.val}`}>₹{(t[tile.key] || 0).toLocaleString('en-IN')}</div>
-                              <div className="text-xs opacity-80 mt-1">{revenue > 0 ? ((t[tile.key] || 0) / revenue * 100).toFixed(1) : '0.0'}% of revenue</div>
-                            </div>
-                          ))}
-                        </div>
-                        <p className="text-xs text-gray-500 mt-2">Split payments (e.g. Gpay + Cash) are divided equally between their methods.</p>
-                      </div>
-                    );
-                  })()}
-                </div>
-
-                {/* Customer Payments */}
-                {reportData.customerPayments && reportData.customerPayments.length > 0 && (
-                  <div className="p-8 border-b border-gray-200">
-                    <h3 className="text-xl font-bold text-gray-900 mb-4">CUSTOMER PAYMENTS</h3>
-                    <div className="overflow-x-auto">
-                      <table className="w-full text-sm">
-                        <thead>
-                          <tr className="bg-gray-100 border-b border-gray-300">
-                            <th className="px-4 py-3 text-left font-semibold text-gray-700">S.No</th>
-                            <th className="px-4 py-3 text-left font-semibold text-gray-700">Date</th>
-                            <th className="px-4 py-3 text-left font-semibold text-gray-700">Customer Name</th>
-                            <th className="px-4 py-3 text-left font-semibold text-gray-700">Mobile/Device</th>
-                            <th className="px-4 py-3 text-left font-semibold text-gray-700">Payment Method</th>
-                            <th className="px-4 py-3 text-right font-semibold text-gray-700">Amount</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {reportData.customerPayments.map((payment, idx) => (
-                            <tr key={idx} className="border-b border-gray-200 hover:bg-gray-50">
-                              <td className="px-4 py-3 text-gray-900">{idx + 1}</td>
-                              <td className="px-4 py-3 text-gray-900">{new Date(payment.date).toLocaleDateString('en-IN')}</td>
-                              <td className="px-4 py-3 font-medium text-gray-900">{payment.customerName}</td>
-                              <td className="px-4 py-3 text-gray-900">{payment.mobileName}</td>
-                              <td className="px-4 py-3">
-                                <span className="px-2 py-1 bg-green-100 text-green-800 rounded text-xs">
-                                  {payment.paymentMethod || 'N/A'}
-                                </span>
-                              </td>
-                              <td className="px-4 py-3 text-right font-semibold text-green-700">₹{payment.amount?.toLocaleString()}</td>
-                            </tr>
-                          ))}
-                        </tbody>
-                        <tfoot>
-                          <tr className="bg-gray-100 font-bold">
-                            <td colSpan="5" className="px-4 py-3 text-right text-gray-900">TOTAL CUSTOMER PAYMENTS:</td>
-                            <td className="px-4 py-3 text-right text-green-700">₹{reportData.summary?.totalCustomerPayments?.toLocaleString()}</td>
-                          </tr>
-                        </tfoot>
-                      </table>
-                    </div>
-                  </div>
-                )}
-
-                {/* Dealer Payments */}
-                {reportData.dealerPayments && reportData.dealerPayments.length > 0 && (
-                  <div className="p-8 border-b border-gray-200">
-                    <h3 className="text-xl font-bold text-gray-900 mb-4">DEALER PAYMENTS</h3>
-                    <div className="overflow-x-auto">
-                      <table className="w-full text-sm">
-                        <thead>
-                          <tr className="bg-gray-100 border-b border-gray-300">
-                            <th className="px-4 py-3 text-left font-semibold text-gray-700">S.No</th>
-                            <th className="px-4 py-3 text-left font-semibold text-gray-700">Date</th>
-                            <th className="px-4 py-3 text-left font-semibold text-gray-700">Dealer Name</th>
-                            <th className="px-4 py-3 text-left font-semibold text-gray-700">Mobile/Device</th>
-                            <th className="px-4 py-3 text-left font-semibold text-gray-700">Payment Method</th>
-                            <th className="px-4 py-3 text-right font-semibold text-gray-700">Amount</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {reportData.dealerPayments.map((payment, idx) => (
-                            <tr key={idx} className="border-b border-gray-200 hover:bg-gray-50">
-                              <td className="px-4 py-3 text-gray-900">{idx + 1}</td>
-                              <td className="px-4 py-3 text-gray-900">{new Date(payment.date).toLocaleDateString('en-IN')}</td>
-                              <td className="px-4 py-3 font-medium text-gray-900">{payment.dealerName}</td>
-                              <td className="px-4 py-3 text-gray-900">{payment.mobileName}</td>
-                              <td className="px-4 py-3">
-                                <span className="px-2 py-1 bg-blue-100 text-blue-800 rounded text-xs">
-                                  {payment.paymentMethod || 'N/A'}
-                                </span>
-                              </td>
-                              <td className="px-4 py-3 text-right font-semibold text-blue-700">₹{payment.amount?.toLocaleString()}</td>
-                            </tr>
-                          ))}
-                        </tbody>
-                        <tfoot>
-                          <tr className="bg-gray-100 font-bold">
-                            <td colSpan="5" className="px-4 py-3 text-right text-gray-900">TOTAL DEALER PAYMENTS:</td>
-                            <td className="px-4 py-3 text-right text-blue-700">₹{reportData.summary?.totalDealerPayments?.toLocaleString()}</td>
-                          </tr>
-                        </tfoot>
-                      </table>
-                    </div>
-                  </div>
-                )}
-
-                {/* Supplier Payments */}
-                {reportData.supplierPayments && reportData.supplierPayments.length > 0 && (
-                  <div className="p-8 border-b border-gray-200">
-                    <h3 className="text-xl font-bold text-gray-900 mb-4">SUPPLIER PAYMENTS</h3>
-                    <div className="overflow-x-auto">
-                      <table className="w-full text-sm">
-                        <thead>
-                          <tr className="bg-gray-100 border-b border-gray-300">
-                            <th className="px-4 py-3 text-left font-semibold text-gray-700">S.No</th>
-                            <th className="px-4 py-3 text-left font-semibold text-gray-700">Date</th>
-                            <th className="px-4 py-3 text-left font-semibold text-gray-700">Supplier Name</th>
-                            <th className="px-4 py-3 text-left font-semibold text-gray-700">Product/Part</th>
-                            <th className="px-4 py-3 text-left font-semibold text-gray-700">Payment Method</th>
-                            <th className="px-4 py-3 text-right font-semibold text-gray-700">Amount</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {reportData.supplierPayments.map((payment, idx) => (
-                            <tr key={idx} className="border-b border-gray-200 hover:bg-gray-50">
-                              <td className="px-4 py-3 text-gray-900">{idx + 1}</td>
-                              <td className="px-4 py-3 text-gray-900">{new Date(payment.date).toLocaleDateString('en-IN')}</td>
-                              <td className="px-4 py-3 font-medium text-gray-900">{payment.supplierName}</td>
-                              <td className="px-4 py-3 text-gray-900">{payment.productName}</td>
-                              <td className="px-4 py-3">
-                                <span className="px-2 py-1 bg-orange-100 text-orange-800 rounded text-xs">
-                                  {payment.paymentMethod || 'N/A'}
-                                </span>
-                              </td>
-                              <td className="px-4 py-3 text-right font-semibold text-red-700">₹{payment.amount?.toLocaleString()}</td>
-                            </tr>
-                          ))}
-                        </tbody>
-                        <tfoot>
-                          <tr className="bg-gray-100 font-bold">
-                            <td colSpan="5" className="px-4 py-3 text-right text-gray-900">TOTAL SUPPLIER PAYMENTS:</td>
-                            <td className="px-4 py-3 text-right text-red-700">₹{reportData.summary?.totalSupplierPayments?.toLocaleString()}</td>
-                          </tr>
-                        </tfoot>
-                      </table>
-                    </div>
-                  </div>
-                )}
-
-                {/* Operating Expenses */}
-                {reportData.expenses && reportData.expenses.length > 0 && (
-                  <div className="p-8 border-b border-gray-200">
-                    <h3 className="text-xl font-bold text-gray-900 mb-4">OPERATING EXPENSES</h3>
-                    <div className="overflow-x-auto">
-                      <table className="w-full text-sm">
-                        <thead>
-                          <tr className="bg-gray-100 border-b border-gray-300">
-                            <th className="px-4 py-3 text-left font-semibold text-gray-700">S.No</th>
-                            <th className="px-4 py-3 text-left font-semibold text-gray-700">Date</th>
-                            <th className="px-4 py-3 text-left font-semibold text-gray-700">Category</th>
-                            <th className="px-4 py-3 text-left font-semibold text-gray-700">Description</th>
-                            <th className="px-4 py-3 text-right font-semibold text-gray-700">Amount</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {reportData.expenses.map((expense, idx) => (
-                            <tr key={idx} className="border-b border-gray-200 hover:bg-gray-50">
-                              <td className="px-4 py-3 text-gray-900">{idx + 1}</td>
-                              <td className="px-4 py-3 text-gray-900">{new Date(expense.date).toLocaleDateString('en-IN')}</td>
-                              <td className="px-4 py-3 font-medium text-gray-900">{expense.category}</td>
-                              <td className="px-4 py-3 text-gray-900">{expense.description}</td>
-                              <td className="px-4 py-3 text-right font-semibold text-red-700">₹{expense.amount?.toLocaleString()}</td>
-                            </tr>
-                          ))}
-                        </tbody>
-                        <tfoot>
-                          <tr className="bg-gray-100 font-bold">
-                            <td colSpan="4" className="px-4 py-3 text-right text-gray-900">TOTAL OPERATING EXPENSES:</td>
-                            <td className="px-4 py-3 text-right text-red-700">₹{reportData.summary?.totalOperatingExpenses?.toLocaleString()}</td>
-                          </tr>
-                        </tfoot>
-                      </table>
-                    </div>
-                  </div>
-                )}
-
-                {/* Payment Method Breakdown */}
-                <div className="p-8">
-                  <h3 className="text-xl font-bold text-gray-900 mb-4">PAYMENT METHOD BREAKDOWN</h3>
-                  <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-                    {reportData.paymentBreakdown?.map((payment, idx) => (
-                      <div key={idx} className="p-4 bg-gray-50 rounded-lg border border-gray-200">
-                        <div className="text-sm text-gray-600 font-medium">{formatPaymentMethodLabel(payment.method)}</div>
-                        <div className="text-xl font-bold text-gray-900 mt-1">₹{payment.total?.toLocaleString()}</div>
-                        <div className="text-xs text-gray-500 mt-1">{payment.count} transactions</div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-
-                {/* Spare Stock Purchases */}
-                {reportData.sparePurchases && reportData.sparePurchases.length > 0 && (
-                  <div className="p-8 border-t border-amber-200 bg-amber-50">
-                    <h3 className="text-xl font-bold text-gray-900 mb-4">SPARE STOCK PURCHASES</h3>
-                    <div className="overflow-x-auto">
-                      <table className="w-full text-sm">
-                        <thead>
-                          <tr className="bg-amber-100 border-b border-amber-300">
-                            <th className="px-4 py-3 text-left font-semibold text-gray-700">S.No</th>
-                            <th className="px-4 py-3 text-left font-semibold text-gray-700">Date</th>
-                            <th className="px-4 py-3 text-left font-semibold text-gray-700">Spare Name</th>
-                            <th className="px-4 py-3 text-left font-semibold text-gray-700">Category</th>
-                            <th className="px-4 py-3 text-center font-semibold text-gray-700">Qty</th>
-                            <th className="px-4 py-3 text-right font-semibold text-gray-700">Cost/Unit</th>
-                            <th className="px-4 py-3 text-right font-semibold text-gray-700">Amount</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {reportData.sparePurchases.map((item, idx) => (
-                            <tr key={idx} className="border-b border-amber-100 hover:bg-amber-50">
-                              <td className="px-4 py-3 text-gray-900">{idx + 1}</td>
-                              <td className="px-4 py-3 text-gray-900">{new Date(item.date).toLocaleDateString('en-IN')}</td>
-                              <td className="px-4 py-3 font-medium text-gray-900">{item.spareName}</td>
-                              <td className="px-4 py-3 text-gray-700">{item.category || '—'}</td>
-                              <td className="px-4 py-3 text-center text-gray-900">{item.quantity}</td>
-                              <td className="px-4 py-3 text-right text-gray-700">₹{item.costPrice?.toLocaleString()}</td>
-                              <td className="px-4 py-3 text-right font-semibold text-amber-700">₹{item.amount?.toLocaleString()}</td>
-                            </tr>
-                          ))}
-                        </tbody>
-                        <tfoot>
-                          <tr className="bg-amber-100 font-bold">
-                            <td colSpan="6" className="px-4 py-3 text-right text-gray-900">TOTAL SPARE PURCHASES:</td>
-                            <td className="px-4 py-3 text-right text-amber-700">₹{reportData.summary?.totalSparePurchases?.toLocaleString()}</td>
-                          </tr>
-                        </tfoot>
-                      </table>
-                    </div>
-                  </div>
-                )}
-
-                {/* Spare Returns to Supplier */}
-                {reportData.spareReturns && reportData.spareReturns.length > 0 && (
-                  <div className="p-8 border-t border-green-200 bg-green-50">
-                    <h3 className="text-xl font-bold text-gray-900 mb-4">SPARE RETURNS TO SUPPLIER</h3>
-                    <div className="overflow-x-auto">
-                      <table className="w-full text-sm">
-                        <thead>
-                          <tr className="bg-green-100 border-b border-green-300">
-                            <th className="px-4 py-3 text-left font-semibold text-gray-700">S.No</th>
-                            <th className="px-4 py-3 text-left font-semibold text-gray-700">Date</th>
-                            <th className="px-4 py-3 text-left font-semibold text-gray-700">Spare Name</th>
-                            <th className="px-4 py-3 text-left font-semibold text-gray-700">Category</th>
-                            <th className="px-4 py-3 text-center font-semibold text-gray-700">Qty Returned</th>
-                            <th className="px-4 py-3 text-right font-semibold text-gray-700">Cost/Unit</th>
-                            <th className="px-4 py-3 text-right font-semibold text-gray-700">Return Value</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {reportData.spareReturns.map((item, idx) => (
-                            <tr key={idx} className="border-b border-green-100 hover:bg-green-50">
-                              <td className="px-4 py-3 text-gray-900">{idx + 1}</td>
-                              <td className="px-4 py-3 text-gray-900">{new Date(item.date).toLocaleDateString('en-IN')}</td>
-                              <td className="px-4 py-3 font-medium text-gray-900">{item.spareName}</td>
-                              <td className="px-4 py-3 text-gray-700">{item.category || '—'}</td>
-                              <td className="px-4 py-3 text-center text-gray-900">{item.quantity}</td>
-                              <td className="px-4 py-3 text-right text-gray-700">₹{item.costPrice?.toLocaleString()}</td>
-                              <td className="px-4 py-3 text-right font-semibold text-green-700">₹{item.amount?.toLocaleString()}</td>
-                            </tr>
-                          ))}
-                        </tbody>
-                        <tfoot>
-                          <tr className="bg-green-100 font-bold">
-                            <td colSpan="6" className="px-4 py-3 text-right text-gray-900">TOTAL RETURNS (CREDIT):</td>
-                            <td className="px-4 py-3 text-right text-green-700">₹{reportData.summary?.totalSpareReturns?.toLocaleString()}</td>
-                          </tr>
-                        </tfoot>
-                      </table>
-                    </div>
-                  </div>
-                )}
-
-                {/* Footer */}
-                <div className="p-8 bg-gray-50 border-t border-gray-200 text-center text-sm text-gray-600">
-                  <p>This is a computer-generated report and does not require a signature.</p>
-                  <p className="mt-1">For queries, please contact: {currentShop?.phone || 'N/A'}</p>
-                </div>
-              </div>
-            )}
-
-            {!reportData && !loadingReport && (
-              <div className="bg-white rounded-xl shadow-lg border border-gray-200 p-12 text-center">
-                <AlertCircle className="h-16 w-16 text-gray-300 mx-auto mb-4" />
-                <p className="text-gray-600 text-lg">No report generated yet</p>
-                <p className="text-gray-500 text-sm mt-2">Select a time period and click "Generate" to create your financial report</p>
-              </div>
-            )}
-          </div>
-        )}
+        {activeTab === 'report' && (hasSales
+          ? <FinancialReport shopId={currentShopId} shopName={currentShop?.name} access={productAccess} serviceReport={hasService ? serviceReportView() : null} />
+          : serviceReportView())}
       </div>
     </div>
   );

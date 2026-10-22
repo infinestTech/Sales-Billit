@@ -2732,6 +2732,10 @@ router.get('/hr/performance',                     performanceController.getPerfo
 router.get('/hr/performance/:id',                 performanceController.getEmployeePerformance);
 // Consolidated sales + service P&L
 router.get('/analytics/business', shopAdminAuth,  performanceController.getBusinessAnalytics);
+
+// Sales financial report (sales profit, expenses, dealer payments, net profit, cash flow); see controllers/financialReportController.js
+const financialReportController = require('../controllers/financialReportController');
+router.get('/reports/sales-financial', shopAdminAuth, financialReportController.getSalesFinancialReport);
 // POS rules enforced by SalesServer (e.g. employee code mandatory on every sale)
 router.get('/shop-settings/pos', shopAdminAuth,   performanceController.getPosSettings);
 router.patch('/shop-settings/pos', shopAdminAuth, performanceController.updatePosSettings);

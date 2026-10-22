@@ -1,5 +1,5 @@
 import {
-  Users, Phone, TrendingUp, Truck, DollarSign, CheckCircle, AlertCircle, UserPlus, Briefcase,
+  Users, Phone, TrendingUp, Truck, DollarSign, CheckCircle, UserPlus, Briefcase,
   ClipboardList, FileText, Wallet, Calculator, Building2, Boxes, History, CreditCard, Store, Send,
   BarChart3, Award, Package, Receipt, Smartphone,
 } from 'lucide-react';
@@ -10,6 +10,8 @@ import {
 export const NAV = [
   { type: 'item', id: 'overview', label: 'Overview', icon: TrendingUp },
   { type: 'item', id: 'business-analytics', label: 'Business Analytics', icon: BarChart3, desc: 'Sales + service P&L' },
+  // Plan-aware: sales report, service report, or both plus a combined view (FinancialReport.jsx)
+  { type: 'item', id: 'report', label: 'Financial Report', icon: FileText, desc: 'Profit, expenses & exports' },
   {
     type: 'group', key: 'hr', label: 'HR', icon: Users, children: [
       { id: 'hr-employees', label: 'Employees', icon: Users, desc: 'Add, edit & manage staff' },
@@ -35,7 +37,6 @@ export const NAV = [
   {
     type: 'group', key: 'reports', label: 'Reports', icon: FileText, product: 'service', children: [
       { id: 'revenue', label: 'Revenue', icon: DollarSign, desc: 'Income, expenses & profit' },
-      { id: 'report', label: 'Financial Report', icon: AlertCircle, desc: 'Printable / Excel report' },
     ]
   },
   {
@@ -94,7 +95,7 @@ export function buildVisibleNav(access) {
   });
 }
 
-export const ALWAYS_TABS = ['overview', 'business-analytics', 'employees', 'hr-employees', 'hr-attendance', 'salary', 'hr-performance'];
+export const ALWAYS_TABS = ['overview', 'business-analytics', 'report', 'employees', 'hr-employees', 'hr-attendance', 'salary', 'hr-performance'];
 
 export function isTabAllowed(tab, visibleNav) {
   if (ALWAYS_TABS.includes(tab)) return true;

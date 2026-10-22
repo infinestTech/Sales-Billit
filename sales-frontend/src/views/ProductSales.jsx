@@ -25,7 +25,8 @@ function ProductSales({ salesUrl, token }) {
 				const res = await fetch(url, { headers: { Authorization: 'Bearer ' + token } });
 				const data = await res.json();
 				if (!res.ok) throw new Error(data.message || 'Failed to load');
-				setProducts(Array.isArray(data.rows) ? data.rows : []);
+				// No fixed selling price: a scanned product starts at its cost price and the salesperson sets the price on the spot
+				setProducts(Array.isArray(data.rows) ? data.rows.map(r => ({ ...r, sellingPrice: Number(r.costPrice) || 0 })) : []);
 			} catch (e) { setError(e.message); }
 		}
 		fetchProducts();
@@ -263,7 +264,7 @@ function ProductSales({ salesUrl, token }) {
 				}
 				
 				const qty = Number(i.qty || i.sellingQty || 0);
-				const unit = Number(found?.sellingPrice ?? found?.unitSellingPrice ?? i.sellingPrice ?? 0);
+				const unit = Number(i.sellingPrice ?? found?.costPrice ?? 0);
 				
 				// Calculate tax per unit (GST percentage from sale data)
 				const taxPercent = (Number(cgstPercent) + Number(sgstPercent) + Number(igstPercent)) || 0;

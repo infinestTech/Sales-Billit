@@ -34,7 +34,8 @@ function MobileProductSales({ salesUrl, token }) {
         const res = await fetch(url, { headers: { Authorization: 'Bearer ' + token } });
         const data = await res.json();
         if (!res.ok) throw new Error(data.message || 'Failed to load');
-        setProducts(Array.isArray(data.rows) ? data.rows : []);
+        // No fixed selling price: a scanned product starts at its cost price and the salesperson sets the price on the spot
+        setProducts(Array.isArray(data.rows) ? data.rows.map((r) => ({ ...r, sellingPrice: Number(r.costPrice) || 0 })) : []);
       } catch (e) {
         setError(e.message);
       }
@@ -364,7 +365,7 @@ function MobileProductSales({ salesUrl, token }) {
           }
 
           const qty = Number(i.qty || i.sellingQty || 0);
-          const unit = Number(found?.sellingPrice ?? found?.unitSellingPrice ?? i.sellingPrice ?? 0).toFixed(2);
+          const unit = Number(i.sellingPrice ?? found?.costPrice ?? 0).toFixed(2);
           const line = (qty * Number(unit)).toFixed(2);
           const taxPerUnit = igstPercent > 0 ? (Number(igstAmt) / Math.max(1, qty)).toFixed(2) : ((Number(cgstAmt) + Number(sgstAmt)) / Math.max(1, qty)).toFixed(2);
 

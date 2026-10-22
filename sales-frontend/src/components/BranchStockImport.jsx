@@ -37,7 +37,6 @@ function BranchStockImport({ salesUrl, getToken, suppliers, branchEntries, onClo
   const [parseError, setParseError] = React.useState('');
   const [bills, setBills] = React.useState([]);
   const [activeKey, setActiveKey] = React.useState('');
-  const [markup, setMarkup] = React.useState('');
   const [codeNotes, setCodeNotes] = React.useState({ renamed: 0, generated: 0 });
   const [saving, setSaving] = React.useState(false);
   const [saveError, setSaveError] = React.useState('');
@@ -56,14 +55,6 @@ function BranchStockImport({ salesUrl, getToken, suppliers, branchEntries, onClo
     });
     return { own, fromHeadOffice };
   }, [branchEntries]);
-
-  const sellingFor = (item) => {
-    if (item.sellingPrice > 0) return item.sellingPrice;
-    const existing = branchRows.own.get(String(item.productNo || '').toLowerCase());
-    if (existing && Number(existing.sellingPrice) > 0) return Number(existing.sellingPrice);
-    if (markup !== '' && !Number.isNaN(Number(markup))) return Math.round(item.costPrice * (1 + Number(markup) / 100) * 100) / 100;
-    return 0;
-  };
 
   const makeBill = (invoice, index) => {
     const s = II.summarize(invoice.items);
@@ -101,14 +92,13 @@ function BranchStockImport({ salesUrl, getToken, suppliers, branchEntries, onClo
   const readyBills = pendingBills.filter(b => !billProblem(b));
 
   const totals = React.useMemo(() => {
-    let products = 0, units = 0, amount = 0, unpriced = 0;
+    let products = 0, units = 0, amount = 0;
     pendingBills.forEach(b => {
       const s = II.summarize(b.items);
       products += s.valid.length; units += s.totalQty; amount += s.supplierAmount;
-      unpriced += s.valid.filter(i => !(sellingFor(i) > 0)).length;
     });
-    return { products, units, amount, unpriced };
-  }, [pendingBills, markup, branchRows]);
+    return { products, units, amount };
+  }, [pendingBills]);
 
   const activeStats = React.useMemo(() => {
     if (!summary) return { topUp: 0, separate: 0 };
@@ -200,7 +190,6 @@ function BranchStockImport({ salesUrl, getToken, suppliers, branchEntries, onClo
         model: i.model,
         qty: i.quantity,
         costPrice: i.costPrice,
-        sellingPrice: sellingFor(i),
         validity: i.validity || null,
         warrantyMonths: i.warrantyMonths,
         warrantyDetails: i.warrantyDetails,
@@ -223,10 +212,6 @@ function BranchStockImport({ salesUrl, getToken, suppliers, branchEntries, onClo
     if (blocked) {
       setActiveKey(blocked.key);
       setSaveError(`${blocked.billNo || blocked.name}: ${billProblem(blocked)}. Fix it or untick the bill to skip it.`);
-      return;
-    }
-    if (totals.unpriced > 0) {
-      setSaveError(`${totals.unpriced} product(s) have no selling price or MRP. Enter a markup % so they can be sold at the POS (use 0 to sell at cost).`);
       return;
     }
     setSaving(true); setSaveError('');
@@ -290,7 +275,7 @@ function BranchStockImport({ salesUrl, getToken, suppliers, branchEntries, onClo
             <div>
               <div style={{ fontWeight: '600', color: '#3730a3' }}>{fileName ? `📄 ${fileName}` : 'Drop the bill file here or choose a file'}</div>
               <div style={{ fontSize: '12px', color: '#6366f1', marginTop: '4px' }}>
-                Columns: S.No, Code, Product, HSN, MRP, Rate, Qty, T.Value, CGST %, CGST Amt, SGST %, SGST Amt, Total (optional: Brand, Model, IMEI, Selling Price, Warranty, Validity)
+                Columns: S.No, Code, Product, HSN, MRP, Rate, Qty, T.Value, CGST %, CGST Amt, SGST %, SGST Amt, Total (optional: Brand, Model, IMEI, Warranty, Validity)
               </div>
             </div>
             <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
@@ -413,11 +398,6 @@ function BranchStockImport({ salesUrl, getToken, suppliers, branchEntries, onClo
                     <input style={input} type="number" value={active.creditAmount} disabled={locked} onChange={(e) => updateBill(active.key, { creditAmount: e.target.value })} />
                   </div>
                 )}
-                <div>
-                  <label style={label}>Markup % for items without a price</label>
-                  <input style={{ ...input, borderColor: totals.unpriced > 0 && markup === '' ? '#f59e0b' : '#d1d5db' }} type="number" min="0" value={markup} disabled={saving} onChange={(e) => setMarkup(e.target.value)} placeholder="e.g. 30" />
-                  <div style={{ fontSize: '11px', color: '#64748b', marginTop: '4px' }}>Selling price = file price → MRP → current branch price → cost + markup</div>
-                </div>
               </div>
 
               <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap', marginTop: '20px', fontSize: '13px' }}>
@@ -433,12 +413,11 @@ function BranchStockImport({ salesUrl, getToken, suppliers, branchEntries, onClo
                 <table style={{ width: '100%', borderCollapse: 'collapse' }}>
                   <thead style={{ position: 'sticky', top: 0, background: '#f8fafc' }}>
                     <tr>
-                      {['Row', 'Code', 'Product', 'HSN', 'Qty', 'Cost', 'Selling price', 'GST', 'Total', 'Extras', ''].map(h => <th key={h} style={th}>{h}</th>)}
+                      {['Row', 'Code', 'Product', 'HSN', 'Qty', 'Cost', 'GST', 'Total', 'Extras', ''].map(h => <th key={h} style={th}>{h}</th>)}
                     </tr>
                   </thead>
                   <tbody>
                     {active.items.map(i => {
-                      const sell = sellingFor(i);
                       return (
                         <tr key={i.rowNumber} style={{ background: i.errors.length ? '#fef2f2' : 'white' }}>
                           <td style={td}>{i.rowNumber}</td>
@@ -454,10 +433,6 @@ function BranchStockImport({ salesUrl, getToken, suppliers, branchEntries, onClo
                           <td style={td}>{i.hsn || '-'}</td>
                           <td style={td}>{i.quantity}</td>
                           <td style={td}>{currency(i.costPrice)}</td>
-                          <td style={td}>
-                            {sell > 0 ? currency(sell) : <span style={{ color: '#d97706' }}>needs markup</span>}
-                            {i.mrp ? <div style={{ fontSize: '11px', color: '#64748b' }}>MRP {currency(i.mrp)}</div> : null}
-                          </td>
                           <td style={td}>{i.gstPercent ? `${i.gstPercent}% · ${currency(i.gstAmount)}` : '-'}</td>
                           <td style={{ ...td, fontWeight: '600' }}>{currency(i.lineTotal)}</td>
                           <td style={{ ...td, fontSize: '12px', color: '#64748b' }}>
@@ -487,7 +462,6 @@ function BranchStockImport({ salesUrl, getToken, suppliers, branchEntries, onClo
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '12px', padding: '18px 28px', borderTop: '1px solid #e5e7eb', background: '#f8fafc', borderRadius: '0 0 16px 16px', flexWrap: 'wrap' }}>
           <div style={{ fontSize: '13px', color: '#475569' }}>
             {bills.length > 0 && `${pendingBills.length} bill(s) · ${totals.products} products · ${totals.units} units · ${currency(totals.amount)}`}
-            {totals.unpriced > 0 && <span style={{ color: '#d97706' }}> · {totals.unpriced} need a selling price</span>}
           </div>
           <div style={{ display: 'flex', gap: '12px' }}>
             <button type="button" style={btn('#f1f5f9', '#475569')} onClick={onClose} disabled={saving}>{bills.some(b => b.status === 'done') ? 'Done' : 'Cancel'}</button>

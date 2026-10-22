@@ -4,6 +4,7 @@ const requireUser = require('../middleware/requireUser');
 const requireInternalKey = require('../middleware/requireInternalKey');
 const employees = require('../controllers/employeeController');
 const analytics = require('../controllers/salesAnalyticsController');
+const financialReport = require('../controllers/financialReportController');
 
 // Salesperson lookup for the POS and report filters (HR employees live in BillitServer)
 router.get('/api/employees/lookup', requireUser, employees.lookupEmployee);
@@ -14,8 +15,12 @@ router.get('/api/employees', requireUser, employees.listEmployees);
 router.get('/api/sales-analytics/summary', requireUser, analytics.summary);
 router.get('/api/sales-analytics/employees/:employeeId', requireUser, analytics.employeeDetail);
 
+// Financial report (sales profit, expenses, dealer payments, net profit): ?from&to[&branch_id&employee_id&payment]
+router.get('/api/financial-report', requireUser, financialReport.report);
+
 // Server-to-server (BillitServer)
 router.get('/internal/sales-analytics/summary', requireInternalKey, analytics.internalSummary);
 router.get('/internal/sales-analytics/employee', requireInternalKey, analytics.internalEmployeeDetail);
+router.get('/internal/financial-report', requireInternalKey, financialReport.internalReport);
 
 module.exports = router;

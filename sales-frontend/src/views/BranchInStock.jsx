@@ -136,7 +136,7 @@ function BranchInStock({ salesUrl, token }) {
     });
   }, [entries, productNoFilter, productNameFilter, brandFilter, modelFilter, qtyFilter, imesFilter]);
 
-  // Compute total branch stock value (Qty * Selling Price) for displayed rows
+  // Compute total branch stock value (Qty * Cost Price) for displayed rows
   const branchStockTotal = React.useMemo(() => {
     // helper to coerce numbers and strip currency formatting like '₹1,110.00'
     function toNumber(val) {
@@ -151,9 +151,9 @@ function BranchInStock({ salesUrl, token }) {
 
     return filteredEntries.reduce((sum, it) => {
       const qty = toNumber(it.branchQty ?? it.qty ?? 0) || 0;
-      // Use selling price for branch stock value; accept formatted strings as well
-      const selling = toNumber(it.sellingPrice ?? it.selling ?? it.sellPrice ?? 0) || 0;
-      return sum + qty * selling;
+      // Stock is valued at cost (there is no fixed selling price); accept formatted strings as well
+      const cost = toNumber(it.costPrice ?? 0) || 0;
+      return sum + qty * cost;
     }, 0);
   }, [filteredEntries]);
 
@@ -170,13 +170,13 @@ function BranchInStock({ salesUrl, token }) {
     }
     const items = filteredEntries.map(it => {
       const qty = toNumber(it.branchQty ?? it.qty ?? 0) || 0;
-      const selling = toNumber(it.sellingPrice ?? it.selling ?? it.sellPrice ?? 0) || 0;
-      const amount = qty * selling;
+      const cost = toNumber(it.costPrice ?? 0) || 0;
+      const amount = qty * cost;
       return {
         productNo: it.productNo || (it.productId || '').toString(),
         productName: it.productName || '-',
         qty,
-        selling,
+        cost,
         amount
       };
     }).filter(i => i.qty !== 0 && i.amount !== 0);
@@ -404,7 +404,7 @@ function BranchInStock({ salesUrl, token }) {
                       <div style={{ fontSize: '12px', color: '#6b7280' }}>{b.productName}</div>
                     </div>
                     <div style={{ textAlign: 'center', color: '#6b7280' }}>
-                      {b.qty} × {currency(b.selling)}
+                      {b.qty} × {currency(b.cost)}
                     </div>
                     <div style={{ textAlign: 'right', fontWeight: '600', color: '#059669' }}>
                       {currency(b.amount)}
@@ -843,14 +843,6 @@ function BranchInStock({ salesUrl, token }) {
                     }}>Cost Price / Code</th>
                     <th style={{
                       padding: '16px 12px',
-                      textAlign: 'right',
-                      fontWeight: '600',
-                      color: '#374151',
-                      borderBottom: '2px solid #e5e7eb',
-                      minWidth: '120px'
-                    }}>Selling Price</th>
-                    <th style={{
-                      padding: '16px 12px',
                       textAlign: 'left',
                       fontWeight: '600',
                       color: '#374151',
@@ -967,14 +959,6 @@ function BranchInStock({ salesUrl, token }) {
                             }}>{priceCodeOf(it)}</span>
                           </div>
                         )}
-                      </td>
-                      <td style={{ padding: '16px 12px', textAlign: 'right' }}>
-                        <span style={{
-                          color: '#059669',
-                          fontWeight: '600'
-                        }}>
-                          {it.sellingPrice != null ? currency(it.sellingPrice) : '-'}
-                        </span>
                       </td>
                       <td style={{ padding: '16px 12px' }}>
                         <div style={{ fontWeight: '500', color: '#1e293b' }}>

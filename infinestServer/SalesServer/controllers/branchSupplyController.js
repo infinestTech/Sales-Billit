@@ -6,6 +6,14 @@ const InStock = require('../models/inStock');
 const BranchStock = require('../models/branchStock');
 const { cleanImeis, cleanRowImeis } = require('../utils/imei');
 
+// Stock rows sent to clients: placeholder IMEIs dropped, and no selling price — sales are priced at the POS
+// from the cost price (older rows may still carry a stored sellingPrice).
+const stockRows = (rows) => cleanRowImeis(rows).map((r) => {
+  if (!r || typeof r !== 'object') return r;
+  const { sellingPrice, ...rest } = r;
+  return rest;
+});
+
 const BranchSupply = mongoose.model('BranchSupply', new mongoose.Schema({
   shop_id: { type: String, index: true },
   branch_id: { type: String, index: true },
@@ -15,7 +23,7 @@ const BranchSupply = mongoose.model('BranchSupply', new mongoose.Schema({
 
   supplierAmount: { type: Number, default: 0 },
   gstAmount: { type: Number, default: 0 },
-  items: { type: Array, default: [] }, // { productName, productId, qty, unitSellingPrice, value, costPrice, totalCostPrice }
+  items: { type: Array, default: [] }, // { productName, productId, qty, value, costPrice, totalCostPrice }; value = cost × qty (older rows may also carry unitSellingPrice)
   totalSupplyValue: { type: Number, default: 0 },
   totalSupplyCost: { type: Number, default: 0 },
   createdBy: { type: String },
@@ -33,12 +41,6 @@ const BranchSupply = mongoose.model('BranchSupply', new mongoose.Schema({
   function isValidObjectId(id) {
     return typeof id === 'string' && /^[0-9a-fA-F]{24}$/.test(id);
   }
-
-// Helper to compute value: sellingPrice * qty
-function computeItemValue(unitSellingPrice, qty) {
-  const v = (Number(unitSellingPrice) || 0) * (Number(qty) || 0);
-  return Number(Number(v).toFixed(2));
-}
 
 exports.createBranchSupply = async (req, res) => {
   try {
@@ -91,18 +93,15 @@ exports.createBranchSupply = async (req, res) => {
       }
     }
 
-    // Prepare items with computed selling value and cost totals
+    // Prepare items with cost totals. There is no fixed selling price: the POS prices each sale on the spot,
+    // so stock is valued at cost.
     let total = 0;
     let totalCost = 0;
     const prepared = items.map(i => {
       const qty = Number(i.qty) || 0;
       const costUnit = Number(i.costPrice) || 0;
-      const pct = (i.pct != null) ? Number(i.pct) : null;
-      // compute selling price from pct if provided, otherwise use provided sellingPrice
-      const unitRaw = (pct != null) ? (costUnit * (1 + (pct / 100))) : (Number(i.sellingPrice) || 0);
-      const unit = Number(Number(unitRaw).toFixed(2));
-      const value = computeItemValue(unit, qty);
       const totalCostPrice = Number(Number(costUnit * qty).toFixed(2));
+      const value = totalCostPrice;
       total += value;
       totalCost += totalCostPrice;
       // Determine a stable productId. If client provided one (central ref), use it.
@@ -122,11 +121,9 @@ exports.createBranchSupply = async (req, res) => {
         brand: i.brand || i.mfg || '',
         model: i.model || i.modelNo || '',
         qty,
-        unitSellingPrice: unit,
         value,
         costPrice: costUnit,
         totalCostPrice,
-        pct: pct,
         validity: i.validity ? new Date(i.validity) : null,
         warrantyMonths: Math.max(0, Number(i.warrantyMonths) || 0),
         warrantyDetails: (i.warrantyDetails || '').toString().trim().slice(0, 300)
@@ -183,7 +180,6 @@ exports.createBranchSupply = async (req, res) => {
       const setObj = {
         productNo: it.productNo || '',
         productName: it.productName,
-        sellingPrice: Number(Number(it.unitSellingPrice || 0).toFixed(2)),
         brand: it.brand,
         model: it.model,
         validity: it.validity,
@@ -191,7 +187,6 @@ exports.createBranchSupply = async (req, res) => {
         warrantyDetails: it.warrantyDetails,
         costPrice: it.costPrice
       };
-      if (source === 'import' && !(setObj.sellingPrice > 0)) delete setObj.sellingPrice;
       if (it.priceCode) setObj.priceCode = it.priceCode;
       if (it.hsn) setObj.hsn = it.hsn;
       const update = { $set: setObj, $inc: { qty: it.qty } };
@@ -443,7 +438,7 @@ exports.listBranchStock = async (req, res) => {
         rowsFiltered = rowsOnly.filter(r => (String(r.productNo || '').toLowerCase().includes(needle)));
       }
       try { console.debug('FLOW listBranchStock: returning onlyBranch rows', { count: Array.isArray(rowsFiltered) ? rowsFiltered.length : 0 }); } catch (__) {}
-      return res.json({ success: true, rows: cleanRowImeis(rowsFiltered), customerNo: customerNo || null });
+      return res.json({ success: true, rows: stockRows(rowsFiltered), customerNo: customerNo || null });
     }
 
     const q = { shop_id: String(shop_id) };
@@ -469,7 +464,6 @@ exports.listBranchStock = async (req, res) => {
           model: it.model || '',
           qty: qty,
           costPrice: costPrice,
-          sellingPrice: (it.sellingPrice ?? it.price ?? it.costPrice ?? 0),
           validity: it.validity || null,
           warrantyMonths: Number(it.warrantyMonths) || 0,
           warrantyDetails: it.warrantyDetails || '',
@@ -495,7 +489,7 @@ exports.listBranchStock = async (req, res) => {
         rowsCentral = (rowsCentral || []).filter(r => (String(r.productNo || '').toLowerCase().includes(needle)));
       }
       try { console.debug('FLOW listBranchStock: returning central-only rows', { count: Array.isArray(rowsCentral) ? rowsCentral.length : 0 }); } catch (__) {}
-      return res.json({ success: true, rows: cleanRowImeis(rowsCentral), customerNo: customerNo || null });
+      return res.json({ success: true, rows: stockRows(rowsCentral), customerNo: customerNo || null });
     }
 
     // If a branch is requested, merge central items with branch-specific rows
@@ -504,7 +498,7 @@ exports.listBranchStock = async (req, res) => {
       const branchMap = {};
       (branchRows || []).forEach(br => { branchMap[String(br.productId)] = br; });
 
-      // Merge: prefer central list but override qty/sellingPrice from branch when present
+      // Merge: prefer central list but override qty/cost from branch when present
       const merged = centralAgg.map(c => {
         const br = branchMap[c.productId];
         const centralQty = Number(c.qty || 0);
@@ -526,8 +520,6 @@ exports.listBranchStock = async (req, res) => {
           qty: totalQty,
           // costPrice prefer branch then central
           costPrice: costPrice,
-          // Selling price: branch override if present, else central sellingPrice
-          sellingPrice: br ? (br.sellingPrice ?? c.sellingPrice) : c.sellingPrice,
           validity: br ? (br.validity || c.validity) : c.validity,
           warrantyMonths: Number(br && br.warrantyMonths) || Number(c.warrantyMonths) || 0,
           warrantyDetails: (br && br.warrantyDetails) || c.warrantyDetails || '',
@@ -559,7 +551,6 @@ exports.listBranchStock = async (req, res) => {
             model: br.model || '',
             qty: qty,
             costPrice: costPrice,
-            sellingPrice: br.sellingPrice ?? 0,
             validity: br.validity || null,
             warrantyMonths: Number(br.warrantyMonths) || 0,
             warrantyDetails: br.warrantyDetails || '',
@@ -583,7 +574,7 @@ exports.listBranchStock = async (req, res) => {
     }
 
     try { console.debug('FLOW listBranchStock: returning merged rows', { count: Array.isArray(rows) ? rows.length : 0 }); } catch (__) {}
-    return res.json({ success: true, rows: cleanRowImeis(rows), customerNo: customerNo || null });
+    return res.json({ success: true, rows: stockRows(rows), customerNo: customerNo || null });
   } catch (err) {
     console.error('listBranchStock error:', err.message || err);
     return res.status(500).json({ success: false, message: 'Server error' });

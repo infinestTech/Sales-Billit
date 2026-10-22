@@ -108,7 +108,6 @@ exports.createInStock = async (req, res) => {
           totalQuantity: computedTotalQ,
           imes: imesArray,
           costPrice: Number(i.costPrice) || 0,
-          sellingPrice: Number(i.sellingPrice) || 0,
           validity: i.validity ? new Date(i.validity) : undefined,
           warrantyMonths: Math.max(0, Number(i.warrantyMonths) || 0),
           warrantyDetails: (i.warrantyDetails || '').toString().trim().slice(0, 300),

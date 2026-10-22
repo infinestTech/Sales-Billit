@@ -149,7 +149,6 @@ export default function BranchSupplyHistory({ salesUrl, token }) {
                 <th>Brand</th>
                 <th>Model</th>
                 <th>Cost Price</th>
-                <th>Selling Price</th>
                 <th>Qty</th>
                 <th>Value</th>
                 <th>Validity</th>
@@ -164,7 +163,7 @@ export default function BranchSupplyHistory({ salesUrl, token }) {
                 return (
                   <React.Fragment key={s._id}>
                     <tr style={{ background: '#f8fafc' }}>
-                      <td colSpan={13} style={{ fontSize: '12px', color: '#334155' }}>
+                      <td colSpan={12} style={{ fontSize: '12px', color: '#334155' }}>
                         <strong>{when}</strong> · {branchName(s)} · {badge(src)}
                         {supplier ? <> · {supplier}</> : null}
                         {s.billNo ? <> · Bill <strong>{s.billNo}</strong>{s.billDate ? ` (${new Date(s.billDate).toLocaleDateString()})` : ''}</> : null}
@@ -173,7 +172,7 @@ export default function BranchSupplyHistory({ salesUrl, token }) {
                       </td>
                     </tr>
                     {s.items.map((it, idx) => {
-                      const unit = it.unitSellingPrice ?? it.sellingPrice ?? 0;
+                      const cost = Number(it.costPrice ?? it.cost ?? 0);
                       return (
                         <tr key={`${s._id}-${idx}`}>
                           <td style={{ fontSize: '12px', color: '#64748b' }}>{when}</td>
@@ -187,10 +186,9 @@ export default function BranchSupplyHistory({ salesUrl, token }) {
                           <td>{it.productName || it.name || '-'}</td>
                           <td>{it.brand || '-'}</td>
                           <td>{it.model || '-'}</td>
-                          <td>{currency(it.costPrice ?? it.cost ?? 0)}</td>
-                          <td>{it.pct != null ? `${it.pct}% / ${currency(unit)}` : currency(unit)}</td>
+                          <td>{currency(cost)}</td>
                           <td>{it.qty ?? 0}</td>
-                          <td>{currency(it.value ?? unit * (it.qty ?? 0))}</td>
+                          <td>{currency(it.totalCostPrice ?? cost * (it.qty ?? 0))}</td>
                           <td>{it.validity ? new Date(it.validity).toLocaleDateString() : '-'}</td>
                         </tr>
                       );

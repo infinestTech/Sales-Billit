@@ -26,6 +26,23 @@ exports.createWhatsappSale = async (req, res) => {
       return res.status(400).json({ success: false, message: 'Employee code is required for every sale' });
     }
 
+    // Unit cost snapshot per item (from branch stock) so the sale's profit can be reported later
+    try {
+      const BranchStock = require('../models/branchStock');
+      for (const it of items) {
+        const or = [];
+        if (it.productId) or.push({ productId: String(it.productId) });
+        if (it.productNo) or.push({ productNo: String(it.productNo).trim() });
+        if (!or.length) continue;
+        const q = { shop_id: String(shop_id), $or: or };
+        if (branch_id) q.branch_id = String(branch_id);
+        const bs = await BranchStock.findOne(q).select('costPrice').lean();
+        it.costPrice = Number(bs?.costPrice || it.costPrice || 0);
+      }
+    } catch (e) {
+      console.error('createWhatsappSale: cost snapshot failed', e.message || e);
+    }
+
     // Create record
     const doc = await WhatsappSale.create({
       shop_id, branch_id, seller_id, customerNo, items, totalAmount, paymentMethod, paymentSplits, amountPaid,

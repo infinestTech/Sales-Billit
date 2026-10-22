@@ -77,14 +77,12 @@ export default function BranchSupply({ salesUrl, token }) {
       // clear the message after a short while
       setTimeout(() => { setError(''); }, 5000);
     }
-    const pct = Number(selectedRows[productId]?.pct || 0);
-    const cost = Number(row?.costPrice || 0);
-    const sellingPrice = pct ? (cost * (1 + pct / 100)) : Number(row?.sellingPrice || 0);
-    const value = sellingPrice * q;
+    // Supplies are valued at cost; there is no selling price (the branch prices each sale at the POS)
+    const value = Number(row?.costPrice || 0) * q;
     // Preserve previously selected IMEs
     setSelectedRows(prev => {
       const prevImes = Array.isArray(prev[productId]?.imes) ? prev[productId].imes : [];
-      const next = { ...prev, [productId]: { qty: q, value, productId, pct, sellingPrice, imes: prevImes } };
+      const next = { ...prev, [productId]: { qty: q, value, productId, imes: prevImes } };
       const total = Object.values(next).reduce((s, it) => s + (Number(it.value) || 0), 0);
       setTotalValue(total);
       return next;
@@ -95,12 +93,9 @@ export default function BranchSupply({ salesUrl, token }) {
     const row = stock.find(s => (s.productId || s._id) === productId) || {};
     setSelectedRows(prev => {
       const qty = Number(prev[productId]?.qty || 0);
-      const pct = Number(prev[productId]?.pct || 0);
-      const cost = Number(row?.costPrice || 0);
-      const sellingPrice = pct ? (cost * (1 + pct / 100)) : Number(row?.sellingPrice || 0);
       const imes = Array.isArray(imesArray) ? imesArray.slice() : [];
-      const value = sellingPrice * qty;
-      const next = { ...prev, [productId]: { qty, value, productId, pct, sellingPrice, imes } };
+      const value = Number(row?.costPrice || 0) * qty;
+      const next = { ...prev, [productId]: { qty, value, productId, imes } };
       const total = Object.values(next).reduce((s, it) => s + (Number(it.value) || 0), 0);
       setTotalValue(total);
       return next;
@@ -115,29 +110,13 @@ export default function BranchSupply({ salesUrl, token }) {
       if (idx >= 0) curr.splice(idx, 1); else curr.push(ime);
       // reuse onImesChange logic: compute derived fields
       const qty = Number(prev[productId]?.qty || 0);
-      const pct = Number(prev[productId]?.pct || 0);
       const row = stock.find(s => (s.productId || s._id) === productId) || {};
-      const cost = Number(row?.costPrice || 0);
-      const sellingPrice = pct ? (cost * (1 + pct / 100)) : Number(row?.sellingPrice || 0);
-      const value = sellingPrice * qty;
-      const next = { ...prev, [productId]: { qty, value, productId, pct, sellingPrice, imes: curr } };
+      const value = Number(row?.costPrice || 0) * qty;
+      const next = { ...prev, [productId]: { qty, value, productId, imes: curr } };
       const total = Object.values(next).reduce((s, it) => s + (Number(it.value) || 0), 0);
       setTotalValue(total);
       return next;
     });
-  };
-
-  const onPctChange = (productId, pctVal) => {
-    const row = stock.find(s => (s.productId || s._id) === productId) || {};
-    const pct = Number(pctVal) || 0;
-    const q = Number(selectedRows[productId]?.qty || 0);
-    const cost = Number(row?.costPrice || 0);
-    const sellingPrice = cost * (1 + pct / 100);
-    const value = sellingPrice * q;
-    const next = { ...selectedRows, [productId]: { qty: q, value, productId, pct, sellingPrice } };
-    setSelectedRows(next);
-    const total = Object.values(next).reduce((s, it) => s + (Number(it.value) || 0), 0);
-    setTotalValue(total);
   };
 
   const onSupply = async () => {
@@ -151,7 +130,6 @@ export default function BranchSupply({ salesUrl, token }) {
       let adjusted = false;
       const items = selected.map(r => {
         const row = stock.find(s => (s.productId || s._id) === r.productId) || {};
-        const sellingPrice = r.sellingPrice ?? row.sellingPrice ?? 0;
         const available = getAvailableQty(row);
         const qtyToSend = Math.min(Number(r.qty) || 0, available);
         if (qtyToSend !== (Number(r.qty) || 0)) adjusted = true;
@@ -165,9 +143,7 @@ export default function BranchSupply({ salesUrl, token }) {
           warrantyDetails: row.warrantyDetails || '',
           priceCode: row.priceCode || '',
           qty: qtyToSend,
-          sellingPrice: sellingPrice,
-          costPrice: row.costPrice,
-          pct: r.pct || 0
+          costPrice: row.costPrice
         };
         if (Array.isArray(r.imes) && r.imes.length) itemObj.imes = r.imes.slice(0, qtyToSend);
         return itemObj;
@@ -194,9 +170,8 @@ export default function BranchSupply({ salesUrl, token }) {
         const next = { ...selectedRows };
         items.forEach(it => {
           const row = stock.find(s => (s.productId || s._id) === it.productId) || {};
-          const sellingPrice = it.sellingPrice ?? row.sellingPrice ?? 0;
-          const value = sellingPrice * it.qty;
-          next[it.productId] = { qty: it.qty, value, productId: it.productId, pct: it.pct, sellingPrice };
+          const value = Number(row.costPrice || 0) * it.qty;
+          next[it.productId] = { ...next[it.productId], qty: it.qty, value, productId: it.productId };
         });
         setSelectedRows(next);
         const total = Object.values(next).reduce((s, it) => s + (Number(it.value) || 0), 0);
@@ -282,7 +257,7 @@ export default function BranchSupply({ salesUrl, token }) {
                   <th>Model</th>
                   <th>Qty</th>
                   <th>Total Cost</th>
-                  <th>Selling Price</th>
+                  <th>Unit Cost</th>
                   <th>Supply Qty</th>
                   <th>IME / IME Count</th>
                   <th>Value</th>
@@ -306,14 +281,7 @@ export default function BranchSupply({ salesUrl, token }) {
                       <td>{(s.centralQty != null ? s.centralQty : (s.qty ?? '-'))}</td>
 
                       <td>{s.totalCostPrice != null ? currency(s.totalCostPrice) : (s.costPrice != null ? currency(s.costPrice) : '-')}</td>
-                      <td>
-                        <div style={{display:'flex',flexDirection:'column'}}>
-                          <div>
-                            <input style={{width:80}} type="number" min={0} value={sel.pct ?? 0} onChange={e => onPctChange(pid, e.target.value)} /> %
-                          </div>
-                          <div style={{fontSize:12,color:'#666'}}>{sel.sellingPrice != null ? currency(sel.sellingPrice) : (s.sellingPrice != null ? currency(s.sellingPrice) : '-')}</div>
-                        </div>
-                      </td>
+                      <td>{s.costPrice != null ? currency(s.costPrice) : '-'}</td>
                       <td><input style={{width:80}} type="number" min={0} value={sel.qty} onChange={e => onQtyChange(pid, e.target.value)} /></td>
 
                       <td style={{ position: 'relative' }}>

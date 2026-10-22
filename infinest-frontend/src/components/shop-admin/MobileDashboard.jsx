@@ -20,6 +20,7 @@ import { buildVisibleNav, isTabAllowed, findNavEntry, isSalesWorkspaceTab } from
 const SalesOverview = dynamic(() => import('./sales/SalesOverview'), { ssr: false });
 const SalesWorkspace = dynamic(() => import('./sales/SalesWorkspace'), { ssr: false });
 const BusinessAnalytics = dynamic(() => import('./BusinessAnalytics'), { ssr: false });
+const FinancialReport = dynamic(() => import('./FinancialReport'), { ssr: false });
 const EmployeeManagement = dynamic(() => import('./EmployeeManagement'), { ssr: false });
 const AttendanceManagement = dynamic(() => import('./AttendanceManagement'), { ssr: false });
 const SalaryManagement = dynamic(() => import('./SalaryManagement'), { ssr: false });
@@ -808,7 +809,7 @@ export default function MobileDashboard({
     { id: 'hr-attendance', label: 'Attendance', icon: CheckCircle, tone: 'bg-amber-50 text-amber-600' },
     { id: 'business-analytics', label: 'Analytics', icon: TrendingUp, tone: 'bg-rose-50 text-rose-600' },
     // Fill-ins for single-product plans so the grid stays two full rows
-    hasService && { id: 'report', label: 'Report', icon: FileText, tone: 'bg-gray-100 text-gray-700' },
+    { id: 'report', label: 'Report', icon: FileText, tone: 'bg-gray-100 text-gray-700' },
     hasService && { id: 'suppliers', label: 'Suppliers', icon: Truck, tone: 'bg-orange-50 text-orange-600' },
     hasSales && { id: 'sales-supplier-credits', label: 'Supplier Dues', icon: Wallet, tone: 'bg-orange-50 text-orange-600' },
     hasSales && { id: 'sales-expenses', label: 'Expenses', icon: Wallet, tone: 'bg-gray-100 text-gray-700' },
@@ -832,6 +833,210 @@ export default function MobileDashboard({
       </div>
     );
   }
+
+  // Service financial report (also shown inside FinancialReport's "Service" view for combo plans)
+  const serviceReportView = () => (
+          <div className="space-y-4">
+            {/* Filters */}
+            <div className="bg-white rounded-lg p-4 shadow-sm border border-gray-200">
+              <h3 className="font-semibold text-gray-900 mb-3 text-sm">Report Period</h3>
+              <div className="space-y-2">
+                <select
+                  value={reportFilters.period}
+                  onChange={(e) => setReportFilters({ period: e.target.value, fromDate: '', toDate: '' })}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
+                >
+                  <option value="1">Today</option>
+                  <option value="7">Last 7 Days</option>
+                  <option value="30">Last 30 Days</option>
+                </select>
+                <div className="text-xs text-gray-500 text-center my-2">OR</div>
+                <div className="grid grid-cols-2 gap-2">
+                  <input
+                    type="date"
+                    value={reportFilters.fromDate}
+                    onChange={(e) => setReportFilters({ ...reportFilters, fromDate: e.target.value, period: '' })}
+                    className="w-full px-2 py-2 border border-gray-300 rounded-lg text-xs"
+                  />
+                  <input
+                    type="date"
+                    value={reportFilters.toDate}
+                    onChange={(e) => setReportFilters({ ...reportFilters, toDate: e.target.value, period: '' })}
+                    className="w-full px-2 py-2 border border-gray-300 rounded-lg text-xs"
+                  />
+                </div>
+                <div className="flex gap-2">
+                  <button
+                    onClick={fetchLocalFinancialReport}
+                    disabled={loadingReport}
+                    className="flex-1 px-4 py-2 bg-green-600 text-white rounded-lg text-sm font-medium disabled:bg-gray-400"
+                  >
+                    {loadingReport ? 'Loading...' : 'Generate'}
+                  </button>
+                  {(localReportData || reportData) && (
+                    <button
+                      onClick={handleExportReport}
+                      className="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium flex items-center gap-1"
+                      title={reportFormat === 'excel' ? 'Export Excel' : 'Print/Save as PDF'}
+                    >
+                      {reportFormat === 'excel' ? (
+                        <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                          <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                          <polyline points="14 2 14 8 20 8"></polyline>
+                          <line x1="16" y1="13" x2="8" y2="13"></line>
+                          <line x1="16" y1="17" x2="8" y2="17"></line>
+                        </svg>
+                      ) : (
+                        <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                          <polyline points="6 9 6 2 18 2 18 9"></polyline>
+                          <path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"></path>
+                          <rect x="6" y="14" width="12" height="8"></rect>
+                        </svg>
+                      )}
+                      {reportFormat === 'excel' ? 'Excel' : 'PDF'}
+                    </button>
+                  )}
+                </div>
+                {/* Format selector */}
+                <div>
+                  <label className="block text-xs text-gray-500 mb-1">Export Format</label>
+                  <select
+                    value={reportFormat}
+                    onChange={(e) => setReportFormat(e.target.value)}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
+                  >
+                    <option value="pdf">PDF</option>
+                    <option value="excel">Excel</option>
+                  </select>
+                </div>
+              </div>
+            </div>
+
+            {(localReportData || reportData) ? (
+              <div className="space-y-4">
+                {/* Summary */}
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="bg-green-50 rounded-lg p-3 border border-green-200">
+                    <div className="text-xs text-green-700 font-medium">Total Revenue</div>
+                    <div className="text-lg font-bold text-green-900">
+                      ₹{(localReportData || reportData).summary?.totalRevenue?.toLocaleString() || 0}
+                    </div>
+                  </div>
+                  <div className="bg-red-50 rounded-lg p-3 border border-red-200">
+                    <div className="text-xs text-red-700 font-medium">Total Expenses</div>
+                    <div className="text-lg font-bold text-red-900">
+                      ₹{(localReportData || reportData).summary?.totalExpenses?.toLocaleString() || 0}
+                    </div>
+                  </div>
+                  <div className="bg-blue-50 rounded-lg p-3 border border-blue-200">
+                    <div className="text-xs text-blue-700 font-medium">Net Profit</div>
+                    <div className="text-lg font-bold text-blue-900">
+                      ₹{(localReportData || reportData).summary?.netProfit?.toLocaleString() || 0}
+                    </div>
+                  </div>
+                  <div className="bg-purple-50 rounded-lg p-3 border border-purple-200">
+                    <div className="text-xs text-purple-700 font-medium">Profit Margin</div>
+                    <div className="text-lg font-bold text-purple-900">
+                      {(localReportData || reportData).summary?.profitMargin?.toFixed(1) || 0}%
+                    </div>
+                  </div>
+                </div>
+
+                {(localReportData || reportData).summary?.paymentMethodTotals && (() => {
+                  const t = (localReportData || reportData).summary.paymentMethodTotals;
+                  const tiles = [['Cash', t.cash], ['Gpay / UPI', t.gpay], ['Card', t.card], ...(t.other > 0 ? [['Other', t.other]] : [])];
+                  return (
+                    <div>
+                      <div className="text-xs font-semibold text-gray-700 mb-2">Payment Breakdown (Revenue)</div>
+                      <div className="grid grid-cols-2 gap-3">
+                        {tiles.map(([label, amt]) => (
+                          <div key={label} className="bg-gray-50 rounded-lg p-3 border border-gray-200">
+                            <div className="text-xs text-gray-600 font-medium">{label}</div>
+                            <div className="text-lg font-bold text-gray-900">₹{(amt || 0).toLocaleString('en-IN')}</div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  );
+                })()}
+
+                {/* Collapsible Sections */}
+                {(localReportData || reportData).customerPayments && (localReportData || reportData).customerPayments.length > 0 && (
+                  <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
+                    <button
+                      onClick={() => setExpandedSection(expandedSection === 'customer' ? null : 'customer')}
+                      className="w-full p-3 bg-gray-100 flex items-center justify-between"
+                    >
+                      <span className="font-semibold text-gray-900 text-sm">Customer Payments</span>
+                      <ChevronDown className={`h-4 w-4 transition-transform ${expandedSection === 'customer' ? 'rotate-180' : ''}`} />
+                    </button>
+                    {expandedSection === 'customer' && (
+                      <div className="divide-y divide-gray-200 max-h-96 overflow-y-auto">
+                        {(localReportData || reportData).customerPayments.slice(0, 20).map((payment, idx) => (
+                          <div key={idx} className="p-3">
+                            <div className="flex items-start justify-between mb-1">
+                              <div className="flex-1">
+                                <div className="font-medium text-gray-900 text-sm">{payment.customerName}</div>
+                                <div className="text-xs text-gray-600">{payment.mobileName}</div>
+                                <div className="text-xs text-gray-500">
+                                  {new Date(payment.date).toLocaleDateString('en-IN')}
+                                </div>
+                              </div>
+                              <div className="text-right">
+                                <div className="font-bold text-green-700">₹{payment.amount?.toLocaleString()}</div>
+                                <div className="text-xs text-gray-500">{payment.paymentMethod || 'N/A'}</div>
+                              </div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* Similar sections for other payment types */}
+                {(localReportData || reportData).dealerPayments && (localReportData || reportData).dealerPayments.length > 0 && (
+                  <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
+                    <button
+                      onClick={() => setExpandedSection(expandedSection === 'dealer' ? null : 'dealer')}
+                      className="w-full p-3 bg-gray-100 flex items-center justify-between"
+                    >
+                      <span className="font-semibold text-gray-900 text-sm">Dealer Payments</span>
+                      <ChevronDown className={`h-4 w-4 transition-transform ${expandedSection === 'dealer' ? 'rotate-180' : ''}`} />
+                    </button>
+                    {expandedSection === 'dealer' && (
+                      <div className="divide-y divide-gray-200 max-h-96 overflow-y-auto">
+                        {(localReportData || reportData).dealerPayments.slice(0, 20).map((payment, idx) => (
+                          <div key={idx} className="p-3">
+                            <div className="flex items-start justify-between mb-1">
+                              <div className="flex-1">
+                                <div className="font-medium text-gray-900 text-sm">{payment.dealerName}</div>
+                                <div className="text-xs text-gray-600">{payment.mobileName}</div>
+                                <div className="text-xs text-gray-500">
+                                  {new Date(payment.date).toLocaleDateString('en-IN')}
+                                </div>
+                              </div>
+                              <div className="text-right">
+                                <div className="font-bold text-blue-700">₹{payment.amount?.toLocaleString()}</div>
+                                <div className="text-xs text-gray-500">{payment.paymentMethod || 'N/A'}</div>
+                              </div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            ) : (
+              <div className="bg-white rounded-lg p-12 text-center">
+                <FileText className="h-12 w-12 text-gray-300 mx-auto mb-3" />
+                <p className="text-gray-600 text-sm">No report generated</p>
+                <p className="text-gray-500 text-xs mt-1">Select period and generate</p>
+              </div>
+            )}
+          </div>
+  );
 
   return (
     <div className="min-h-screen bg-gray-50 pb-[calc(5.5rem+env(safe-area-inset-bottom))]">
@@ -1350,208 +1555,9 @@ export default function MobileDashboard({
         )}
 
         {/* Report Tab */}
-        {activeTab === 'report' && (
-          <div className="space-y-4">
-            {/* Filters */}
-            <div className="bg-white rounded-lg p-4 shadow-sm border border-gray-200">
-              <h3 className="font-semibold text-gray-900 mb-3 text-sm">Report Period</h3>
-              <div className="space-y-2">
-                <select
-                  value={reportFilters.period}
-                  onChange={(e) => setReportFilters({ period: e.target.value, fromDate: '', toDate: '' })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
-                >
-                  <option value="1">Today</option>
-                  <option value="7">Last 7 Days</option>
-                  <option value="30">Last 30 Days</option>
-                </select>
-                <div className="text-xs text-gray-500 text-center my-2">OR</div>
-                <div className="grid grid-cols-2 gap-2">
-                  <input
-                    type="date"
-                    value={reportFilters.fromDate}
-                    onChange={(e) => setReportFilters({ ...reportFilters, fromDate: e.target.value, period: '' })}
-                    className="w-full px-2 py-2 border border-gray-300 rounded-lg text-xs"
-                  />
-                  <input
-                    type="date"
-                    value={reportFilters.toDate}
-                    onChange={(e) => setReportFilters({ ...reportFilters, toDate: e.target.value, period: '' })}
-                    className="w-full px-2 py-2 border border-gray-300 rounded-lg text-xs"
-                  />
-                </div>
-                <div className="flex gap-2">
-                  <button
-                    onClick={fetchLocalFinancialReport}
-                    disabled={loadingReport}
-                    className="flex-1 px-4 py-2 bg-green-600 text-white rounded-lg text-sm font-medium disabled:bg-gray-400"
-                  >
-                    {loadingReport ? 'Loading...' : 'Generate'}
-                  </button>
-                  {(localReportData || reportData) && (
-                    <button
-                      onClick={handleExportReport}
-                      className="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium flex items-center gap-1"
-                      title={reportFormat === 'excel' ? 'Export Excel' : 'Print/Save as PDF'}
-                    >
-                      {reportFormat === 'excel' ? (
-                        <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                          <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
-                          <polyline points="14 2 14 8 20 8"></polyline>
-                          <line x1="16" y1="13" x2="8" y2="13"></line>
-                          <line x1="16" y1="17" x2="8" y2="17"></line>
-                        </svg>
-                      ) : (
-                        <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                          <polyline points="6 9 6 2 18 2 18 9"></polyline>
-                          <path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"></path>
-                          <rect x="6" y="14" width="12" height="8"></rect>
-                        </svg>
-                      )}
-                      {reportFormat === 'excel' ? 'Excel' : 'PDF'}
-                    </button>
-                  )}
-                </div>
-                {/* Format selector */}
-                <div>
-                  <label className="block text-xs text-gray-500 mb-1">Export Format</label>
-                  <select
-                    value={reportFormat}
-                    onChange={(e) => setReportFormat(e.target.value)}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
-                  >
-                    <option value="pdf">PDF</option>
-                    <option value="excel">Excel</option>
-                  </select>
-                </div>
-              </div>
-            </div>
-
-            {(localReportData || reportData) ? (
-              <div className="space-y-4">
-                {/* Summary */}
-                <div className="grid grid-cols-2 gap-3">
-                  <div className="bg-green-50 rounded-lg p-3 border border-green-200">
-                    <div className="text-xs text-green-700 font-medium">Total Revenue</div>
-                    <div className="text-lg font-bold text-green-900">
-                      ₹{(localReportData || reportData).summary?.totalRevenue?.toLocaleString() || 0}
-                    </div>
-                  </div>
-                  <div className="bg-red-50 rounded-lg p-3 border border-red-200">
-                    <div className="text-xs text-red-700 font-medium">Total Expenses</div>
-                    <div className="text-lg font-bold text-red-900">
-                      ₹{(localReportData || reportData).summary?.totalExpenses?.toLocaleString() || 0}
-                    </div>
-                  </div>
-                  <div className="bg-blue-50 rounded-lg p-3 border border-blue-200">
-                    <div className="text-xs text-blue-700 font-medium">Net Profit</div>
-                    <div className="text-lg font-bold text-blue-900">
-                      ₹{(localReportData || reportData).summary?.netProfit?.toLocaleString() || 0}
-                    </div>
-                  </div>
-                  <div className="bg-purple-50 rounded-lg p-3 border border-purple-200">
-                    <div className="text-xs text-purple-700 font-medium">Profit Margin</div>
-                    <div className="text-lg font-bold text-purple-900">
-                      {(localReportData || reportData).summary?.profitMargin?.toFixed(1) || 0}%
-                    </div>
-                  </div>
-                </div>
-
-                {(localReportData || reportData).summary?.paymentMethodTotals && (() => {
-                  const t = (localReportData || reportData).summary.paymentMethodTotals;
-                  const tiles = [['Cash', t.cash], ['Gpay / UPI', t.gpay], ['Card', t.card], ...(t.other > 0 ? [['Other', t.other]] : [])];
-                  return (
-                    <div>
-                      <div className="text-xs font-semibold text-gray-700 mb-2">Payment Breakdown (Revenue)</div>
-                      <div className="grid grid-cols-2 gap-3">
-                        {tiles.map(([label, amt]) => (
-                          <div key={label} className="bg-gray-50 rounded-lg p-3 border border-gray-200">
-                            <div className="text-xs text-gray-600 font-medium">{label}</div>
-                            <div className="text-lg font-bold text-gray-900">₹{(amt || 0).toLocaleString('en-IN')}</div>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  );
-                })()}
-
-                {/* Collapsible Sections */}
-                {(localReportData || reportData).customerPayments && (localReportData || reportData).customerPayments.length > 0 && (
-                  <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
-                    <button
-                      onClick={() => setExpandedSection(expandedSection === 'customer' ? null : 'customer')}
-                      className="w-full p-3 bg-gray-100 flex items-center justify-between"
-                    >
-                      <span className="font-semibold text-gray-900 text-sm">Customer Payments</span>
-                      <ChevronDown className={`h-4 w-4 transition-transform ${expandedSection === 'customer' ? 'rotate-180' : ''}`} />
-                    </button>
-                    {expandedSection === 'customer' && (
-                      <div className="divide-y divide-gray-200 max-h-96 overflow-y-auto">
-                        {(localReportData || reportData).customerPayments.slice(0, 20).map((payment, idx) => (
-                          <div key={idx} className="p-3">
-                            <div className="flex items-start justify-between mb-1">
-                              <div className="flex-1">
-                                <div className="font-medium text-gray-900 text-sm">{payment.customerName}</div>
-                                <div className="text-xs text-gray-600">{payment.mobileName}</div>
-                                <div className="text-xs text-gray-500">
-                                  {new Date(payment.date).toLocaleDateString('en-IN')}
-                                </div>
-                              </div>
-                              <div className="text-right">
-                                <div className="font-bold text-green-700">₹{payment.amount?.toLocaleString()}</div>
-                                <div className="text-xs text-gray-500">{payment.paymentMethod || 'N/A'}</div>
-                              </div>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                )}
-
-                {/* Similar sections for other payment types */}
-                {(localReportData || reportData).dealerPayments && (localReportData || reportData).dealerPayments.length > 0 && (
-                  <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
-                    <button
-                      onClick={() => setExpandedSection(expandedSection === 'dealer' ? null : 'dealer')}
-                      className="w-full p-3 bg-gray-100 flex items-center justify-between"
-                    >
-                      <span className="font-semibold text-gray-900 text-sm">Dealer Payments</span>
-                      <ChevronDown className={`h-4 w-4 transition-transform ${expandedSection === 'dealer' ? 'rotate-180' : ''}`} />
-                    </button>
-                    {expandedSection === 'dealer' && (
-                      <div className="divide-y divide-gray-200 max-h-96 overflow-y-auto">
-                        {(localReportData || reportData).dealerPayments.slice(0, 20).map((payment, idx) => (
-                          <div key={idx} className="p-3">
-                            <div className="flex items-start justify-between mb-1">
-                              <div className="flex-1">
-                                <div className="font-medium text-gray-900 text-sm">{payment.dealerName}</div>
-                                <div className="text-xs text-gray-600">{payment.mobileName}</div>
-                                <div className="text-xs text-gray-500">
-                                  {new Date(payment.date).toLocaleDateString('en-IN')}
-                                </div>
-                              </div>
-                              <div className="text-right">
-                                <div className="font-bold text-blue-700">₹{payment.amount?.toLocaleString()}</div>
-                                <div className="text-xs text-gray-500">{payment.paymentMethod || 'N/A'}</div>
-                              </div>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                )}
-              </div>
-            ) : (
-              <div className="bg-white rounded-lg p-12 text-center">
-                <FileText className="h-12 w-12 text-gray-300 mx-auto mb-3" />
-                <p className="text-gray-600 text-sm">No report generated</p>
-                <p className="text-gray-500 text-xs mt-1">Select period and generate</p>
-              </div>
-            )}
-          </div>
-        )}
+        {activeTab === 'report' && (hasSales
+          ? <FinancialReport shopId={currentShopId} shopName={currentShop?.name} access={productAccess} serviceReport={hasService ? serviceReportView() : null} />
+          : serviceReportView())}
 
         {/* Section hubs: Service / Sales / HR */}
         {HUBS[activeTab] && (

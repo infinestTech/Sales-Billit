@@ -2,7 +2,7 @@ import * as XLSX from "xlsx";
 
 // Parses supplier tax invoices (Excel/CSV/JSON) shaped like:
 // S.No | Code | Product | HSN | MRP | Rate | Qty | T.Value | CGST % | CGST Amt | SGST % | SGST Amt | Total
-// plus optional Brand, Model, IMEI, Selling Price, Warranty (months), Warranty Details, Validity.
+// plus optional Brand, Model, IMEI, Warranty (months), Warranty Details, Validity.
 // (No price code column: the price code is worked out from the cost price — see encodePriceCode in barcodeLabels.js.)
 
 const ALIASES = {
@@ -21,7 +21,6 @@ const ALIASES = {
   igstPercent: ["igst %", "igst%", "igst rate", "igstpercent", "igst percent"],
   igstAmount: ["igst amt", "igst amount", "igstamount"],
   total: ["total", "amount", "net amount", "line total", "total amount"],
-  sellingPrice: ["selling price", "sellingprice", "sale price", "sp"],
   brand: ["brand", "make"],
   model: ["model", "model no"],
   imei: ["imei", "imeis", "imei numbers", "imei no", "imes"],
@@ -145,7 +144,6 @@ function buildItem(raw, rowNumber) {
   const gstAmount = taxAmount || (total && taxable ? total - taxable : 0);
   const gstPercent = toNumber(raw.cgstPercent) + toNumber(raw.sgstPercent) + toNumber(raw.igstPercent);
   const mrp = toNumber(raw.mrp);
-  const selling = toNumber(raw.sellingPrice) || mrp;
   // Accessories often carry "0", "-" or "NA" in the IMEI column; only real IMEIs make an item a phone
   const imes = text(raw.imei).split(/[,;\s]+/).filter((v) => v && !isPlaceholderImei(v));
 
@@ -163,7 +161,6 @@ function buildItem(raw, rowNumber) {
     hsn: text(raw.hsn),
     quantity,
     costPrice: round2(rate),
-    sellingPrice: round2(selling),
     mrp: round2(mrp),
     gstPercent: round2(gstPercent),
     gstAmount: round2(gstAmount),
@@ -372,11 +369,11 @@ export function summarize(items) {
 const TEMPLATE_HEADER = [
   "S.No", "Code", "Product", "HSN", "MRP", "Rate", "Qty", "T.Value",
   "CGST %", "CGST Amt", "SGST %", "SGST Amt", "Total",
-  "Brand", "Model", "IMEI", "Selling Price", "Warranty (months)", "Warranty Details", "Validity",
+  "Brand", "Model", "IMEI", "Warranty (months)", "Warranty Details", "Validity",
 ];
 const TEMPLATE_ROWS = [
-  [1, "POR 2203", "iKonnect C Pro - Type C to 3.5mm Female", "85444999", 0, 149, 5, 631.36, "9%", 56.82, "9%", 56.82, 745, "Portronics", "iKonnect C Pro", "", 199, 6, "Brand warranty", "", "AXC"],
-  [2, "POR 1236", "Konnect B Micro - 1M Micro USB Nylon Braided Cable", "85444999", 499, 66, 10, 559.32, "9%", 50.34, "9%", 50.34, 660, "Portronics", "Konnect B", "", "", 6, "", "", "BTZ"],
+  [1, "POR 2203", "iKonnect C Pro - Type C to 3.5mm Female", "85444999", 0, 149, 5, 631.36, "9%", 56.82, "9%", 56.82, 745, "Portronics", "iKonnect C Pro", "", 6, "Brand warranty", ""],
+  [2, "POR 1236", "Konnect B Micro - 1M Micro USB Nylon Braided Cable", "85444999", 499, 66, 10, 559.32, "9%", 50.34, "9%", 50.34, 660, "Portronics", "Konnect B", "", 6, "", ""],
 ];
 
 export function downloadTemplate() {
@@ -396,7 +393,7 @@ export function downloadTemplate() {
 }
 
 export function downloadJsonTemplate() {
-  const keys = ["sno", "code", "product", "hsn", "mrp", "rate", "qty", "taxableValue", "cgstPercent", "cgstAmount", "sgstPercent", "sgstAmount", "total", "brand", "model", "imei", "sellingPrice", "warrantyMonths", "warrantyDetails", "validity"];
+  const keys = ["sno", "code", "product", "hsn", "mrp", "rate", "qty", "taxableValue", "cgstPercent", "cgstAmount", "sgstPercent", "sgstAmount", "total", "brand", "model", "imei", "warrantyMonths", "warrantyDetails", "validity"];
   const sample = {
     supplierName: "Finetune Mobiles",
     billNo: "GST-R-373",
