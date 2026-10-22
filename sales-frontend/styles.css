@@ -2297,6 +2297,17 @@ button.btn.secondary {
   transition: transform 0.25s ease;
 }
 
+/* Sidebar line icons (src/components/LineIcon.jsx) */
+.mobile-icon, .nav-section-title .section-icon, .mobile-nav-section-title .section-icon,
+.mobile-plan-icon, .mobile-branch-icon, .mobile-nav-item-arrow, .mobile-sidebar-close {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+.mobile-icon { color: #a5b4fc; }
+.mobile-nav-item.active .mobile-icon { color: #fff; }
+.brand-icon, .mobile-brand-icon { color: #fff; }
+
 .mobile-nav-item:hover .mobile-icon,
 .mobile-nav-item.active .mobile-icon {
   transform: scale(1.1);

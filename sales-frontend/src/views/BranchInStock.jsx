@@ -1,13 +1,148 @@
+// Branch "Purchase Inventory" (#instock): branch stock list with search, status filters, sorting,
+// stock value breakdown, and entry points to Add Purchase / bill import / barcode labels.
+// Look matches the Dealers screens (same palette as src/utils/dealerUi.js); classes are prefixed `bi-`.
+
+// Line icons come from the shared set in src/components/LineIcon.jsx
+function BiIcon({ name, size = 18 }) {
+  return window.LineIcon ? <window.LineIcon name={name} size={size} /> : null;
+}
+
+const BI_CSS = [
+  '.bi{--ac:#4f46e5;--ac2:#6366f1;--acs:#eef2ff;--tx:#0f172a;--mu:#64748b;--ln:#e2e8f0;--bg:#f8fafc;--ok:#16a34a;--oks:#dcfce7;--wa:#b45309;--was:#fef3c7;--er:#dc2626;--ers:#fee2e2;color:var(--tx);font-family:Inter,system-ui,sans-serif;padding:24px;background:var(--bg);min-height:100%}',
+  '.bi *{box-sizing:border-box}',
+  '.bi-head{display:flex;flex-wrap:wrap;align-items:flex-end;justify-content:space-between;gap:14px;margin-bottom:20px}',
+  '.bi-head h1{margin:0;font-size:26px;font-weight:800;letter-spacing:-.02em}',
+  '.bi-head p{margin:4px 0 0;color:var(--mu);font-size:14px}',
+  '.bi-actions{display:flex;flex-wrap:wrap;gap:8px}',
+  '.bi-btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;height:40px;padding:0 16px;border-radius:10px;border:1px solid transparent;font:600 14px Inter,system-ui,sans-serif;cursor:pointer;transition:background .15s,box-shadow .15s;white-space:nowrap}',
+  '.bi-btn:disabled{opacity:.5;cursor:not-allowed}',
+  '.bi-btn.pri{background:var(--ac);color:#fff;box-shadow:0 4px 12px rgba(79,70,229,.22)}.bi-btn.pri:hover:not(:disabled){background:#4338ca}',
+  '.bi-btn.sec{background:#fff;color:var(--tx);border-color:var(--ln)}.bi-btn.sec:hover:not(:disabled){background:#f1f5f9}',
+  '.bi-btn.icon{width:40px;padding:0}',
+  '.bi-btn.link{height:auto;padding:0;background:none;color:var(--ac);font-size:12.5px}.bi-btn.link:hover{text-decoration:underline}',
+  '.bi-btn.sm{height:34px;padding:0 12px;font-size:13px}',
+  '.bi-stats{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;margin-bottom:16px}',
+  '.bi-stat{display:flex;gap:14px;align-items:flex-start;background:#fff;border:1px solid var(--ln);border-radius:14px;padding:16px;text-align:left;font:inherit;color:inherit}',
+  'button.bi-stat{cursor:pointer;transition:border-color .15s,box-shadow .15s}button.bi-stat:hover{border-color:#c7d2fe}button.bi-stat.on{border-color:var(--ac);box-shadow:0 0 0 3px var(--acs)}',
+  '.bi-stat .ic{flex:0 0 40px;height:40px;border-radius:11px;display:flex;align-items:center;justify-content:center;background:var(--acs);color:var(--ac)}',
+  '.bi-stat .ic.ok{background:var(--oks);color:var(--ok)}.bi-stat .ic.wa{background:var(--was);color:var(--wa)}.bi-stat .ic.er{background:var(--ers);color:var(--er)}',
+  '.bi-stat .k{font-size:12px;font-weight:600;color:var(--mu);text-transform:uppercase;letter-spacing:.04em}',
+  '.bi-stat .v{margin-top:4px;font-size:22px;font-weight:800;font-variant-numeric:tabular-nums;line-height:1.2}',
+  '.bi-stat .s{margin-top:2px;font-size:12px;color:var(--mu)}',
+  '.bi-card{background:#fff;border:1px solid var(--ln);border-radius:14px;overflow:hidden}',
+  '.bi-toolbar{display:flex;flex-wrap:wrap;gap:10px;align-items:center;padding:14px;border-bottom:1px solid var(--ln)}',
+  '.bi-search{position:relative;flex:1 1 280px;min-width:0}',
+  '.bi-search input{width:100%;height:40px;padding:0 36px;border:1px solid var(--ln);border-radius:10px;font-size:14px;outline:none;background:var(--bg);font-family:inherit}',
+  '.bi-search input:focus{border-color:var(--ac2);background:#fff;box-shadow:0 0 0 3px var(--acs)}',
+  '.bi-search .lead{position:absolute;left:11px;top:50%;transform:translateY(-50%);color:var(--mu);display:flex;pointer-events:none}',
+  '.bi-search .clr{position:absolute;right:6px;top:50%;transform:translateY(-50%);border:0;background:transparent;color:var(--mu);width:28px;height:28px;border-radius:7px;cursor:pointer;display:flex;align-items:center;justify-content:center}.bi-search .clr:hover{background:#f1f5f9}',
+  '.bi-chips{display:inline-flex;background:var(--bg);border:1px solid var(--ln);border-radius:10px;padding:3px;flex-wrap:wrap}',
+  '.bi-chips button{border:0;background:transparent;height:32px;padding:0 12px;border-radius:7px;font:600 13px Inter,system-ui,sans-serif;color:var(--mu);cursor:pointer;display:inline-flex;align-items:center;gap:6px}',
+  '.bi-chips button.on{background:#fff;color:var(--tx);box-shadow:0 1px 3px rgba(15,23,42,.12)}',
+  '.bi-chips .n{font-size:11.5px;font-weight:700;background:#e2e8f0;color:#475569;border-radius:999px;padding:1px 7px}',
+  '.bi-select{height:40px;border:1px solid var(--ln);border-radius:10px;padding:0 10px;font:500 13px Inter,system-ui,sans-serif;background:#fff;color:var(--tx);width:auto;max-width:220px}',
+  '.bi-meta{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;padding:10px 16px;font-size:13px;color:var(--mu);border-bottom:1px solid var(--ln);background:#fcfdff}',
+  '.bi-scroll{overflow-x:auto}',
+  '.bi-table{width:100%;border-collapse:collapse;font-size:13.5px}',
+  '.bi-table th{position:sticky;top:0;text-align:left;font-size:11.5px;text-transform:uppercase;letter-spacing:.05em;color:var(--mu);background:var(--bg);padding:10px 14px;font-weight:700;white-space:nowrap;border-bottom:1px solid var(--ln)}',
+  '.bi-table th.sort{cursor:pointer;user-select:none}.bi-table th.sort:hover{color:var(--tx)}.bi-table th .arr{margin-left:4px;color:var(--ac)}',
+  '.bi-table td{padding:12px 14px;border-bottom:1px solid #eef2f6;vertical-align:middle}',
+  '.bi-table tbody tr:hover{background:#fafaff}',
+  '.bi-table .r{text-align:right}.bi-table .c{text-align:center}',
+  '.bi-prod{display:flex;flex-direction:column;gap:3px;min-width:200px}',
+  '.bi-prod b{font-weight:700;font-size:14px;color:var(--tx)}',
+  '.bi-prod .sub{font-size:12.5px;color:var(--mu)}',
+  '.bi-code{display:inline-block;font:600 12px ui-monospace,Menlo,Consolas,monospace;color:#334155;background:#f1f5f9;border-radius:6px;padding:2px 7px;white-space:nowrap}',
+  '.bi-imei{font:500 11.5px ui-monospace,Menlo,Consolas,monospace;color:var(--ac);background:var(--acs);border-radius:6px;padding:2px 6px;align-self:flex-start}',
+  '.bi-num{font-variant-numeric:tabular-nums;font-weight:700;white-space:nowrap}',
+  '.bi-pc{display:inline-block;margin-top:4px;font:700 11.5px ui-monospace,Menlo,Consolas,monospace;letter-spacing:1px;color:#4338ca;background:var(--acs);border:1px solid #c7d2fe;border-radius:6px;padding:1px 7px}',
+  '.bi-badge{display:inline-flex;align-items:center;gap:5px;border-radius:999px;padding:3px 10px;font-size:12px;font-weight:700;white-space:nowrap}',
+  '.bi-badge.ok{background:var(--oks);color:var(--ok)}.bi-badge.wa{background:var(--was);color:var(--wa)}.bi-badge.er{background:var(--ers);color:var(--er)}.bi-badge.mu{background:#f1f5f9;color:var(--mu)}',
+  '.bi-dot{width:6px;height:6px;border-radius:50%;background:currentColor}',
+  '.bi-sm{font-size:12.5px;color:var(--mu);white-space:nowrap}',
+  '.bi-pager{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;padding:12px 16px;font-size:13px;color:var(--mu)}',
+  '.bi-pager .pg{display:flex;align-items:center;gap:6px}',
+  '.bi-empty{text-align:center;padding:56px 20px;color:var(--mu)}',
+  '.bi-empty .i{width:56px;height:56px;margin:0 auto 12px;border-radius:16px;background:var(--acs);color:var(--ac);display:flex;align-items:center;justify-content:center}',
+  '.bi-empty b{display:block;color:var(--tx);font-size:16px;margin-bottom:4px}',
+  '.bi-empty .a{display:flex;gap:8px;justify-content:center;flex-wrap:wrap;margin-top:16px}',
+  '.bi-err{display:flex;align-items:center;gap:10px;justify-content:space-between;flex-wrap:wrap;background:#fef2f2;border:1px solid #fecaca;color:#b91c1c;padding:10px 14px;border-radius:12px;margin-bottom:16px;font-size:14px}',
+  '.bi-skel{height:14px;border-radius:6px;background:linear-gradient(90deg,#eef2f6,#f8fafc,#eef2f6);background-size:200% 100%;animation:biSk 1.2s infinite}',
+  '@keyframes biSk{from{background-position:200% 0}to{background-position:-200% 0}}',
+  '.bi-overlay{position:fixed;inset:0;background:rgba(15,23,42,.45);z-index:9000;display:flex;justify-content:flex-end}',
+  '.bi-drawer{width:min(560px,100%);height:100%;background:#fff;display:flex;flex-direction:column;box-shadow:-12px 0 40px rgba(15,23,42,.2);animation:biIn .18s ease-out}',
+  '@keyframes biIn{from{transform:translateX(24px);opacity:.6}to{transform:none;opacity:1}}',
+  '.bi-dh{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:18px 20px;border-bottom:1px solid var(--ln)}',
+  '.bi-dh h2{margin:0;font-size:18px}.bi-dh p{margin:2px 0 0;font-size:13px;color:var(--mu)}',
+  '.bi-db{flex:1;overflow:auto}',
+  '.bi-df{display:flex;justify-content:space-between;align-items:center;padding:14px 20px;border-top:1px solid var(--ln);background:var(--bg);font-weight:700}',
+  '.bi-df .t{font-size:20px;color:var(--ok);font-variant-numeric:tabular-nums}',
+  '.bi-cards{display:none}',
+  '@media (max-width:1100px){.bi-stats{grid-template-columns:repeat(2,minmax(0,1fr))}}',
+  '@media (max-width:760px){.bi{padding:14px}.bi-head h1{font-size:22px}.bi-actions{width:100%}.bi-actions .bi-btn.pri{flex:1 1 100%}.bi-actions .bi-btn.sec:not(.icon){flex:1 1 0}',
+  '.bi-stat{padding:12px;gap:10px}.bi-stat .ic{flex-basis:34px;height:34px}.bi-stat .v{font-size:18px}',
+  '.bi-toolbar{padding:10px}.bi-chips{width:100%}.bi-chips button{flex:1 1 auto;justify-content:center}.bi-select{flex:1 1 0;max-width:none}',
+  '.bi-scroll{display:none}.bi-cards{display:block}',
+  '.bi-mc{padding:14px 16px;border-bottom:1px solid #eef2f6}.bi-mc .top{display:flex;justify-content:space-between;gap:10px;align-items:flex-start}',
+  '.bi-mc .grid{display:grid;grid-template-columns:1fr 1fr;gap:8px 12px;margin-top:10px;font-size:13px}.bi-mc .grid .lb{display:block;font-size:11px;color:var(--mu);text-transform:uppercase;letter-spacing:.04em;font-weight:600}',
+  '.bi-chips{flex-wrap:nowrap}.bi-chips button{padding:0 6px}.bi-select.sup{flex:1 1 100%}}',
+  // styles.css forces 44px / 16px / 12px 16px padding on every <button> below 768px; keep this page's own sizes
+  '@media (max-width:768px){.bi .bi-btn{font-size:14px!important;padding:0 14px!important;min-height:40px!important}.bi .bi-btn.icon{padding:0!important;min-width:40px!important}',
+  '.bi .bi-btn.sm{min-height:34px!important;font-size:13px!important}',
+  '.bi .bi-btn.link{min-height:0!important;min-width:0!important;padding:0!important;font-size:12.5px!important}',
+  '.bi .bi-chips button{min-height:34px!important;min-width:0!important;padding:0 6px!important;font-size:13px!important}',
+  '.bi .bi-search .clr{min-height:28px!important;min-width:28px!important;padding:0!important}',
+  '.bi .bi-select{height:44px;padding:0 10px!important;font-size:15px!important}}',
+  '@media (max-width:480px){.bi-stat .ic{display:none}.bi-stat .k{font-size:11px}}',
+].join('\n');
+
+const BI_PAGE_SIZE = 50;
+const BI_LOW_STOCK = 2; // qty at or below this (and above 0) counts as low stock
+
+function biToNumber(val) {
+  if (val == null) return 0;
+  if (typeof val === 'number') return val;
+  const f = parseFloat(String(val).replace(/[^0-9.-]+/g, ''));
+  return isNaN(f) ? 0 : f;
+}
+const biQty = (it) => biToNumber(it.branchQty ?? it.qty ?? 0);
+const biStatus = (it) => { const q = biQty(it); return q <= 0 ? 'out' : q <= BI_LOW_STOCK ? 'low' : 'in'; };
+// Calendar days since the latest supply of this product
+function biDaysInStock(it) {
+  if (!it.productCreatedAt) return null;
+  const created = new Date(it.productCreatedAt);
+  if (isNaN(created.getTime())) return null;
+  const now = new Date();
+  const d = Math.floor((Date.UTC(now.getFullYear(), now.getMonth(), now.getDate()) - Date.UTC(created.getFullYear(), created.getMonth(), created.getDate())) / 86400000);
+  return d >= 0 ? d : null;
+}
+// Unit cost shown to the branch. Central refs ('<docId>_<idx>') carry no branch cost, so they show '-'.
+function biUnitCost(it) {
+  if (/^[0-9a-fA-F]{24}_[0-9]+$/.test(String(it.productId || ''))) return null;
+  const raw = it.costPrice ?? it.cost ?? null;
+  if (raw != null) return biToNumber(raw);
+  const q = biQty(it);
+  return it.totalCostPrice != null && q > 0 ? biToNumber(it.totalCostPrice) / q : null;
+}
+const biImes = (it) => {
+  const central = Array.isArray(it.centralOnlyImes) && it.centralOnlyImes.length ? it.centralOnlyImes : (Array.isArray(it.centralImes) ? it.centralImes : []);
+  return [...(Array.isArray(it.imes) ? it.imes : []), ...central].map(String).filter(Boolean);
+};
+const biDate = (d) => {
+  if (!d) return '—';
+  const dt = new Date(d);
+  return isNaN(dt.getTime()) ? '—' : dt.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
+};
+
 function BranchInStock({ salesUrl, token }) {
   const [entries, setEntries] = React.useState([]);
+  const [loading, setLoading] = React.useState(true);
   const [error, setError] = React.useState('');
-  // Add filter states
-  const [productNoFilter, setProductNoFilter] = React.useState('');
-  const [productNameFilter, setProductNameFilter] = React.useState('');
-  const [brandFilter, setBrandFilter] = React.useState('');
-  const [modelFilter, setModelFilter] = React.useState('');
-  const [qtyFilter, setQtyFilter] = React.useState('');
-  const [imesFilter, setImesFilter] = React.useState('');
+  const [query, setQuery] = React.useState('');
+  const [status, setStatus] = React.useState('all'); // all | in | low | out
+  const [supplierFilter, setSupplierFilter] = React.useState('');
+  const [sort, setSort] = React.useState({ key: 'added', dir: 'desc' });
+  const [page, setPage] = React.useState(1);
   const [showBreakdown, setShowBreakdown] = React.useState(false);
   const [showBarcodeSheet, setShowBarcodeSheet] = React.useState(false);
   const [showImport, setShowImport] = React.useState(false);
@@ -43,24 +178,18 @@ function BranchInStock({ salesUrl, token }) {
           const sName = s.supplierName || s.supplier || '';
           const sCreated = s.createdAt || s.created_at || s.updatedAt || s.updated_at || null;
           (Array.isArray(s.items) ? s.items : []).forEach(it => {
-            try {
-              const pid = String(it.productId || it._id || '');
-              if (!pid) return;
-              const prev = supplyMap[pid];
-              if (!prev) supplyMap[pid] = { supplierName: sName, createdAt: sCreated };
-              else {
-                const prevTime = prev.createdAt ? new Date(prev.createdAt).getTime() : 0;
-                const curTime = sCreated ? new Date(sCreated).getTime() : 0;
-                if (curTime > prevTime) supplyMap[pid] = { supplierName: sName, createdAt: sCreated };
-              }
-            } catch (e) { /* ignore per-item mapping errors */ }
+            const pid = String(it.productId || it._id || '');
+            if (!pid) return;
+            const prev = supplyMap[pid];
+            const prevTime = prev && prev.createdAt ? new Date(prev.createdAt).getTime() : 0;
+            const curTime = sCreated ? new Date(sCreated).getTime() : 0;
+            if (!prev || curTime > prevTime) supplyMap[pid] = { supplierName: sName, createdAt: sCreated };
           });
         });
 
         // Annotate rows with supplierName and productCreatedAt from the latest matching supply
         rows = rows.map(r => {
-          const pid = String(r.productId || '');
-          const info = supplyMap[pid] || null;
+          const info = supplyMap[String(r.productId || '')] || null;
           return { ...r, supplierName: info ? info.supplierName : (r.supplierName || ''), productCreatedAt: info ? info.createdAt : (r.createdAt || null) };
         });
       } catch (e) {
@@ -69,12 +198,13 @@ function BranchInStock({ salesUrl, token }) {
 
       setEntries(rows);
     } catch (e) { setError(e.message); }
+    finally { setLoading(false); }
   };
 
   // Suppliers for the Add Purchase form
   const [suppliers, setSuppliers] = React.useState([]);
 
-  // Price code cipher (shop-admin setting) -> encoded cost price shown under the cost column
+  // Price code cipher (branch Price Code setting) -> encoded cost price shown under the cost column
   const [priceCipher, setPriceCipher] = React.useState('');
   React.useEffect(() => {
     const tk = getAuthToken();
@@ -108,97 +238,81 @@ function BranchInStock({ salesUrl, token }) {
 
   React.useEffect(() => { loadEntries(); loadSuppliers(); }, [token]);
   React.useEffect(() => {
-    const onUpdated = (e) => {
-      // if branch-specific update then reload regardless; UI will decide filtering
-      loadEntries();
-    };
+    const onUpdated = () => loadEntries();
     window.addEventListener('branch-stock-updated', onUpdated);
     return () => window.removeEventListener('branch-stock-updated', onUpdated);
   }, [token]);
+  React.useEffect(() => {
+    if (!showBreakdown) return undefined;
+    const onKey = (e) => { if (e.key === 'Escape') setShowBreakdown(false); };
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, [showBreakdown]);
+  React.useEffect(() => { setPage(1); }, [query, status, supplierFilter, sort]);
 
   const currency = (n) => new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 2 }).format(n || 0);
 
-  // Filtering logic
-  const filteredEntries = React.useMemo(() => {
+  const supplierNames = React.useMemo(
+    () => Array.from(new Set(entries.map(it => (it.supplierName || '').trim()).filter(Boolean))).sort((a, b) => a.localeCompare(b)),
+    [entries]
+  );
+
+  // Search + supplier filter (status chips are applied after, so their counts follow the search)
+  const searched = React.useMemo(() => {
+    const q = query.trim().toLowerCase();
     return entries.filter(it => {
-      const qtyVal = it.branchQty ?? it.qty ?? '';
-      // prepare IME string for searching
-  const centralArr = Array.isArray(it.centralOnlyImes) && it.centralOnlyImes.length ? it.centralOnlyImes : (Array.isArray(it.centralImes) ? it.centralImes : []);
-  const imesStr = [ ...(Array.isArray(it.imes) ? it.imes : []), ...centralArr ].join(',');
-      return (
-        (!productNoFilter || (it.productNo || '').toLowerCase().includes(productNoFilter.toLowerCase())) &&
-        (!productNameFilter || (it.productName || '').toLowerCase().includes(productNameFilter.toLowerCase())) &&
-        (!brandFilter || (it.brand || '').toLowerCase().includes(brandFilter.toLowerCase())) &&
-        (!modelFilter || (it.model || '').toLowerCase().includes(modelFilter.toLowerCase())) &&
-        (!qtyFilter || String(qtyVal).includes(qtyFilter)) &&
-        (!imesFilter || imesStr.toLowerCase().includes(imesFilter.toLowerCase()))
-      );
+      if (supplierFilter && (it.supplierName || '').trim() !== supplierFilter) return false;
+      if (!q) return true;
+      return [it.productNo, it.productName, it.brand, it.model, it.supplierName].some(v => String(v || '').toLowerCase().includes(q))
+        || biImes(it).some(m => m.toLowerCase().includes(q));
     });
-  }, [entries, productNoFilter, productNameFilter, brandFilter, modelFilter, qtyFilter, imesFilter]);
+  }, [entries, query, supplierFilter]);
 
-  // Compute total branch stock value (Qty * Cost Price) for displayed rows
-  const branchStockTotal = React.useMemo(() => {
-    // helper to coerce numbers and strip currency formatting like '₹1,110.00'
-    function toNumber(val) {
-      if (val == null) return 0;
-      if (typeof val === 'number') return val;
-      try {
-        const cleaned = String(val).replace(/[^0-9.-]+/g, '');
-        const f = parseFloat(cleaned);
-        return isNaN(f) ? 0 : f;
-      } catch (e) { return 0; }
-    }
+  const counts = React.useMemo(() => {
+    const c = { all: searched.length, in: 0, low: 0, out: 0 };
+    searched.forEach(it => { c[biStatus(it)] += 1; });
+    return c;
+  }, [searched]);
 
-    return filteredEntries.reduce((sum, it) => {
-      const qty = toNumber(it.branchQty ?? it.qty ?? 0) || 0;
-      // Stock is valued at cost (there is no fixed selling price); accept formatted strings as well
-      const cost = toNumber(it.costPrice ?? 0) || 0;
-      return sum + qty * cost;
-    }, 0);
-  }, [filteredEntries]);
+  const filteredEntries = React.useMemo(() => {
+    const rows = status === 'all' ? searched : searched.filter(it => biStatus(it) === status);
+    const val = (it) => {
+      switch (sort.key) {
+        case 'name': return String(it.productName || it.productNo || '').toLowerCase();
+        case 'qty': return biQty(it);
+        case 'cost': return biUnitCost(it) ?? -1;
+        case 'value': return biQty(it) * (biUnitCost(it) || 0);
+        case 'supplier': return String(it.supplierName || '').toLowerCase();
+        default: { const t = it.productCreatedAt ? new Date(it.productCreatedAt).getTime() : 0; return isNaN(t) ? 0 : t; }
+      }
+    };
+    const dir = sort.dir === 'asc' ? 1 : -1;
+    return rows.slice().sort((a, b) => { const x = val(a), y = val(b); return x < y ? -dir : x > y ? dir : 0; });
+  }, [searched, status, sort]);
 
-  // Provide a breakdown of per-row contributions used to compute the total
+  // Stock value (Qty * Cost Price) for the rows on screen; there is no fixed selling price
   const branchStockBreakdown = React.useMemo(() => {
-    function toNumber(val) {
-      if (val == null) return 0;
-      if (typeof val === 'number') return val;
-      try {
-        const cleaned = String(val).replace(/[^0-9.-]+/g, '');
-        const f = parseFloat(cleaned);
-        return isNaN(f) ? 0 : f;
-      } catch (e) { return 0; }
-    }
     const items = filteredEntries.map(it => {
-      const qty = toNumber(it.branchQty ?? it.qty ?? 0) || 0;
-      const cost = toNumber(it.costPrice ?? 0) || 0;
-      const amount = qty * cost;
-      return {
-        productNo: it.productNo || (it.productId || '').toString(),
-        productName: it.productName || '-',
-        qty,
-        cost,
-        amount
-      };
-    }).filter(i => i.qty !== 0 && i.amount !== 0);
-    const total = items.reduce((s, it) => s + it.amount, 0);
-    return { items, total };
+      const qty = biQty(it);
+      const cost = biToNumber(it.costPrice ?? 0);
+      return { productNo: it.productNo || String(it.productId || ''), productName: it.productName || '-', qty, cost, amount: qty * cost };
+    }).filter(i => i.qty !== 0 && i.amount !== 0).sort((a, b) => b.amount - a.amount);
+    return { items, total: items.reduce((s, it) => s + it.amount, 0) };
   }, [filteredEntries]);
+  const totalUnits = React.useMemo(() => filteredEntries.reduce((s, it) => s + biQty(it), 0), [filteredEntries]);
 
-  // Transform branch entries for BarcodeSheet component
+  const pageCount = Math.max(1, Math.ceil(filteredEntries.length / BI_PAGE_SIZE));
+  const pageRows = filteredEntries.slice((page - 1) * BI_PAGE_SIZE, page * BI_PAGE_SIZE);
+  const filtersOn = !!(query || supplierFilter || status !== 'all');
+  const clearFilters = () => { setQuery(''); setSupplierFilter(''); setStatus('all'); };
+  const qLower = query.trim().toLowerCase();
+
+  // Transform branch entries for BarcodeSheet component (grouped by category, InStock entry shape)
   const barcodeEntries = React.useMemo(() => {
-    // Transform branch entries (flat array) to InStock entries format (array of entries with items)
-    // Group products by category for better organization
     const grouped = {};
-    
     entries.forEach(row => {
       const category = row.category || 'Uncategorized';
-      if (!grouped[category]) {
-        grouped[category] = {
-          category: category,
-          items: []
-        };
-      }
-      
+      if (!grouped[category]) grouped[category] = { category, items: [] };
       grouped[category].items.push({
         productNo: row.productNo || row.productId || '',
         productName: row.productName || '',
@@ -209,823 +323,310 @@ function BranchInStock({ salesUrl, token }) {
         imes: Array.isArray(row.imes) ? row.imes : (row.imei ? [row.imei] : [])
       });
     });
-    
     return Object.values(grouped);
   }, [entries]);
 
+  const exportCsv = () => {
+    const esc = (v) => { const s = String(v ?? ''); return /[",\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s; };
+    const head = ['Product No', 'Product Name', 'Brand', 'Model', 'Qty', 'Unit Cost', 'Stock Value', 'Supplier', 'Added On', 'Days in Stock', 'IMEIs', 'Warranty (months)', 'Validity'];
+    const lines = filteredEntries.map(it => {
+      const cost = biUnitCost(it);
+      return [it.productNo, it.productName, it.brand, it.model, biQty(it), cost ?? '', cost != null ? (biQty(it) * cost).toFixed(2) : '',
+        it.supplierName, biDate(it.productCreatedAt), biDaysInStock(it) ?? '', biImes(it).join(' '), it.warrantyMonths || '', it.validity ? biDate(it.validity) : '']
+        .map(esc).join(',');
+    });
+    const blob = new Blob(['﻿' + [head.join(','), ...lines].join('\n')], { type: 'text/csv;charset=utf-8' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = 'branch-inventory-' + new Date().toISOString().slice(0, 10) + '.csv';
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+  };
+
+  const setSortKey = (key) => setSort(s => (s.key === key ? { key, dir: s.dir === 'asc' ? 'desc' : 'asc' } : { key, dir: key === 'name' || key === 'supplier' ? 'asc' : 'desc' }));
+  const Th = ({ k, children, className }) => (
+    <th className={'sort ' + (className || '')} onClick={() => setSortKey(k)} aria-sort={sort.key === k ? (sort.dir === 'asc' ? 'ascending' : 'descending') : 'none'}>
+      {children}{sort.key === k ? <span className="arr">{sort.dir === 'asc' ? '↑' : '↓'}</span> : null}
+    </th>
+  );
+
+  const qtyBadge = (it) => {
+    const st = biStatus(it);
+    const cls = st === 'out' ? 'er' : st === 'low' ? 'wa' : 'ok';
+    return <span className={'bi-badge ' + cls}><span className="bi-dot" />{biQty(it)}</span>;
+  };
+  const ageBadge = (it) => {
+    const d = biDaysInStock(it);
+    if (d == null) return <span className="bi-sm">—</span>;
+    const cls = d > 90 ? 'er' : d > 45 ? 'wa' : 'mu';
+    return <span className={'bi-badge ' + cls} title="Days since the latest purchase of this product">{d} day{d === 1 ? '' : 's'}</span>;
+  };
+  const costCell = (it) => {
+    const cost = biUnitCost(it);
+    const pc = priceCodeOf(it);
+    return (
+      <>
+        <div className="bi-num">{cost != null ? currency(cost) : '—'}</div>
+        {pc ? <span className="bi-pc" title="Price code (encoded cost price)">{pc}</span> : null}
+      </>
+    );
+  };
+  const warrantyText = (it) => {
+    const months = Number(it.warrantyMonths) || 0;
+    const parts = [];
+    if (months) parts.push(months + ' month' + (months > 1 ? 's' : ''));
+    if (it.warrantyDetails) parts.push(it.warrantyDetails);
+    return parts.join(' · ');
+  };
+  const matchedImei = (it) => (qLower.length >= 3 ? biImes(it).find(m => m.toLowerCase().includes(qLower)) : null);
+
+  const statTiles = [
+    { key: 'all', icon: 'box', cls: '', label: 'Products', value: counts.all, sub: filtersOn ? 'Matching your filters' : 'In branch inventory' },
+    { key: 'units', icon: 'layers', cls: 'ok', label: 'Units in stock', value: totalUnits.toLocaleString('en-IN'), sub: 'Across shown products' },
+    { key: 'value', icon: 'wallet', cls: '', label: 'Stock value', value: '₹' + Math.round(branchStockBreakdown.total).toLocaleString('en-IN'), sub: 'At cost price' },
+    { key: 'attention', icon: 'alert', cls: counts.out ? 'er' : 'wa', label: 'Needs restock', value: counts.low + counts.out, sub: counts.out + ' out · ' + counts.low + ' low (≤' + BI_LOW_STOCK + ')' },
+  ];
+
   return (
-    <div style={{ padding: '24px', backgroundColor: '#f8fafc', minHeight: '100vh' }}>
-      {/* Page Header */}
-      <div style={{ marginBottom: '32px' }}>
-        <h1 style={{ 
-          fontSize: '32px', 
-          fontWeight: '700', 
-          color: '#1e293b', 
-          marginBottom: '8px',
-          display: 'flex',
-          alignItems: 'center',
-          gap: '12px'
-        }}>
-          🏢 Branch Inventory
-        </h1>
-        <p style={{ color: '#64748b', fontSize: '16px', margin: 0 }}>
-          Manage and track your branch-specific inventory stock
-        </p>
-      </div>
+    <div className="bi">
+      <style>{BI_CSS}</style>
 
-      {/* Statistics Cards */}
-      <div style={{ 
-        display: 'grid', 
-        gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', 
-        gap: '24px', 
-        marginBottom: '32px' 
-      }}>
-        <div style={{
-          background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-          borderRadius: '16px',
-          padding: '24px',
-          color: 'white',
-          boxShadow: '0 10px 25px rgba(102, 126, 234, 0.15)',
-          border: '1px solid rgba(255, 255, 255, 0.1)'
-        }}>
-          <div style={{ display: 'flex', alignItems: 'center', marginBottom: '16px' }}>
-            <div style={{ 
-              fontSize: '28px', 
-              marginRight: '16px',
-              background: 'rgba(255, 255, 255, 0.2)',
-              padding: '12px',
-              borderRadius: '12px',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center'
-            }}>📦</div>
-            <div>
-              <div style={{ fontSize: '14px', opacity: 0.9, marginBottom: '4px' }}>Total Items</div>
-              <div style={{ fontSize: '28px', fontWeight: '700' }}>
-                {filteredEntries.length}
-              </div>
-            </div>
-          </div>
-          <div style={{ fontSize: '14px', opacity: 0.8 }}>Items in branch inventory</div>
+      <div className="bi-head">
+        <div>
+          <h1>Purchase Inventory</h1>
+          <p>Stock held by this branch, valued at cost. Add a purchase, import a supplier bill, or print barcode labels.</p>
         </div>
-       
-        <div style={{
-          background: 'linear-gradient(135deg, #f093fb 0%, #f5576c 100%)',
-          borderRadius: '16px',
-          padding: '24px',
-          color: 'white',
-          boxShadow: '0 10px 25px rgba(240, 147, 251, 0.15)',
-          border: '1px solid rgba(255, 255, 255, 0.1)'
-        }}>
-          <div style={{ display: 'flex', alignItems: 'center', marginBottom: '16px' }}>
-            <div style={{ 
-              fontSize: '28px', 
-              marginRight: '16px',
-              background: 'rgba(255, 255, 255, 0.2)',
-              padding: '12px',
-              borderRadius: '12px',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center'
-            }}>📊</div>
-            <div>
-              <div style={{ fontSize: '14px', opacity: 0.9, marginBottom: '4px' }}>Total Quantity</div>
-              <div style={{ fontSize: '28px', fontWeight: '700' }}>
-                {filteredEntries.reduce((sum, item) => sum + (Number(item.branchQty || item.qty) || 0), 0)}
-              </div>
-            </div>
-          </div>
-          <div style={{ fontSize: '14px', opacity: 0.8 }}>Units in stock</div>
-        </div>
-       
-        <div style={{
-          background: 'linear-gradient(135deg, #4facfe 0%, #00f2fe 100%)',
-          borderRadius: '16px',
-          padding: '24px',
-          color: 'white',
-          boxShadow: '0 10px 25px rgba(79, 172, 254, 0.15)',
-          border: '1px solid rgba(255, 255, 255, 0.1)'
-        }}>
-          <div style={{ display: 'flex', alignItems: 'center', marginBottom: '16px' }}>
-            <div style={{ 
-              fontSize: '28px', 
-              marginRight: '16px',
-              background: 'rgba(255, 255, 255, 0.2)',
-              padding: '12px',
-              borderRadius: '12px',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center'
-            }}>💰</div>
-            <div>
-              <div style={{ fontSize: '14px', opacity: 0.9, marginBottom: '4px' }}>Stock Value</div>
-              <div style={{ fontSize: '28px', fontWeight: '700' }}>
-                {currency(branchStockTotal)}
-              </div>
-            </div>
-          </div>
-          <div style={{ fontSize: '14px', opacity: 0.8 }}>
-            <button 
-              style={{
-                background: 'rgba(255, 255, 255, 0.2)',
-                color: 'white',
-                border: 'none',
-                borderRadius: '6px',
-                padding: '4px 8px',
-                fontSize: '12px',
-                cursor: 'pointer'
-              }}
-              onClick={() => setShowBreakdown(s => !s)}
-            >
-              {showBreakdown ? 'Hide' : 'Show'} breakdown
-            </button>
-          </div>
+        <div className="bi-actions">
+          <button type="button" className="bi-btn sec icon" title="Refresh" aria-label="Refresh" onClick={() => { setLoading(true); loadEntries(); }}><BiIcon name="refresh" /></button>
+          <button type="button" className="bi-btn sec" onClick={() => setShowBarcodeSheet(true)} disabled={entries.length === 0}><BiIcon name="barcode" />Barcode labels</button>
+          <button type="button" className="bi-btn sec" onClick={() => setShowImport(true)}><BiIcon name="upload" />Import bill</button>
+          <button type="button" className="bi-btn pri" onClick={() => setOpenAdd(true)}><BiIcon name="plus" />Add purchase</button>
         </div>
       </div>
 
-      {/* Stock Value Breakdown */}
-      {showBreakdown && (
-        <div style={{
-          background: 'white',
-          borderRadius: '16px',
-          padding: '24px',
-          marginBottom: '32px',
-          boxShadow: '0 4px 6px rgba(0, 0, 0, 0.05)',
-          border: '1px solid #e2e8f0'
-        }}>
-          <h3 style={{ 
-            fontSize: '18px', 
-            fontWeight: '600', 
-            color: '#1e293b',
-            marginBottom: '16px',
-            display: 'flex',
-            alignItems: 'center',
-            gap: '8px'
-          }}>
-            💰 Stock Value Breakdown
-          </h3>
-          
-          {branchStockBreakdown.items.length === 0 ? (
-            <div style={{
-              textAlign: 'center',
-              padding: '32px',
-              background: '#f8fafc',
-              borderRadius: '12px',
-              border: '2px dashed #cbd5e1'
-            }}>
-              <div style={{ fontSize: '24px', marginBottom: '8px' }}>📊</div>
-              <div style={{ color: '#6b7280', fontSize: '14px' }}>No items contributing to stock value</div>
-            </div>
-          ) : (
-            <div style={{ 
-              border: '1px solid #e2e8f0',
-              borderRadius: '12px',
-              overflow: 'hidden'
-            }}>
-              <div style={{ background: '#f8fafc', padding: '12px 16px', borderBottom: '1px solid #e2e8f0' }}>
-                <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr', gap: '16px', fontSize: '12px', fontWeight: '600', color: '#6b7280' }}>
-                  <div>PRODUCT</div>
-                  <div style={{ textAlign: 'center' }}>CALCULATION</div>
-                  <div style={{ textAlign: 'right' }}>VALUE</div>
-                </div>
-              </div>
-              <div style={{ maxHeight: '300px', overflowY: 'auto' }}>
-                {branchStockBreakdown.items.map((b, i) => (
-                  <div key={i} style={{
-                    display: 'grid', 
-                    gridTemplateColumns: '2fr 1fr 1fr', 
-                    gap: '16px',
-                    padding: '12px 16px',
-                    borderBottom: i < branchStockBreakdown.items.length - 1 ? '1px solid #f1f5f9' : 'none',
-                    fontSize: '14px'
-                  }}>
-                    <div>
-                      <div style={{ fontWeight: '500', color: '#1e293b' }}>{b.productNo}</div>
-                      <div style={{ fontSize: '12px', color: '#6b7280' }}>{b.productName}</div>
-                    </div>
-                    <div style={{ textAlign: 'center', color: '#6b7280' }}>
-                      {b.qty} × {currency(b.cost)}
-                    </div>
-                    <div style={{ textAlign: 'right', fontWeight: '600', color: '#059669' }}>
-                      {currency(b.amount)}
-                    </div>
-                  </div>
-                ))}
-              </div>
-              <div style={{ 
-                padding: '12px 16px', 
-                background: '#f8fafc', 
-                borderTop: '2px solid #e2e8f0',
-                display: 'grid',
-                gridTemplateColumns: '2fr 1fr 1fr',
-                gap: '16px'
-              }}>
-                <div></div>
-                <div style={{ textAlign: 'center', fontSize: '14px', fontWeight: '600', color: '#6b7280' }}>
-                  Total Value
-                </div>
-                <div style={{ textAlign: 'right', fontSize: '18px', fontWeight: '700', color: '#059669' }}>
-                  {currency(branchStockBreakdown.total)}
-                </div>
-              </div>
-            </div>
-          )}
+      {error && (
+        <div className="bi-err" role="alert">
+          <span style={{ display: 'flex', alignItems: 'center', gap: 8 }}><BiIcon name="alert" />{error}</span>
+          <button type="button" className="bi-btn sec sm" onClick={() => { setLoading(true); loadEntries(); }}>Try again</button>
         </div>
       )}
 
-      {/* Actions Section */}
-      <div style={{
-        background: 'white',
-        borderRadius: '16px',
-        padding: '24px',
-        marginBottom: '32px',
-        boxShadow: '0 4px 6px rgba(0, 0, 0, 0.05)',
-        border: '1px solid #e2e8f0'
-      }}>
-        <div style={{ 
-          display: 'flex', 
-          justifyContent: 'space-between', 
-          alignItems: 'center',
-          marginBottom: '24px',
-          flexWrap: 'wrap',
-          gap: '16px'
-        }}>
-          <div>
-            <h3 style={{ 
-              fontSize: '24px', 
-              fontWeight: '600', 
-              color: '#1e293b',
-              marginBottom: '8px'
-            }}>Inventory Management</h3>
-            <p style={{ 
-              color: '#64748b', 
-              fontSize: '16px',
-              margin: 0
-            }}>Add new products and manage your branch inventory</p>
-          </div>
-          <button 
-            style={{
-              background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-              color: 'white',
-              border: 'none',
-              borderRadius: '12px',
-              padding: '12px 24px',
-              fontSize: '14px',
-              fontWeight: '600',
-              cursor: 'pointer',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '8px',
-              boxShadow: '0 4px 12px rgba(102, 126, 234, 0.3)',
-              transition: 'all 0.2s ease'
-            }}
-            type="button" 
-            onClick={() => setOpenAdd(true)}
-            onMouseOver={(e) => {
-              e.target.style.transform = 'translateY(-2px)';
-              e.target.style.boxShadow = '0 6px 16px rgba(102, 126, 234, 0.4)';
-            }}
-            onMouseOut={(e) => {
-              e.target.style.transform = 'translateY(0px)';
-              e.target.style.boxShadow = '0 4px 12px rgba(102, 126, 234, 0.3)';
-            }}
-          >
-            📦 Add Purchase
-          </button>
-
-          <button
-            style={{
-              background: 'linear-gradient(135deg, #11998e 0%, #38ef7d 100%)',
-              color: 'white',
-              border: 'none',
-              borderRadius: '12px',
-              padding: '12px 24px',
-              fontSize: '14px',
-              fontWeight: '600',
-              cursor: 'pointer',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '8px',
-              boxShadow: '0 4px 12px rgba(17, 153, 142, 0.3)'
-            }}
-            type="button"
-            onClick={() => setShowImport(true)}
-          >
-            📥 Import from Excel / JSON
-          </button>
-
-          <button 
-            style={{
-              background: 'linear-gradient(135deg, #fa709a 0%, #fee140 100%)',
-              color: 'white',
-              border: 'none',
-              borderRadius: '12px',
-              padding: '12px 24px',
-              fontSize: '14px',
-              fontWeight: '600',
-              cursor: entries.length === 0 ? 'not-allowed' : 'pointer',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '8px',
-              boxShadow: '0 4px 12px rgba(250, 112, 154, 0.3)',
-              transition: 'all 0.2s ease',
-              opacity: entries.length === 0 ? 0.6 : 1
-            }}
-            type="button" 
-            onClick={() => entries.length > 0 && setShowBarcodeSheet(true)}
-            disabled={entries.length === 0}
-            onMouseOver={(e) => {
-              if (entries.length > 0) {
-                e.target.style.transform = 'translateY(-2px)';
-                e.target.style.boxShadow = '0 6px 16px rgba(250, 112, 154, 0.4)';
-              }
-            }}
-            onMouseOut={(e) => {
-              e.target.style.transform = 'translateY(0px)';
-              e.target.style.boxShadow = '0 4px 12px rgba(250, 112, 154, 0.3)';
-            }}
-          >
-            📊 Generate Barcode Labels
-          </button>
-        </div>
-
-        {/* Filter Section */}
-        <div>
-          <h4 style={{ 
-            fontSize: '18px', 
-            fontWeight: '600', 
-            color: '#1e293b',
-            marginBottom: '20px',
-            display: 'flex',
-            alignItems: 'center',
-            gap: '8px'
-          }}>
-            🔍 Filter Inventory
-          </h4>
-          
-          <div style={{ 
-            display: 'grid', 
-            gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', 
-            gap: '16px'
-          }}>
-            <div>
-              <label style={{ 
-                display: 'block', 
-                fontSize: '14px', 
-                fontWeight: '500', 
-                color: '#374151',
-                marginBottom: '6px'
-              }}>Product No</label>
-              <input 
-                type="text" 
-                placeholder="Search by product number" 
-                value={productNoFilter} 
-                onChange={e => setProductNoFilter(e.target.value)}
-                style={{
-                  width: '100%',
-                  padding: '10px 12px',
-                  border: '2px solid #e5e7eb',
-                  borderRadius: '8px',
-                  fontSize: '14px',
-                  transition: 'border-color 0.2s ease',
-                  outline: 'none'
-                }}
-                onFocus={(e) => e.target.style.borderColor = '#667eea'}
-                onBlur={(e) => e.target.style.borderColor = '#e5e7eb'}
-              />
-            </div>
-
-            <div>
-              <label style={{ 
-                display: 'block', 
-                fontSize: '14px', 
-                fontWeight: '500', 
-                color: '#374151',
-                marginBottom: '6px'
-              }}>Product Name</label>
-              <input 
-                type="text" 
-                placeholder="Search by product name" 
-                value={productNameFilter} 
-                onChange={e => setProductNameFilter(e.target.value)}
-                style={{
-                  width: '100%',
-                  padding: '10px 12px',
-                  border: '2px solid #e5e7eb',
-                  borderRadius: '8px',
-                  fontSize: '14px',
-                  transition: 'border-color 0.2s ease',
-                  outline: 'none'
-                }}
-                onFocus={(e) => e.target.style.borderColor = '#667eea'}
-                onBlur={(e) => e.target.style.borderColor = '#e5e7eb'}
-              />
-            </div>
-
-            <div>
-              <label style={{ 
-                display: 'block', 
-                fontSize: '14px', 
-                fontWeight: '500', 
-                color: '#374151',
-                marginBottom: '6px'
-              }}>Brand</label>
-              <input 
-                type="text" 
-                placeholder="Search by brand" 
-                value={brandFilter} 
-                onChange={e => setBrandFilter(e.target.value)}
-                style={{
-                  width: '100%',
-                  padding: '10px 12px',
-                  border: '2px solid #e5e7eb',
-                  borderRadius: '8px',
-                  fontSize: '14px',
-                  transition: 'border-color 0.2s ease',
-                  outline: 'none'
-                }}
-                onFocus={(e) => e.target.style.borderColor = '#667eea'}
-                onBlur={(e) => e.target.style.borderColor = '#e5e7eb'}
-              />
-            </div>
-
-            <div>
-              <label style={{ 
-                display: 'block', 
-                fontSize: '14px', 
-                fontWeight: '500', 
-                color: '#374151',
-                marginBottom: '6px'
-              }}>Model</label>
-              <input 
-                type="text" 
-                placeholder="Search by model" 
-                value={modelFilter} 
-                onChange={e => setModelFilter(e.target.value)}
-                style={{
-                  width: '100%',
-                  padding: '10px 12px',
-                  border: '2px solid #e5e7eb',
-                  borderRadius: '8px',
-                  fontSize: '14px',
-                  transition: 'border-color 0.2s ease',
-                  outline: 'none'
-                }}
-                onFocus={(e) => e.target.style.borderColor = '#667eea'}
-                onBlur={(e) => e.target.style.borderColor = '#e5e7eb'}
-              />
-            </div>
-
-            <div>
-              <label style={{ 
-                display: 'block', 
-                fontSize: '14px', 
-                fontWeight: '500', 
-                color: '#374151',
-                marginBottom: '6px'
-              }}>Quantity</label>
-              <input 
-                type="text" 
-                placeholder="Filter by quantity" 
-                value={qtyFilter} 
-                onChange={e => setQtyFilter(e.target.value)}
-                style={{
-                  width: '100%',
-                  padding: '10px 12px',
-                  border: '2px solid #e5e7eb',
-                  borderRadius: '8px',
-                  fontSize: '14px',
-                  transition: 'border-color 0.2s ease',
-                  outline: 'none'
-                }}
-                onFocus={(e) => e.target.style.borderColor = '#667eea'}
-                onBlur={(e) => e.target.style.borderColor = '#e5e7eb'}
-              />
-            </div>
-
-            <div>
-              <label style={{ 
-                display: 'block', 
-                fontSize: '14px', 
-                fontWeight: '500', 
-                color: '#374151',
-                marginBottom: '6px'
-              }}>IMEI</label>
-              <input 
-                type="text" 
-                placeholder="Search by IMEI" 
-                value={imesFilter} 
-                onChange={e => setImesFilter(e.target.value)}
-                style={{
-                  width: '100%',
-                  padding: '10px 12px',
-                  border: '2px solid #e5e7eb',
-                  borderRadius: '8px',
-                  fontSize: '14px',
-                  transition: 'border-color 0.2s ease',
-                  outline: 'none'
-                }}
-                onFocus={(e) => e.target.style.borderColor = '#667eea'}
-                onBlur={(e) => e.target.style.borderColor = '#e5e7eb'}
-              />
-            </div>
-          </div>
-        </div>
+      <div className="bi-stats">
+        {statTiles.map(t => {
+          const body = (
+            <>
+              <div className={'ic ' + t.cls}><BiIcon name={t.icon} size={20} /></div>
+              <div style={{ minWidth: 0 }}>
+                <div className="k">{t.label}</div>
+                <div className="v">{loading ? <div className="bi-skel" style={{ width: 80, height: 22 }} /> : t.value}</div>
+                <div className="s">{t.sub}</div>
+                {t.key === 'value' && !loading && (
+                  <button type="button" className="bi-btn link" onClick={() => setShowBreakdown(true)}>View breakdown</button>
+                )}
+              </div>
+            </>
+          );
+          return t.key === 'attention'
+            ? <button key={t.key} type="button" className={'bi-stat' + (status === 'low' || status === 'out' ? ' on' : '')}
+                title="Show low and out-of-stock products" onClick={() => setStatus(counts.out ? 'out' : 'low')}>{body}</button>
+            : <div key={t.key} className="bi-stat">{body}</div>;
+        })}
       </div>
 
-      {/* Main Table Section */}
-      <div style={{
-        background: 'white',
-        borderRadius: '16px',
-        padding: '24px',
-        marginBottom: '32px',
-        boxShadow: '0 4px 6px rgba(0, 0, 0, 0.05)',
-        border: '1px solid #e2e8f0'
-      }}>
-        <div style={{ marginBottom: '24px' }}>
-          <h3 style={{ 
-            fontSize: '24px', 
-            fontWeight: '600', 
-            color: '#1e293b',
-            marginBottom: '8px',
-            display: 'flex',
-            alignItems: 'center',
-            gap: '8px'
-          }}>
-            📦 Branch Inventory Items
-          </h3>
-          <p style={{ 
-            color: '#64748b', 
-            fontSize: '16px',
-            margin: 0
-          }}>
-            Showing {filteredEntries.length} item{filteredEntries.length !== 1 ? 's' : ''} in branch inventory
-          </p>
+      <div className="bi-card">
+        <div className="bi-toolbar">
+          <div className="bi-search">
+            <span className="lead"><BiIcon name="search" size={16} /></span>
+            <input type="search" value={query} onChange={e => setQuery(e.target.value)}
+              placeholder="Search product, code, brand, model, supplier or IMEI" aria-label="Search inventory" />
+            {query && <button type="button" className="clr" aria-label="Clear search" onClick={() => setQuery('')}><BiIcon name="x" size={14} /></button>}
+          </div>
+          <div className="bi-chips" role="tablist" aria-label="Stock status">
+            {[['all', 'All'], ['in', 'In stock'], ['low', 'Low'], ['out', 'Out']].map(([k, label]) => (
+              <button key={k} type="button" role="tab" aria-selected={status === k} className={status === k ? 'on' : ''} onClick={() => setStatus(k)}>
+                {label}<span className="n">{counts[k]}</span>
+              </button>
+            ))}
+          </div>
+          <select className="bi-select sup" value={supplierFilter} onChange={e => setSupplierFilter(e.target.value)} aria-label="Filter by supplier">
+            <option value="">All suppliers</option>
+            {supplierNames.map(n => <option key={n} value={n}>{n}</option>)}
+          </select>
+          <select className="bi-select" value={sort.key + ':' + sort.dir} aria-label="Sort"
+            onChange={e => { const [key, dir] = e.target.value.split(':'); setSort({ key, dir }); }}>
+            <option value="added:desc">Newest purchase first</option>
+            <option value="added:asc">Oldest stock first</option>
+            <option value="name:asc">Name A–Z</option>
+            <option value="qty:asc">Quantity: low to high</option>
+            <option value="qty:desc">Quantity: high to low</option>
+            <option value="value:desc">Stock value: high to low</option>
+          </select>
+          <button type="button" className="bi-btn sec icon" title="Export CSV" aria-label="Export CSV" onClick={exportCsv} disabled={!filteredEntries.length}><BiIcon name="download" /></button>
         </div>
-        {filteredEntries.length === 0 ? (
-          <div style={{
-            textAlign: 'center',
-            padding: '64px 24px',
-            background: '#f8fafc',
-            borderRadius: '12px',
-            border: '2px dashed #cbd5e1'
-          }}>
-            <div style={{ fontSize: '48px', marginBottom: '16px' }}>📦</div>
-            <div style={{ fontSize: '20px', fontWeight: '600', color: '#475569', marginBottom: '8px' }}>
-              No Inventory Items
-            </div>
-            <div style={{ color: '#64748b', fontSize: '16px' }}>
-              No in-stock entries found for this branch
+
+        {!loading && entries.length > 0 && (
+          <div className="bi-meta">
+            <span>Showing <b>{filteredEntries.length}</b> of {entries.length} product{entries.length === 1 ? '' : 's'}</span>
+            {filtersOn && <button type="button" className="bi-btn link" onClick={clearFilters}>Clear filters</button>}
+          </div>
+        )}
+
+        {loading ? (
+          <div style={{ padding: 16, display: 'grid', gap: 14 }}>
+            {[0, 1, 2, 3, 4].map(i => <div key={i} className="bi-skel" style={{ width: (90 - i * 8) + '%' }} />)}
+          </div>
+        ) : entries.length === 0 ? (
+          <div className="bi-empty">
+            <div className="i"><BiIcon name="box" size={26} /></div>
+            <b>No stock in this branch yet</b>
+            Record a purchase or import a supplier bill to start tracking inventory.
+            <div className="a">
+              <button type="button" className="bi-btn sec" onClick={() => setShowImport(true)}><BiIcon name="upload" />Import bill</button>
+              <button type="button" className="bi-btn pri" onClick={() => setOpenAdd(true)}><BiIcon name="plus" />Add purchase</button>
             </div>
           </div>
+        ) : filteredEntries.length === 0 ? (
+          <div className="bi-empty">
+            <div className="i"><BiIcon name="search" size={24} /></div>
+            <b>No products match</b>
+            Try a different search, status or supplier.
+            <div className="a"><button type="button" className="bi-btn sec" onClick={clearFilters}>Clear filters</button></div>
+          </div>
         ) : (
-          <div style={{ 
-            border: '1px solid #e2e8f0',
-            borderRadius: '12px',
-            overflow: 'hidden',
-            background: '#fff'
-          }}>
-            <div style={{ overflowX: 'auto' }}>
-              <table style={{ 
-                width: '100%', 
-                borderCollapse: 'collapse',
-                fontSize: '14px'
-              }}>
+          <>
+            <div className="bi-scroll">
+              <table className="bi-table">
                 <thead>
-                  <tr style={{ background: '#f8fafc' }}>
-                    <th style={{
-                      padding: '16px 12px',
-                      textAlign: 'left',
-                      fontWeight: '600',
-                      color: '#374151',
-                      borderBottom: '2px solid #e5e7eb',
-                      minWidth: '120px'
-                    }}>Product No</th>
-                    <th style={{
-                      padding: '16px 12px',
-                      textAlign: 'left',
-                      fontWeight: '600',
-                      color: '#374151',
-                      borderBottom: '2px solid #e5e7eb',
-                      minWidth: '180px'
-                    }}>Product Name</th>
-                    <th style={{
-                      padding: '16px 12px',
-                      textAlign: 'left',
-                      fontWeight: '600',
-                      color: '#374151',
-                      borderBottom: '2px solid #e5e7eb',
-                      minWidth: '120px'
-                    }}>Brand</th>
-                    <th style={{
-                      padding: '16px 12px',
-                      textAlign: 'left',
-                      fontWeight: '600',
-                      color: '#374151',
-                      borderBottom: '2px solid #e5e7eb',
-                      minWidth: '120px'
-                    }}>Model</th>
-                    <th style={{
-                      padding: '16px 12px',
-                      textAlign: 'center',
-                      fontWeight: '600',
-                      color: '#374151',
-                      borderBottom: '2px solid #e5e7eb',
-                      width: '80px'
-                    }}>Qty</th>
-                    <th style={{
-                      padding: '16px 12px',
-                      textAlign: 'right',
-                      fontWeight: '600',
-                      color: '#374151',
-                      borderBottom: '2px solid #e5e7eb',
-                      minWidth: '120px'
-                    }}>Cost Price / Code</th>
-                    <th style={{
-                      padding: '16px 12px',
-                      textAlign: 'left',
-                      fontWeight: '600',
-                      color: '#374151',
-                      borderBottom: '2px solid #e5e7eb',
-                      minWidth: '130px'
-                    }}>Supplier</th>
-                    <th style={{
-                      padding: '16px 12px',
-                      textAlign: 'center',
-                      fontWeight: '600',
-                      color: '#374151',
-                      borderBottom: '2px solid #e5e7eb',
-                      minWidth: '120px'
-                    }}>Product Date</th>
-                    <th style={{
-                      padding: '16px 12px',
-                      textAlign: 'center',
-                      fontWeight: '600',
-                      color: '#374151',
-                      borderBottom: '2px solid #e5e7eb',
-                      width: '100px'
-                    }}>Days in Stock</th>
-                    <th style={{
-                      padding: '16px 12px',
-                      textAlign: 'center',
-                      fontWeight: '600',
-                      color: '#374151',
-                      borderBottom: '2px solid #e5e7eb',
-                      minWidth: '120px'
-                    }}>Validity</th>
-                  <th style={{
-                      padding: '16px 12px',
-                      textAlign: 'center',
-                      fontWeight: '600',
-                      color: '#374151',
-                      borderBottom: '2px solid #e5e7eb',
-                      minWidth: '150px'
-                    }}>Warranty</th>
+                  <tr>
+                    <Th k="name">Product</Th>
+                    <Th k="qty" className="c">Qty</Th>
+                    <Th k="cost" className="r">Unit cost</Th>
+                    <Th k="value" className="r">Stock value</Th>
+                    <Th k="supplier">Supplier</Th>
+                    <Th k="added">Purchased</Th>
+                    <th>Warranty / validity</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {filteredEntries.map((it, idx) => (
-                    <tr 
-                      key={it._id || idx}
-                      style={{
-                        borderBottom: '1px solid #f1f5f9',
-                        transition: 'background-color 0.2s ease'
-                      }}
-                      onMouseOver={(e) => e.target.parentElement.style.backgroundColor = '#f8fafc'}
-                      onMouseOut={(e) => e.target.parentElement.style.backgroundColor = 'transparent'}
-                    >
-                      <td style={{ padding: '16px 12px' }}>
-                        <span style={{
-                          background: '#f1f5f9',
-                          color: '#475569',
-                          padding: '4px 8px',
-                          borderRadius: '6px',
-                          fontSize: '12px',
-                          fontFamily: 'monospace'
-                        }}>
-                          {it.productNo || '-'}
-                        </span>
-                      </td>
-                      <td style={{ padding: '16px 12px' }}>
-                        <div style={{ fontWeight: '500', color: '#1e293b' }}>
-                          {it.productName || '-'}
-                        </div>
-                      </td>
-                      <td style={{ padding: '16px 12px', color: '#475569' }}>
-                        {it.brand || '-'}
-                      </td>
-                      <td style={{ padding: '16px 12px', color: '#475569' }}>
-                        {it.model || '-'}
-                      </td>
-                      <td style={{ padding: '16px 12px', textAlign: 'center' }}>
-                        <span style={{
-                          background: '#dbeafe',
-                          color: '#1d4ed8',
-                          padding: '4px 8px',
-                          borderRadius: '6px',
-                          fontSize: '12px',
-                          fontWeight: '600'
-                        }}>
-                          {it.branchQty ?? (it.qty ?? '-')}
-                        </span>
-                      </td>
-                      <td style={{ padding: '16px 12px', textAlign: 'right' }}>
-                        <span style={{
-                          color: '#dc2626',
-                          fontWeight: '600'
-                        }}>
-                          {(() => {
-                            // Determine whether this row references a central InStock item.
-                            // Central refs are stored as '<docId>_<idx>' where docId is a 24-char hex ObjectId.
-                            // Treat anything else (including 'branch_...') as branch-only so costPrice is shown.
-                            const pid = String(it.productId || '');
-                            const isCentralRef = /^[0-9a-fA-F]{24}_[0-9]+$/.test(pid);
-                            const isBranchOnly = !isCentralRef;
-                            if (!isBranchOnly) return '-';
-                            const qtyVal = Number(it.branchQty ?? it.qty ?? 0) || 0;
-                            const rawCost = (it.costPrice ?? it.cost ?? null);
-                            let unitCost = null;
-                            if (rawCost != null) unitCost = Number(rawCost) || 0;
-                            else if (it.totalCostPrice != null && qtyVal > 0) unitCost = Number(it.totalCostPrice) / qtyVal;
-                            return unitCost != null ? currency(unitCost) : '-';
-                          })()}
-                        </span>
-                        {priceCodeOf(it) && (
-                          <div title="Price code (encoded cost price)" style={{ marginTop: '4px' }}>
-                            <span style={{
-                              display: 'inline-block', fontFamily: 'ui-monospace, Menlo, Consolas, monospace', fontSize: '12px',
-                              fontWeight: 700, letterSpacing: '1px', color: '#4338ca', background: '#eef2ff',
-                              border: '1px solid #c7d2fe', borderRadius: '6px', padding: '1px 7px'
-                            }}>{priceCodeOf(it)}</span>
-                          </div>
-                        )}
-                      </td>
-                      <td style={{ padding: '16px 12px' }}>
-                        <div style={{ fontWeight: '500', color: '#1e293b' }}>
-                          {it.supplierName || '-'}
-                        </div>
-                      </td>
-                      <td style={{ padding: '16px 12px', textAlign: 'center', fontSize: '12px', color: '#64748b' }}>
-                        {it.productCreatedAt ? new Date(it.productCreatedAt).toLocaleDateString() : '-'}
-                      </td>
-                      <td style={{ padding: '16px 12px', textAlign: 'center' }}>
-                        <span style={{
-                          background: '#f3f4f6',
-                          color: '#374151',
-                          padding: '4px 8px',
-                          borderRadius: '6px',
-                          fontSize: '12px'
-                        }}>
-                          {(() => {
-                            if (!it.productCreatedAt) return '-';
-                            try {
-                              const created = new Date(it.productCreatedAt);
-                              const now = new Date();
-                              // Calculate calendar day difference using UTC to avoid timezone/time-of-day issues
-                              const utcToday = Date.UTC(now.getFullYear(), now.getMonth(), now.getDate());
-                              const utcCreated = Date.UTC(created.getFullYear(), created.getMonth(), created.getDate());
-                              const diffDays = Math.floor((utcToday - utcCreated) / (1000 * 60 * 60 * 24));
-                              return diffDays >= 0 ? `${diffDays} days` : '-';
-                            } catch (e) { return '-'; }
-                          })()}
-                        </span>
-                      </td>
-                      <td style={{ padding: '16px 12px', textAlign: 'center', fontSize: '12px', color: '#64748b' }}>
-                        {it.validity ? new Date(it.validity).toLocaleDateString() : '-'}
-                      </td>
-                      <td style={{ padding: '16px 12px', textAlign: 'center', fontSize: '12px', color: '#64748b' }}>
-                        {(() => {
-                          const months = Number(it.warrantyMonths) || 0;
-                          if (!months && !it.warrantyDetails) return '-';
-                          return (
-                            <div>
-                              {months ? <div style={{ color: '#374151', fontWeight: '600' }}>{months} month{months > 1 ? 's' : ''}</div> : null}
-                              {it.warrantyDetails ? <div>{it.warrantyDetails}</div> : null}
+                  {pageRows.map((it, idx) => {
+                    const cost = biUnitCost(it);
+                    const imei = matchedImei(it);
+                    const sub = [it.brand, it.model].filter(Boolean).join(' · ');
+                    const warranty = warrantyText(it);
+                    return (
+                      <tr key={it._id || it.productId || idx}>
+                        <td>
+                          <div className="bi-prod">
+                            <b>{it.productName || it.productNo || '—'}</b>
+                            <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+                              {it.productNo ? <span className="bi-code">{it.productNo}</span> : null}
+                              {sub ? <span className="sub">{sub}</span> : null}
                             </div>
-                          );
-                        })()}
-                      </td>
-                    </tr>
-                  ))}
+                            {imei ? <span className="bi-imei">IMEI {imei}</span> : null}
+                          </div>
+                        </td>
+                        <td className="c">{qtyBadge(it)}</td>
+                        <td className="r">{costCell(it)}</td>
+                        <td className="r"><span className="bi-num">{cost != null ? currency(biQty(it) * cost) : '—'}</span></td>
+                        <td>{it.supplierName || <span className="bi-sm">—</span>}</td>
+                        <td>
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: 4, alignItems: 'flex-start' }}>
+                            <span className="bi-sm">{biDate(it.productCreatedAt)}</span>
+                            {ageBadge(it)}
+                          </div>
+                        </td>
+                        <td>
+                          {warranty ? <div style={{ fontSize: 13 }}>{warranty}</div> : null}
+                          {it.validity ? <div className="bi-sm">Valid till {biDate(it.validity)}</div> : null}
+                          {!warranty && !it.validity ? <span className="bi-sm">—</span> : null}
+                        </td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             </div>
-          </div>
-        )}
-        {error && (
-          <div style={{
-            background: '#fef2f2',
-            border: '1px solid #fecaca',
-            color: '#dc2626',
-            padding: '12px 16px',
-            borderRadius: '8px',
-            marginTop: '16px',
-            fontSize: '14px'
-          }}>
-            {error}
-          </div>
+
+            {/* Phone layout: one card per product */}
+            <div className="bi-cards">
+              {pageRows.map((it, idx) => {
+                const cost = biUnitCost(it);
+                const imei = matchedImei(it);
+                const warranty = warrantyText(it);
+                return (
+                  <div key={it._id || it.productId || idx} className="bi-mc">
+                    <div className="top">
+                      <div className="bi-prod" style={{ minWidth: 0 }}>
+                        <b>{it.productName || it.productNo || '—'}</b>
+                        <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+                          {it.productNo ? <span className="bi-code">{it.productNo}</span> : null}
+                          <span className="sub">{[it.brand, it.model].filter(Boolean).join(' · ')}</span>
+                        </div>
+                        {imei ? <span className="bi-imei">IMEI {imei}</span> : null}
+                      </div>
+                      {qtyBadge(it)}
+                    </div>
+                    <div className="grid">
+                      <div><span className="lb">Unit cost</span>{costCell(it)}</div>
+                      <div><span className="lb">Stock value</span><b className="bi-num">{cost != null ? currency(biQty(it) * cost) : '—'}</b></div>
+                      <div><span className="lb">Supplier</span>{it.supplierName || '—'}</div>
+                      <div><span className="lb">Purchased</span>{biDate(it.productCreatedAt)}<div style={{ marginTop: 4 }}>{ageBadge(it)}</div></div>
+                      {(warranty || it.validity) && (
+                        <div style={{ gridColumn: '1 / -1' }}><span className="lb">Warranty / validity</span>{[warranty, it.validity ? 'Valid till ' + biDate(it.validity) : ''].filter(Boolean).join(' · ')}</div>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+
+            {pageCount > 1 && (
+              <div className="bi-pager">
+                <span>{(page - 1) * BI_PAGE_SIZE + 1}–{Math.min(page * BI_PAGE_SIZE, filteredEntries.length)} of {filteredEntries.length}</span>
+                <div className="pg">
+                  <button type="button" className="bi-btn sec sm" disabled={page <= 1} onClick={() => setPage(p => p - 1)} aria-label="Previous page"><BiIcon name="chevL" size={16} /></button>
+                  <span>Page {page} of {pageCount}</span>
+                  <button type="button" className="bi-btn sec sm" disabled={page >= pageCount} onClick={() => setPage(p => p + 1)} aria-label="Next page"><BiIcon name="chevR" size={16} /></button>
+                </div>
+              </div>
+            )}
+          </>
         )}
       </div>
+
+      {/* Stock value breakdown drawer */}
+      {showBreakdown && (
+        <div className="bi-overlay" onClick={() => setShowBreakdown(false)}>
+          <div className="bi-drawer" role="dialog" aria-modal="true" aria-label="Stock value breakdown" onClick={e => e.stopPropagation()}>
+            <div className="bi-dh">
+              <div>
+                <h2>Stock value breakdown</h2>
+                <p>Quantity × cost price for {filtersOn ? 'the filtered' : 'all'} products, highest first.</p>
+              </div>
+              <button type="button" className="bi-btn sec icon" aria-label="Close" onClick={() => setShowBreakdown(false)}><BiIcon name="x" /></button>
+            </div>
+            <div className="bi-db">
+              {branchStockBreakdown.items.length === 0 ? (
+                <div className="bi-empty"><div className="i"><BiIcon name="wallet" size={24} /></div><b>Nothing to value</b>No products with both quantity and cost.</div>
+              ) : (
+                <table className="bi-table">
+                  <thead><tr><th>Product</th><th className="r">Qty × cost</th><th className="r">Value</th></tr></thead>
+                  <tbody>
+                    {branchStockBreakdown.items.map((b, i) => (
+                      <tr key={i}>
+                        <td><div className="bi-prod" style={{ minWidth: 0 }}><b>{b.productName}</b><span className="bi-code" style={{ alignSelf: 'flex-start' }}>{b.productNo}</span></div></td>
+                        <td className="r bi-sm">{b.qty} × {currency(b.cost)}</td>
+                        <td className="r"><span className="bi-num">{currency(b.amount)}</span></td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
+            </div>
+            <div className="bi-df"><span>Total stock value</span><span className="t">{currency(branchStockBreakdown.total)}</span></div>
+          </div>
+        </div>
+      )}
 
       {/* Add Stock Modal */}
       {openAdd && window.BranchStockEntry && (
@@ -1061,9 +662,9 @@ function BranchInStock({ salesUrl, token }) {
 
       {/* Barcode Sheet Modal */}
       {showBarcodeSheet && window.BarcodeSheet && (
-        <window.BarcodeSheet 
-          entries={barcodeEntries} 
-          salesUrl={salesUrl} 
+        <window.BarcodeSheet
+          entries={barcodeEntries}
+          salesUrl={salesUrl}
           token={token}
           onClose={() => setShowBarcodeSheet(false)}
         />

@@ -51,7 +51,7 @@ function MobileNav() {
   return (
     <div className="mobile-nav-header">
       <div className="mobile-nav-brand">
-        <div className="mobile-brand-icon">🚀</div>
+        <div className="mobile-brand-icon"><window.LineIcon name="gem" size={22} /></div>
         <div className="mobile-brand-text">
           <span className="mobile-brand-title">SalesPro</span>
           <span className="mobile-brand-subtitle">Mobile Sales</span>
@@ -65,7 +65,7 @@ function MobileNav() {
           </div>
         ) : (
           <div className="mobile-branch-count">
-            <span className="mobile-branch-icon">🏪</span>
+            <span className="mobile-branch-icon"><window.LineIcon name="store" size={14} /></span>
             <span className="mobile-branch-text">{used}/{Number.isFinite(branchLimit) ? branchLimit : 0}</span>
           </div>
         )}
