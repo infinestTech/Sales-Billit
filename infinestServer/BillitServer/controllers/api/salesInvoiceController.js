@@ -110,4 +110,14 @@ const sendSalesBillWhatsapp = async (req, res) => {
   }
 };
 
-module.exports = { getSalesInvoicePdf, sendSalesBillWhatsapp };
+// GET /api/internal/sales-invoice/link/:id  (x-internal-key, called by SalesServer for the POS "A4" button)
+// Built here so the link uses BillitServer's public BILLIT_BACKEND_URL, not SalesServer's internal address.
+const getSalesInvoiceLink = (req, res) => {
+  const { id } = req.params;
+  if (!isObjectId(id)) return res.status(400).json({ success: false, error: "Invalid sale." });
+  const url = salesInvoiceUrl(id);
+  if (!url) return res.status(503).json({ success: false, error: "Invoice PDF link is not configured (BILLIT_BACKEND_URL)." });
+  return res.json({ success: true, url });
+};
+
+module.exports = { getSalesInvoicePdf, sendSalesBillWhatsapp, getSalesInvoiceLink };

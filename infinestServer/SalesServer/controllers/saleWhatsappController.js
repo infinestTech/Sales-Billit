@@ -31,7 +31,19 @@ exports.getInvoiceLink = async (req, res) => {
   try {
     const sale = await findOwnSale(req);
     if (!sale) return res.status(404).json({ success: false, message: 'Sale not found' });
-    return res.json({ success: true, url: salesInvoiceUrl(String(sale._id)) });
+    // BillitServer signs the link with its public URL (SalesServer's BILLIT_BACKEND_URL may be an internal
+    // address such as 127.0.0.1, which the browser can't open). Falls back to the local builder in dev.
+    let url = '';
+    try {
+      const { data } = await axios.get(`${billitBaseUrl()}/api/internal/sales-invoice/link/${sale._id}`, {
+        headers: { 'x-internal-key': process.env.INTERNAL_API_KEY || '' },
+        timeout: 8000,
+      });
+      url = (data && data.url) || '';
+    } catch (e) {
+      console.error('invoice-link via BillitServer failed:', e.message || e);
+    }
+    return res.json({ success: true, url: url || salesInvoiceUrl(String(sale._id)) });
   } catch (err) {
     console.error('invoice-link error:', err.message || err);
     return res.status(500).json({ success: false, message: 'Server error' });
