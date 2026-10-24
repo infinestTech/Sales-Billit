@@ -2722,7 +2722,7 @@ router.patch('/hr/salary/:id/finalize',           hrController.finalizeSalary);
 router.patch('/hr/salary/:id/mark-paid',          hrController.markSalaryPaid);
 router.get('/hr/salary/:id',                      hrController.getSalaryRecord);
 
-// HR shop-level settings (duplicate punch window, lunch threshold/duration)
+// HR shop-level settings (duplicate punch window, late/overtime policy)
 router.get('/hr/settings',                        hrController.getHrSettings);
 router.patch('/hr/settings',                      hrController.updateHrSettings);
 

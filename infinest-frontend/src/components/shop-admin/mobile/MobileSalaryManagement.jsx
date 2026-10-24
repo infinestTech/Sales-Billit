@@ -265,6 +265,11 @@ export default function MobileSalaryManagement({ shopId }) {
                   <div className="bg-white rounded-lg p-3 border border-gray-200"><div className="text-xs text-gray-600">Late Days</div><div className="text-xl font-bold text-orange-600">{monthlyDetail.salary?.lateDays ?? monthlyDetail.summary?.lateDays ?? 0}</div></div>
                   <div className="bg-white rounded-lg p-3 border border-gray-200"><div className="text-xs text-gray-600">Earned</div><div className="text-xl font-bold text-blue-600">{fmtINR(monthlyDetail.salary?.earnedBase)}</div></div>
                 </div>
+                {monthlyDetail.salary?.missingCheckoutDays > 0 && (
+                  <div className="mt-3 p-3 bg-amber-50 border border-amber-200 rounded-lg text-amber-800 text-xs">
+                    {monthlyDetail.salary.missingCheckoutDays} day(s) have no check-out and are not paid. Mark them PRESENT in Attendance → Manual Mark, then regenerate.
+                  </div>
+                )}
                 <div className="bg-white rounded-lg p-3 border border-gray-200 mt-3">
                   <div className="text-xs text-gray-600 mb-1">Late Deduction</div>
                   <div className="text-xl font-bold text-red-600">−{fmtINR(monthlyDetail.salary?.lateDeduction)}</div>

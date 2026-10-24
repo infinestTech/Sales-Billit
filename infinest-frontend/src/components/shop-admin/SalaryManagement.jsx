@@ -79,7 +79,8 @@ export default function SalaryManagement({ shopId, unit = "all" }) {
       const res = await axios.post(`${API_URL}/api/shop-admin/hr/salary/generate-bulk`, { shopId, month, year, unit: unitParam }, { headers: headers() });
       const r = res.data.result;
       const warn = (res.data.warnings || []).join(" ");
-      setActionMsg({ success: `Bulk generated: ${r.success.length} success, ${r.failed.length} failed${warn ? ` — ${warn}` : ""}` });
+      const locked = (r.skipped || []).length;
+      setActionMsg({ success: `Bulk generated: ${r.success.length} success, ${r.failed.length} failed${locked ? `, ${locked} skipped (already finalized/paid)` : ""}${warn ? ` — ${warn}` : ""}` });
       fetchSalaryReport();
     } catch (err) { setActionMsg({ error: err.response?.data?.message || "Bulk generation failed" }); }
     finally { setGenerating(false); }
@@ -411,6 +412,11 @@ export default function SalaryManagement({ shopId, unit = "all" }) {
                 <div><div className="text-red-600 font-bold text-xl">{selectedRecord.absentDays}</div><div className="text-gray-500 text-xs">Absent</div></div>
                 <div><div className="text-orange-600 font-bold text-xl">{selectedRecord.lateDays}</div><div className="text-gray-500 text-xs">Late Days</div></div>
               </div>
+              {selectedRecord.missingCheckoutDays > 0 && (
+                <div className="p-3 bg-amber-50 border border-amber-200 rounded-lg text-amber-800 text-xs">
+                  {selectedRecord.missingCheckoutDays} day(s) have a check-in but no check-out and are not paid. Fix them in Attendance → Manual Mark (mark PRESENT), then regenerate.
+                </div>
+              )}
               <div>
                 <div className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Earnings</div>
                 <div className="space-y-1">

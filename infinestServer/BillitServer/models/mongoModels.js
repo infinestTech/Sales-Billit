@@ -78,10 +78,6 @@ const shopSchema = new mongoose.Schema({
   hr_settings: {
     // Any punch within this many minutes of the previous accepted punch is treated as a duplicate.
     duplicate_punch_window_minutes: { type: Number, default: 180 },
-    // Any check-out after this time of day is treated as the start of lunch.
-    lunch_threshold_time: { type: String, default: '12:00' }, // HH:MM (24h)
-    // Fixed lunch duration in minutes; punches inside this window after LUNCH_OUT are ignored.
-    lunch_break_minutes: { type: Number, default: 30 },
     // Master toggle: apply late-entry salary deductions (requires per-employee deduction_per_hour > 0).
     enable_late_deduction: { type: Boolean, default: true },
     // 'fixed' = shift start/end enforced; 'flexible' = any hours as long as minimum is met.
@@ -562,7 +558,7 @@ employeeSchema.index(
 
 // ==============================
 // 🕐 HR Attendance Punch Log
-// Records every individual punch event (check-in, lunch-out, lunch-in, check-out, duplicate)
+// Records every individual punch event (check-in, check-out, duplicate)
 // Works for both SOFTWARE punches and eSSL M20 device punches.
 // ==============================
 const hrPunchSchema = new mongoose.Schema({
@@ -570,8 +566,9 @@ const hrPunchSchema = new mongoose.Schema({
   employee_id: { type: mongoose.Schema.Types.ObjectId, ref: 'Employee', required: true },
   date: { type: String, required: true }, // YYYY-MM-DD
   punch_time: { type: Date, required: true },
-  // CHECK_IN -> LUNCH_OUT -> LUNCH_IN -> CHECK_OUT. DUPLICATE entries are
-  // recorded for audit but do not influence the daily summary.
+  // CHECK_IN -> CHECK_OUT (the latest check-out of the day wins). DUPLICATE
+  // entries are recorded for audit but do not influence the daily summary.
+  // LUNCH_OUT / LUNCH_IN are legacy values kept only so old punches stay valid.
   punch_type: { type: String, enum: ['CHECK_IN', 'CHECK_OUT', 'LUNCH_OUT', 'LUNCH_IN', 'DUPLICATE'], required: true },
   source: { type: String, enum: ['SOFTWARE', 'ESSL_M20', 'MANUAL'], default: 'SOFTWARE' },
   is_late: { type: Boolean, default: false },
@@ -592,15 +589,15 @@ const hrDailyAttendanceSchema = new mongoose.Schema({
   status: { type: String, enum: ['PRESENT', 'ABSENT', 'LEAVE', 'HOLIDAY'], default: 'ABSENT' },
   check_in_time: { type: Date },
   check_out_time: { type: Date },
-  lunch_out_time: { type: Date },
-  lunch_in_time: { type: Date },
   is_late: { type: Boolean, default: false },
   late_minutes: { type: Number, default: 0 },
   late_deduction: { type: Number, default: 0 }, // ₹ deducted for lateness on this day
   day_net_salary: { type: Number, default: 0 }, // daily_salary − late_deduction; set on checkout
-  lunch_minutes: { type: Number, default: 0 },
   total_worked_minutes: { type: Number, default: 0 },
   source: { type: String, enum: ['SOFTWARE', 'ESSL_M20', 'MANUAL'], default: 'SOFTWARE' },
+  // Set by Manual Mark: the admin's status wins over later punches that day,
+  // and a manual PRESENT is paid even without a check-out.
+  manual_override: { type: Boolean, default: false },
   notes: { type: String },
   created_at: { type: Date, default: Date.now },
   updated_at: { type: Date, default: Date.now }
@@ -620,7 +617,8 @@ const hrSalaryRecordSchema = new mongoose.Schema({
   month_number: { type: Number, required: true }, // 1-12
   // Attendance summary
   total_working_days: { type: Number, default: 0 },
-  present_days: { type: Number, default: 0 },
+  present_days: { type: Number, default: 0 },          // paid days: checked out, or marked PRESENT manually
+  missing_checkout_days: { type: Number, default: 0 }, // checked in but never out — not paid
   absent_days: { type: Number, default: 0 },
   leave_days: { type: Number, default: 0 },
   total_late_entries: { type: Number, default: 0 },

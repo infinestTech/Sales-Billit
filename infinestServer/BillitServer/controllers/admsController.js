@@ -182,6 +182,9 @@ async function handleHandshake(req, res) {
     // Update heartbeat
     device.last_seen = new Date();
     device.last_activity = 'Heartbeat';
+    // A fresh handshake means the device (re)connected, e.g. after a restart:
+    // re-sync its clock to IST on the very next poll instead of waiting.
+    device.last_time_sync = null;
     if (req.query.pushver) device.firmware_version = req.query.pushver;
     // Persist the current ATTLOG stamp so we don't re-send all history on reconnect.
     // We advance the stamp AFTER each successful push (see handleDataPush).
@@ -271,19 +274,16 @@ async function handleDataPush(req, res) {
     let accepted = 0;
     let skipped = 0;
 
-    // Per-device time correction (minutes) applied to every parsed punch.
-    // Lets admins fix devices whose firmware refuses to accept our SET OPTION
-    // DateTime command and keeps sending UTC/wrong-TZ timestamps.
-    const offsetMs = (device.time_offset_minutes || 0) * 60 * 1000;
-
+    // Oldest first, so the HR state machine sees each employee's punches in order
+    // (an offline backlog arrives as one push holding both the in and the out).
+    const parsedLines = [];
     for (const line of lines) {
       const parsed = parseAttLogLine(line);
-      if (!parsed) { skipped++; continue; }
+      if (parsed) parsedLines.push(parsed); else skipped++;
+    }
+    parsedLines.sort((a, b) => a.punch_time - b.punch_time);
 
-      if (offsetMs !== 0) {
-        parsed.punch_time = new Date(parsed.punch_time.getTime() + offsetMs);
-      }
-
+    for (const parsed of parsedLines) {
       const employee = pinMap[parsed.device_pin] || null;
 
       // Many M20 devices send the same InOutCode for every fingerprint scan.
@@ -346,15 +346,20 @@ async function handleDataPush(req, res) {
         // Mark punch log as processed
         await EsslPunchLog.findByIdAndUpdate(punchLog._id, { processed: true });
 
-        // Feed into HR daily attendance system (non-blocking).
-        // overridePunchType=null lets processPunch decide via its state machine.
-        processPunch(
-          device.shop_id.toString(),
-          employee._id.toString(),
-          'ESSL_M20',
-          null,
-          parsed.punch_time,
-        ).catch(err => console.error('[ADMS] HR processPunch error:', err.message));
+        // Feed into HR daily attendance system. Awaited one at a time: running
+        // them in parallel let every punch in a batch see "no punches yet" and
+        // all become CHECK_IN. overridePunchType=null lets processPunch decide.
+        try {
+          await processPunch(
+            device.shop_id.toString(),
+            employee._id.toString(),
+            'ESSL_M20',
+            null,
+            parsed.punch_time,
+          );
+        } catch (err) {
+          console.error('[ADMS] HR processPunch error:', err.message);
+        }
 
         accepted++;
       } catch (dbErr) {

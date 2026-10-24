@@ -3,13 +3,16 @@
  * HR Controller — day-wise wage system.
  *
  * Punch flow per employee per day:
- *   CHECK_IN  → LUNCH_OUT (after lunch threshold) → LUNCH_IN → CHECK_OUT
+ *   CHECK_IN → CHECK_OUT (every later punch moves the check-out; the last one wins)
  *
- * Any punch within `duplicate_punch_window_minutes` of the last accepted
- * non-lunch punch (or within `lunch_break_minutes` after LUNCH_OUT) is stored
- * with type=DUPLICATE and does not advance the state machine.
+ * A punch within `duplicate_punch_window_minutes` of the CHECK_IN (or at the
+ * exact time of an existing punch, e.g. a device re-sending its log) is stored
+ * with type=DUPLICATE and does not change the daily summary. Breaks are not
+ * tracked: worked time is first check-in to last check-out.
  *
- * Salary = daily_salary × present_days − Σ(per-day late deduction)
+ * Salary = daily_salary × paid_days − Σ(per-day late deduction on paid days)
+ *          paid day = PRESENT with a check-out, or marked PRESENT by hand
+ *          (a check-in with no check-out is reported as missing, not paid)
  *          per-day late deduction = (late_minutes / 60) × late_policy.deduction_per_hour
  *          (capped at one day's salary so a single late day cannot go negative).
  */
@@ -87,11 +90,30 @@ function computeWorkingHours(startStr, endStr) {
   return Math.round((mins / 60) * 100) / 100;
 }
 
-/** Same calendar day (IST) as referenceDate, at the given HH:MM. */
-function todayAt(timeStr, referenceDate) {
-  const base = referenceDate ? moment(referenceDate).tz(IST_TZ) : moment().tz(IST_TZ);
+/** The given HH:MM (IST) on the attendance date YYYY-MM-DD. */
+function atDate(dateStr, timeStr) {
   const { h, m } = parseTime(timeStr);
-  return base.clone().startOf('day').hours(h).minutes(m).seconds(0).milliseconds(0).toDate();
+  return moment.tz(dateStr, 'YYYY-MM-DD', IST_TZ).hours(h).minutes(m).seconds(0).milliseconds(0).toDate();
+}
+
+/**
+ * Attendance date a punch belongs to. Usually its IST calendar date, but for a
+ * fixed shift that crosses midnight (e.g. 22:00–06:00) punches in the first
+ * half of the off-hours gap belong to the shift that started the day before,
+ * so the morning check-out lands on the same day as the night check-in.
+ */
+function attendanceDateFor(punchTime, employee, hrSettings) {
+  const local = moment(punchTime).tz(IST_TZ);
+  const dateStr = local.format('YYYY-MM-DD');
+  if (hrSettings.working_hours_type === 'flexible') return dateStr;
+  const s = parseTime(employee.shift?.start_time || '09:00');
+  const e = parseTime(employee.shift?.end_time || '18:00');
+  const startMin = s.h * 60 + s.m;
+  const endMin = e.h * 60 + e.m;
+  if (endMin >= startMin) return dateStr;
+  const cutoff = (endMin + startMin) / 2;
+  const punchMin = local.hours() * 60 + local.minutes();
+  return punchMin < cutoff ? local.clone().subtract(1, 'day').format('YYYY-MM-DD') : dateStr;
 }
 
 /** Working days in a month for the employee's weekly off. */
@@ -109,8 +131,6 @@ async function getShopHrSettings(shopId) {
   const shop = await Shop.findById(shopId).select('hr_settings').lean();
   const defaults = {
     duplicate_punch_window_minutes: 180,
-    lunch_threshold_time: '12:00',
-    lunch_break_minutes: 30,
     enable_late_deduction: true,
     working_hours_type: 'fixed',
     flexible_min_hours_per_day: 8,
@@ -373,68 +393,38 @@ async function deleteEmployee(req, res) {
 
 /**
  * Decide the next punch type given today's prior punches and shop HR settings.
- * Returns one of: CHECK_IN, LUNCH_OUT, LUNCH_IN, CHECK_OUT, DUPLICATE.
+ * Returns one of: CHECK_IN, CHECK_OUT, DUPLICATE.
  */
 function decidePunchType(now, todayPunches, hrSettings) {
   const dupWinMs = (hrSettings.duplicate_punch_window_minutes || 180) * 60_000;
-  const lunchBreakMs = (hrSettings.lunch_break_minutes || 30) * 60_000;
 
-  // Ignore previous DUPLICATE entries when looking at "last accepted" state.
+  // Same instant as a punch we already have → the device re-sent its log.
+  if (todayPunches.some(p => new Date(p.punch_time).getTime() === now.getTime())) return 'DUPLICATE';
+
+  // Ignore previous DUPLICATE entries when looking at "accepted" state.
   const accepted = todayPunches.filter(p => p.punch_type !== 'DUPLICATE');
+  const checkIn = accepted.find(p => p.punch_type === 'CHECK_IN');
+  if (!checkIn) return 'CHECK_IN';
 
-  if (accepted.length === 0) return 'CHECK_IN';
-  const last = accepted[accepted.length - 1];
-  const delta = now.getTime() - new Date(last.punch_time).getTime();
-
-  if (last.punch_type === 'CHECK_OUT') return 'DUPLICATE';
-
-  if (last.punch_type === 'CHECK_IN') {
-    if (delta < dupWinMs) return 'DUPLICATE';
-    const lunchThreshold = todayAt(hrSettings.lunch_threshold_time || '12:00', now);
-    const hadLunchToday = accepted.some(p => p.punch_type === 'LUNCH_OUT');
-    if (!hadLunchToday && now >= lunchThreshold) return 'LUNCH_OUT';
-    return 'CHECK_OUT';
-  }
-
-  if (last.punch_type === 'LUNCH_OUT') {
-    if (delta < lunchBreakMs) return 'DUPLICATE';
-    return 'LUNCH_IN';
-  }
-
-  if (last.punch_type === 'LUNCH_IN') {
-    if (delta < dupWinMs) return 'DUPLICATE';
-    return 'CHECK_OUT';
-  }
-
-  return 'DUPLICATE';
+  // Re-scan right after checking in is not a check-out.
+  if (now.getTime() - new Date(checkIn.punch_time).getTime() < dupWinMs) return 'DUPLICATE';
+  return 'CHECK_OUT';
 }
 
 /**
  * Recompute the daily summary from the full set of accepted punches.
  */
-function buildDailySummary(employee, punches, hrSettings) {
+function buildDailySummary(employee, punches, hrSettings, dateStr) {
   const accepted = punches.filter(p => p.punch_type !== 'DUPLICATE')
     .sort((a, b) => new Date(a.punch_time) - new Date(b.punch_time));
 
   const checkIn  = accepted.find(p => p.punch_type === 'CHECK_IN');
   const checkOut = [...accepted].reverse().find(p => p.punch_type === 'CHECK_OUT');
-  const lunchOut = accepted.find(p => p.punch_type === 'LUNCH_OUT');
-  const lunchIn  = accepted.find(p => p.punch_type === 'LUNCH_IN');
-
-  let lunchMinutes = 0;
-  if (lunchOut && lunchIn) {
-    lunchMinutes = Math.max(0, Math.floor(
-      (new Date(lunchIn.punch_time) - new Date(lunchOut.punch_time)) / 60_000
-    ));
-  } else if (lunchOut && !lunchIn) {
-    // assume default lunch break if employee hasn't punched back yet
-    lunchMinutes = hrSettings.lunch_break_minutes || 30;
-  }
 
   let workedMinutes = 0;
   if (checkIn && checkOut) {
     workedMinutes = Math.max(0,
-      Math.floor((new Date(checkOut.punch_time) - new Date(checkIn.punch_time)) / 60_000) - lunchMinutes
+      Math.floor((new Date(checkOut.punch_time) - new Date(checkIn.punch_time)) / 60_000)
     );
   }
 
@@ -448,7 +438,7 @@ function buildDailySummary(employee, punches, hrSettings) {
   if (checkIn && !isFlexible) {
     const graceMin = employee.late_policy?.grace_period_minutes
       ?? employee.shift?.grace_period_minutes ?? 15;
-    const shiftStart = todayAt(employee.shift?.start_time || '09:00', checkIn.punch_time);
+    const shiftStart = atDate(dateStr, employee.shift?.start_time || '09:00');
     const lateGraceMs = shiftStart.getTime() + graceMin * 60_000;
     if (new Date(checkIn.punch_time).getTime() > lateGraceMs) {
       isLate = true;
@@ -489,15 +479,30 @@ function buildDailySummary(employee, punches, hrSettings) {
     status,
     check_in_time:  checkIn?.punch_time,
     check_out_time: checkOut?.punch_time,
-    lunch_out_time: lunchOut?.punch_time,
-    lunch_in_time:  lunchIn?.punch_time,
-    lunch_minutes:  lunchMinutes,
     total_worked_minutes: workedMinutes,
     is_late: isLate,
     late_minutes: lateMinutes,
     late_deduction: lateDeduction,
     day_net_salary: dayNetSalary,
   };
+}
+
+/**
+ * Force a day's status to the one an admin set by hand. A non-PRESENT day
+ * carries no late deduction and no pay; a manual PRESENT is paid in full
+ * (less any lateness) even without a check-out.
+ */
+function applyManualStatus(day, status, employee) {
+  day.status = status;
+  if (status === 'PRESENT') {
+    day.day_net_salary = Math.max(0, round2((employee.daily_salary || 0) - (day.late_deduction || 0)));
+  } else {
+    day.is_late = false;
+    day.late_minutes = 0;
+    day.late_deduction = 0;
+    day.day_net_salary = 0;
+  }
+  return day;
 }
 
 /**
@@ -509,15 +514,17 @@ async function processPunch(shopId, employeeId, source, _overridePunchType, punc
   if (!shopOid || !empOid) throw new Error('Invalid shopId or employeeId');
 
   const now = punchTimeOverride ? new Date(punchTimeOverride) : new Date();
-  const dateStr = formatIST(now, 'YYYY-MM-DD');
 
   const employee = await Employee.findOne({ _id: empOid, shop_id: shopOid }).lean();
   if (!employee) throw new Error('Employee not found');
 
   const hrSettings = await getShopHrSettings(shopOid);
+  const dateStr = attendanceDateFor(now, employee, hrSettings);
 
-  const todayPunches = await HrPunch.find({ employee_id: empOid, date: dateStr })
-    .sort({ punch_time: 1 }).lean();
+  const [todayPunches, existingDay] = await Promise.all([
+    HrPunch.find({ employee_id: empOid, date: dateStr }).sort({ punch_time: 1 }).lean(),
+    HrDailyAttendance.findOne({ employee_id: empOid, date: dateStr }).select('status manual_override').lean(),
+  ]);
 
   const punchType = decidePunchType(now, todayPunches, hrSettings);
 
@@ -527,7 +534,7 @@ async function processPunch(shopId, employeeId, source, _overridePunchType, punc
   if (punchType === 'CHECK_IN') {
     const graceMin = employee.late_policy?.grace_period_minutes
       ?? employee.shift?.grace_period_minutes ?? 15;
-    const shiftStart = todayAt(employee.shift?.start_time || '09:00', now);
+    const shiftStart = atDate(dateStr, employee.shift?.start_time || '09:00');
     if (now.getTime() > shiftStart.getTime() + graceMin * 60_000) {
       isLate = true;
       lateMinutes = Math.floor((now.getTime() - shiftStart.getTime()) / 60_000);
@@ -554,7 +561,9 @@ async function processPunch(shopId, employeeId, source, _overridePunchType, punc
   }
 
   const allPunches = [...todayPunches, punch.toObject ? punch.toObject() : punch];
-  const summary = buildDailySummary(employee, allPunches, hrSettings);
+  const summary = buildDailySummary(employee, allPunches, hrSettings, dateStr);
+  // A status the admin set by hand (leave, holiday, …) is not undone by punches.
+  if (existingDay?.manual_override) applyManualStatus(summary, existingDay.status, employee);
 
   await HrDailyAttendance.findOneAndUpdate(
     { employee_id: empOid, date: dateStr },
@@ -568,7 +577,6 @@ async function processPunch(shopId, employeeId, source, _overridePunchType, punc
     isLate: summary.is_late,
     lateMinutes: summary.late_minutes,
     lateDeduction: summary.late_deduction,
-    lunchMinutes: summary.lunch_minutes,
     workedMinutes: summary.total_worked_minutes,
     status: summary.status,
     message: `${punchType.replace('_', ' ')} recorded at ${now.toLocaleTimeString('en-IN')}`,
@@ -601,11 +609,28 @@ async function manualMark(req, res) {
     if (!valid.includes(status)) {
       return res.status(400).json({ success: false, message: `status must be one of: ${valid.join(', ')}` });
     }
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(String(date))) {
+      return res.status(400).json({ success: false, message: 'date must be YYYY-MM-DD' });
+    }
     const empOid = toObjectId(employeeId);
     if (!empOid) return res.status(400).json({ success: false, message: 'Invalid employeeId' });
+    const employee = await Employee.findOne({ _id: empOid, shop_id: shopId }).select('daily_salary').lean();
+    if (!employee) return res.status(404).json({ success: false, message: 'Employee not found' });
+
+    const existing = await HrDailyAttendance.findOne({ employee_id: empOid, date })
+      .select('is_late late_minutes late_deduction').lean();
+    const day = applyManualStatus({
+      is_late: !!existing?.is_late,
+      late_minutes: existing?.late_minutes || 0,
+      late_deduction: existing?.late_deduction || 0,
+    }, status, employee);
+
     const rec = await HrDailyAttendance.findOneAndUpdate(
       { employee_id: empOid, date },
-      { $set: { shop_id: shopId, status, source: 'MANUAL', notes: notes || leaveType || '', updated_at: new Date() } },
+      { $set: {
+          shop_id: shopId, ...day, manual_override: true, source: 'MANUAL',
+          notes: notes || leaveType || '', updated_at: new Date(),
+      } },
       { upsert: true, new: true }
     );
     return res.json({ success: true, data: rec });
@@ -634,9 +659,6 @@ function attendanceToFrontend(rec, employee) {
     lastPunchTime:  r.check_out_time,
     checkInTime:    r.check_in_time,
     checkOutTime:   r.check_out_time,
-    lunchOutTime:   r.lunch_out_time,
-    lunchInTime:    r.lunch_in_time,
-    lunchMinutes:   r.lunch_minutes || 0,
     isLate:         !!r.is_late,
     lateMinutes:    r.late_minutes || 0,
     lateDeduction:  r.late_deduction || 0,
@@ -703,7 +725,6 @@ async function getMonthlyAttendance(req, res) {
       lateDays: records.filter(r => r.is_late).length,
       totalLateMinutes: records.reduce((s, r) => s + (r.late_minutes || 0), 0),
       totalLateDeduction: records.reduce((s, r) => s + (r.late_deduction || 0), 0),
-      totalLunchMinutes: records.reduce((s, r) => s + (r.lunch_minutes || 0), 0),
       totalWorkedMinutes: records.reduce((s, r) => s + (r.total_worked_minutes || 0), 0),
     };
     return res.json({
@@ -742,7 +763,6 @@ async function getAttendanceReport(req, res) {
         lateEntries: empRecords.filter(r => r.is_late).length,
         totalLateMinutes: empRecords.reduce((s, r) => s + (r.late_minutes || 0), 0),
         totalLateDeduction: empRecords.reduce((s, r) => s + (r.late_deduction || 0), 0),
-        totalLunchMinutes: empRecords.reduce((s, r) => s + (r.lunch_minutes || 0), 0),
         records: empRecords.map(r => attendanceToFrontend(r)),
       };
     });
@@ -755,20 +775,34 @@ async function getAttendanceReport(req, res) {
 
 // ─── Salary calc ──────────────────────────────────────────────────────────────
 
-async function buildMonthlyAttendanceSummary(empOid, monthStr) {
+// A day is paid once it is complete (checked out) or an admin marked it PRESENT by hand.
+// A check-in with no check-out is not paid until it is corrected via Manual Mark.
+const isPaidDay = (r) => r.status === 'PRESENT' && (!!r.check_out_time || !!r.manual_override);
+
+async function buildMonthlyAttendanceSummary(shopId, empOid, monthStr) {
   const records = await HrDailyAttendance.find({
+    shop_id: shopId,
     employee_id: empOid,
     date: { $regex: `^${monthStr}` }
   }).lean();
+  const paid = records.filter(isPaidDay);
   return {
-    records,
-    present_days: records.filter(r => r.status === 'PRESENT').length,
+    records: paid,
+    present_days: paid.length,
+    missing_checkout_days: records.filter(r => r.status === 'PRESENT' && !isPaidDay(r)).length,
     absent_days:  records.filter(r => r.status === 'ABSENT').length,
     leave_days:   records.filter(r => r.status === 'LEAVE').length,
-    total_late_entries: records.filter(r => r.is_late).length,
-    total_late_minutes: records.reduce((s, r) => s + (r.late_minutes || 0), 0),
-    total_late_deduction: records.reduce((s, r) => s + (r.late_deduction || 0), 0),
+    total_late_entries: paid.filter(r => r.is_late).length,
+    total_late_minutes: paid.reduce((s, r) => s + (r.late_minutes || 0), 0),
+    total_late_deduction: paid.reduce((s, r) => s + (r.late_deduction || 0), 0),
   };
+}
+
+// Salary records an admin has locked (FINALIZED / PAID) are never recalculated.
+async function lockedSalaryStatus(shopId, empOid, monthStr) {
+  const rec = await HrSalaryRecord.findOne({ shop_id: shopId, employee_id: empOid, month: monthStr })
+    .select('status').lean();
+  return rec && rec.status !== 'DRAFT' ? rec.status : null;
 }
 
 function calculateSalary(employee, summary, year, monthNum, hrSettings = {}, performance = {}) {
@@ -792,11 +826,8 @@ function calculateSalary(employee, summary, year, monthNum, hrSettings = {}, per
     if (hrSettings.working_hours_type === 'flexible') {
       shiftMins = (Number(hrSettings.flexible_min_hours_per_day) || 8) * 60;
     } else {
-      const shiftStart = employee.shift?.start_time || '09:00';
-      const shiftEnd   = employee.shift?.end_time   || '18:00';
-      const [sh, sm] = shiftStart.split(':').map(Number);
-      const [eh, em] = shiftEnd.split(':').map(Number);
-      shiftMins = Math.max(0, (eh * 60 + em) - (sh * 60 + sm));
+      // computeWorkingHours handles shifts that cross midnight (22:00–06:00 = 8h).
+      shiftMins = Math.round(computeWorkingHours(employee.shift?.start_time, employee.shift?.end_time) * 60);
     }
     const thresholdMins   = Number(hrSettings.overtime_threshold_minutes)  || 0;
     const ratePerHour     = Number(hrSettings.overtime_bonus_rate_per_hour) || 0;
@@ -827,6 +858,7 @@ function calculateSalary(employee, summary, year, monthNum, hrSettings = {}, per
     daily_salary: daily,
     total_working_days: workingDays,
     present_days: summary.present_days,
+    missing_checkout_days: summary.missing_checkout_days || 0,
     absent_days: summary.absent_days,
     leave_days: summary.leave_days,
     total_late_entries: summary.total_late_entries,
@@ -939,6 +971,7 @@ function mapSalaryToFrontend(rec) {
     year: r.year,
     status: r.status || 'DRAFT',
     presentDays: r.present_days || 0,
+    missingCheckoutDays: r.missing_checkout_days || 0,
     absentDays: r.absent_days || 0,
     leaveDays: r.leave_days || 0,
     lateDays: r.total_late_entries || 0,
@@ -979,8 +1012,13 @@ async function generateSalary(req, res) {
     const employee = await Employee.findOne({ _id: empOid, shop_id: shopId }).lean();
     if (!employee) return res.status(404).json({ success: false, message: 'Employee not found' });
 
+    const locked = await lockedSalaryStatus(shopId, empOid, monthStr);
+    if (locked) {
+      return res.status(409).json({ success: false, message: `Salary for ${monthStr} is already ${locked} and cannot be regenerated.` });
+    }
+
     const hrSettings = await getShopHrSettings(shopId);
-    const summary    = await buildMonthlyAttendanceSummary(empOid, monthStr);
+    const summary    = await buildMonthlyAttendanceSummary(shopId, empOid, monthStr);
     const perf       = await loadMonthlyPerformance(shopId, [employee], yearNum, monthNum);
     const calc       = calculateSalary(employee, summary, yearNum, monthNum, hrSettings, perf.byEmployee.get(String(empOid)));
 
@@ -1022,9 +1060,15 @@ async function generateBulkSalary(req, res) {
     const hrSettings  = await getShopHrSettings(shopId);
     const perf        = await loadMonthlyPerformance(shopId, employees, yearNum, monthNum);
     const results = [];
+    const skipped = [];
     for (const emp of employees) {
       try {
-        const summary = await buildMonthlyAttendanceSummary(emp._id, monthStr);
+        const locked = await lockedSalaryStatus(shopId, emp._id, monthStr);
+        if (locked) {
+          skipped.push({ employeeId: emp._id.toString(), name: emp.name || emp.employee_name, status: locked });
+          continue;
+        }
+        const summary = await buildMonthlyAttendanceSummary(shopId, emp._id, monthStr);
         const calc    = calculateSalary(emp, summary, yearNum, monthNum, hrSettings, perf.byEmployee.get(String(emp._id)));
         const record  = await HrSalaryRecord.findOneAndUpdate(
           { employee_id: emp._id, month: monthStr },
@@ -1049,7 +1093,7 @@ async function generateBulkSalary(req, res) {
     const failedList  = results.filter(r => !r.success);
     return res.json({
       success: true,
-      result: { success: successList, failed: failedList },
+      result: { success: successList, failed: failedList, skipped },
       generated: successList.length,
       warnings: perf.warnings,
     });
@@ -1157,8 +1201,6 @@ async function getHrSettings(req, res) {
       success: true,
       data: {
         duplicatePunchWindowMinutes:  settings.duplicate_punch_window_minutes,
-        lunchThresholdTime:           settings.lunch_threshold_time,
-        lunchBreakMinutes:            settings.lunch_break_minutes,
         enableLateDeduction:          settings.enable_late_deduction !== false,
         workingHoursType:             settings.working_hours_type || 'fixed',
         flexibleMinHoursPerDay:       settings.flexible_min_hours_per_day ?? 8,
@@ -1177,7 +1219,7 @@ async function updateHrSettings(req, res) {
   try {
     const shopId = requireShop(req, res); if (!shopId) return;
     const {
-      duplicatePunchWindowMinutes, lunchThresholdTime, lunchBreakMinutes,
+      duplicatePunchWindowMinutes,
       enableLateDeduction, workingHoursType, flexibleMinHoursPerDay,
       enableOvertimeBonus, overtimeThresholdMinutes, overtimeBonusRatePerHour,
     } = req.body;
@@ -1187,15 +1229,6 @@ async function updateHrSettings(req, res) {
       const v = Number(duplicatePunchWindowMinutes);
       if (!(v >= 0 && v <= 24 * 60)) return res.status(400).json({ success: false, message: 'duplicatePunchWindowMinutes must be 0–1440' });
       update['hr_settings.duplicate_punch_window_minutes'] = v;
-    }
-    if (lunchThresholdTime !== undefined) {
-      if (!/^\d{2}:\d{2}$/.test(String(lunchThresholdTime))) return res.status(400).json({ success: false, message: 'lunchThresholdTime must be HH:MM' });
-      update['hr_settings.lunch_threshold_time'] = String(lunchThresholdTime);
-    }
-    if (lunchBreakMinutes !== undefined) {
-      const v = Number(lunchBreakMinutes);
-      if (!(v >= 0 && v <= 240)) return res.status(400).json({ success: false, message: 'lunchBreakMinutes must be 0–240' });
-      update['hr_settings.lunch_break_minutes'] = v;
     }
     if (enableLateDeduction !== undefined) {
       update['hr_settings.enable_late_deduction'] = !!enableLateDeduction;
@@ -1230,8 +1263,6 @@ async function updateHrSettings(req, res) {
       message: 'HR settings updated',
       data: {
         duplicatePunchWindowMinutes:  settings.duplicate_punch_window_minutes,
-        lunchThresholdTime:           settings.lunch_threshold_time,
-        lunchBreakMinutes:            settings.lunch_break_minutes,
         enableLateDeduction:          settings.enable_late_deduction !== false,
         workingHoursType:             settings.working_hours_type || 'fixed',
         flexibleMinHoursPerDay:       settings.flexible_min_hours_per_day ?? 8,
