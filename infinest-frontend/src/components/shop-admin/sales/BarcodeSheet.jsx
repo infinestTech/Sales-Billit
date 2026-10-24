@@ -2,6 +2,7 @@
 import React from 'react';
 import { jsPDF } from 'jspdf';
 import * as BL from './barcodeLabels';
+import * as LOTS from './lotStock';
 
 const JSBARCODE_SRC = 'https://cdn.jsdelivr.net/npm/jsbarcode@3.11.5/dist/JsBarcode.all.min.js';
 
@@ -82,11 +83,45 @@ function BarcodeSheet({ entries, onClose, salesUrl, token }) {
   // Generate barcode data from entries
   React.useEffect(() => {
     const data = [];
+    const lots = new Map(); // productNo (TEMPER-D8) -> one label template per category
     
     entries.forEach(entry => {
       const category = entry.category || '';
       
       entry.items?.forEach(item => {
+        // Pouch / tempered lots: one label per category whatever the number of purchases; the user
+        // enters how many labels to print (it starts at 0 — nobody prints a whole lot of 1000 at once)
+        if (LOTS.isLotItem(item)) {
+          const qty = Math.max(0, parseInt(item.quantity) || 0);
+          const cost = Number(item.costPrice) || 0;
+          const prev = lots.get(item.productNo);
+          if (prev) {
+            const total = prev.maxQuantity + qty;
+            if (total > 0) prev.costPrice = (prev.costPrice * prev.maxQuantity + cost * qty) / total;
+            prev.maxQuantity = total;
+          } else {
+            const lot = {
+              id: `lot-${item.productNo}`,
+              productNo: item.productNo,
+              productName: item.productName || LOTS.lotLabelTitle(item),
+              brand: '',
+              model: '',
+              imei: null,
+              costPrice: cost,
+              barcodeValue: item.productNo,
+              type: 'Lot',
+              typeTag: LOTS.lotTypeOf(item.lotType).label,
+              lotType: item.lotType,
+              lotCategory: item.lotCategory,
+              labelTitle: LOTS.lotLabelTitle(item),
+              quantity: 0,
+              maxQuantity: qty
+            };
+            lots.set(item.productNo, lot);
+            data.push(lot);
+          }
+          return;
+        }
         // Check if it's a mobile by category OR by having real IMEI numbers (ignore "0"/placeholder values)
         const hasImei = Array.isArray(item.imes) && item.imes.length > 0 && item.imes.some(imei => imei && imei.trim() && !/^0+$/.test(imei.trim()));
         const isMobile = category.toLowerCase().includes('mobile') || category.toLowerCase() === 'phone' || hasImei;
@@ -130,6 +165,7 @@ function BarcodeSheet({ entries, onClose, salesUrl, token }) {
       });
     });
     
+    lots.forEach(l => { l.priceCode = BL.encodePriceCode(l.costPrice, priceCipher); });
     setBarcodeData(data);
   }, [entries, priceCipher]);
 
@@ -186,7 +222,7 @@ function BarcodeSheet({ entries, onClose, salesUrl, token }) {
   const query = search.trim().toLowerCase();
   const searchHits = React.useMemo(() => {
     const hits = new Map();
-    const wantType = filters.type === 'mobile' ? 'Mobile' : filters.type === 'accessory' ? 'Accessory' : null;
+    const wantType = filters.type === 'mobile' ? 'Mobile' : filters.type === 'accessory' ? 'Accessory' : filters.type === 'lot' ? 'Lot' : null;
     products.forEach(p => {
       if (wantType && p.type !== wantType) return;
       if (!query) { hits.set(p.key, null); return; }
@@ -215,7 +251,7 @@ function BarcodeSheet({ entries, onClose, salesUrl, token }) {
     const only = searchHits.get(p.key);
     const out = [];
     p.labels.forEach(item => {
-      if (item.type === 'Accessory') {
+      if (item.type === 'Accessory' || item.type === 'Lot') {
         const qty = accessoryQty(item);
         for (let i = 0; i < qty; i++) out.push({ ...item, id: `${item.id}-${i}` });
       } else if (!only || only.has(item.id)) {
@@ -419,8 +455,8 @@ function BarcodeSheet({ entries, onClose, salesUrl, token }) {
                 <label style={{ display: 'block', fontSize: '12px', fontWeight: '600', color: '#475569', marginBottom: '6px' }}>
                   Type
                 </label>
-                <div role="radiogroup" aria-label="Product type" style={{ display: 'flex', width: '100%', boxSizing: 'border-box', background: '#f1f5f9', borderRadius: '8px', padding: '3px', gap: '2px' }}>
-                  {[['all', 'All'], ['mobile', 'Mobiles'], ['accessory', 'Accessories']].map(([value, text]) => (
+                <div role="radiogroup" aria-label="Product type" style={{ display: 'flex', flexWrap: 'wrap', width: '100%', boxSizing: 'border-box', background: '#f1f5f9', borderRadius: '8px', padding: '3px', gap: '2px' }}>
+                  {[['all', 'All'], ['mobile', 'Mobiles'], ['accessory', 'Accessories'], ['lot', 'Pouch / Tempered']].map(([value, text]) => (
                     <button
                       key={value}
                       type="button"
@@ -428,7 +464,7 @@ function BarcodeSheet({ entries, onClose, salesUrl, token }) {
                       aria-checked={filters.type === value}
                       onClick={() => setFilters(prev => ({ ...prev, type: value }))}
                       style={{
-                        flex: 1, border: 'none', borderRadius: '6px', padding: '7px 6px', fontSize: '12px', fontWeight: 600, cursor: 'pointer',
+                        flex: '1 1 auto', border: 'none', borderRadius: '6px', padding: '7px 6px', fontSize: '12px', fontWeight: 600, cursor: 'pointer',
                         whiteSpace: 'nowrap', minWidth: 0, minHeight: 0, margin: 0,
                         background: filters.type === value ? 'white' : 'transparent',
                         color: filters.type === value ? '#4338ca' : '#475569',
@@ -563,7 +599,8 @@ function BarcodeSheet({ entries, onClose, salesUrl, token }) {
                 {visibleProducts.slice(0, PRODUCT_LIST_LIMIT).map(p => {
                   const isChecked = selected.has(p.key);
                   const only = searchHits.get(p.key);
-                  const isAccessory = p.type === 'Accessory';
+                  const isLot = p.type === 'Lot';
+                  const isAccessory = p.type === 'Accessory' || isLot; // both print a chosen number of labels
                   const first = p.labels[0] || {};
                   const max = parseInt(first.maxQuantity ?? first.quantity) || 0;
                   const mobileCount = only ? only.size : p.labels.length;
@@ -578,7 +615,7 @@ function BarcodeSheet({ entries, onClose, salesUrl, token }) {
                           {p.productName}
                         </div>
                         <div style={{ fontSize: '11px', color: '#64748b' }}>
-                          {isAccessory ? '🎧 Accessory' : '📱 Mobile'} · {p.productNo}
+                          {isLot ? `🧩 ${first.typeTag} · ${p.productNo} · ${max} in stock` : <>{isAccessory ? '🎧 Accessory' : '📱 Mobile'} · {p.productNo}</>}
                           {!isAccessory && (only ? ` · ${only.size} of ${p.labels.length} IMEIs match` : ` · ${p.labels.length} IMEI${p.labels.length !== 1 ? 's' : ''}`)}
                         </div>
                       </div>
@@ -730,7 +767,7 @@ function BarcodeSheet({ entries, onClose, salesUrl, token }) {
                         color: '#1e293b',
                         wordWrap: 'break-word'
                       }}>
-                        {BL.shortTitle(item.productName)}
+                        {BL.labelTitle(item)}
                       </div>
                     </div>
 

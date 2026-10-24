@@ -16,7 +16,10 @@ const BranchStockSchema = new mongoose.Schema({
   warrantyMonths: { type: Number, default: 0 },
   warrantyDetails: { type: String, default: '' },
   hsn: { type: String, default: '' }, // from the supplier bill / inventory; printed on sale receipts
-  priceCode: { type: String, default: '' }
+  priceCode: { type: String, default: '' },
+  // Pouch / tempered glass lot (utils/lotStock.js): one row per category per branch, '' = normal product
+  lotType: { type: String, default: '' },
+  lotCategory: { type: String, default: '' }
 }, { timestamps: true });
 
 module.exports = mongoose.models && mongoose.models.BranchStock

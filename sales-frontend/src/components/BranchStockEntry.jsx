@@ -1,6 +1,7 @@
 // Branch "Add Purchase" form: one supplier bill -> branch stock (POST /api/branch-supply, source "manual").
-// Every item is a card that is either a Mobile (tracked by IMEI; quantity = number of IMEIs scanned) or an
-// Accessory (plain quantity). Enter moves to the next field (barcode scanners send Enter), Ctrl+Enter saves,
+// Every item is a card that is a Mobile (tracked by IMEI; quantity = number of IMEIs scanned), an
+// Accessory (plain quantity) or a pouch / tempered glass lot (a price category such as "D8", a quantity and
+// what was paid for the whole lot; cost per piece = amount / quantity). Enter moves to the next field (barcode scanners send Enter), Ctrl+Enter saves,
 // Esc closes. Used by BranchInStock on desktop and mobile.
 
 const BSE_LAST_TYPE_KEY = 'branchStockEntry.lastType';
@@ -9,11 +10,12 @@ let bseKeySeq = 0;
 function bseNewItem(type) {
   return {
     key: 'it' + (++bseKeySeq),
-    type: type === 'accessory' ? 'accessory' : 'mobile',
+    type: type === 'accessory' || type === 'lot' ? type : 'mobile',
     productName: '', productNo: '',
     qty: 1, costPrice: '',
     warrantyMonths: '', warrantyDetails: '',
-    imeis: [], imeiDraft: '', imeiNote: ''
+    imeis: [], imeiDraft: '', imeiNote: '',
+    lotType: 'temper', lotCategory: '', lotAmount: ''
   };
 }
 
@@ -84,7 +86,9 @@ const BSE_CSS = `
 .bse-chip{display:inline-flex;align-items:center;gap:6px;background:#eef2ff;color:#3730a3;border:1px solid #c7d2fe;border-radius:999px;padding:5px 6px 5px 12px;font-size:13px;font-family:ui-monospace,Menlo,Consolas,monospace}
 .bse-chip.warn{background:#fffbeb;color:#92400e;border-color:#fcd34d}
 .bse-chip button{border:none;background:rgba(15,23,42,.08);width:20px;height:20px;border-radius:50%;cursor:pointer;font-size:12px;line-height:20px;color:inherit;padding:0}
-.bse-adds{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.bse-adds{display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px}
+.bse-g-lot{grid-template-columns:1fr 1.4fr 1fr 1fr}
+.bse-link{border:none;background:none;color:#4f46e5;font-size:12px;font-weight:600;cursor:pointer;padding:0;margin-left:6px}
 .bse-add{border:2px dashed #cbd5e1;background:#fff;border-radius:14px;padding:16px;font-size:14px;font-weight:600;color:#334155;cursor:pointer;transition:all .15s}
 .bse-add:hover{border-color:#6366f1;color:#4338ca;background:#eef2ff}
 .bse-foot{background:#fff;border-top:1px solid #e2e8f0;padding:14px 24px;display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap}
@@ -117,8 +121,8 @@ const BSE_CSS = `
   .bse-modal{max-height:none;height:100%;border-radius:0}
   .bse-head,.bse-body,.bse-foot{padding-left:14px;padding-right:14px}
   .bse-g-bill,.bse-g-bill2,.bse-g-name{grid-template-columns:1fr}
-  .bse-g-price{grid-template-columns:1fr 1fr}
-  .bse-adds{grid-template-columns:1fr 1fr}
+  .bse-g-price,.bse-g-lot{grid-template-columns:1fr 1fr}
+  .bse-adds{grid-template-columns:1fr}
   .bse-kbd{display:none}
   .bse-actions{width:100%}
   .bse-actions .bse-btn{flex:1}
@@ -142,6 +146,14 @@ function BranchStockEntry({ salesUrl, getToken, suppliers, branchEntries, onClos
   const [saveError, setSaveError] = React.useState('');
   const focusKey = React.useRef(null); // item whose name box gets focus after it is added
   const modalRef = React.useRef(null);
+  const LS = window.LotStock;
+
+  // Pouch / tempered price categories (shop-wide list, managed in LotCategoryManager)
+  const [lotCategories, setLotCategories] = React.useState([]);
+  const [manageLots, setManageLots] = React.useState(null); // lot type the category manager opens on
+  const loadLotCategories = () => LS.fetchLotCategories(salesUrl, getToken()).then(setLotCategories).catch(() => {});
+  React.useEffect(() => { loadLotCategories(); }, []);
+  const lotCategoryOf = (it) => lotCategories.find(c => c.type === it.lotType && c.name === it.lotCategory) || null;
 
   // IMEIs already held by this branch, to stop the same handset being stocked twice
   const stockedImeis = React.useMemo(() => {
@@ -155,7 +167,7 @@ function BranchStockEntry({ salesUrl, getToken, suppliers, branchEntries, onClos
   const rememberType = (t) => { try { localStorage.setItem(BSE_LAST_TYPE_KEY, t); } catch (_) {} };
   const addItem = (type) => { const it = bseNewItem(type); focusKey.current = it.key; rememberType(type); setItems(l => [...l, it]); };
   const duplicateItem = (it) => {
-    const copy = { ...bseNewItem(it.type), productName: it.productName, costPrice: it.costPrice, warrantyMonths: it.warrantyMonths, warrantyDetails: it.warrantyDetails, qty: it.type === 'accessory' ? it.qty : 1 };
+    const copy = { ...bseNewItem(it.type), productName: it.productName, costPrice: it.costPrice, warrantyMonths: it.warrantyMonths, warrantyDetails: it.warrantyDetails, qty: it.type === 'mobile' ? 1 : it.qty, lotType: it.lotType };
     focusKey.current = copy.key;
     setItems(l => { const i = l.findIndex(x => x.key === it.key); const n = l.slice(); n.splice(i + 1, 0, copy); return n; });
   };
@@ -181,13 +193,19 @@ function BranchStockEntry({ salesUrl, getToken, suppliers, branchEntries, onClos
   const qtyOf = (it) => it.type === 'mobile' ? it.imeis.length : Math.max(0, Math.floor(bseNum(it.qty)));
   const totals = React.useMemo(() => {
     let units = 0, cost = 0;
-    items.forEach(it => { const q = qtyOf(it); units += q; cost += q * bseNum(it.costPrice); });
+    items.forEach(it => { const q = qtyOf(it); units += q; cost += it.type === 'lot' ? bseNum(it.lotAmount) : q * bseNum(it.costPrice); });
     return { units, cost };
   }, [items]);
   const creditAmount = bseNum(billAmount) > 0 ? bseNum(billAmount) : totals.cost;
 
   const itemErrors = (it) => {
     const e = {};
+    if (it.type === 'lot') {
+      if (!it.lotCategory) e.lotCategory = 'Select a category';
+      if (!(qtyOf(it) > 0)) e.qty = 'Quantity must be at least 1';
+      if (!(bseNum(it.lotAmount) > 0)) e.lotAmount = 'Enter what you paid for this lot';
+      return e;
+    }
     if (!it.productName.trim()) e.productName = 'Enter the product name';
     if (it.type === 'mobile' && it.imeis.length === 0 && !bseCleanImei(it.imeiDraft)) e.imeis = 'Scan or type at least one IMEI';
     if (it.type === 'accessory' && !(qtyOf(it) > 0)) e.qty = 'Quantity must be at least 1';
@@ -204,7 +222,7 @@ function BranchStockEntry({ salesUrl, getToken, suppliers, branchEntries, onClos
   }, [supplierId, payType, creditAmount, items]);
   const err = (key, field) => showErrors && errors.perItem[key] && errors.perItem[key][field];
 
-  const dirty = items.some(it => it.productName || it.imeis.length || it.costPrice) || supplierId || billNo || billAmount;
+  const dirty = items.some(it => it.productName || it.imeis.length || it.costPrice || it.lotCategory || it.lotAmount) || supplierId || billNo || billAmount;
   const requestClose = () => { if (saving) return; if (dirty && !window.confirm('Discard this purchase entry?')) return; onClose(); };
 
   // ---- save ----
@@ -226,6 +244,10 @@ function BranchStockEntry({ salesUrl, getToken, suppliers, branchEntries, onClos
     const used = new Set((branchEntries || []).map(r => String(r.productNo || '').trim()).filter(Boolean));
     finalItems.forEach(it => { if (it.productNo.trim()) used.add(it.productNo.trim()); });
     const payloadItems = finalItems.map(it => {
+      // Lots: the server names the item and sets its code (TEMPER-D8) from the category
+      if (it.type === 'lot') {
+        return { lotType: it.lotType, lotCategory: it.lotCategory, qty: qtyOf(it), costPrice: LS.lotUnitCost(it.lotAmount, qtyOf(it)), imes: [] };
+      }
       let productNo = it.productNo.trim();
       if (!productNo) { productNo = bseNextProductNo(used); used.add(productNo); }
       return {
@@ -248,7 +270,7 @@ function BranchStockEntry({ salesUrl, getToken, suppliers, branchEntries, onClos
       creditAmount: payType === 'credit' ? creditAmount : 0,
       supplierAmount: bseNum(billAmount),
       gstAmount: bseNum(gstAmount),
-      category: types.size === 1 ? (types.has('mobile') ? 'Mobile' : 'Accessories') : undefined,
+      category: types.size === 1 && !types.has('lot') ? (types.has('mobile') ? 'Mobile' : 'Accessories') : undefined,
       items: payloadItems
     };
 
@@ -314,7 +336,7 @@ function BranchStockEntry({ salesUrl, getToken, suppliers, branchEntries, onClos
         <div className="bse-head">
           <div>
             <h2 id="bse-title">Add Purchase</h2>
-            <p>Enter a supplier bill — mobiles by IMEI, accessories by quantity</p>
+            <p>Enter a supplier bill — mobiles by IMEI, accessories by quantity, pouches &amp; tempered glass by category</p>
           </div>
           <button type="button" className="bse-x" onClick={requestClose} aria-label="Close">✕</button>
         </div>
@@ -379,6 +401,7 @@ function BranchStockEntry({ salesUrl, getToken, suppliers, branchEntries, onClos
           {items.map((it, idx) => {
             const ie = showErrors ? (errors.perItem[it.key] || {}) : {};
             const isMobile = it.type === 'mobile';
+            const isLot = it.type === 'lot';
             return (
               <div key={it.key} className={'bse-card' + (Object.keys(ie).length ? ' bse-err' : '')}>
                 <div className="bse-itemhead">
@@ -386,7 +409,8 @@ function BranchStockEntry({ salesUrl, getToken, suppliers, branchEntries, onClos
                     <span className="bse-num">#{idx + 1}</span>
                     <div className="bse-seg" role="radiogroup" aria-label={'Item ' + (idx + 1) + ' type'}>
                       <button type="button" role="radio" aria-checked={isMobile} className={isMobile ? 'on' : ''} onClick={() => setType(it, 'mobile')}>📱 Mobile</button>
-                      <button type="button" role="radio" aria-checked={!isMobile} className={!isMobile ? 'on' : ''} onClick={() => setType(it, 'accessory')}>🎧 Accessory</button>
+                      <button type="button" role="radio" aria-checked={it.type === 'accessory'} className={it.type === 'accessory' ? 'on' : ''} onClick={() => setType(it, 'accessory')}>🎧 Accessory</button>
+                      <button type="button" role="radio" aria-checked={isLot} className={isLot ? 'on' : ''} onClick={() => setType(it, 'lot')}>🧩 Pouch / Tempered</button>
                     </div>
                   </div>
                   <div className="bse-row">
@@ -395,6 +419,50 @@ function BranchStockEntry({ salesUrl, getToken, suppliers, branchEntries, onClos
                   </div>
                 </div>
 
+                {isLot ? (() => {
+                  const cats = lotCategories.filter(c => c.type === it.lotType);
+                  const cat = lotCategoryOf(it);
+                  const unit = LS.lotUnitCost(it.lotAmount, qtyOf(it));
+                  return (
+                    <div className="bse-grid bse-g-lot">
+                      <div className="bse-f">
+                        <label htmlFor={'lt-' + it.key}>Type</label>
+                        <select id={'lt-' + it.key} className="bse-in" value={it.lotType} data-focus={it.key}
+                          onChange={e => patch(it.key, { lotType: e.target.value, lotCategory: '' })}>
+                          {LS.LOT_TYPES.map(t => <option key={t.key} value={t.key}>{t.label}</option>)}
+                        </select>
+                      </div>
+                      <div className="bse-f">
+                        <label htmlFor={'lc-' + it.key}>Category <span className="req">*</span>
+                          <button type="button" className="bse-link" onClick={() => setManageLots(it.lotType)}>Manage</button>
+                        </label>
+                        <select id={'lc-' + it.key} className={'bse-in' + (ie.lotCategory ? ' bse-bad' : '')} value={it.lotCategory}
+                          onChange={e => patch(it.key, { lotCategory: e.target.value })}>
+                          <option value="">{cats.length ? 'Select category' : 'No categories yet — use Manage'}</option>
+                          {cats.map(c => <option key={c.id} value={c.name}>{c.name} · {LS.formatPriceRange(c.minPrice, c.maxPrice)}</option>)}
+                        </select>
+                        <div className="bse-hint bad">{ie.lotCategory || ''}</div>
+                      </div>
+                      <div className="bse-f">
+                        <label>Quantity <span className="req">*</span></label>
+                        <div className="bse-step" style={ie.qty ? { borderColor: '#f87171' } : null}>
+                          <button type="button" aria-label="Decrease quantity" onClick={() => patch(it.key, { qty: Math.max(1, Math.floor(bseNum(it.qty)) - 1) })}>−</button>
+                          <input type="number" inputMode="numeric" min="1" value={it.qty} aria-label="Quantity"
+                            onChange={e => patch(it.key, { qty: e.target.value })} onWheel={e => e.currentTarget.blur()} />
+                          <button type="button" aria-label="Increase quantity" onClick={() => patch(it.key, { qty: Math.floor(bseNum(it.qty)) + 1 })}>+</button>
+                        </div>
+                        <div className="bse-hint bad">{ie.qty || ''}</div>
+                      </div>
+                      <div className="bse-f">
+                        <label>Amount paid for lot <span className="req">*</span></label>
+                        {Money({ value: it.lotAmount, onChange: e => patch(it.key, { lotAmount: e.target.value }), bad: ie.lotAmount, label: 'Amount paid for this lot' })}
+                        <div className={'bse-hint' + (ie.lotAmount ? ' bad' : '')}>
+                          {ie.lotAmount || (unit > 0 ? bseMoney(unit) + ' per piece' + (cat ? ' · sells ' + LS.formatPriceRange(cat.minPrice, cat.maxPrice) : '') : '')}
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })() : (<>
                 <div className="bse-grid bse-g-name">
                   <div className="bse-f">
                     <label htmlFor={'n-' + it.key}>Product name <span className="req">*</span></label>
@@ -446,6 +514,8 @@ function BranchStockEntry({ salesUrl, getToken, suppliers, branchEntries, onClos
                   </div>
                 )}
 
+                </>)}
+
                 {isMobile && (
                   <div className={'bse-imei' + (ie.imeis ? ' bse-bad' : '')}>
                     <label htmlFor={'i-' + it.key} style={{ display: 'block', fontSize: 12, fontWeight: 600, color: '#475569', marginBottom: 6 }}>
@@ -484,6 +554,7 @@ function BranchStockEntry({ salesUrl, getToken, suppliers, branchEntries, onClos
           <div className="bse-adds">
             <button type="button" className="bse-add" onClick={() => addItem('mobile')}>＋ Add mobile</button>
             <button type="button" className="bse-add" onClick={() => addItem('accessory')}>＋ Add accessory</button>
+            <button type="button" className="bse-add" onClick={() => addItem('lot')}>＋ Add pouch / tempered</button>
           </div>
         </div>
 
@@ -501,6 +572,10 @@ function BranchStockEntry({ salesUrl, getToken, suppliers, branchEntries, onClos
           </div>
         </div>
       </div>
+      {manageLots && window.LotCategoryManager && (
+        <window.LotCategoryManager salesUrl={salesUrl} getToken={getToken} initialType={manageLots}
+          onClose={() => setManageLots(null)} onChanged={loadLotCategories} />
+      )}
     </div>
   );
 }

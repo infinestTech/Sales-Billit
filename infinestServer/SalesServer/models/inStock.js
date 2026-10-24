@@ -24,6 +24,9 @@ const InStockItemSchema = new mongoose.Schema({
   gstPercent: { type: Number, default: 0 },
   // Shop's coded price printed on barcode labels (e.g. "AXC"); free text from the supplier bill import
   priceCode: { type: String, default: '' },
+  // Pouch / tempered glass bought as a lot and stocked by price category (utils/lotStock.js); '' = normal product
+  lotType: { type: String, enum: ['', 'temper', 'pouch'], default: '' },
+  lotCategory: { type: String, default: '' },
 }, { _id: false });
 
 

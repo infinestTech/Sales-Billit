@@ -23,6 +23,7 @@ const featureRoutes = require('./routes/featureRoutes');
 const supplierCreditRoutes = require('./routes/supplierCreditRoutes');
 const dealerLedgerRoutes = require('./routes/dealerLedgerRoutes');
 const shopInfoRoutes = require('./routes/shopInfoRoutes');
+const lotCategoryRoutes = require('./routes/lotCategoryRoutes');
 const salesPerformanceRoutes = require('./routes/salesPerformanceRoutes');
 
 const { syncSalesUser } = require('./controllers/salesSyncController');
@@ -621,6 +622,7 @@ app.use(featureRoutes);
 app.use(supplierCreditRoutes);
 app.use(dealerLedgerRoutes);
 app.use(shopInfoRoutes);
+app.use(lotCategoryRoutes);
 app.use(salesPerformanceRoutes);
 
 const PORT = process.env.SALES_PORT || 9000;

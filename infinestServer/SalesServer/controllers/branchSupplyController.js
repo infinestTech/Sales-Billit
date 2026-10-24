@@ -5,6 +5,9 @@ const InStock = require('../models/inStock');
 // Use canonical BranchStock model (includes `imes` field)
 const BranchStock = require('../models/branchStock');
 const { cleanImeis, cleanRowImeis } = require('../utils/imei');
+const {
+  loadLotCategories, resolveLotRef, isLotType, normalizeLotName, lotProductNo, lotProductName, branchLotProductId, withLotRanges,
+} = require('../utils/lotStock');
 
 // Stock rows sent to clients: placeholder IMEIs dropped, and no selling price — sales are priced at the POS
 // from the cost price (older rows may still carry a stored sellingPrice).
@@ -73,6 +76,45 @@ exports.createBranchSupply = async (req, res) => {
       }
     }
 
+    // Pouch / tempered glass lots (utils/lotStock.js). A branch purchase names its category; a supply from
+    // master inventory inherits it from the central item. Either way the branch keeps one row per category.
+    if (items.some(i => i && (i.lotType || i.productId))) {
+      const lotCategories = await loadLotCategories(shop_id);
+      const centralDocs = new Map();
+      const centralItemOf = async (pid) => {
+        const [docId, idxStr] = String(pid || '').split('_');
+        const idx = Number(idxStr);
+        if (!isValidObjectId(docId) || !Number.isInteger(idx)) return null;
+        if (!centralDocs.has(docId)) centralDocs.set(docId, await InStock.findById(docId).select('items').lean());
+        const doc = centralDocs.get(docId);
+        return (doc && Array.isArray(doc.items) && doc.items[idx]) || null;
+      };
+      for (const i of items) {
+        if (!i) continue;
+        let lotType = i.lotType || '';
+        let lotCategory = i.lotCategory || '';
+        const fromCentral = !lotType && !!i.productId;
+        if (fromCentral) {
+          const c = await centralItemOf(i.productId);
+          if (c && c.lotType) { lotType = c.lotType; lotCategory = c.lotCategory; }
+        }
+        if (!lotType) { delete i.lotType; delete i.lotCategory; continue; }
+        const ref = resolveLotRef(lotCategories, lotType, lotCategory);
+        // Head office may still supply a lot whose category was deleted since; a new purchase may not
+        if (ref.error && !fromCentral) return res.status(400).json({ success: false, message: ref.error });
+        const name = ref.category ? ref.category.name : normalizeLotName(lotCategory);
+        if (!isLotType(lotType) || !name) return res.status(400).json({ success: false, message: 'Invalid lot category' });
+        if (!(Number(i.qty) >= 1)) return res.status(400).json({ success: false, message: `Quantity is required for ${lotProductName(lotType, name)}` });
+        i.lotType = lotType;
+        i.lotCategory = name;
+        i.productNo = lotProductNo(lotType, name);
+        i.productName = lotProductName(lotType, name);
+        i.imes = [];
+        i.lotRowId = branchLotProductId(branch_id, lotType, name);
+        if (!i.productId) i.productId = i.lotRowId; // branch purchase: its supply line points at the branch row
+      }
+    }
+
     // Imported codes the branch already holds (from earlier branch purchases) top up the same stock row
     // instead of creating duplicates. Rows supplied from master inventory are never reused, because
     // their productId links back to central stock and would be decremented again.
@@ -132,6 +174,7 @@ exports.createBranchSupply = async (req, res) => {
       if (Number(i.mrp) > 0) out.mrp = Number(i.mrp);
       if (Number(i.gstPercent) > 0) out.gstPercent = Number(i.gstPercent);
       if (i.priceCode) out.priceCode = String(i.priceCode).trim().slice(0, 40);
+      if (i.lotType) { out.lotType = i.lotType; out.lotCategory = i.lotCategory; out.lotRowId = i.lotRowId; }
       // include imes only when client provided real ones (placeholders like "0" are dropped)
       const realImes = cleanImeis(i.imes);
       if (realImes.length) out.imes = realImes.slice(0, qty);
@@ -176,7 +219,10 @@ exports.createBranchSupply = async (req, res) => {
     const successfulItems = [];
     for (const it of prepared) {
       try {
-      const filter = { shop_id: String(shop_id), branch_id: String(branch_id), productId: String(it.productId) };
+      // A lot tops up the branch's single row for its category (whatever the source); other items key on productId
+      const filter = it.lotType
+        ? { shop_id: String(shop_id), branch_id: String(branch_id), lotType: it.lotType, lotCategory: it.lotCategory }
+        : { shop_id: String(shop_id), branch_id: String(branch_id), productId: String(it.productId) };
       const setObj = {
         productNo: it.productNo || '',
         productName: it.productName,
@@ -190,6 +236,18 @@ exports.createBranchSupply = async (req, res) => {
       if (it.priceCode) setObj.priceCode = it.priceCode;
       if (it.hsn) setObj.hsn = it.hsn;
       const update = { $set: setObj, $inc: { qty: it.qty } };
+      if (it.lotType) {
+        // Cost per piece = weighted average of what is left and what was just bought
+        const held = await BranchStock.findOne(filter).select('qty costPrice').lean();
+        const heldQty = Math.max(0, Number(held && held.qty) || 0);
+        const newQty = heldQty + it.qty;
+        setObj.costPrice = newQty > 0
+          ? Math.round(((heldQty * (Number(held && held.costPrice) || 0)) + it.qty * it.costPrice) / newQty * 100) / 100
+          : it.costPrice;
+        setObj.lotType = it.lotType;
+        setObj.lotCategory = it.lotCategory;
+        update.$setOnInsert = { productId: it.lotRowId };
+      }
 
       // If this item references a central InStock item, try to fetch productNo / price code / HSN from central
       try {
@@ -438,7 +496,7 @@ exports.listBranchStock = async (req, res) => {
         rowsFiltered = rowsOnly.filter(r => (String(r.productNo || '').toLowerCase().includes(needle)));
       }
       try { console.debug('FLOW listBranchStock: returning onlyBranch rows', { count: Array.isArray(rowsFiltered) ? rowsFiltered.length : 0 }); } catch (__) {}
-      return res.json({ success: true, rows: stockRows(rowsFiltered), customerNo: customerNo || null });
+      return res.json({ success: true, rows: stockRows(await withLotRanges(rowsFiltered, shop_id)), customerNo: customerNo || null });
     }
 
     const q = { shop_id: String(shop_id) };
@@ -468,6 +526,8 @@ exports.listBranchStock = async (req, res) => {
           warrantyMonths: Number(it.warrantyMonths) || 0,
           warrantyDetails: it.warrantyDetails || '',
           priceCode: it.priceCode || '',
+          lotType: it.lotType || '',
+          lotCategory: it.lotCategory || '',
           totalCostPrice: (Number(qty) * Number(costPrice || 0)),
           imes: Array.isArray(it.imes) ? it.imes : [],
           // expose centralImes for frontend dropdowns that need to show central IMEs
@@ -489,7 +549,7 @@ exports.listBranchStock = async (req, res) => {
         rowsCentral = (rowsCentral || []).filter(r => (String(r.productNo || '').toLowerCase().includes(needle)));
       }
       try { console.debug('FLOW listBranchStock: returning central-only rows', { count: Array.isArray(rowsCentral) ? rowsCentral.length : 0 }); } catch (__) {}
-      return res.json({ success: true, rows: stockRows(rowsCentral), customerNo: customerNo || null });
+      return res.json({ success: true, rows: stockRows(await withLotRanges(rowsCentral, shop_id)), customerNo: customerNo || null });
     }
 
     // If a branch is requested, merge central items with branch-specific rows
@@ -524,6 +584,8 @@ exports.listBranchStock = async (req, res) => {
           warrantyMonths: Number(br && br.warrantyMonths) || Number(c.warrantyMonths) || 0,
           warrantyDetails: (br && br.warrantyDetails) || c.warrantyDetails || '',
           priceCode: (br && br.priceCode) || c.priceCode || '',
+          lotType: c.lotType || '',
+          lotCategory: c.lotCategory || '',
           totalCostPrice: Number(totalQty) * Number(costPrice || 0),
           // include imes only from branch rows. Do NOT fall back to central imes for branch views.
           imes: Array.isArray(br && br.imes) && br.imes.length ? br.imes : [],
@@ -555,6 +617,8 @@ exports.listBranchStock = async (req, res) => {
             warrantyMonths: Number(br.warrantyMonths) || 0,
             warrantyDetails: br.warrantyDetails || '',
             priceCode: br.priceCode || '',
+            lotType: br.lotType || '',
+            lotCategory: br.lotCategory || '',
             totalCostPrice: Number(qty) * Number(costPrice || 0),
             imes: Array.isArray(br.imes) ? br.imes : []
           });
@@ -574,7 +638,7 @@ exports.listBranchStock = async (req, res) => {
     }
 
     try { console.debug('FLOW listBranchStock: returning merged rows', { count: Array.isArray(rows) ? rows.length : 0 }); } catch (__) {}
-    return res.json({ success: true, rows: stockRows(rows), customerNo: customerNo || null });
+    return res.json({ success: true, rows: stockRows(await withLotRanges(rows, shop_id)), customerNo: customerNo || null });
   } catch (err) {
     console.error('listBranchStock error:', err.message || err);
     return res.status(500).json({ success: false, message: 'Server error' });

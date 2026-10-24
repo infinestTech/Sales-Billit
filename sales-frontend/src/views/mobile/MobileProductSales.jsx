@@ -34,8 +34,9 @@ function MobileProductSales({ salesUrl, token }) {
         const res = await fetch(url, { headers: { Authorization: 'Bearer ' + token } });
         const data = await res.json();
         if (!res.ok) throw new Error(data.message || 'Failed to load');
-        // No fixed selling price: a scanned product starts at its cost price and the salesperson sets the price on the spot
-        setProducts(Array.isArray(data.rows) ? data.rows.map((r) => ({ ...r, sellingPrice: Number(r.costPrice) || 0 })) : []);
+        // No fixed selling price: a scanned product starts at its cost price (a pouch / tempered lot at its
+        // category's minimum price) and the salesperson sets the price on the spot
+        setProducts(Array.isArray(data.rows) ? data.rows.map((r) => ({ ...r, sellingPrice: r.lotType ? window.LotStock.lotStartPrice(r) : Number(r.costPrice) || 0 })) : []);
       } catch (e) {
         setError(e.message);
       }
@@ -694,6 +695,11 @@ function MobileProductSales({ salesUrl, token }) {
                           <span>#{p.productNo || '-'}</span>
                           {(p.brand || p.model) ? <span> • {(p.brand || '').trim()} {(p.model || '').trim()}</span> : null}
                         </div>
+                        {p.lotType && window.LotStock.formatPriceRange(p.priceMin, p.priceMax) ? (
+                          <div style={{ fontSize: 12, fontWeight: 700, color: '#7c3aed', marginTop: 6 }}>
+                            Price range {window.LotStock.formatPriceRange(p.priceMin, p.priceMax)}
+                          </div>
+                        ) : null}
                         <div style={{ fontSize: 12, opacity: 0.85, marginTop: 6 }}>
                           Available: <b>{p.qty ?? '-'}</b>
                         </div>

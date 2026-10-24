@@ -134,6 +134,9 @@ const biDate = (d) => {
   return isNaN(dt.getTime()) ? '—' : dt.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
 };
 
+// Pouch / tempered lot rows show their category's selling range instead of brand / model
+const biLotRange = (it) => { const r = window.LotStock.formatPriceRange(it.priceMin, it.priceMax); return r ? 'Sells ' + r : ''; };
+
 function BranchInStock({ salesUrl, token }) {
   const [entries, setEntries] = React.useState([]);
   const [loading, setLoading] = React.useState(true);
@@ -178,7 +181,8 @@ function BranchInStock({ salesUrl, token }) {
           const sName = s.supplierName || s.supplier || '';
           const sCreated = s.createdAt || s.created_at || s.updatedAt || s.updated_at || null;
           (Array.isArray(s.items) ? s.items : []).forEach(it => {
-            const pid = String(it.productId || it._id || '');
+            // A lot supplied from master inventory lands on the branch's own row for its category (lotRowId)
+            const pid = String(it.lotRowId || it.productId || it._id || '');
             if (!pid) return;
             const prev = supplyMap[pid];
             const prevTime = prev && prev.createdAt ? new Date(prev.createdAt).getTime() : 0;
@@ -320,7 +324,9 @@ function BranchInStock({ salesUrl, token }) {
         model: row.model || '',
         costPrice: row.costPrice ?? row.cost ?? 0,
         quantity: row.branchQty ?? row.qty ?? 0,
-        imes: Array.isArray(row.imes) ? row.imes : (row.imei ? [row.imei] : [])
+        imes: Array.isArray(row.imes) ? row.imes : (row.imei ? [row.imei] : []),
+        lotType: row.lotType || '',
+        lotCategory: row.lotCategory || ''
       });
     });
     return Object.values(grouped);
@@ -511,7 +517,7 @@ function BranchInStock({ salesUrl, token }) {
                   {pageRows.map((it, idx) => {
                     const cost = biUnitCost(it);
                     const imei = matchedImei(it);
-                    const sub = [it.brand, it.model].filter(Boolean).join(' · ');
+                    const sub = it.lotType ? biLotRange(it) : [it.brand, it.model].filter(Boolean).join(' · ');
                     const warranty = warrantyText(it);
                     return (
                       <tr key={it._id || it.productId || idx}>
@@ -560,7 +566,7 @@ function BranchInStock({ salesUrl, token }) {
                         <b>{it.productName || it.productNo || '—'}</b>
                         <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
                           {it.productNo ? <span className="bi-code">{it.productNo}</span> : null}
-                          <span className="sub">{[it.brand, it.model].filter(Boolean).join(' · ')}</span>
+                          <span className="sub">{it.lotType ? biLotRange(it) : [it.brand, it.model].filter(Boolean).join(' · ')}</span>
                         </div>
                         {imei ? <span className="bi-imei">IMEI {imei}</span> : null}
                       </div>

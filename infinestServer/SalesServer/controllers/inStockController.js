@@ -1,5 +1,6 @@
 const InStock = require('../models/inStock');
 const { cleanImeis } = require('../utils/imei');
+const { loadLotCategories, resolveLotRef, lotProductNo, lotProductName } = require('../utils/lotStock');
 
 // Helper function to get product inventory limit
 async function getProductInventoryLimit(userId, shopId, mongoPlanId) {
@@ -38,6 +39,21 @@ exports.createInStock = async (req, res) => {
     if (purchaseType === 'credit' && (!creditAmount || Number(creditAmount) <= 0)) {
       return res.status(400).json({ success: false, message: 'Credit amount is required for credit purchases' });
     }
+
+  // Pouch / tempered glass lots: the category decides the product code and name (utils/lotStock.js)
+  if (items.some(i => i && i.lotType)) {
+    const lotCategories = await loadLotCategories(shop_id);
+    for (const i of items) {
+      if (!i || !i.lotType) continue;
+      const ref = resolveLotRef(lotCategories, i.lotType, i.lotCategory);
+      if (ref.error) return res.status(400).json({ success: false, message: ref.error });
+      if (!(Number(i.quantity) >= 1)) return res.status(400).json({ success: false, message: `Quantity is required for ${lotProductName(i.lotType, ref.category.name)}` });
+      i.lotCategory = ref.category.name;
+      i.productNo = lotProductNo(i.lotType, ref.category.name);
+      i.productName = lotProductName(i.lotType, ref.category.name);
+      i.imes = [];
+    }
+  }
 
   // Check product inventory limit
   const productLimit = await getProductInventoryLimit(userId, shop_id, req.user.mongoPlanId);
@@ -115,6 +131,8 @@ exports.createInStock = async (req, res) => {
           mrp: Math.max(0, Number(i.mrp) || 0),
           gstPercent: Math.max(0, Number(i.gstPercent) || 0),
           priceCode: (i.priceCode || '').toString().trim().slice(0, 40),
+          lotType: i.lotType || '',
+          lotCategory: i.lotType ? i.lotCategory : '',
         };
       }),
       createdBy: String(userId || ''),

@@ -1,6 +1,7 @@
 import React from 'react';
 import BarcodeSheet from './BarcodeSheet';
 import InStockImport from './InStockImport';
+import LotStockEntry from './LotStockEntry';
 import { encodePriceCode, normalizePriceCipher } from './barcodeLabels';
 
 export default function InStockView({ salesUrl, token }) {
@@ -44,6 +45,7 @@ export default function InStockView({ salesUrl, token }) {
   const [showRedDot, setShowRedDot] = React.useState(false);
   const [showBarcodeSheet, setShowBarcodeSheet] = React.useState(false);
   const [showImport, setShowImport] = React.useState(false);
+  const [showLotEntry, setShowLotEntry] = React.useState(false); // pouch / tempered lot stock-in
 
   // Re-stock / delete (master inventory actions)
   const [lowStockThreshold, setLowStockThreshold] = React.useState(5);
@@ -556,6 +558,27 @@ export default function InStockView({ salesUrl, token }) {
               onClick={() => setShowImport(true)}
             >
               📥 Import from Excel / JSON
+            </button>
+
+            <button
+              style={{
+                background: 'linear-gradient(135deg, #8b5cf6 0%, #6d28d9 100%)',
+                color: 'white',
+                border: 'none',
+                borderRadius: '12px',
+                padding: '12px 24px',
+                fontSize: '14px',
+                fontWeight: '600',
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px',
+                boxShadow: '0 4px 12px rgba(139, 92, 246, 0.3)'
+              }}
+              type="button"
+              onClick={() => setShowLotEntry(true)}
+            >
+              🧩 Add Pouch / Tempered
             </button>
 
             <button 
@@ -2217,6 +2240,16 @@ export default function InStockView({ salesUrl, token }) {
           onClose={() => setShowImport(false)}
           onImported={loadEntries}
           onSuppliersChanged={loadSuppliers}
+        />
+      )}
+
+ {showLotEntry && (
+        <LotStockEntry
+          salesUrl={salesUrl}
+          token={token}
+          suppliers={suppliers}
+          onClose={() => setShowLotEntry(false)}
+          onSaved={() => { setShowLotEntry(false); loadEntries(); }}
         />
       )}
 

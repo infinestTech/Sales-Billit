@@ -151,6 +151,12 @@ export function shortTitle(name) {
   return words.slice(0, 2).join(' ') + '..';
 }
 
+/** Label title: item.labelTitle when the caller set one (pouch / tempered lots print "TEMPER D8"), else shortTitle. */
+export function labelTitle(item) {
+  const own = String(item && item.labelTitle != null ? item.labelTitle : '').trim();
+  return own || shortTitle(item && item.productName);
+}
+
 /**
  * Text lines printed under the bars: the barcode value only when it is not the product code (a phone's IMEI),
  * then the product code, then the price code. Each line is { text, kind: 'barcode' | 'product' | 'price' }.
@@ -347,14 +353,14 @@ export function planThermalLabel(doc, label, settings, modules) {
 function toThermalLabel(item, shopName) {
   return {
     code: barcodeValueOf(item),
-    productName: shortTitle(item.productName),
+    productName: labelTitle(item),
     codeLines: labelCodeLines(item),
-    type: item.type || '',
+    type: item.typeTag || item.type || '', // typeTag: "Tempered Glass" / "Pouch" for lots
     shopName: shopName || '',
   };
 }
 
-const labelKey = (item) => [barcodeValueOf(item), item.productName || '', item.productNo || '', item.priceCode || '', item.type || ''].join('\u0000');
+const labelKey = (item) => [barcodeValueOf(item), labelTitle(item), item.productNo || '', item.priceCode || '', item.type || ''].join('\u0000');
 
 /**
  * Checks every distinct label without building the PDF. Returns
@@ -496,7 +502,7 @@ export function buildA4Pdf({ jsPDF, labels, shopName, getCanvas }) {
       // Product title: first two words only
       doc.setFontSize(12);
       doc.setFont(undefined, 'bold');
-      doc.text(doc.splitTextToSize(shortTitle(item.productName), labelWidth - 4)[0] || '', cx, cursor, { align: 'center' });
+      doc.text(doc.splitTextToSize(labelTitle(item), labelWidth - 4)[0] || '', cx, cursor, { align: 'center' });
       cursor += 3;
 
       // Barcode

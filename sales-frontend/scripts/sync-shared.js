@@ -21,6 +21,13 @@ const MODULES = [
     needs: 'jsPDF and JsBarcode are passed in by the caller.',
     replace: [],
   },
+  {
+    source: 'lotStock.js',
+    target: 'src/utils/lotStock.js',
+    global: 'LotStock',
+    needs: 'Plain browser JS (fetch); no other globals.',
+    replace: [],
+  },
 ];
 
 for (const m of MODULES) {

@@ -25,8 +25,9 @@ function ProductSales({ salesUrl, token }) {
 				const res = await fetch(url, { headers: { Authorization: 'Bearer ' + token } });
 				const data = await res.json();
 				if (!res.ok) throw new Error(data.message || 'Failed to load');
-				// No fixed selling price: a scanned product starts at its cost price and the salesperson sets the price on the spot
-				setProducts(Array.isArray(data.rows) ? data.rows.map(r => ({ ...r, sellingPrice: Number(r.costPrice) || 0 })) : []);
+				// No fixed selling price: a scanned product starts at its cost price (a pouch / tempered lot at its
+				// category's minimum price) and the salesperson sets the price on the spot
+				setProducts(Array.isArray(data.rows) ? data.rows.map(r => ({ ...r, sellingPrice: r.lotType ? window.LotStock.lotStartPrice(r) : Number(r.costPrice) || 0 })) : []);
 			} catch (e) { setError(e.message); }
 		}
 		fetchProducts();
@@ -870,8 +871,13 @@ function ProductSales({ salesUrl, token }) {
 														{p.productName || 'Unnamed Product'}
 													</div>
 													<div style={{fontSize: '13px', color: '#64748b'}}>
-														{p.brand || '-'} {p.model || '-'} • #{p.productNo || '-'}
+														{p.lotType ? `${window.LotStock.lotTypeOf(p.lotType)?.label || ''} · ${p.lotCategory}` : `${p.brand || '-'} ${p.model || '-'}`} • #{p.productNo || '-'}
 													</div>
+													{p.lotType && window.LotStock.formatPriceRange(p.priceMin, p.priceMax) && (
+														<div style={{marginTop: '6px', display: 'inline-block', fontSize: '13px', fontWeight: '700', color: '#7c3aed', background: '#f5f3ff', border: '1px solid #ddd6fe', borderRadius: '999px', padding: '2px 10px'}}>
+															Price range {window.LotStock.formatPriceRange(p.priceMin, p.priceMax)}
+														</div>
+													)}
 													{hasImes && (
 														<div style={{marginTop: '8px', fontSize: '12px', color: selectedCount > 0 && selectedCount === Number(p.sellingQty ?? 0) ? '#16a34a' : '#f59e0b', fontWeight: '500'}}>
 															{selectedCount > 0 ? '✅' : '📱'} IMEI: {selectedCount} selected {Number(p.sellingQty ?? 0) === 0 ? '(scan IMEI barcodes)' : ''}
