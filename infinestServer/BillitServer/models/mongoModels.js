@@ -209,6 +209,7 @@ const mobileSchema = new mongoose.Schema({
   has_warranty: { type: Boolean, default: false },
   warranty_months: { type: Number, default: null },
   warranty_expiry_date: { type: Date, default: null },
+  warranty_note: { type: String, default: "" }, // what the warranty covers (e.g. "Display only"), printed on every bill
   // Supplier-related fields for tracking product/supplier usage
   supplierId: { type: mongoose.Schema.Types.ObjectId, ref: "Supplier" },
   supplierName: { type: String },
@@ -253,6 +254,7 @@ const reworkRecordSchema = new mongoose.Schema({
   has_warranty: { type: Boolean, default: false },
   warranty_months: { type: Number, default: null },
   warranty_expiry_date: { type: Date, default: null },
+  warranty_note: { type: String, default: "" }, // what the warranty covers (e.g. "Display only"), printed on every bill
   productName: { type: String },
   supplierName: { type: String },
   complaint: { type: String, required: true },

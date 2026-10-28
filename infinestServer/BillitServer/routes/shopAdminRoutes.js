@@ -2915,7 +2915,7 @@ router.get('/records', shopAdminAuth, async (req, res) => {
 
 router.post('/records/toggle-status', shopAdminAuth, async (req, res) => {
     try {
-        const { mobileId, status, value, hasWarranty, warrantyMonths } = req.body;
+        const { mobileId, status, value, hasWarranty, warrantyMonths, warrantyNote } = req.body;
         if (!['processing', 'ready', 'delivered', 'returned'].includes(status)) {
             return res.status(400).json({ success: false, message: 'invalid status' });
         }
@@ -2932,10 +2932,12 @@ router.post('/records/toggle-status', shopAdminAuth, async (req, res) => {
                 update.warranty_expiry_date = warrantyApplies && months > 0
                     ? new Date(new Date().setMonth(new Date().getMonth() + months))
                     : null;
+                update.warranty_note = warrantyApplies ? String(warrantyNote || '').trim().slice(0, 300) : '';
             } else {
                 update.has_warranty = false;
                 update.warranty_months = null;
                 update.warranty_expiry_date = null;
+                update.warranty_note = '';
             }
         }
         const mobile = await Mobile.findOneAndUpdate({ _id: mobileId, shop_id: req.shopId }, update, { new: true });

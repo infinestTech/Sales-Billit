@@ -53,7 +53,8 @@ const formatWarranty = (m) => {
   if (!m?.has_warranty) return "No Warranty";
   const months = m.warranty_months;
   const expiry = m.warranty_expiry_date ? formatDate(m.warranty_expiry_date) : null;
-  return `${months ? `${months} Month${months === 1 ? "" : "s"}` : "Yes"}${expiry ? ` (till ${expiry})` : ""}`;
+  const note = String(m.warranty_note || "").trim();
+  return `${months ? `${months} Month${months === 1 ? "" : "s"}` : "Yes"}${expiry ? ` (till ${expiry})` : ""}${note ? ` - For: ${note}` : ""}`;
 };
 
 const getPaidAmount = (m) =>

@@ -4,7 +4,8 @@
  *
  * Categories are a shop-wide list on the shared Shop document:
  *   Shop.sales_settings.lot_categories = [{ id, type: 'temper' | 'pouch', name: 'D8', minPrice, maxPrice }]
- * A category is stocked as one item with productNo `TEMPER-D8` / `POUCH-D8` (the barcode value),
+ * A category is stocked as one item with productNo `TEMPER-D8` / `POUCH-D8` (the barcode value) unless
+ * the purchase names its own product code,
  * carrying lotType + lotCategory. Each branch holds a single BranchStock row per category; every
  * purchase or supply tops that row up and averages its cost per piece. The POS shows the category's
  * current price range and starts the unit price at its minimum.
@@ -18,17 +19,18 @@ const LOT_TYPES = {
 
 const isLotType = (type) => Object.prototype.hasOwnProperty.call(LOT_TYPES, type);
 
-/** "d 8" -> "D 8": upper case, single spaces; letters, digits, space and "-" only. '' when invalid. */
+/** Any name the shop likes ("D+", "Gorila glass 9H"): trimmed, single spaces, at most 60 characters. '' when empty. */
 function normalizeLotName(name) {
-  const s = String(name == null ? '' : name).trim().replace(/\s+/g, ' ').toUpperCase();
-  if (!s || s.length > 20 || !/^[A-Z0-9][A-Z0-9 -]*$/.test(s)) return '';
-  return s;
+  return String(name == null ? '' : name).trim().replace(/\s+/g, ' ').slice(0, 60);
 }
+
+/** Optional product code typed on a lot purchase; '' means "use the category's default code". */
+const normalizeLotCode = (code) => String(code == null ? '' : code).trim().replace(/\s+/g, ' ').slice(0, 60);
 
 const lotProductNo = (type, name) => `${LOT_TYPES[type].code}-${String(name).replace(/ /g, '-')}`;
 const lotProductName = (type, name) => `${LOT_TYPES[type].label} ${name}`;
-/** Stable id of a branch's single stock row for a category ("branch_" keeps it out of admin supply lists). */
-const branchLotProductId = (branchId, type, name) => `branch_lot_${branchId}_${type}_${lotProductNo(type, name)}`;
+/** Stable id of a branch's stock row for a lot product code ("branch_" keeps it out of admin supply lists). */
+const branchLotProductId = (branchId, type, productNo) => `branch_lot_${branchId}_${type}_${productNo}`;
 
 async function loadLotCategories(shopId) {
   const shop = await Shop.findById(shopId).select('sales_settings.lot_categories').lean();
@@ -39,7 +41,9 @@ async function loadLotCategories(shopId) {
 
 const findLotCategory = (list, type, name) => {
   const n = normalizeLotName(name);
-  return list.find((c) => c.type === type && c.name === n) || null;
+  const lower = n.toLowerCase();
+  return list.find((c) => c.type === type && c.name === n)
+    || list.find((c) => c.type === type && String(c.name).toLowerCase() === lower) || null;
 };
 
 /** Validates a lot reference from a client payload: { lotType, lotCategory } -> category or an error. */
@@ -62,6 +66,6 @@ async function withLotRanges(rows, shopId) {
 }
 
 module.exports = {
-  LOT_TYPES, isLotType, normalizeLotName, lotProductNo, lotProductName, branchLotProductId,
+  LOT_TYPES, isLotType, normalizeLotName, normalizeLotCode, lotProductNo, lotProductName, branchLotProductId,
   loadLotCategories, findLotCategory, resolveLotRef, withLotRanges,
 };

@@ -47,6 +47,7 @@ const viewReceiptController = async (req, res) => {
   has_warranty: m.has_warranty || false,
   warranty_months: m.warranty_months || null,
   warranty_expiry_date: m.warranty_expiry_date || null,
+  warranty_note: m.warranty_note || "",
   _id: m._id, // Include ID for receipt links
     }));
 
@@ -123,6 +124,7 @@ const viewPublicReceiptController = async (req, res) => {
   has_warranty: m.has_warranty || false,
   warranty_months: m.warranty_months || null,
   warranty_expiry_date: m.warranty_expiry_date || null,
+  warranty_note: m.warranty_note || "",
   _id: m._id,
     }));
 

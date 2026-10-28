@@ -1,6 +1,6 @@
 "use client"
 import { useEffect, useRef, useState, useCallback } from "react"
-import { X, RotateCcw, Check, Camera } from "lucide-react"
+import { X, RotateCcw, Check, Camera, SwitchCamera } from "lucide-react"
 
 const SIDES = ["front", "back"]
 const MAX_WIDTH = 1280
@@ -30,19 +30,30 @@ export default function CameraCaptureModal({ open, onClose, onDone, title }) {
   const [shots, setShots] = useState({})
   const [flash, setFlash] = useState(false)
   const [retryToken, setRetryToken] = useState(0)
+  // Rear camera by default; the switch button (shown only with 2+ cameras) flips to the front one
+  const [facing, setFacing] = useState("environment")
+  const [cameraCount, setCameraCount] = useState(0)
 
   const stopStream = () => {
     streamRef.current?.getTracks().forEach((t) => t.stop())
     streamRef.current = null
   }
 
+  // A fresh capture always starts on the rear camera
+  useEffect(() => {
+    if (open) {
+      setFacing("environment")
+      setStep(0)
+      setShots({})
+    }
+  }, [open])
+
   useEffect(() => {
     if (!open) return
     let cancelled = false
-    setStep(0)
-    setShots({})
     setError("")
     setReady(false)
+    stopStream()
 
     if (!navigator.mediaDevices?.getUserMedia) {
       setError("Camera is not supported in this browser (a secure https connection is required).")
@@ -56,6 +67,10 @@ export default function CameraCaptureModal({ open, onClose, onDone, title }) {
           return
         }
         streamRef.current = stream
+        // Labels/devices are only listed after permission is granted, so count cameras now
+        navigator.mediaDevices.enumerateDevices?.()
+          .then((devices) => { if (!cancelled) setCameraCount(devices.filter((d) => d.kind === "videoinput").length) })
+          .catch(() => {})
         if (videoRef.current) {
           videoRef.current.srcObject = stream
           videoRef.current.onloadedmetadata = () => {
@@ -65,8 +80,8 @@ export default function CameraCaptureModal({ open, onClose, onDone, title }) {
         }
       })
 
-    // Prefer the rear camera; laptops without one can throw OverconstrainedError, so fall back to any camera
-    start({ video: { facingMode: "environment", width: { ideal: 1920 }, height: { ideal: 1080 } }, audio: false }).catch((err) => {
+    // Ask for the chosen side; laptops without one can throw OverconstrainedError, so fall back to any camera
+    start({ video: { facingMode: facing, width: { ideal: 1920 }, height: { ideal: 1080 } }, audio: false }).catch((err) => {
       if (cancelled) return
       if (err?.name === "OverconstrainedError" || err?.name === "ConstraintNotSatisfiedError") {
         return start({ video: { width: { ideal: 1920 }, height: { ideal: 1080 } }, audio: false }).catch((err2) => {
@@ -80,7 +95,7 @@ export default function CameraCaptureModal({ open, onClose, onDone, title }) {
       cancelled = true
       stopStream()
     }
-  }, [open, retryToken])
+  }, [open, retryToken, facing])
 
   const capture = useCallback(() => {
     const video = videoRef.current
@@ -104,10 +119,17 @@ export default function CameraCaptureModal({ open, onClose, onDone, title }) {
     setTimeout(() => setFlash(false), 150)
   }, [ready, step])
 
+  const switchCamera = (e) => {
+    e?.stopPropagation()
+    setFacing((f) => (f === "environment" ? "user" : "environment"))
+  }
+
   useEffect(() => {
     if (!open || step > 1) return
     const onKey = (e) => {
       if (e.repeat) return
+      // Keyboard users tabbing to the switch button should not trigger a capture
+      if (e.target?.closest?.("[data-no-capture]")) return
       e.preventDefault()
       e.stopPropagation()
       capture()
@@ -166,11 +188,23 @@ export default function CameraCaptureModal({ open, onClose, onDone, title }) {
           {/* Video stays mounted so the stream survives a retake */}
           <div className={error || step === 2 ? "hidden" : ""}>
             <div className="relative overflow-hidden rounded-md bg-black" onClick={capture}>
-              <video ref={videoRef} playsInline muted className="h-auto max-h-[60vh] w-full object-contain" />
+              <video ref={videoRef} playsInline muted className={`h-auto max-h-[60vh] w-full object-contain ${facing === "user" ? "-scale-x-100" : ""}`} />
               {flash && <div className="absolute inset-0 bg-white/80" />}
               <div className="absolute left-3 top-3 rounded bg-black/60 px-2 py-1 text-xs font-semibold text-white">
                 {Math.min(step + 1, 2)}/2 · {sideLabel}
               </div>
+              {cameraCount > 1 && (
+                <button
+                  type="button"
+                  data-no-capture
+                  onClick={switchCamera}
+                  className="absolute right-3 top-3 flex h-11 w-11 items-center justify-center rounded-full bg-black/60 text-white shadow-lg backdrop-blur hover:bg-black/75 active:scale-95"
+                  title={facing === "environment" ? "Switch to front camera" : "Switch to back camera"}
+                  aria-label={facing === "environment" ? "Switch to front camera" : "Switch to back camera"}
+                >
+                  <SwitchCamera className="h-5 w-5" />
+                </button>
+              )}
               {!ready && (
                 <div className="absolute inset-0 flex items-center justify-center text-sm text-white">Starting camera...</div>
               )}

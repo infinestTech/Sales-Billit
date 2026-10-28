@@ -34,7 +34,8 @@ const formatWarranty = (record) => {
   if (!record?.has_warranty) return "No Warranty"
   const months = record.warranty_months
   const expiry = record.warranty_expiry_date ? formatDate(record.warranty_expiry_date) : null
-  return `${months ? `${months} Month${months === 1 ? "" : "s"}` : "Yes"}${expiry ? ` (till ${expiry})` : ""}`
+  const note = String(record.warranty_note || "").trim()
+  return `${months ? `${months} Month${months === 1 ? "" : "s"}` : "Yes"}${expiry ? ` (till ${expiry})` : ""}${note ? ` · For: ${note}` : ""}`
 }
 
 const WarrantyBadge = ({ record }) => (

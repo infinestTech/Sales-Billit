@@ -13,7 +13,8 @@ import {
 } from "lucide-react"
 import api from "@/components/api"
 import { logAndNotify, logError, logSuccess } from "@/utils/logger"
-import { PAYMENT_METHOD_OPTIONS, formatPaymentMethodLabel } from "@/constants/paymentMethods"
+import { formatPaymentMethodLabel } from "@/constants/paymentMethods"
+import AddPaymentModal from "@/components/tables/AddPaymentModal"
 import BottomSheet from "./BottomSheet"
 import { formatDateTime, formatINR } from "./utils"
 
@@ -34,16 +35,11 @@ export default function MobilePaymentSheet({
   shopId,
   onUpdated,
 }) {
-  const [amount, setAmount] = useState("")
-  const [method, setMethod] = useState("Cash")
-  const [busy, setBusy] = useState(false)
+  const [adding, setAdding] = useState(false) // AddPaymentModal: method(s) first, then amounts
   const [deletingId, setDeletingId] = useState(null)
 
   useEffect(() => {
-    if (open) {
-      setAmount("")
-      setMethod("Cash")
-    }
+    if (!open) setAdding(false)
   }, [open])
 
   if (!mobile) return null
@@ -60,40 +56,28 @@ export default function MobilePaymentSheet({
     }`,
   }
 
-  const handleAdd = async () => {
-    const value = Number(amount)
-    if (!value || value <= 0) {
-      logAndNotify("Enter a valid amount.", "warning", shopId)
-      return
+  // One payment entry per mode (Cash ₹500 + Gpay ₹300 → two entries)
+  const handleAdd = async (splits) => {
+    let updated = null
+    for (const split of splits) {
+      try {
+        const res = await api.post(
+          "/api/add-payment-entry",
+          { id: mobile._id, amount: split.amount, method: split.method, date: new Date().toISOString() },
+          { headers }
+        )
+        updated = res.data?.updatedMobile || updated
+      } catch (err) {
+        logError(err.response?.data?.error || "Failed to add payment", err, shopId)
+        if (updated) onUpdated?.(updated)
+        throw new Error(updated
+          ? `Saved part of the payment, but ${split.method} ₹${split.amount} failed. Check the history.`
+          : "Failed to add payment. Please try again.")
+      }
     }
-    if (!method) {
-      logAndNotify("Select a payment method.", "warning", shopId)
-      return
-    }
-    setBusy(true)
-    try {
-      const res = await api.post(
-        "/api/add-payment-entry",
-        {
-          id: mobile._id,
-          amount: value,
-          method,
-          date: new Date().toISOString(),
-        },
-        { headers }
-      )
-      logSuccess("Payment added.", shopId)
-      onUpdated?.(res.data?.updatedMobile || null)
-      setAmount("")
-    } catch (err) {
-      logError(
-        err.response?.data?.error || "Failed to add payment",
-        err,
-        shopId
-      )
-    } finally {
-      setBusy(false)
-    }
+    logSuccess("Payment added.", shopId)
+    onUpdated?.(updated)
+    setAdding(false)
   }
 
   const handleDelete = async (paymentId) => {
@@ -120,73 +104,24 @@ export default function MobilePaymentSheet({
   }
 
   return (
+    <>
     <BottomSheet
       open={open}
-      onClose={onClose}
+      onClose={adding ? () => {} : onClose}
       title="Payments"
       subtitle={`${mobile.mobile_name || "Mobile"} • Total ${formatINR(totalPaid)}`}
       footer={
         <button
           type="button"
-          onClick={handleAdd}
-          disabled={busy || !amount}
-          className="flex w-full items-center justify-center gap-2 rounded-xl bg-indigo-600 py-3.5 text-base font-semibold text-white disabled:opacity-50"
+          onClick={() => setAdding(true)}
+          className="flex w-full items-center justify-center gap-2 rounded-xl bg-indigo-600 py-3.5 text-base font-semibold text-white"
         >
-          {busy ? (
-            <>
-              <Loader2 className="h-5 w-5 animate-spin" /> Adding…
-            </>
-          ) : (
-            <>
-              <Plus className="h-5 w-5" /> Add payment
-            </>
-          )}
+          <Plus className="h-5 w-5" /> Add payment
         </button>
       }
     >
-      {/* New payment entry */}
-      <div className="space-y-3 rounded-xl border border-gray-200 bg-gray-50 p-3">
-        <div>
-          <label className="mb-1 block text-xs font-medium text-gray-600">
-            Amount
-          </label>
-          <input
-            type="number"
-            inputMode="decimal"
-            value={amount}
-            onChange={(e) => setAmount(e.target.value)}
-            placeholder="0"
-            className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-base focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500"
-          />
-        </div>
-        <div>
-          <label className="mb-1 block text-xs font-medium text-gray-600">
-            Method
-          </label>
-          <div className="grid grid-cols-3 gap-2">
-            {PAYMENT_METHOD_OPTIONS.filter((o) => o.value).map((opt) => {
-              const active = method === opt.value
-              return (
-                <button
-                  key={opt.value}
-                  type="button"
-                  onClick={() => setMethod(opt.value)}
-                  className={`rounded-lg border px-2 py-2 text-xs font-medium ${
-                    active
-                      ? "border-indigo-500 bg-indigo-50 text-indigo-700"
-                      : "border-gray-300 bg-white text-gray-700"
-                  }`}
-                >
-                  {opt.label}
-                </button>
-              )
-            })}
-          </div>
-        </div>
-      </div>
-
       {/* Existing payments */}
-      <div className="mt-4">
+      <div>
         <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-gray-500">
           History ({payments.length})
         </p>
@@ -229,5 +164,8 @@ export default function MobilePaymentSheet({
         )}
       </div>
     </BottomSheet>
+    {/* Outside the sheet: its transform would otherwise anchor the fixed modal to the sheet */}
+    <AddPaymentModal open={adding} currentTotal={totalPaid} onClose={() => setAdding(false)} onSubmit={handleAdd} />
+    </>
   )
 }

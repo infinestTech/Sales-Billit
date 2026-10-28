@@ -105,8 +105,8 @@ function LotCategoryManager({ salesUrl, getToken, initialType, onClose, onChange
           <div className="lcm-add">
             <div className="lcm-f-name">
               <label htmlFor="lcm-name">New {typeInfo.label.toLowerCase()} category</label>
-              <input id="lcm-name" className="lcm-in" value={draft.name} maxLength={20} placeholder="e.g. D8"
-                onChange={e => setDraft(d => ({ ...d, name: e.target.value.toUpperCase() }))} />
+              <input id="lcm-name" className="lcm-in" value={draft.name} maxLength={60} placeholder="e.g. D8, D+"
+                onChange={e => setDraft(d => ({ ...d, name: e.target.value }))} />
             </div>
             <div>
               <label htmlFor="lcm-min">Min price ₹</label>

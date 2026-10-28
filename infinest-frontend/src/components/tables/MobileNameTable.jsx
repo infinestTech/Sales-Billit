@@ -11,6 +11,7 @@ import { useRouter } from "next/navigation"
 import { jwtDecode } from "jwt-decode"
 import { useShopWhatsappConfig } from "@/hooks/useShopWhatsappConfig"
 import { PAYMENT_METHOD_OPTIONS, DEFAULT_PAYMENT_METHOD, formatPaymentMethodLabel } from "@/constants/paymentMethods"
+import AddPaymentModal from "./AddPaymentModal"
 
 
 
@@ -45,9 +46,6 @@ const MobileNameTable = ({ mobileData, setMobileData, onRevenueUpdate, hideActio
   const [paymentModalOpen, setPaymentModalOpen] = useState(false)
   const [activePaymentMobileId, setActivePaymentMobileId] = useState(null)
   const [activePaymentMobileIndex, setActivePaymentMobileIndex] = useState(null)
-  const [newPaymentAmount, setNewPaymentAmount] = useState("")
-  const [newPaymentMethod, setNewPaymentMethod] = useState("")
-  const [addingPayment, setAddingPayment] = useState(false)
   const [popupPosition, setPopupPosition] = useState({ top: 0, left: 0 })
   const [viewPopupPosition, setViewPopupPosition] = useState({ top: 0, left: 0 })
 
@@ -61,6 +59,7 @@ const MobileNameTable = ({ mobileData, setMobileData, onRevenueUpdate, hideActio
   const [warrantyHasInput, setWarrantyHasInput] = useState(null) // true | false | null (undecided)
   const [warrantyMonthsInput, setWarrantyMonthsInput] = useState(6) // 3 | 6 | "custom"
   const [warrantyCustomMonths, setWarrantyCustomMonths] = useState("")
+  const [warrantyNoteInput, setWarrantyNoteInput] = useState("") // what the warranty covers, printed on bills
 
   // Manual "Send WhatsApp Message" modal (server sends via MSG91; no credentials in the browser)
   const [waMessageModal, setWaMessageModal] = useState({ open: false, mobile: null })
@@ -312,6 +311,7 @@ const MobileNameTable = ({ mobileData, setMobileData, onRevenueUpdate, hideActio
       setWarrantyHasInput(null)
       setWarrantyMonthsInput(6)
       setWarrantyCustomMonths("")
+      setWarrantyNoteInput("")
       setWarrantyModal({ open: true, index })
       return
     }
@@ -328,7 +328,7 @@ const MobileNameTable = ({ mobileData, setMobileData, onRevenueUpdate, hideActio
     if (warrantyHasInput === true) {
       const months = warrantyMonthsInput === "custom" ? Number(warrantyCustomMonths) : Number(warrantyMonthsInput)
       if (!months || months <= 0) return
-      warrantyInfo = { hasWarranty: true, warrantyMonths: months }
+      warrantyInfo = { hasWarranty: true, warrantyMonths: months, warrantyNote: warrantyNoteInput.trim() }
     } else {
       warrantyInfo = { hasWarranty: false, warrantyMonths: null }
     }
@@ -410,8 +410,6 @@ const MobileNameTable = ({ mobileData, setMobileData, onRevenueUpdate, hideActio
     setActivePaymentMobileId(mobile?._id || null)
     setActivePaymentMobileIndex(globalIndex)
     setPaymentModalOpen(true)
-    setNewPaymentAmount("")
-    setNewPaymentMethod("")
     
     // Position popup near the button
     setTimeout(() => {
@@ -497,8 +495,6 @@ const MobileNameTable = ({ mobileData, setMobileData, onRevenueUpdate, hideActio
     setPaymentModalOpen(false)
     setActivePaymentMobileId(null)
     setActivePaymentMobileIndex(null)
-    setNewPaymentAmount("")
-    setNewPaymentMethod("")
     setPopupPosition({ top: 0, left: 0 })
   }
 
@@ -516,60 +512,44 @@ const MobileNameTable = ({ mobileData, setMobileData, onRevenueUpdate, hideActio
     }
   }, [activePaymentMobileIndex, paymentModalOpen])
 
-  const addPaymentEntry = async () => {
-    if (!newPaymentAmount || !newPaymentMethod) {
-      alert("Please enter amount and select payment method")
-      return
-    }
-    
-    const amount = Number.parseFloat(newPaymentAmount)
-    if (isNaN(amount) || amount <= 0) {
-      alert("Please enter a valid amount")
-      return
-    }
-
-    setAddingPayment(true)
-    try {
-      const token = localStorage.getItem("token")
-      const response = await api.post(
-        "/api/add-payment-entry",
-        {
-          id: activePaymentMobileId,
-          amount: amount,
-          method: newPaymentMethod,
-          date: new Date().toISOString()
-        },
-        {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        },
-      )
-
-      const updated = response.data.updatedMobile
-      const updatedData = [...mobileData]
-      const localRecord = updatedData[activePaymentMobileIndex] || {}
-      const merged = {
-        ...localRecord,
-        ...updated,
-        payments: updated.payments || [],
-        total_paid: updated.total_paid || 0,
+  // Saves the payment chosen in AddPaymentModal: one entry per mode (Cash ₹500 + Gpay ₹300 → two entries)
+  const addPaymentSplits = async (splits) => {
+    const token = localStorage.getItem("token")
+    let updated = null
+    for (const split of splits) {
+      try {
+        const response = await api.post(
+          "/api/add-payment-entry",
+          { id: activePaymentMobileId, amount: split.amount, method: split.method, date: new Date().toISOString() },
+          { headers: { Authorization: `Bearer ${token}` } },
+        )
+        updated = response.data.updatedMobile
+      } catch (error) {
+        console.error("Failed to add payment entry:", error.message)
+        if (updated) applyUpdatedPayments(updated)
+        throw new Error(updated
+          ? `Saved part of the payment, but ${split.method} ₹${split.amount} failed. Check the payment history.`
+          : "Failed to add payment. Please try again.")
       }
-      updatedData[activePaymentMobileIndex] = merged
-
-      setMobileData(updatedData)
-      setNewPaymentAmount("")
-      setNewPaymentMethod("")
-
-      if (typeof onRevenueUpdate === "function") {
-        onRevenueUpdate()
-      }
-    } catch (error) {
-      console.error("Failed to add payment entry:", error.message)
-      alert("Failed to add payment. Please try again.")
-    } finally {
-      setAddingPayment(false)
     }
+    if (updated) applyUpdatedPayments(updated)
+    closePaymentModal()
+    if (typeof onRevenueUpdate === "function") {
+      onRevenueUpdate()
+    }
+  }
+
+  const applyUpdatedPayments = (updated) => {
+    // Parents pass a value setter (not a functional updater), so build the new list here
+    const updatedData = [...mobileData]
+    const localRecord = updatedData[activePaymentMobileIndex] || {}
+    updatedData[activePaymentMobileIndex] = {
+      ...localRecord,
+      ...updated,
+      payments: updated.payments || [],
+      total_paid: updated.total_paid || 0,
+    }
+    setMobileData(updatedData)
   }
 
   const deletePaymentEntry = async (paymentId) => {
@@ -1071,65 +1051,13 @@ const MobileNameTable = ({ mobileData, setMobileData, onRevenueUpdate, hideActio
         </>
       )}
 
-      {/* Add Payment Popup */}
-      {paymentModalOpen && (
-        <>
-          <div className="fixed inset-0 bg-black/30 z-40" onClick={closePaymentModal}></div>
-          <div className="fixed left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 bg-white rounded-lg shadow-xl border border-gray-200 p-5 w-80 z-50">
-            <div className="flex items-center justify-between mb-4">
-              <h4 className="text-base font-semibold text-gray-900">Add Payment</h4>
-              <button
-                onClick={closePaymentModal}
-                className="text-gray-400 hover:text-gray-600"
-              >
-                <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                </svg>
-              </button>
-            </div>
-            <div className="mb-4 pb-4 border-b border-gray-200">
-              <p className="text-xs text-gray-600 mb-1">Current Total</p>
-              <p className="text-xl font-bold text-gray-900">
-                ₹{((mobileData[activePaymentMobileIndex]?.total_paid || mobileData[activePaymentMobileIndex]?.paid_amount || 0)).toLocaleString("en-IN")}
-              </p>
-            </div>
-            <div className="space-y-3">
-              <div>
-                <label className="block text-xs font-medium text-gray-700 mb-1">Amount</label>
-                <input
-                  type="number"
-                  className="w-full border border-gray-300 rounded px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
-                  placeholder="₹0"
-                  value={newPaymentAmount}
-                  onChange={(e) => setNewPaymentAmount(e.target.value)}
-                  min="0"
-                />
-              </div>
-              <div>
-                <label className="block text-xs font-medium text-gray-700 mb-1">Method</label>
-                <select
-                  className="w-full border border-gray-300 rounded px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
-                  value={newPaymentMethod}
-                  onChange={(e) => setNewPaymentMethod(e.target.value)}
-                >
-                  {PAYMENT_METHOD_OPTIONS.map((option) => (
-                    <option key={option.value} value={option.value}>
-                      {option.label}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <button
-                onClick={addPaymentEntry}
-                disabled={addingPayment || !newPaymentAmount || !newPaymentMethod}
-                className="w-full bg-blue-600 text-white py-1.5 rounded text-sm font-medium hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-              >
-                {addingPayment ? "Adding..." : "Add"}
-              </button>
-            </div>
-          </div>
-        </>
-      )}
+      {/* Add Payment Popup: choose the method(s) first, then the amount per method */}
+      <AddPaymentModal
+        open={paymentModalOpen}
+        currentTotal={mobileData[activePaymentMobileIndex]?.total_paid || mobileData[activePaymentMobileIndex]?.paid_amount || 0}
+        onClose={closePaymentModal}
+        onSubmit={addPaymentSplits}
+      />
 
       {/* View Payment History Popup */}
       {activePaymentMobileIndex !== null && !paymentModalOpen && (
@@ -1578,6 +1506,17 @@ const MobileNameTable = ({ mobileData, setMobileData, onRevenueUpdate, hideActio
                       className="mt-2 w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
                     />
                   )}
+                  <div className="mt-3">
+                    <label className="block text-xs font-medium text-gray-700 mb-1">Warranty covers <span className="font-normal text-gray-400">(optional, printed on the bill)</span></label>
+                    <textarea
+                      rows={2}
+                      maxLength={300}
+                      value={warrantyNoteInput}
+                      onChange={(e) => setWarrantyNoteInput(e.target.value)}
+                      placeholder="e.g. Display replacement only, not physical or water damage"
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm resize-none focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                    />
+                  </div>
                 </div>
               )}
             </div>

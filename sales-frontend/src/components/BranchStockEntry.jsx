@@ -87,7 +87,7 @@ const BSE_CSS = `
 .bse-chip.warn{background:#fffbeb;color:#92400e;border-color:#fcd34d}
 .bse-chip button{border:none;background:rgba(15,23,42,.08);width:20px;height:20px;border-radius:50%;cursor:pointer;font-size:12px;line-height:20px;color:inherit;padding:0}
 .bse-adds{display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px}
-.bse-g-lot{grid-template-columns:1fr 1.4fr 1fr 1fr}
+.bse-g-lot{grid-template-columns:1fr 1fr 1.4fr 1fr 1fr}
 .bse-link{border:none;background:none;color:#4f46e5;font-size:12px;font-weight:600;cursor:pointer;padding:0;margin-left:6px}
 .bse-add{border:2px dashed #cbd5e1;background:#fff;border-radius:14px;padding:16px;font-size:14px;font-weight:600;color:#334155;cursor:pointer;transition:all .15s}
 .bse-add:hover{border-color:#6366f1;color:#4338ca;background:#eef2ff}
@@ -167,7 +167,7 @@ function BranchStockEntry({ salesUrl, getToken, suppliers, branchEntries, onClos
   const rememberType = (t) => { try { localStorage.setItem(BSE_LAST_TYPE_KEY, t); } catch (_) {} };
   const addItem = (type) => { const it = bseNewItem(type); focusKey.current = it.key; rememberType(type); setItems(l => [...l, it]); };
   const duplicateItem = (it) => {
-    const copy = { ...bseNewItem(it.type), productName: it.productName, costPrice: it.costPrice, warrantyMonths: it.warrantyMonths, warrantyDetails: it.warrantyDetails, qty: it.type === 'mobile' ? 1 : it.qty, lotType: it.lotType };
+    const copy = { ...bseNewItem(it.type), productName: it.productName, costPrice: it.costPrice, warrantyMonths: it.warrantyMonths, warrantyDetails: it.warrantyDetails, qty: it.type === 'mobile' ? 1 : it.qty, lotType: it.lotType, lotCategory: it.lotCategory, productNo: it.type === 'lot' ? it.productNo : '' };
     focusKey.current = copy.key;
     setItems(l => { const i = l.findIndex(x => x.key === it.key); const n = l.slice(); n.splice(i + 1, 0, copy); return n; });
   };
@@ -244,9 +244,9 @@ function BranchStockEntry({ salesUrl, getToken, suppliers, branchEntries, onClos
     const used = new Set((branchEntries || []).map(r => String(r.productNo || '').trim()).filter(Boolean));
     finalItems.forEach(it => { if (it.productNo.trim()) used.add(it.productNo.trim()); });
     const payloadItems = finalItems.map(it => {
-      // Lots: the server names the item and sets its code (TEMPER-D8) from the category
+      // Lots: the server names the item from the category; the code is the one typed, else TEMPER-D8
       if (it.type === 'lot') {
-        return { lotType: it.lotType, lotCategory: it.lotCategory, qty: qtyOf(it), costPrice: LS.lotUnitCost(it.lotAmount, qtyOf(it)), imes: [] };
+        return { lotType: it.lotType, lotCategory: it.lotCategory, productNo: String(it.productNo || '').trim(), qty: qtyOf(it), costPrice: LS.lotUnitCost(it.lotAmount, qtyOf(it)), imes: [] };
       }
       let productNo = it.productNo.trim();
       if (!productNo) { productNo = bseNextProductNo(used); used.add(productNo); }
@@ -431,6 +431,13 @@ function BranchStockEntry({ salesUrl, getToken, suppliers, branchEntries, onClos
                           onChange={e => patch(it.key, { lotType: e.target.value, lotCategory: '' })}>
                           {LS.LOT_TYPES.map(t => <option key={t.key} value={t.key}>{t.label}</option>)}
                         </select>
+                      </div>
+                      <div className="bse-f">
+                        <label htmlFor={'lp-' + it.key}>Product Code</label>
+                        <input id={'lp-' + it.key} className="bse-in" value={it.productNo} maxLength={60}
+                          placeholder={cat ? cat.productNo : 'Optional'}
+                          onChange={e => patch(it.key, { productNo: e.target.value })} />
+                        <div className="bse-hint">{it.productNo.trim() ? '' : 'Blank = category code'}</div>
                       </div>
                       <div className="bse-f">
                         <label htmlFor={'lc-' + it.key}>Category <span className="req">*</span>

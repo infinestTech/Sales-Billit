@@ -149,6 +149,12 @@ const { allUpdateEstimatedCost } = require("../controllers/api/allUpdateEstimate
 router.post("/allUpdateEstimatedCost", authenticateToken, allUpdateEstimatedCost);
 
 
+const { updateClientMobile } = require("../controllers/api/updateClientMobileController");
+
+
+router.post("/updateClientMobile", authenticateToken, updateClientMobile);
+
+
 const { sendBalanceReminder } = require("../controllers/api/sendBalanceReminderController");
 
 

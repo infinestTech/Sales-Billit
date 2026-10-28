@@ -11,7 +11,7 @@ const FIELD_TO_EVENT = {
 
 
 const toggleMobileStatus = async (req, res) => {
-  const { id, field, skipWhatsapp, hasWarranty, warrantyMonths } = req.body;
+  const { id, field, skipWhatsapp, hasWarranty, warrantyMonths, warrantyNote } = req.body;
 
 
   if (!id || !field) {
@@ -93,11 +93,13 @@ const toggleMobileStatus = async (req, res) => {
           warrantyApplies && months > 0
             ? new Date(new Date().setMonth(new Date().getMonth() + months))
             : null;
+        updateData.warranty_note = warrantyApplies ? String(warrantyNote || "").trim().slice(0, 300) : "";
       } else {
         // Undoing delivery — clear the warranty that was recorded for it
         updateData.has_warranty = false;
         updateData.warranty_months = null;
         updateData.warranty_expiry_date = null;
+        updateData.warranty_note = "";
       }
     } else if (field === "ready") {
       const newValue = !prev.ready;

@@ -10,6 +10,9 @@ export default function CreateBranch({ salesUrl, token, planId, branchLimit: pro
   const [error, setError] = React.useState('');
   const [page, setPage] = React.useState(1);
   const [pageSize] = React.useState(10);
+  const [editingId, setEditingId] = React.useState(null); // branch being edited in the form above the list
+  const [deletingId, setDeletingId] = React.useState(null);
+  const formRef = React.useRef(null);
 
   const onChange = (e) => {
     const { name, value } = e.target;
@@ -44,16 +47,51 @@ export default function CreateBranch({ salesUrl, token, planId, branchLimit: pro
     loadPlanLimits();
   }, []);
 
+  const emptyForm = { name: '', address: '', gstNo: '', phoneNumber: '', email: '', password: '', confirmPassword: '' };
+
+  const startEdit = (r) => {
+    setError('');
+    setEditingId(r._id);
+    setForm({ name: r.name || '', address: r.address || '', gstNo: r.gstNo || '', phoneNumber: r.phoneNumber || '', email: r.email || '', password: '', confirmPassword: '' });
+    formRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  };
+
+  const cancelEdit = () => {
+    setEditingId(null);
+    setError('');
+    setForm(emptyForm);
+  };
+
+  const removeBranch = async (r) => {
+    if (!window.confirm(`Delete branch "${r.name}"?\n\nIts login stops working. Past sales and supplies stay in your reports. A branch that still holds stock cannot be deleted.`)) return;
+    setError('');
+    setDeletingId(r._id);
+    try {
+      const res = await fetch(salesUrl + '/api/branches/' + encodeURIComponent(r._id), {
+        method: 'DELETE',
+        headers: { Authorization: 'Bearer ' + token },
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || !data.success) throw new Error(data.message || 'Delete failed');
+      if (editingId === r._id) cancelEdit();
+      await loadBranches();
+    } catch (e) {
+      setError(e.message);
+    } finally {
+      setDeletingId(null);
+    }
+  };
+
   const submit = async (e) => {
     e.preventDefault();
     setError('');
     if (form.password !== form.confirmPassword) return setError('Passwords do not match');
-    if (rows.length >= branchLimit) return setError('Branch limit reached for your plan');
-    
+    if (!editingId && rows.length >= branchLimit) return setError('Branch limit reached for your plan');
+
     // Check if email already exists in the current branches list
     const normalizedEmail = (form.email || '').toLowerCase().trim();
-    const emailExists = rows.some(branch => 
-      (branch.email || '').toLowerCase().trim() === normalizedEmail
+    const emailExists = rows.some(branch =>
+      branch._id !== editingId && (branch.email || '').toLowerCase().trim() === normalizedEmail
     );
     
     if (emailExists) {
@@ -62,8 +100,8 @@ export default function CreateBranch({ salesUrl, token, planId, branchLimit: pro
     
     setSaving(true);
     try {
-      const res = await fetch(salesUrl + '/api/branches', {
-        method: 'POST',
+      const res = await fetch(salesUrl + '/api/branches' + (editingId ? '/' + encodeURIComponent(editingId) : ''), {
+        method: editingId ? 'PUT' : 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token },
         body: JSON.stringify({
           name: form.name,
@@ -75,8 +113,9 @@ export default function CreateBranch({ salesUrl, token, planId, branchLimit: pro
         }),
       });
       const data = await res.json();
-      if (!res.ok || !data.success) throw new Error(data.message || 'Create failed');
-      setForm({ name: '', address: '', gstNo: '', phoneNumber: '', email: '', password: '', confirmPassword: '' });
+      if (!res.ok || !data.success) throw new Error(data.message || (editingId ? 'Update failed' : 'Create failed'));
+      setEditingId(null);
+      setForm(emptyForm);
       await loadBranches();
     } catch (e) {
       setError(e.message);
@@ -131,11 +170,11 @@ export default function CreateBranch({ salesUrl, token, planId, branchLimit: pro
       </div>
 
       {/* Create Branch Form */}
-      <div className="card">
+      <div className="card" ref={formRef}>
         <div className="card-header">
           <div>
-            <h3 className="card-title">Create New Branch</h3>
-            <p className="card-description">Add a new branch location to expand your business</p>
+            <h3 className="card-title">{editingId ? 'Edit Branch' : 'Create New Branch'}</h3>
+            <p className="card-description">{editingId ? 'Update the branch details. Leave the password blank to keep the current one.' : 'Add a new branch location to expand your business'}</p>
           </div>
         </div>
         
@@ -189,28 +228,28 @@ export default function CreateBranch({ salesUrl, token, planId, branchLimit: pro
             </div>
             
             <div className="form-group">
-              <label className="form-label required">Password</label>
-              <input 
-                name="password" 
-                type="password" 
-                value={form.password} 
-                onChange={onChange} 
-                placeholder="Secure password" 
+              <label className={'form-label' + (editingId ? '' : ' required')}>Password</label>
+              <input
+                name="password"
+                type="password"
+                value={form.password}
+                onChange={onChange}
+                placeholder={editingId ? 'Leave blank to keep current' : 'Secure password'}
                 className="form-input"
-                required
+                required={!editingId}
               />
             </div>
             
             <div className="form-group">
-              <label className="form-label required">Confirm Password</label>
-              <input 
-                name="confirmPassword" 
-                type="password" 
-                value={form.confirmPassword} 
-                onChange={onChange} 
-                placeholder="Confirm password" 
+              <label className={'form-label' + (editingId ? '' : ' required')}>Confirm Password</label>
+              <input
+                name="confirmPassword"
+                type="password"
+                value={form.confirmPassword}
+                onChange={onChange}
+                placeholder={editingId ? 'Leave blank to keep current' : 'Confirm password'}
                 className="form-input"
-                required
+                required={!editingId}
               />
             </div>
 
@@ -230,15 +269,20 @@ export default function CreateBranch({ salesUrl, token, planId, branchLimit: pro
             <button 
               className="btn btn-primary" 
               type="submit" 
-              disabled={saving || rows.length >= branchLimit}
+              disabled={saving || (!editingId && rows.length >= branchLimit)}
             >
               {saving ? (
                 <span className="loading">
                   <span className="spinner"></span>
-                  Creating...
+                  {editingId ? 'Saving...' : 'Creating...'}
                 </span>
-              ) : '+ Create Branch'}
+              ) : (editingId ? 'Save Changes' : '+ Create Branch')}
             </button>
+            {editingId && (
+              <button className="btn btn-secondary" type="button" onClick={cancelEdit} disabled={saving}>
+                Cancel
+              </button>
+            )}
             
             <div style={{ 
               alignSelf: 'center', 
@@ -291,7 +335,7 @@ export default function CreateBranch({ salesUrl, token, planId, branchLimit: pro
                     <th>GST No</th>
                     
                     <th>Status</th>
-                   
+                    <th style={{width: '190px'}}>Actions</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -309,6 +353,16 @@ export default function CreateBranch({ salesUrl, token, planId, branchLimit: pro
                       <td>{r.gstNo || '-'}</td>
                       <td>
                         <span className="status-badge success">Active</span>
+                      </td>
+                      <td>
+                        <div style={{ display: 'flex', gap: '8px' }}>
+                          <button className="btn btn-outline btn-sm" type="button" onClick={() => startEdit(r)} disabled={deletingId === r._id}>
+                            ✏️ Edit
+                          </button>
+                          <button className="btn btn-danger btn-sm" type="button" onClick={() => removeBranch(r)} disabled={deletingId === r._id}>
+                            {deletingId === r._id ? 'Deleting...' : '🗑 Delete'}
+                          </button>
+                        </div>
                       </td>
                     </tr>
                   ))}

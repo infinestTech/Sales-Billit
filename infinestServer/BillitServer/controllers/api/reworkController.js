@@ -53,7 +53,7 @@ const searchDeliveredMobiles = async (req, res) => {
 
     const mobiles = await Mobile.find(mobileFilters)
       .select(
-        "mobile_name model imei issue technician_name added_date delivery_date has_warranty warranty_months warranty_expiry_date productName supplierName customer_id dealer_id"
+        "mobile_name model imei issue technician_name added_date delivery_date has_warranty warranty_months warranty_expiry_date warranty_note productName supplierName customer_id dealer_id"
       )
       .sort({ delivery_date: -1 })
       .limit(200);
@@ -85,6 +85,7 @@ const searchDeliveredMobiles = async (req, res) => {
           has_warranty: m.has_warranty || false,
           warranty_months: m.warranty_months || null,
           warranty_expiry_date: m.warranty_expiry_date || null,
+          warranty_note: m.warranty_note || "",
           productName: m.productName || "",
           supplierName: m.supplierName || "",
           client_name: client?.client_name || "N/A",
@@ -139,6 +140,7 @@ const addReworkRecord = async (req, res) => {
       has_warranty: mobile.has_warranty || false,
       warranty_months: mobile.warranty_months || null,
       warranty_expiry_date: mobile.warranty_expiry_date || null,
+      warranty_note: mobile.warranty_note || "",
       productName: mobile.productName || "",
       supplierName: mobile.supplierName || "",
       complaint: complaint.trim(),

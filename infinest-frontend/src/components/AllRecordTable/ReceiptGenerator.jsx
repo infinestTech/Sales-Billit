@@ -27,6 +27,9 @@ const formatWarranty = (mobile) => {
   return `${months ? `${months} Month${months === 1 ? "" : "s"}` : "Yes"}${expiry ? ` (till ${expiry})` : ""}`;
 };
 
+// What the warranty covers ("Display only"), entered when the device was marked Delivered
+const warrantyNote = (mobile) => (mobile?.has_warranty ? String(mobile.warranty_note || "").trim() : "");
+
 const RECEIPT_TYPE_OPTIONS = [
   { id: "a4", label: "A4 Invoice", description: "Full-page invoice with warranty & terms", icon: FileText },
   { id: "jobcard", label: "Job Card", description: "A5 landscape service job card", icon: Smartphone },
@@ -869,7 +872,12 @@ const A4Receipt = ({ clientData, mobiles, shopPhoneNumber, shopAddress, shopEmai
                 <td style={cell}>{mobile.issue || '-'}</td>
                 <td style={cell}>{mobile.added_date ? new Date(mobile.added_date).toLocaleDateString('en-IN') : '-'}</td>
                 <td style={cell}>{mobile.delivery_date ? new Date(mobile.delivery_date).toLocaleDateString('en-IN') : '-'}</td>
-                <td style={{ ...cell, color: mobile.has_warranty ? '#166534' : '#888', fontWeight: mobile.has_warranty ? 600 : 400, whiteSpace: 'nowrap' }}>{formatWarranty(mobile)}</td>
+                <td style={{ ...cell, color: mobile.has_warranty ? '#166534' : '#888', fontWeight: mobile.has_warranty ? 600 : 400, whiteSpace: 'nowrap' }}>
+                  {formatWarranty(mobile)}
+                  {warrantyNote(mobile) && (
+                    <div style={{ whiteSpace: 'normal', fontWeight: 400, color: '#333', fontSize: '0.92em', marginTop: 2, maxWidth: 180 }}>For: {warrantyNote(mobile)}</div>
+                  )}
+                </td>
                 <td style={{ ...cell, textAlign: 'right' }}>₹{paid}</td>
               </tr>
             );
@@ -1368,6 +1376,7 @@ const ReceiptGenerator = ({ clientData, shopPhoneNumber, closeModal, shopAddress
                         {mobile.has_warranty ? (
                           <span className="flex items-center gap-1 text-emerald-600 font-medium">
                             <ShieldCheck size={14} /> {formatWarranty(mobile)}
+                            {warrantyNote(mobile) && <span className="font-normal text-gray-600">· For: {warrantyNote(mobile)}</span>}
                           </span>
                         ) : (
                           <span className="flex items-center gap-1 text-gray-400">

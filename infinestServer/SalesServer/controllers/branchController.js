@@ -125,4 +125,77 @@ const toggleBranchAdmin = async (req, res) => {
   }
 };
 
-module.exports = { createBranch, listBranches, toggleBranchAdmin };
+// Only the shop owner (shop-admin / owner Sales token) may edit or delete branches, never a branch login
+const isOwner = (req) => !!(req.user && req.user.shop_id && !req.user.branch_id);
+const validId = (id) => require('mongoose').isValidObjectId(id);
+
+// PUT /api/branches/:id — name, address, phone, email, GST No; password only when a new one is given
+const updateBranch = async (req, res) => {
+  try {
+    if (!isOwner(req)) return res.status(403).json({ success: false, message: 'Only the shop owner can edit branches' });
+    if (!validId(req.params.id)) return res.status(404).json({ success: false, message: 'Branch not found' });
+    const doc = await Branch.findOne({ _id: req.params.id, shop_id: req.user.shop_id });
+    if (!doc) return res.status(404).json({ success: false, message: 'Branch not found' });
+
+    const body = req.body || {};
+    const name = String(body.name || '').trim();
+    const email = String(body.email || '').toLowerCase().trim();
+    if (!name || !email) return res.status(400).json({ success: false, message: 'name and email are required' });
+    if (email !== doc.email) {
+      const taken = await Branch.findOne({ shop_id: req.user.shop_id, email, _id: { $ne: doc._id } }).select('_id').lean();
+      if (taken) return res.status(400).json({ success: false, message: 'A branch with this email already exists' });
+    }
+
+    doc.name = name;
+    doc.email = email;
+    doc.address = String(body.address || '').trim();
+    doc.phoneNumber = String(body.phoneNumber || '').trim();
+    doc.gstNo = String(body.gstNo || '').trim();
+    if (body.password) doc.passwordHash = crypto.createHash('sha256').update(String(body.password)).digest('hex');
+    doc.updatedBy = req.user.userId || '';
+    await doc.save();
+    return res.json({ success: true, branch: doc });
+  } catch (err) {
+    console.error('Update branch error:', err.message);
+    if (err.code === 11000) return res.status(400).json({ success: false, message: 'A branch with this email already exists in your shop' });
+    return res.status(500).json({ success: false, message: err.message });
+  }
+};
+
+// DELETE /api/branches/:id — refused while the branch still holds stock, so no inventory disappears.
+// Sales, supplies and expenses stay on record for reports; the branch login stops working.
+const deleteBranch = async (req, res) => {
+  try {
+    if (!isOwner(req)) return res.status(403).json({ success: false, message: 'Only the shop owner can delete branches' });
+    if (!validId(req.params.id)) return res.status(404).json({ success: false, message: 'Branch not found' });
+    const doc = await Branch.findOne({ _id: req.params.id, shop_id: req.user.shop_id });
+    if (!doc) return res.status(404).json({ success: false, message: 'Branch not found' });
+
+    const BranchStock = require('../models/branchStock');
+    const filter = { shop_id: String(req.user.shop_id), branch_id: String(doc._id) };
+    const held = await BranchStock.aggregate([
+      { $match: { ...filter, qty: { $gt: 0 } } },
+      { $group: { _id: null, products: { $sum: 1 }, units: { $sum: '$qty' } } },
+    ]);
+    if (held.length && held[0].units > 0) {
+      return res.status(409).json({
+        success: false,
+        message: `${doc.name} still holds ${held[0].units} unit(s) of ${held[0].products} product(s). Sell or move that stock before deleting the branch.`,
+      });
+    }
+
+    await BranchStock.deleteMany(filter);
+    await Branch.deleteOne({ _id: doc._id });
+    // Keep one admin branch: the oldest remaining one takes over
+    if (doc.isAdmin) {
+      const next = await Branch.findOne({ shop_id: req.user.shop_id }).sort({ createdAt: 1 });
+      if (next && !next.isAdmin) { next.isAdmin = true; await next.save(); }
+    }
+    return res.json({ success: true });
+  } catch (err) {
+    console.error('Delete branch error:', err.message);
+    return res.status(500).json({ success: false, message: err.message });
+  }
+};
+
+module.exports = { createBranch, listBranches, toggleBranchAdmin, updateBranch, deleteBranch };

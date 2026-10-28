@@ -6,7 +6,7 @@ const InStock = require('../models/inStock');
 const BranchStock = require('../models/branchStock');
 const { cleanImeis, cleanRowImeis } = require('../utils/imei');
 const {
-  loadLotCategories, resolveLotRef, isLotType, normalizeLotName, lotProductNo, lotProductName, branchLotProductId, withLotRanges,
+  loadLotCategories, resolveLotRef, isLotType, normalizeLotName, normalizeLotCode, lotProductNo, lotProductName, branchLotProductId, withLotRanges,
 } = require('../utils/lotStock');
 
 // Stock rows sent to clients: placeholder IMEIs dropped, and no selling price — sales are priced at the POS
@@ -93,10 +93,11 @@ exports.createBranchSupply = async (req, res) => {
         if (!i) continue;
         let lotType = i.lotType || '';
         let lotCategory = i.lotCategory || '';
+        let lotCode = normalizeLotCode(i.productNo);
         const fromCentral = !lotType && !!i.productId;
         if (fromCentral) {
           const c = await centralItemOf(i.productId);
-          if (c && c.lotType) { lotType = c.lotType; lotCategory = c.lotCategory; }
+          if (c && c.lotType) { lotType = c.lotType; lotCategory = c.lotCategory; lotCode = normalizeLotCode(c.productNo); }
         }
         if (!lotType) { delete i.lotType; delete i.lotCategory; continue; }
         const ref = resolveLotRef(lotCategories, lotType, lotCategory);
@@ -107,10 +108,11 @@ exports.createBranchSupply = async (req, res) => {
         if (!(Number(i.qty) >= 1)) return res.status(400).json({ success: false, message: `Quantity is required for ${lotProductName(lotType, name)}` });
         i.lotType = lotType;
         i.lotCategory = name;
-        i.productNo = lotProductNo(lotType, name);
+        // The purchase's own product code when given, else the category's TEMPER-D8; one branch row per code
+        i.productNo = lotCode || lotProductNo(lotType, name);
         i.productName = lotProductName(lotType, name);
         i.imes = [];
-        i.lotRowId = branchLotProductId(branch_id, lotType, name);
+        i.lotRowId = branchLotProductId(branch_id, lotType, i.productNo);
         if (!i.productId) i.productId = i.lotRowId; // branch purchase: its supply line points at the branch row
       }
     }
@@ -219,9 +221,9 @@ exports.createBranchSupply = async (req, res) => {
     const successfulItems = [];
     for (const it of prepared) {
       try {
-      // A lot tops up the branch's single row for its category (whatever the source); other items key on productId
+      // A lot tops up the branch's row for its category + product code (whatever the source); other items key on productId
       const filter = it.lotType
-        ? { shop_id: String(shop_id), branch_id: String(branch_id), lotType: it.lotType, lotCategory: it.lotCategory }
+        ? { shop_id: String(shop_id), branch_id: String(branch_id), lotType: it.lotType, lotCategory: it.lotCategory, productNo: it.productNo }
         : { shop_id: String(shop_id), branch_id: String(branch_id), productId: String(it.productId) };
       const setObj = {
         productNo: it.productNo || '',

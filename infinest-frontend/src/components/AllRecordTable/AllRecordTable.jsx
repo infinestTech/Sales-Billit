@@ -21,6 +21,9 @@ import {
   Package,
   Calculator,
   MessageCircle,
+  Pencil,
+  Check,
+  X,
 } from "lucide-react"
 import StatCard from "@/components/ui/StatCard"
 
@@ -71,6 +74,8 @@ const AllRecordTable = ({ shopId, filterDate }) => {
   const [totals, setTotals] = useState(EMPTY_TOTALS)
   const [shopOwnerName, setShopOwnerName] = useState("")
 const [shopAddressState, setShopAddressState] = useState("")
+  // Inline edit of a client's mobile number: { id, value, saving, error }
+  const [phoneEdit, setPhoneEdit] = useState(null)
 
 
   const openReceiptModal = (client) => {
@@ -247,6 +252,38 @@ const [shopAddressState, setShopAddressState] = useState("")
       console.warn(response.data.message)
     } catch (error) {
       console.error("Error updating estimated cost:", error)
+    }
+  }
+
+  const saveMobileNumber = async (invoice) => {
+    const value = (phoneEdit?.value || "").replace(/[\s-]/g, "")
+    if (value === invoice.mobile_number) {
+      setPhoneEdit(null)
+      return
+    }
+    if (!/^\+?\d{10,15}$/.test(value)) {
+      setPhoneEdit((p) => ({ ...p, error: "Enter 10-15 digits" }))
+      return
+    }
+    setPhoneEdit((p) => ({ ...p, saving: true, error: "" }))
+    try {
+      const token = localStorage.getItem("token")
+      const { data } = await api.post(
+        "/api/updateClientMobile",
+        { id: invoice._id, type: invoice.customer_type || "Customer", mobileNumber: value },
+        { headers: { Authorization: `Bearer ${token}` } },
+      )
+      setFilteredInvoices((prev) =>
+        prev.map((inv) =>
+          inv._id === invoice._id
+            ? { ...inv, mobile_number: data.mobile_number, whatsapp_number: data.whatsapp_number ?? inv.whatsapp_number }
+            : inv,
+        ),
+      )
+      setPhoneEdit(null)
+    } catch (error) {
+      const msg = error.response?.data?.message || "Could not update"
+      setPhoneEdit((p) => (p ? { ...p, saving: false, error: msg } : p))
     }
   }
 
@@ -436,8 +473,62 @@ const [shopAddressState, setShopAddressState] = useState("")
                             )}
                           </div>
                         </td>
-                        <td className="px-6 py-4 border-b border-gray-200">
-                          <span className="font-medium text-gray-700">{invoice.mobile_number}</span>
+                        <td className="px-6 py-4 border-b border-gray-200" onClick={(e) => e.stopPropagation()}>
+                          {phoneEdit?.id === invoice._id ? (
+                            <div>
+                              <div className="flex items-center gap-1">
+                                <input
+                                  type="tel"
+                                  inputMode="numeric"
+                                  autoFocus
+                                  maxLength={16}
+                                  value={phoneEdit.value}
+                                  disabled={phoneEdit.saving}
+                                  onChange={(e) => {
+                                    const v = e.target.value
+                                    if (/^\+?[\d\s-]*$/.test(v)) setPhoneEdit((p) => ({ ...p, value: v, error: "" }))
+                                  }}
+                                  onKeyDown={(e) => {
+                                    if (e.key === "Enter") saveMobileNumber(invoice)
+                                    if (e.key === "Escape") setPhoneEdit(null)
+                                  }}
+                                  className="w-32 px-2 py-1.5 border border-blue-400 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                />
+                                <button
+                                  type="button"
+                                  title="Save"
+                                  disabled={phoneEdit.saving}
+                                  onClick={() => saveMobileNumber(invoice)}
+                                  className="inline-flex items-center justify-center w-7 h-7 rounded-md bg-green-600 hover:bg-green-700 text-white disabled:opacity-50"
+                                >
+                                  <Check className="h-4 w-4" />
+                                </button>
+                                <button
+                                  type="button"
+                                  title="Cancel"
+                                  disabled={phoneEdit.saving}
+                                  onClick={() => setPhoneEdit(null)}
+                                  className="inline-flex items-center justify-center w-7 h-7 rounded-md bg-gray-100 hover:bg-gray-200 text-gray-600"
+                                >
+                                  <X className="h-4 w-4" />
+                                </button>
+                              </div>
+                              {phoneEdit.error && <p className="mt-1 text-xs text-red-600">{phoneEdit.error}</p>}
+                            </div>
+                          ) : (
+                            <div className="group flex items-center gap-2">
+                              <span className="font-medium text-gray-700">{invoice.mobile_number}</span>
+                              <button
+                                type="button"
+                                title="Edit mobile number"
+                                aria-label="Edit mobile number"
+                                onClick={() => setPhoneEdit({ id: invoice._id, value: invoice.mobile_number || "", saving: false, error: "" })}
+                                className="inline-flex items-center justify-center w-7 h-7 rounded-md text-gray-400 hover:text-blue-600 hover:bg-blue-50 transition-colors"
+                              >
+                                <Pencil className="h-3.5 w-3.5" />
+                              </button>
+                            </div>
+                          )}
                         </td>
                         <td className="px-6 py-4 border-b border-gray-200">
                           <span className="inline-flex items-center px-3 py-1 rounded-full text-sm font-semibold bg-purple-100 text-purple-800">
@@ -609,6 +700,7 @@ const [shopAddressState, setShopAddressState] = useState("")
                   has_warranty: m.has_warranty || false,
                   warranty_months: m.warranty_months || null,
                   warranty_expiry_date: m.warranty_expiry_date || null,
+                  warranty_note: m.warranty_note || "",
                 })),  
           }}
           shopPhoneNumber={shopPhoneNumberState}

@@ -27,6 +27,7 @@ export default function AllRecordsPanel({ currentShopId }) {
   const [warrantyHasInput, setWarrantyHasInput] = useState(null); // true | false | null (undecided)
   const [warrantyMonthsInput, setWarrantyMonthsInput] = useState(6); // 3 | 6 | "custom"
   const [warrantyCustomMonths, setWarrantyCustomMonths] = useState("");
+  const [warrantyNoteInput, setWarrantyNoteInput] = useState(""); // what the warranty covers, printed on bills
 
   const fetchPage = async (tabVal, pageVal, qVal) => {
     setLoading(true);
@@ -63,6 +64,7 @@ export default function AllRecordsPanel({ currentShopId }) {
       setWarrantyHasInput(null);
       setWarrantyMonthsInput(6);
       setWarrantyCustomMonths("");
+      setWarrantyNoteInput("");
       setWarrantyModal(mobileId);
       return;
     }
@@ -77,7 +79,7 @@ export default function AllRecordsPanel({ currentShopId }) {
     if (warrantyHasInput === true) {
       const months = warrantyMonthsInput === "custom" ? Number(warrantyCustomMonths) : Number(warrantyMonthsInput);
       if (!months || months <= 0) return;
-      extra = { hasWarranty: true, warrantyMonths: months };
+      extra = { hasWarranty: true, warrantyMonths: months, warrantyNote: warrantyNoteInput.trim() };
     } else {
       extra = { hasWarranty: false, warrantyMonths: null };
     }
@@ -288,6 +290,17 @@ export default function AllRecordsPanel({ currentShopId }) {
                   className="mt-2"
                 />
               )}
+              <div className="mt-3">
+                <label className="block text-xs font-medium text-gray-700 mb-1">Warranty covers <span className="font-normal text-gray-400">(optional, printed on the bill)</span></label>
+                <textarea
+                  rows={2}
+                  maxLength={300}
+                  value={warrantyNoteInput}
+                  onChange={(e) => setWarrantyNoteInput(e.target.value)}
+                  placeholder="e.g. Display replacement only, not physical or water damage"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm resize-none focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                />
+              </div>
             </div>
           )}
 

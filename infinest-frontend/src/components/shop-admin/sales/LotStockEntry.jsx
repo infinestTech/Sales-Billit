@@ -19,7 +19,7 @@ const LSE_CSS = `
 .lse-grid{display:grid;gap:12px}
 .lse-g-bill{grid-template-columns:2fr 1fr 1fr}
 .lse-g-pay{grid-template-columns:1fr 1fr;margin-top:12px}
-.lse-g-line{grid-template-columns:1fr 1.4fr 0.8fr 1fr auto;align-items:start}
+.lse-g-line{grid-template-columns:1fr 1fr 1.4fr 0.8fr 1fr auto;align-items:start}
 .lse-f label{display:block;font-size:12px;font-weight:600;color:#475569;margin-bottom:5px}
 .lse-f label .req{color:#ef4444}
 .lse-in{width:100%;box-sizing:border-box;height:40px;padding:0 10px;border:1.5px solid #e2e8f0;border-radius:9px;font-size:14px;color:#0f172a;background:#fff;outline:none}
@@ -53,7 +53,7 @@ const LSE_CSS = `
 `;
 
 let lseSeq = 0;
-const newLine = (lotType) => ({ key: "l" + ++lseSeq, lotType: lotType || "temper", lotCategory: "", qty: "", amount: "" });
+const newLine = (lotType) => ({ key: "l" + ++lseSeq, lotType: lotType || "temper", lotCategory: "", productNo: "", qty: "", amount: "" });
 const num = (v) => { const n = Number(v); return Number.isFinite(n) ? n : 0; };
 const money = (n) => new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR", maximumFractionDigits: 2 }).format(num(n));
 const today = () => new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Kolkata" });
@@ -105,7 +105,7 @@ export default function LotStockEntry({ salesUrl, token, suppliers = [], onClose
           category: "Accessories",
           items: lines.map((l) => {
             const qty = Math.floor(num(l.qty));
-            return { lotType: l.lotType, lotCategory: l.lotCategory, quantity: qty, costPrice: LS.lotUnitCost(l.amount, qty), imes: [] };
+            return { lotType: l.lotType, lotCategory: l.lotCategory, productNo: String(l.productNo || "").trim(), quantity: qty, costPrice: LS.lotUnitCost(l.amount, qty), imes: [] };
           }),
         }),
       });
@@ -191,6 +191,13 @@ export default function LotStockEntry({ salesUrl, token, suppliers = [], onClose
                     <select id={"lt-" + l.key} className="lse-in" value={l.lotType} onChange={(e) => patch(l.key, { lotType: e.target.value, lotCategory: "" })}>
                       {LS.LOT_TYPES.map((t) => <option key={t.key} value={t.key}>{t.label}</option>)}
                     </select>
+                  </div>
+                  <div className="lse-f">
+                    <label htmlFor={"lp-" + l.key}>Product Code</label>
+                    <input id={"lp-" + l.key} className="lse-in" value={l.productNo} maxLength={60}
+                      placeholder={cat ? cat.productNo : "Optional"}
+                      onChange={(e) => patch(l.key, { productNo: e.target.value })} />
+                    <div className="lse-hint">{l.productNo.trim() ? "" : "Blank = category code"}</div>
                   </div>
                   <div className="lse-f">
                     <label htmlFor={"lc-" + l.key}>Category <span className="req">*</span>

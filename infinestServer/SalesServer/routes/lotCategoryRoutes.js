@@ -39,12 +39,12 @@ router.post('/api/lot-categories', requireUser, async (req, res) => {
     const body = req.body || {};
     if (!isLotType(body.type)) return res.status(400).json({ success: false, message: 'Type must be temper or pouch' });
     const name = normalizeLotName(body.name);
-    if (!name) return res.status(400).json({ success: false, message: 'Category name: letters, digits, spaces or "-" (max 20)' });
+    if (!name) return res.status(400).json({ success: false, message: 'Enter a category name' });
     const range = parseRange(body);
     if (range.error) return res.status(400).json({ success: false, message: range.error });
 
     const list = await loadLotCategories(req.user.shop_id);
-    if (list.some((c) => c.type === body.type && c.name === name)) {
+    if (list.some((c) => c.type === body.type && String(c.name).toLowerCase() === name.toLowerCase())) {
       return res.status(409).json({ success: false, message: `${LOT_TYPES[body.type].label} category ${name} already exists` });
     }
     const category = { id: crypto.randomBytes(6).toString('hex'), type: body.type, name, ...range };
