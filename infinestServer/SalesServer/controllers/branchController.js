@@ -96,6 +96,8 @@ const createBranch = async (req, res) => {
 const listBranches = async (req, res) => {
   try {
     const list = await Branch.find({ shop_id: req.user.shop_id }).sort({ createdAt: -1 }).lean();
+    const stock = await stockByBranch(req.user.shop_id, list.map((b) => b._id)).catch(() => ({}));
+    list.forEach((b) => { b.stock = stock[String(b._id)] || { units: 0, products: 0, value: 0 }; });
     res.json({ success: true, branches: list });
   } catch (err) {
     console.error('List branches error:', err.message);
@@ -162,7 +164,25 @@ const updateBranch = async (req, res) => {
   }
 };
 
-// DELETE /api/branches/:id — refused while the branch still holds stock, so no inventory disappears.
+// Units, product rows and cost value of the stock each branch holds: { [branchId]: { units, products, value } }
+const stockByBranch = async (shopId, branchIds) => {
+  const BranchStock = require('../models/branchStock');
+  const rows = await BranchStock.aggregate([
+    { $match: { shop_id: String(shopId), branch_id: { $in: branchIds.map(String) }, qty: { $gt: 0 } } },
+    { $group: {
+      _id: '$branch_id',
+      products: { $sum: 1 },
+      units: { $sum: '$qty' },
+      value: { $sum: { $multiply: ['$qty', { $ifNull: ['$costPrice', 0] }] } },
+    } },
+  ]);
+  const out = {};
+  rows.forEach((r) => { out[r._id] = { units: r.units, products: r.products, value: Math.round(r.value * 100) / 100 }; });
+  return out;
+};
+
+// DELETE /api/branches/:id[?force=1] — a branch holding stock answers 409 with the stock summary so the
+// owner can be warned; with force=1 the branch is deleted together with that stock.
 // Sales, supplies and expenses stay on record for reports; the branch login stops working.
 const deleteBranch = async (req, res) => {
   try {
@@ -173,14 +193,14 @@ const deleteBranch = async (req, res) => {
 
     const BranchStock = require('../models/branchStock');
     const filter = { shop_id: String(req.user.shop_id), branch_id: String(doc._id) };
-    const held = await BranchStock.aggregate([
-      { $match: { ...filter, qty: { $gt: 0 } } },
-      { $group: { _id: null, products: { $sum: 1 }, units: { $sum: '$qty' } } },
-    ]);
-    if (held.length && held[0].units > 0) {
+    const force = ['1', 'true'].includes(String(req.query.force || '').toLowerCase());
+    const stock = (await stockByBranch(req.user.shop_id, [doc._id]))[String(doc._id)];
+    if (stock && stock.units > 0 && !force) {
       return res.status(409).json({
         success: false,
-        message: `${doc.name} still holds ${held[0].units} unit(s) of ${held[0].products} product(s). Sell or move that stock before deleting the branch.`,
+        needsConfirm: true,
+        stock,
+        message: `${doc.name} still holds ${stock.units} unit(s) of ${stock.products} product(s). Deleting the branch deletes this stock too.`,
       });
     }
 
@@ -191,7 +211,7 @@ const deleteBranch = async (req, res) => {
       const next = await Branch.findOne({ shop_id: req.user.shop_id }).sort({ createdAt: 1 });
       if (next && !next.isAdmin) { next.isAdmin = true; await next.save(); }
     }
-    return res.json({ success: true });
+    return res.json({ success: true, deletedStock: stock || { units: 0, products: 0, value: 0 } });
   } catch (err) {
     console.error('Delete branch error:', err.message);
     return res.status(500).json({ success: false, message: err.message });

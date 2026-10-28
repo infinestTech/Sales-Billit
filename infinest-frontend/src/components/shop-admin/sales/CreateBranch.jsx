@@ -1,23 +1,108 @@
 import React from 'react';
 
-export default function CreateBranch({ salesUrl, token, planId, branchLimit: propBranchLimit = 0 }) {
-  const [form, setForm] = React.useState({
-    name: '', address: '', gstNo: '', phoneNumber: '', email: '', password: '', confirmPassword: ''
-  });
-  const [rows, setRows] = React.useState([]);
-  const [branchLimit, setBranchLimit] = React.useState(propBranchLimit);
-  const [saving, setSaving] = React.useState(false);
-  const [error, setError] = React.useState('');
-  const [page, setPage] = React.useState(1);
-  const [pageSize] = React.useState(10);
-  const [editingId, setEditingId] = React.useState(null); // branch being edited in the form above the list
-  const [deletingId, setDeletingId] = React.useState(null);
-  const formRef = React.useRef(null);
+// Branch Management: usage overview, one card per branch (contact details + stock held), create/edit in a
+// modal, and a delete dialog that warns when the branch still holds stock (deleting removes that stock too).
 
-  const onChange = (e) => {
-    const { name, value } = e.target;
-    setForm((f) => ({ ...f, [name]: value }));
-  };
+const CB_CSS = `
+.cb{--cb-ink:#0f172a;--cb-mute:#64748b;--cb-line:#e2e8f0;--cb-soft:#f8fafc;--cb-pri:#4f46e5;--cb-pri-soft:#eef2ff;--cb-red:#dc2626;--cb-red-soft:#fef2f2;color:var(--cb-ink)}
+.cb *{box-sizing:border-box}
+.cb-top{display:flex;justify-content:space-between;align-items:flex-end;gap:16px;flex-wrap:wrap;margin-bottom:20px}
+.cb-h1{font-size:22px;font-weight:700;margin:0}
+.cb-sub{color:var(--cb-mute);font-size:14px;margin:4px 0 0}
+.cb-btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;border-radius:10px;padding:10px 16px;font-size:14px;font-weight:600;border:1px solid transparent;cursor:pointer;transition:background .15s,border-color .15s,opacity .15s;white-space:nowrap}
+.cb-btn:disabled{opacity:.5;cursor:not-allowed}
+.cb-btn-pri{background:var(--cb-pri);color:#fff}
+.cb-btn-pri:hover:not(:disabled){background:#4338ca}
+.cb-btn-ghost{background:#fff;color:#334155;border-color:var(--cb-line)}
+.cb-btn-ghost:hover:not(:disabled){background:var(--cb-soft)}
+.cb-btn-red{background:var(--cb-red);color:#fff}
+.cb-btn-red:hover:not(:disabled){background:#b91c1c}
+.cb-stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px;margin-bottom:20px}
+.cb-stat{background:#fff;border:1px solid var(--cb-line);border-radius:14px;padding:16px}
+.cb-stat-l{font-size:12px;font-weight:600;color:var(--cb-mute);text-transform:uppercase;letter-spacing:.04em}
+.cb-stat-v{font-size:24px;font-weight:700;margin-top:6px}
+.cb-stat-v small{font-size:14px;font-weight:500;color:var(--cb-mute)}
+.cb-bar{height:6px;border-radius:99px;background:#e2e8f0;margin-top:10px;overflow:hidden}
+.cb-bar>span{display:block;height:100%;background:var(--cb-pri);border-radius:99px}
+.cb-bar.full>span{background:#f59e0b}
+.cb-alert{display:flex;gap:10px;align-items:flex-start;border-radius:12px;padding:12px 14px;font-size:14px;margin-bottom:16px}
+.cb-alert-err{background:var(--cb-red-soft);color:#991b1b;border:1px solid #fecaca}
+.cb-alert-ok{background:#f0fdf4;color:#166534;border:1px solid #bbf7d0}
+.cb-alert button{margin-left:auto;background:none;border:0;color:inherit;cursor:pointer;font-size:16px;line-height:1}
+.cb-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:16px}
+.cb-card{background:#fff;border:1px solid var(--cb-line);border-radius:16px;padding:18px;display:flex;flex-direction:column;gap:14px;transition:box-shadow .15s,border-color .15s}
+.cb-card:hover{border-color:#c7d2fe;box-shadow:0 6px 20px rgba(15,23,42,.06)}
+.cb-card-h{display:flex;gap:12px;align-items:center}
+.cb-av{width:44px;height:44px;border-radius:12px;background:var(--cb-pri-soft);color:var(--cb-pri);display:flex;align-items:center;justify-content:center;font-weight:700;font-size:16px;flex-shrink:0}
+.cb-name{font-weight:700;font-size:16px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.cb-tags{display:flex;gap:6px;margin-top:3px;flex-wrap:wrap}
+.cb-tag{font-size:11px;font-weight:600;padding:2px 8px;border-radius:99px;background:#f1f5f9;color:#475569}
+.cb-tag.ok{background:#dcfce7;color:#166534}
+.cb-tag.main{background:var(--cb-pri-soft);color:var(--cb-pri)}
+.cb-info{display:grid;gap:7px;font-size:13px}
+.cb-info div{display:flex;gap:8px;color:#334155;min-width:0}
+.cb-info span:first-child{width:18px;flex-shrink:0;text-align:center;color:var(--cb-mute)}
+.cb-info span:last-child{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.cb-info .none{color:#94a3b8}
+.cb-stock{display:flex;justify-content:space-between;align-items:center;background:var(--cb-soft);border-radius:10px;padding:10px 12px;font-size:13px;color:var(--cb-mute)}
+.cb-stock b{color:var(--cb-ink);font-size:14px}
+.cb-actions{display:flex;gap:8px;margin-top:auto}
+.cb-actions .cb-btn{flex:1;padding:8px 12px}
+.cb-del{color:var(--cb-red) !important}
+.cb-del:hover:not(:disabled){background:var(--cb-red-soft) !important;border-color:#fecaca !important}
+.cb-empty{background:#fff;border:1px dashed #cbd5e1;border-radius:16px;padding:48px 20px;text-align:center}
+.cb-empty-i{font-size:36px}
+.cb-empty h3{margin:10px 0 4px;font-size:17px}
+.cb-empty p{color:var(--cb-mute);font-size:14px;margin:0 0 16px}
+.cb-ov{position:fixed;inset:0;background:rgba(15,23,42,.5);display:flex;align-items:center;justify-content:center;padding:16px;z-index:1000}
+.cb-modal{background:#fff;border-radius:18px;width:100%;max-width:640px;max-height:calc(100vh - 32px);display:flex;flex-direction:column;box-shadow:0 24px 60px rgba(15,23,42,.25)}
+.cb-modal.sm{max-width:460px}
+.cb-mh{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;padding:20px 22px 14px;border-bottom:1px solid var(--cb-line)}
+.cb-mh h3{margin:0;font-size:18px}
+.cb-mh p{margin:4px 0 0;color:var(--cb-mute);font-size:13px}
+.cb-x{background:#f1f5f9;border:0;border-radius:8px;width:32px;height:32px;cursor:pointer;font-size:16px;color:#475569;flex-shrink:0}
+.cb-mb{padding:18px 22px;overflow-y:auto}
+.cb-mf{display:flex;justify-content:flex-end;gap:10px;padding:14px 22px;border-top:1px solid var(--cb-line)}
+.cb-fgrid{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+.cb-f{display:flex;flex-direction:column;gap:6px}
+.cb-f.wide{grid-column:1/-1}
+.cb-f label{font-size:13px;font-weight:600;color:#334155}
+.cb-f label i{color:var(--cb-red);font-style:normal}
+.cb-f input{border:1px solid #cbd5e1;border-radius:10px;padding:10px 12px;font-size:14px;outline:none;width:100%;background:#fff;color:var(--cb-ink)}
+.cb-f input:focus{border-color:var(--cb-pri);box-shadow:0 0 0 3px rgba(79,70,229,.15)}
+.cb-sec{grid-column:1/-1;font-size:12px;font-weight:700;color:var(--cb-mute);text-transform:uppercase;letter-spacing:.05em;padding-top:4px}
+.cb-hint{font-size:12px;color:var(--cb-mute)}
+.cb-warn{background:var(--cb-red-soft);border:1px solid #fecaca;border-radius:12px;padding:14px;margin-top:14px}
+.cb-warn-t{font-weight:700;color:#991b1b;font-size:14px}
+.cb-warn-n{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin:12px 0}
+.cb-warn-n div{background:#fff;border-radius:8px;padding:8px;text-align:center;font-size:12px;color:var(--cb-mute)}
+.cb-warn-n b{display:block;font-size:16px;color:var(--cb-ink)}
+.cb-check{display:flex;gap:8px;align-items:flex-start;font-size:13px;color:#7f1d1d;cursor:pointer}
+.cb-check input{margin-top:2px;padding:0;accent-color:var(--cb-red);width:16px;height:16px;flex-shrink:0}
+.cb-list{margin:10px 0 0;padding-left:18px;color:#475569;font-size:13px;line-height:1.6}
+.cb-spin{width:14px;height:14px;border:2px solid rgba(255,255,255,.5);border-top-color:#fff;border-radius:50%;animation:cbspin .7s linear infinite}
+@keyframes cbspin{to{transform:rotate(360deg)}}
+@media (max-width:640px){.cb-fgrid{grid-template-columns:1fr}.cb-top .cb-btn{width:100%}}
+`;
+
+const emptyForm = { name: '', address: '', gstNo: '', phoneNumber: '', email: '', password: '', confirmPassword: '' };
+const money = (n) => '₹' + Math.round(Number(n) || 0).toLocaleString('en-IN');
+const initials = (name) => String(name || '?').trim().split(/\s+/).slice(0, 2).map((w) => w[0]).join('').toUpperCase() || '?';
+const stockOf = (r) => r.stock || { units: 0, products: 0, value: 0 };
+
+export default function CreateBranch({ salesUrl, token, planId, branchLimit: propBranchLimit = 0 }) {
+  const [rows, setRows] = React.useState([]);
+  const [loading, setLoading] = React.useState(true);
+  const [branchLimit, setBranchLimit] = React.useState(propBranchLimit);
+  const [error, setError] = React.useState('');
+  const [notice, setNotice] = React.useState('');
+  // Create/edit modal: null = closed, { id: null } = new branch, { id } = editing
+  const [editor, setEditor] = React.useState(null);
+  const [form, setForm] = React.useState(emptyForm);
+  const [formError, setFormError] = React.useState('');
+  const [saving, setSaving] = React.useState(false);
+  // Delete dialog: { branch, stock, ack, busy, error }
+  const [del, setDel] = React.useState(null);
 
   const loadBranches = async () => {
     try {
@@ -26,78 +111,74 @@ export default function CreateBranch({ salesUrl, token, planId, branchLimit: pro
       const data = await res.json();
       if (!res.ok) throw new Error(data.message || 'Failed to load branches');
       setRows(Array.isArray(data.branches) ? data.branches : []);
-      setPage(1);
     } catch (e) { setError(e.message); }
+    finally { setLoading(false); }
   };
 
   const loadPlanLimits = async () => {
     try {
       const res = await fetch(salesUrl + '/api/plan-limits');
       const data = await res.json();
-      if (res.ok && data.limits?.branches) {
-        setBranchLimit(data.limits.branches);
-      }
+      if (res.ok && data.limits?.branches) setBranchLimit(data.limits.branches);
     } catch (e) {
       console.error('Failed to fetch plan limits:', e);
     }
   };
 
-  React.useEffect(() => { 
-    loadBranches(); 
+  React.useEffect(() => {
+    loadBranches();
     loadPlanLimits();
   }, []);
 
-  const emptyForm = { name: '', address: '', gstNo: '', phoneNumber: '', email: '', password: '', confirmPassword: '' };
+  const limit = Number.isFinite(Number(branchLimit)) ? Number(branchLimit) : 0;
+  const atLimit = rows.length >= limit;
+  const totals = rows.reduce((t, r) => {
+    const s = stockOf(r);
+    t.units += Number(s.units) || 0;
+    t.value += Number(s.value) || 0;
+    return t;
+  }, { units: 0, value: 0 });
 
-  const startEdit = (r) => {
-    setError('');
-    setEditingId(r._id);
-    setForm({ name: r.name || '', address: r.address || '', gstNo: r.gstNo || '', phoneNumber: r.phoneNumber || '', email: r.email || '', password: '', confirmPassword: '' });
-    formRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-  };
+  // Esc closes whichever dialog is open (not while a request is running)
+  React.useEffect(() => {
+    if (!editor && !del) return;
+    const onKey = (e) => {
+      if (e.key !== 'Escape') return;
+      if (editor && !saving) setEditor(null);
+      if (del && !del.busy) setDel(null);
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [editor, del, saving]);
 
-  const cancelEdit = () => {
-    setEditingId(null);
-    setError('');
+  const openCreate = () => {
     setForm(emptyForm);
+    setFormError('');
+    setEditor({ id: null });
   };
 
-  const removeBranch = async (r) => {
-    if (!window.confirm(`Delete branch "${r.name}"?\n\nIts login stops working. Past sales and supplies stay in your reports. A branch that still holds stock cannot be deleted.`)) return;
-    setError('');
-    setDeletingId(r._id);
-    try {
-      const res = await fetch(salesUrl + '/api/branches/' + encodeURIComponent(r._id), {
-        method: 'DELETE',
-        headers: { Authorization: 'Bearer ' + token },
-      });
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok || !data.success) throw new Error(data.message || 'Delete failed');
-      if (editingId === r._id) cancelEdit();
-      await loadBranches();
-    } catch (e) {
-      setError(e.message);
-    } finally {
-      setDeletingId(null);
-    }
+  const openEdit = (r) => {
+    setForm({ name: r.name || '', address: r.address || '', gstNo: r.gstNo || '', phoneNumber: r.phoneNumber || '', email: r.email || '', password: '', confirmPassword: '' });
+    setFormError('');
+    setEditor({ id: r._id });
+  };
+
+  const onChange = (e) => {
+    const { name, value } = e.target;
+    setForm((f) => ({ ...f, [name]: value }));
+    setFormError('');
   };
 
   const submit = async (e) => {
     e.preventDefault();
-    setError('');
-    if (form.password !== form.confirmPassword) return setError('Passwords do not match');
-    if (!editingId && rows.length >= branchLimit) return setError('Branch limit reached for your plan');
-
-    // Check if email already exists in the current branches list
+    const editingId = editor?.id || null;
+    if (form.password !== form.confirmPassword) return setFormError('Passwords do not match');
+    if (!editingId && atLimit) return setFormError('Branch limit reached for your plan');
     const normalizedEmail = (form.email || '').toLowerCase().trim();
-    const emailExists = rows.some(branch =>
-      branch._id !== editingId && (branch.email || '').toLowerCase().trim() === normalizedEmail
-    );
-    
-    if (emailExists) {
-      return setError('A branch with this email already exists. Please use a different email address.');
+    if (rows.some((b) => b._id !== editingId && (b.email || '').toLowerCase().trim() === normalizedEmail)) {
+      return setFormError('A branch with this email already exists. Use a different email address.');
     }
-    
+
     setSaving(true);
     try {
       const res = await fetch(salesUrl + '/api/branches' + (editingId ? '/' + encodeURIComponent(editingId) : ''), {
@@ -106,7 +187,7 @@ export default function CreateBranch({ salesUrl, token, planId, branchLimit: pro
         body: JSON.stringify({
           name: form.name,
           address: form.address,
-          gstNo: form.gstNo, // Added GST No field
+          gstNo: form.gstNo,
           phoneNumber: form.phoneNumber,
           email: form.email,
           password: form.password,
@@ -114,289 +195,237 @@ export default function CreateBranch({ salesUrl, token, planId, branchLimit: pro
       });
       const data = await res.json();
       if (!res.ok || !data.success) throw new Error(data.message || (editingId ? 'Update failed' : 'Create failed'));
-      setEditingId(null);
-      setForm(emptyForm);
+      setEditor(null);
+      setNotice(editingId ? `${form.name} updated` : `${form.name} created`);
       await loadBranches();
     } catch (e) {
-      setError(e.message);
+      setFormError(e.message);
     } finally {
       setSaving(false);
     }
   };
 
-  // pagination
-  const total = rows.length;
-  const startIndex = total === 0 ? 0 : (page - 1) * pageSize + 1;
-  const endIndex = Math.min(page * pageSize, total);
-  const totalPages = Math.max(1, Math.ceil(total / pageSize));
-  const visible = rows.slice((page - 1) * pageSize, (page - 1) * pageSize + pageSize);
+  const openDelete = (r) => setDel({ branch: r, stock: stockOf(r), ack: false, busy: false, error: '' });
+
+  const confirmDelete = async () => {
+    if (!del) return;
+    const { branch, stock, ack } = del;
+    const hasStock = Number(stock.units) > 0;
+    if (hasStock && !ack) return;
+    setDel((d) => ({ ...d, busy: true, error: '' }));
+    try {
+      const res = await fetch(salesUrl + '/api/branches/' + encodeURIComponent(branch._id) + (hasStock ? '?force=1' : ''), {
+        method: 'DELETE',
+        headers: { Authorization: 'Bearer ' + token },
+      });
+      const data = await res.json().catch(() => ({}));
+      // Stock arrived since the list loaded: show the warning and ask again
+      if (res.status === 409 && data.needsConfirm) {
+        setDel((d) => ({ ...d, busy: false, ack: false, stock: data.stock || d.stock }));
+        return;
+      }
+      if (!res.ok || !data.success) throw new Error(data.message || 'Delete failed');
+      setDel(null);
+      setNotice(hasStock ? `${branch.name} deleted with ${stock.units} unit(s) of stock` : `${branch.name} deleted`);
+      await loadBranches();
+    } catch (e) {
+      setDel((d) => (d ? { ...d, busy: false, error: e.message } : d));
+    }
+  };
+
+  const delHasStock = del && Number(del.stock.units) > 0;
 
   return (
-    <div>
-      {/* Statistics Cards */}
-      <div className="stats-grid">
-        <div className="stat-card">
-          <div className="stat-header">
-            <div className="stat-icon">🏪</div>
-            <div>
-              <div className="stat-label">Branch Limit</div>
-              <div className="stat-value">{Number.isFinite(branchLimit) ? branchLimit : 0}</div>
-            </div>
-          </div>
-          <div className="stat-change positive">Plan: {planId || 'Basic'}</div>
+    <div className="cb">
+      <style>{CB_CSS}</style>
+
+      <div className="cb-top">
+        <div>
+          <h2 className="cb-h1">Branches</h2>
+          <p className="cb-sub">Each branch has its own login, stock and sales.</p>
         </div>
-        
-        <div className="stat-card secondary">
-          <div className="stat-header">
-            <div className="stat-icon" style={{background: 'var(--gradient-secondary)'}}>🌟</div>
-            <div>
-              <div className="stat-label">Active Branches</div>
-              <div className="stat-value">{rows.length}</div>
-            </div>
+        <button type="button" className="cb-btn cb-btn-pri" onClick={openCreate} disabled={limit <= 0 || atLimit}
+          title={limit <= 0 ? 'Upgrade your plan to add branches' : atLimit ? 'Branch limit reached for your plan' : ''}>
+          + Add branch
+        </button>
+      </div>
+
+      <div className="cb-stats">
+        <div className="cb-stat">
+          <div className="cb-stat-l">Branches used</div>
+          <div className="cb-stat-v">{rows.length} <small>of {limit}</small></div>
+          <div className={'cb-bar' + (atLimit ? ' full' : '')}>
+            <span style={{ width: (limit > 0 ? Math.min(100, (rows.length / limit) * 100) : 0) + '%' }} />
           </div>
-          <div className="stat-change">{rows.length > 0 ? 'Operational' : 'Getting Started'}</div>
         </div>
-        
-        <div className="stat-card accent">
-          <div className="stat-header">
-            <div className="stat-icon" style={{background: 'var(--gradient-accent)'}}>📊</div>
-            <div>
-              <div className="stat-label">Available Slots</div>
-              <div className="stat-value">{Math.max(0, branchLimit - rows.length)}</div>
-            </div>
+        <div className="cb-stat">
+          <div className="cb-stat-l">Plan</div>
+          <div className="cb-stat-v" style={{ fontSize: 18 }}>{planId || 'Basic'}</div>
+          <div className="cb-hint" style={{ marginTop: 6 }}>
+            {limit <= 0 ? 'Upgrade to enable branches' : atLimit ? 'Limit reached' : `${limit - rows.length} slot(s) free`}
           </div>
-          <div className="stat-change">{branchLimit - rows.length > 0 ? 'Ready to expand' : 'Limit reached'}</div>
+        </div>
+        <div className="cb-stat">
+          <div className="cb-stat-l">Stock across branches</div>
+          <div className="cb-stat-v">{totals.units.toLocaleString('en-IN')} <small>units</small></div>
+          <div className="cb-hint" style={{ marginTop: 6 }}>{money(totals.value)} at cost</div>
         </div>
       </div>
 
-      {/* Create Branch Form */}
-      <div className="card" ref={formRef}>
-        <div className="card-header">
-          <div>
-            <h3 className="card-title">{editingId ? 'Edit Branch' : 'Create New Branch'}</h3>
-            <p className="card-description">{editingId ? 'Update the branch details. Leave the password blank to keep the current one.' : 'Add a new branch location to expand your business'}</p>
-          </div>
-        </div>
-        
-        <form onSubmit={submit}>
-          <div className="form-grid form-grid-2">
-            <div className="form-group">
-              <label className="form-label required">Branch Name</label>
-              <input 
-                name="name" 
-                value={form.name} 
-                onChange={onChange} 
-                placeholder="e.g., Downtown Store" 
-                className="form-input"
-                required
-              />
-            </div>
-            
-            <div className="form-group">
-              <label className="form-label">Address</label>
-              <input 
-                name="address" 
-                value={form.address} 
-                onChange={onChange} 
-                placeholder="Complete address" 
-                className="form-input"
-              />
-            </div>
-            
-            <div className="form-group">
-              <label className="form-label">Phone Number</label>
-              <input 
-                name="phoneNumber" 
-                value={form.phoneNumber} 
-                onChange={onChange} 
-                placeholder="Contact number" 
-                className="form-input"
-              />
-            </div>
-            
-            <div className="form-group">
-              <label className="form-label required">Email</label>
-              <input 
-                name="email" 
-                type="email" 
-                value={form.email} 
-                onChange={onChange} 
-                placeholder="branch@example.com" 
-                className="form-input"
-                required
-              />
-            </div>
-            
-            <div className="form-group">
-              <label className={'form-label' + (editingId ? '' : ' required')}>Password</label>
-              <input
-                name="password"
-                type="password"
-                value={form.password}
-                onChange={onChange}
-                placeholder={editingId ? 'Leave blank to keep current' : 'Secure password'}
-                className="form-input"
-                required={!editingId}
-              />
-            </div>
-            
-            <div className="form-group">
-              <label className={'form-label' + (editingId ? '' : ' required')}>Confirm Password</label>
-              <input
-                name="confirmPassword"
-                type="password"
-                value={form.confirmPassword}
-                onChange={onChange}
-                placeholder={editingId ? 'Leave blank to keep current' : 'Confirm password'}
-                className="form-input"
-                required={!editingId}
-              />
-            </div>
+      {error && (
+        <div className="cb-alert cb-alert-err"><span>⚠️</span><span>{error}</span><button type="button" onClick={() => setError('')} aria-label="Dismiss">×</button></div>
+      )}
+      {notice && (
+        <div className="cb-alert cb-alert-ok"><span>✓</span><span>{notice}</span><button type="button" onClick={() => setNotice('')} aria-label="Dismiss">×</button></div>
+      )}
 
-            <div className="form-group">
-              <label className="form-label">GST No</label>
-              <input 
-                name="gstNo" 
-                value={form.gstNo} 
-                onChange={onChange} 
-                placeholder="GST Number" 
-                className="form-input"
-              />
+      {loading ? (
+        <div className="cb-empty"><p>Loading branches…</p></div>
+      ) : rows.length === 0 ? (
+        <div className="cb-empty">
+          <div className="cb-empty-i">🏪</div>
+          <h3>No branches yet</h3>
+          <p>{limit > 0 ? 'Create your first branch to start selling from it.' : 'Your plan does not include branches.'}</p>
+          {limit > 0 && <button type="button" className="cb-btn cb-btn-pri" onClick={openCreate}>+ Add branch</button>}
+        </div>
+      ) : (
+        <div className="cb-grid">
+          {rows.map((r) => {
+            const s = stockOf(r);
+            return (
+              <div className="cb-card" key={r._id}>
+                <div className="cb-card-h">
+                  <div className="cb-av">{initials(r.name)}</div>
+                  <div style={{ minWidth: 0 }}>
+                    <div className="cb-name" title={r.name}>{r.name || '-'}</div>
+                    <div className="cb-tags">
+                      <span className="cb-tag ok">Active</span>
+                      {r.isAdmin && <span className="cb-tag main">Main branch</span>}
+                      {r.gstNo && <span className="cb-tag">GST</span>}
+                    </div>
+                  </div>
+                </div>
+                <div className="cb-info">
+                  <div><span>📍</span><span className={r.address ? '' : 'none'} title={r.address}>{r.address || 'No address'}</span></div>
+                  <div><span>📞</span><span className={r.phoneNumber ? '' : 'none'}>{r.phoneNumber || 'No phone'}</span></div>
+                  <div><span>✉️</span><span title={r.email}>{r.email || '-'}</span></div>
+                  {r.gstNo && <div><span>🧾</span><span>{r.gstNo}</span></div>}
+                </div>
+                <div className="cb-stock">
+                  <span>Stock held</span>
+                  <span>{s.units > 0 ? <><b>{s.units}</b> units · {money(s.value)}</> : 'None'}</span>
+                </div>
+                <div className="cb-actions">
+                  <button type="button" className="cb-btn cb-btn-ghost" onClick={() => openEdit(r)}>✏️ Edit</button>
+                  <button type="button" className="cb-btn cb-btn-ghost cb-del" onClick={() => openDelete(r)}>🗑 Delete</button>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {editor && (
+        <div className="cb-ov" onMouseDown={(e) => { if (e.target === e.currentTarget && !saving) setEditor(null); }}>
+          <form className="cb-modal" onSubmit={submit} role="dialog" aria-modal="true">
+            <div className="cb-mh">
+              <div>
+                <h3>{editor.id ? 'Edit branch' : 'New branch'}</h3>
+                <p>{editor.id ? 'Leave the password blank to keep the current one.' : 'The email and password are the branch login.'}</p>
+              </div>
+              <button type="button" className="cb-x" onClick={() => setEditor(null)} disabled={saving} aria-label="Close">✕</button>
             </div>
-          </div>
-          
-          <div className="btn-group mt-4">
-            <button 
-              className="btn btn-primary" 
-              type="submit" 
-              disabled={saving || (!editingId && rows.length >= branchLimit)}
-            >
-              {saving ? (
-                <span className="loading">
-                  <span className="spinner"></span>
-                  {editingId ? 'Saving...' : 'Creating...'}
-                </span>
-              ) : (editingId ? 'Save Changes' : '+ Create Branch')}
-            </button>
-            {editingId && (
-              <button className="btn btn-secondary" type="button" onClick={cancelEdit} disabled={saving}>
-                Cancel
+            <div className="cb-mb">
+              <div className="cb-fgrid">
+                <div className="cb-sec">Details</div>
+                <div className="cb-f wide">
+                  <label>Branch name <i>*</i></label>
+                  <input name="name" value={form.name} onChange={onChange} placeholder="e.g. Downtown Store" required autoFocus />
+                </div>
+                <div className="cb-f wide">
+                  <label>Address</label>
+                  <input name="address" value={form.address} onChange={onChange} placeholder="Street, city" />
+                </div>
+                <div className="cb-f">
+                  <label>Phone number</label>
+                  <input name="phoneNumber" value={form.phoneNumber} onChange={onChange} placeholder="Contact number" inputMode="tel" />
+                </div>
+                <div className="cb-f">
+                  <label>GST No</label>
+                  <input name="gstNo" value={form.gstNo} onChange={onChange} placeholder="Optional" />
+                </div>
+                <div className="cb-sec">Login</div>
+                <div className="cb-f wide">
+                  <label>Email <i>*</i></label>
+                  <input name="email" type="email" value={form.email} onChange={onChange} placeholder="branch@example.com" required />
+                </div>
+                <div className="cb-f">
+                  <label>{editor.id ? 'New password' : <>Password <i>*</i></>}</label>
+                  <input name="password" type="password" value={form.password} onChange={onChange}
+                    placeholder={editor.id ? 'Keep current' : 'Password'} required={!editor.id} autoComplete="new-password" />
+                </div>
+                <div className="cb-f">
+                  <label>{editor.id ? 'Confirm new password' : <>Confirm password <i>*</i></>}</label>
+                  <input name="confirmPassword" type="password" value={form.confirmPassword} onChange={onChange}
+                    placeholder={editor.id ? 'Keep current' : 'Repeat password'} required={!editor.id || !!form.password} autoComplete="new-password" />
+                </div>
+              </div>
+              {formError && <div className="cb-alert cb-alert-err" style={{ marginTop: 16, marginBottom: 0 }}><span>⚠️</span><span>{formError}</span></div>}
+            </div>
+            <div className="cb-mf">
+              <button type="button" className="cb-btn cb-btn-ghost" onClick={() => setEditor(null)} disabled={saving}>Cancel</button>
+              <button type="submit" className="cb-btn cb-btn-pri" disabled={saving}>
+                {saving && <span className="cb-spin" />}
+                {editor.id ? (saving ? 'Saving…' : 'Save changes') : (saving ? 'Creating…' : 'Create branch')}
               </button>
-            )}
-            
-            <div style={{ 
-              alignSelf: 'center', 
-              color: 'var(--text-muted)', 
-              fontSize: '14px',
-              fontWeight: '500'
-            }}>
-              {branchLimit > 0 ? `Using ${rows.length} of ${branchLimit} branches` : 'Upgrade to enable branches'}
             </div>
-          </div>
-          
-          {error && (
-            <div className="alert alert-danger mt-4">
-              <div className="alert-icon">❌</div>
-              <div>{error}</div>
-            </div>
-          )}
-        </form>
-      </div>
+          </form>
+        </div>
+      )}
 
-      {/* Branches Table */}
-      <div className="table-card branch-section">
-        <div className="table-header">
-          <div>
-            <h3 className="table-title">Branch Locations</h3>
-            <p className="table-subtitle">Manage all your business locations</p>
+      {del && (
+        <div className="cb-ov" onMouseDown={(e) => { if (e.target === e.currentTarget && !del.busy) setDel(null); }}>
+          <div className="cb-modal sm" role="alertdialog" aria-modal="true">
+            <div className="cb-mh">
+              <div>
+                <h3>Delete {del.branch.name}?</h3>
+                <p>This cannot be undone.</p>
+              </div>
+              <button type="button" className="cb-x" onClick={() => setDel(null)} disabled={del.busy} aria-label="Close">✕</button>
+            </div>
+            <div className="cb-mb">
+              <ul className="cb-list">
+                <li>The branch login stops working.</li>
+                <li>Past sales, supplies and expenses stay in your reports.</li>
+                {del.branch.isAdmin && <li>The oldest remaining branch becomes the main branch.</li>}
+              </ul>
+              {delHasStock && (
+                <div className="cb-warn">
+                  <div className="cb-warn-t">⚠️ This branch still holds stock</div>
+                  <div className="cb-warn-n">
+                    <div><b>{del.stock.units}</b>units</div>
+                    <div><b>{del.stock.products}</b>products</div>
+                    <div><b>{money(del.stock.value)}</b>at cost</div>
+                  </div>
+                  <label className="cb-check">
+                    <input type="checkbox" checked={del.ack} disabled={del.busy}
+                      onChange={(e) => setDel((d) => ({ ...d, ack: e.target.checked }))} />
+                    <span>I understand this stock will be permanently deleted with the branch.</span>
+                  </label>
+                </div>
+              )}
+              {del.error && <div className="cb-alert cb-alert-err" style={{ marginTop: 14, marginBottom: 0 }}><span>⚠️</span><span>{del.error}</span></div>}
+            </div>
+            <div className="cb-mf">
+              <button type="button" className="cb-btn cb-btn-ghost" onClick={() => setDel(null)} disabled={del.busy}>Cancel</button>
+              <button type="button" className="cb-btn cb-btn-red" onClick={confirmDelete} disabled={del.busy || (delHasStock && !del.ack)}>
+                {del.busy && <span className="cb-spin" />}
+                {del.busy ? 'Deleting…' : delHasStock ? 'Delete branch and stock' : 'Delete branch'}
+              </button>
+            </div>
           </div>
         </div>
-        
-        {visible.length === 0 ? (
-          <div className="empty-state">
-            <div className="empty-icon">�</div>
-            <div className="empty-title">No Branches Yet</div>
-            <div className="empty-description">Create your first branch location to get started</div>
-            <button className="empty-action" onClick={() => document.querySelector('input[name="name"]')?.focus()}>
-              🏪 Create First Branch
-            </button>
-          </div>
-        ) : (
-          <>
-            <div className="table-scroll">
-              <table className="modern-table">
-                <thead>
-                  <tr>
-                    <th style={{width: '80px'}}>No.</th>
-                    <th>Branch Name</th>
-                    <th>Address</th>
-                    <th>Contact</th>
-                    <th>Email</th>
-                    <th>GST No</th>
-                    
-                    <th>Status</th>
-                    <th style={{width: '190px'}}>Actions</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {visible.map((r, i) => (
-                    <tr key={r._id || (startIndex + i)}>
-                      <td>
-                        <span className="serial-badge">{startIndex + i}</span>
-                      </td>
-                      <td>
-                        <span className="cell-strong">{r.name || '-'}</span>
-                      </td>
-                      <td>{r.address || '-'}</td>
-                      <td>{r.phoneNumber || '-'}</td>
-                      <td>{r.email || '-'}</td>
-                      <td>{r.gstNo || '-'}</td>
-                      <td>
-                        <span className="status-badge success">Active</span>
-                      </td>
-                      <td>
-                        <div style={{ display: 'flex', gap: '8px' }}>
-                          <button className="btn btn-outline btn-sm" type="button" onClick={() => startEdit(r)} disabled={deletingId === r._id}>
-                            ✏️ Edit
-                          </button>
-                          <button className="btn btn-danger btn-sm" type="button" onClick={() => removeBranch(r)} disabled={deletingId === r._id}>
-                            {deletingId === r._id ? 'Deleting...' : '🗑 Delete'}
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-            
-            <div className="table-footer">
-              <div className="table-info">
-                {total === 0 ? 'No branches found' : `Showing ${startIndex} to ${endIndex} of ${total} branches`}
-              </div>
-              <div className="pagination">
-                <button 
-                  className="pagination-btn" 
-                  type="button" 
-                  onClick={() => setPage(p => Math.max(1, p - 1))} 
-                  disabled={page <= 1}
-                >
-                  ← Previous
-                </button>
-                <span className="pagination-info">Page {page} of {totalPages}</span>
-                <button 
-                  className="pagination-btn" 
-                  type="button" 
-                  onClick={() => setPage(p => Math.min(totalPages, p + 1))} 
-                  disabled={page >= totalPages}
-                >
-                  Next →
-                </button>
-              </div>
-            </div>
-          </>
-        )}
-      </div>
+      )}
     </div>
   );
 }
