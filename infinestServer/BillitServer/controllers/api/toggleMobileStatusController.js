@@ -202,7 +202,9 @@ const toggleMobileStatus = async (req, res) => {
               event === "mobile_delivered" && process.env.BILLIT_BACKEND_URL
                 ? {
                     type: "document",
-                    value: `${process.env.BILLIT_BACKEND_URL}/api/receipt/pdf/${updatedMobile._id}`,
+                    // ?v= makes every delivery a new URL: WhatsApp/MSG91 cache media by link, so a device
+                    // delivered again (e.g. after undo, now with a warranty note) would otherwise get the old PDF
+                    value: `${process.env.BILLIT_BACKEND_URL}/api/receipt/pdf/${updatedMobile._id}?v=${Date.now()}`,
                     filename: `Receipt-${customer.bill_no || updatedMobile._id}.pdf`,
                   }
                 : null;

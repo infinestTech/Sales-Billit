@@ -51,6 +51,8 @@ const getReceiptPdf = async (req, res) => {
     res.setHeader("Content-Type", "application/pdf");
     res.setHeader("Content-Disposition", `inline; filename="Receipt-${billNo}.pdf"`);
     res.setHeader("Content-Length", pdfBuffer.length);
+    // Built live from the record (warranty, payments), so never serve a cached copy
+    res.setHeader("Cache-Control", "no-store");
     return res.send(pdfBuffer);
   } catch (err) {
     console.error("❌ Error generating receipt PDF:", err);
