@@ -192,13 +192,14 @@ async function handleHandshake(req, res) {
 
     // Respond with configuration.
     //
-    // TimeZone=0  ← tell the device the server is UTC+0.
-    //   The iClock Proxy firmware ADDS the TimeZone value to the device's local
-    //   display time before putting it in the ATTLOG.  If we set TimeZone=5.5
-    //   (IST offset), the device adds another 5.5 h on top of its already-IST
-    //   clock, giving IST+11h which is totally wrong.  With TimeZone=0 the
-    //   firmware sends the raw device-clock value (IST), which our parser then
-    //   correctly interprets as Asia/Kolkata.
+    // TimeZone=330  ← the device's local offset from UTC, in minutes (IST).
+    //   Push firmware 2.4.x sets its clock from the HTTP `Date:` header of our
+    //   responses (always GMT) plus this value.  With TimeZone=0 the clock was
+    //   reset to UTC on every response, so ATTLOG timestamps arrived 5h30m
+    //   behind real time (raw "03:10:31" received at 08:40 IST) even though
+    //   the SET OPTION DateTime command below kept pushing IST.  With 330 the
+    //   clock — and every ATTLOG line — is IST wall-clock time, which
+    //   parseAttLogLine interprets as Asia/Kolkata.
     //
     // ATTLOGStamp — use last_seen epoch so the device only sends NEW records
     //   after every reconnect instead of replaying the entire history.
@@ -218,7 +219,7 @@ async function handleHandshake(req, res) {
       'TransTimes=00:00;14:05',
       'TransInterval=1',
       'TransFlag=TransData AttLog',
-      'TimeZone=0',
+      'TimeZone=330',
       'Realtime=1',
       'Encrypt=0',
     ].join('\n') + '\n';
@@ -394,9 +395,8 @@ async function handleDataPush(req, res) {
  *
  * Device polls for pending commands every `Delay` seconds (we configure 10s).
  * We use this channel to push a `SET OPTION DateTime=<encoded>` command
- * periodically so the device clock stays synced to IST.  The eSSL M20 will
- * otherwise drift to its NTP source (UTC on Hetzner) and the on-screen time
- * and incoming ATTLOG timestamps will be wrong by 5h30m.
+ * periodically as a backstop so the device clock stays synced to IST (the
+ * handshake's TimeZone=330 is what keeps the Date-header sync on IST).
  *
  * Protocol response format (one command per line):
  *   C:<cmdId>:<command>

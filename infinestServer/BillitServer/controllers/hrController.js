@@ -1286,4 +1286,6 @@ module.exports = {
   generateSalary, generateBulkSalary, getSalaryReport, getSalaryRecord, finalizeSalary, markSalaryPaid,
   // Settings
   getHrSettings, updateHrSettings,
+  // Summary helpers (used by scripts/fixEsslPunchOffset.js to rebuild days)
+  getShopHrSettings, attendanceDateFor, buildDailySummary, applyManualStatus,
 };
