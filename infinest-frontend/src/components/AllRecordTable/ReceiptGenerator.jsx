@@ -1141,8 +1141,14 @@ const ReceiptGenerator = ({ clientData, shopPhoneNumber, closeModal, shopAddress
   const handleA4Print = useReactToPrint({
     contentRef: a4Ref,
     documentTitle: `A4-Receipt-${clientData.bill_no || 'Service'}`,
+    // Android's print() returns before the preview has rendered every page;
+    // without this the print iframe is removed 500 ms later and page 2 can be
+    // lost. The iframe is removed instead when the next print starts.
+    preserveAfterPrint: true,
+    // !important: react-to-print copies the global stylesheets in after this,
+    // and globals.css's print `@page { margin: 1.5cm }` would otherwise win.
     pageStyle: `
-      @page { size: A4 portrait; margin: 0; }
+      @page { size: A4 portrait !important; margin: 0 !important; }
       body { -webkit-print-color-adjust: exact; print-color-adjust: exact; margin: 0; }
       .a4-receipt-root { width: 210mm; margin: 0 auto; }
       .a4-page { page-break-after: always; break-after: page; }
